@@ -103,7 +103,10 @@ export interface DuplicateOpenOrderErrorBody {
   message: string;
 }
 
-/** 429: too many attempts from this IP (spec §7). */
+/**
+ * 429: too many attempts. The booking form counts per IP (spec §7); login reuses this body, and
+ * counts failures per IP and from all IPs together (ADR-0004).
+ */
 export interface RateLimitedErrorBody {
   error: 'rate_limited';
   message: string;
