@@ -18,8 +18,7 @@
 - **מודל הנתונים מצטמצם:** בלי `users`, `customers`, `settings`, ובלי שדה `location` בהזמנה. נוספים
   `address.nearStreetCode`, יומן `messages` בהזמנה, ואוסף טכני `loginAttempts` (TTL).
 - **בלי סטטוס "כתובת לבדיקה"** (מ"הקשר קבוע" ב-prompts.md): אין geocoding בזמן ריצה. במקומו, תג "בלי מיקום".
-- **P4 ב-`docs/prompts.md` לא מעודכן:** section 3 (Geocoding בשמירה, אימות, OSM) ו-section 8 (Apps Script)
-  מתארים את הגישה הקודמת.
+- **P4 ב-`docs/prompts.md`:** עודכן ב-2026-10-19 לפי ה-ADRs (רשימת רחובות במקום Geocoding, מסלול בלי Apps Script, wa.me).
 - **פוטר:** "© OpenStreetMap contributors".
 
 ## שאלות שדורשות את ההחלטה שלך
@@ -27,8 +26,8 @@
 2. ~~Vercel Hobby ו"לא מסחרי" (ADR-0002)~~ **הוחלט:** Vercel, חינם.
    **Gmail ייעודי (spec ש8):** **הוחלט:** חשבון Gmail רגיל, לא Workspace. ממנו נרשמים ל-Vercel ול-Atlas.
 3. **דומיין (ADR-0002):** להתחיל עם `<שם>.vercel.app` (חינם), או `.com` (כ-32 ש"ח לשנה)? ואיזה שם (`latet-od`?).
-4. **עדכון המסמכים:** לעדכן עכשיו את `spec.md` (להסיר את ה-⏳ שנסגרו ולצמצם את §5) ואת P4 ב-`prompts.md`
-   (sections 3 ו-8), או לחכות לתשובת יואל על WhatsApp?
+4. **עדכון המסמכים:** P4 ב-`prompts.md` עודכן (2026-10-19). `spec.md` עדיין לא: ה-⏳ שנסגרו ו-§5 המלא נשארו,
+   וה-ADRs גוברים עליו.
 
 ### הוחלט ב-2026-10-19 (תשובות לשאלות הפתוחות ב-spec §8)
 | ש | החלטה |
