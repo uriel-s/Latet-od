@@ -66,4 +66,13 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // One-off Node scripts (scripts/geocode-streets.ts) maintain shared data: they may use
+    // @bottlerun/shared, never app code.
+    files: ['scripts/**'],
+    languageOptions: { globals: globals.node },
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [appPattern('api'), appPattern('web')] }],
+    },
+  },
 );
