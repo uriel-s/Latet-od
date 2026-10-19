@@ -376,6 +376,92 @@ button[aria-disabled='true'] {
   align-self: flex-start;
 }
 
+/* --- Collector app (collector/) ----------------------------------------------------- */
+
+/* The logout action above the screen, at the end (left, in right-to-left) of the column, away
+   from where the heading starts. */
+.collector-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* .link-button has no side padding; this keeps the short word a full 48px wide target too. */
+.collector-logout {
+  min-width: var(--tap-target);
+  padding-inline: 0.5rem;
+}
+
+/* Each screen starts with its <h1>: the toolbar above it already makes the space at the top. */
+.collector-toolbar + h1 {
+  margin-block-start: 0;
+}
+
+/*
+ * The bottom navigation (BottomNav.tsx): fixed to the bottom of the screen, full width, three
+ * equal tabs. In the right-to-left row the first tab (הזמנות) is on the right. The padding keeps
+ * the tabs above the iPhone's home bar.
+ */
+.bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 10;
+  border-block-start: 2px solid var(--color-text);
+  background: var(--color-white);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav-list {
+  display: flex;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.bottom-nav-list li {
+  flex: 1;
+}
+
+/*
+ * A whole tab is the tap target. The 4px bar on top is transparent until the tab is current:
+ * reserved here, so the text does not move when it appears.
+ */
+.bottom-nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target);
+  padding: 0.25rem 0.5rem;
+  border-block-start: 4px solid transparent;
+  color: var(--color-text);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* The current tab: a bar, a background (--color-text on it is 6.5:1) and an underline, so it is
+   told apart by shape, not by colour alone. */
+.bottom-nav-link[aria-current='page'] {
+  border-block-start-color: var(--color-text);
+  background: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/*
+ * While the bottom navigation is on the page, the page ends with empty space as tall as the
+ * navigation, so it never covers the end of a screen or the OSM credit in the footer. The same
+ * space is kept when the browser scrolls a focused field into view.
+ */
+.layout:has(.bottom-nav) {
+  padding-block-end: calc(var(--tap-target) + 2px + env(safe-area-inset-bottom));
+}
+
+html:has(.bottom-nav) {
+  scroll-padding-block-end: calc(var(--tap-target) + 2px + env(safe-area-inset-bottom));
+}
+
 /* --- Messages and helpers -------------------------------------------------------- */
 
 /* A message about the whole form (rate limit, network error), above or next to its button. */
