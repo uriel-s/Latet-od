@@ -1,0 +1,6 @@
+# Hand-written Hebrew docs: tables and line breaks are deliberate.
+docs/
+*.md
+package-lock.json
+dist/
+coverage/
