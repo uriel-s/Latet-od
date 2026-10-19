@@ -5,6 +5,7 @@ import express, { type Express } from 'express';
 import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
 import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
+import { createOrderHandlers } from './orders/createOrderRoute.ts';
 
 /**
  * Largest JSON body the api accepts. An order is a few hundred bytes; the limit leaves room for
@@ -22,9 +23,10 @@ export function createApp(deps: AppDeps): Express {
   app.disable('x-powered-by');
   // The api runs behind exactly one proxy: Vercel's edge in production, Vite's dev proxy locally.
   // Trusting one hop makes `req.ip` the client's address, taken from the last entry of
-  // X-Forwarded-For (the one that proxy added), which the per-IP rate limits need (sections 3
-  // and 5). Trusting only one hop means a client cannot pick its IP by sending its own
-  // X-Forwarded-For: the entries it adds come before the proxy's and are ignored.
+  // X-Forwarded-For (the one that proxy added), which the per-IP rate limits need (POST
+  // /api/orders below, and the login in section 5). Trusting only one hop means a client cannot
+  // pick its IP by sending its own X-Forwarded-For: the entries it adds come before the proxy's
+  // and are ignored.
   app.set('trust proxy', 1);
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
@@ -44,6 +46,9 @@ export function createApp(deps: AppDeps): Express {
     }
     res.json(body);
   });
+
+  // The public booking form (spec §3.1): the per-IP rate limit, then the route (createOrderRoute.ts).
+  app.post('/api/orders', ...createOrderHandlers(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
   // a mistyped customer link holds the token.

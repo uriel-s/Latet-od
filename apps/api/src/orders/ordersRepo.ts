@@ -7,7 +7,8 @@ import type { NewOrder, Order, OrderStatus } from '@bottlerun/shared';
 
 /**
  * The phone already has an open order (status in `OPEN_ORDER_STATUSES`), and the write would
- * give it a second one (spec §3.1). The api answers it with the customer's existing order.
+ * give it a second one (spec §3.1). The api answers it with 409 and a fixed message only, never
+ * the existing order or its token, because anyone can type someone else's number (spec §3.1).
  *
  * The message never contains the phone: errors end up in logs, and phones must not (CLAUDE.md,
  * privacy).
