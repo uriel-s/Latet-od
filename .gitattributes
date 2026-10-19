@@ -1,0 +1,7 @@
+# Everything LF in the working tree. Git for Windows here has core.autocrlf=true at system
+# level; without this, a checkout turns every file CRLF and `prettier --check` fails repo-wide.
+* text=auto eol=lf
+
+# Shell scripts must stay LF or bash dies on \r (added by /setup-project)
+*.sh text eol=lf
+.githooks/* text eol=lf

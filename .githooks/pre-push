@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# installed by /setup-project — refuses pushes to the trunk unless this clone opts in.
+# Maintainers who merge locally and push the trunk: git config claude.allowTrunkPush true
+#
+# Runs both as a plain git pre-push hook (refs arrive on stdin) and as a pre-commit
+# pre-push-stage hook (target branch arrives in PRE_COMMIT_REMOTE_BRANCH, and stdin
+# is NOT the ref list). Handling both is why this works in projects that already use
+# pre-commit as well as those that do not.
+set -u
+
+if [ "$(git config --bool claude.allowTrunkPush 2>/dev/null || echo false)" = "true" ]; then
+  exit 0
+fi
+
+is_trunk() { case "${1#refs/heads/}" in main|master|trunk) return 0 ;; *) return 1 ;; esac; }
+
+refuse() {
+  echo "pre-push: refusing to push directly to ${1#refs/heads/}." >&2
+  echo "  Open a pull request instead (/pr)." >&2
+  echo "  Maintainer? git config claude.allowTrunkPush true" >&2
+  exit 1
+}
+
+if [ -n "${PRE_COMMIT_REMOTE_BRANCH:-}" ]; then          # invoked by pre-commit
+  is_trunk "$PRE_COMMIT_REMOTE_BRANCH" && refuse "$PRE_COMMIT_REMOTE_BRANCH"
+  exit 0
+fi
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do   # invoked by git
+  is_trunk "$remote_ref" && refuse "$remote_ref"
+done
+exit 0

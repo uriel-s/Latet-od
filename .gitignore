@@ -1,0 +1,24 @@
+node_modules/
+dist/
+coverage/
+.vercel/
+*.log
+
+# Secrets: only the example is committed
+.env
+.env.*
+!.env.example
+
+# Claude: the contract files are shared, per-developer state is not
+.claude/*
+!.claude/checks.sh
+!.claude/project-params.md
+
+# Claude command-system run artifacts (added by /setup-project)
+.dev-state.md
+.dev-log.md
+.dev-plan.md
+.dev-plan.*.done.md
+.dev-archive/
+.work-context.md
+.claude/settings.local.json
