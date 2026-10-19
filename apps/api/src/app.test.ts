@@ -97,12 +97,14 @@ describe('request bodies', () => {
   });
 
   it('accepts a body under 10kb', async () => {
-    // No route takes it yet, so it reaches the 404: the parser let it through.
+    // Not a valid order, so the route answers 400 invalid_order: the parser let the body through
+    // to the route instead of refusing it with 413.
     const res = await request(createApp(createFakeDeps()))
       .post('/api/orders')
       .send({ notes: 'x'.repeat(9 * 1024) });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
+    expect((res.body as { error?: unknown }).error).toBe('invalid_order');
   });
 });
 
