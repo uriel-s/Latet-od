@@ -23,6 +23,8 @@ export * from './orderStatus.ts';
 export * from './order.ts';
 // The POST /api/orders contract: request, success summary, error bodies and messages (spec §3.1).
 export * from './orderApi.ts';
+// The /api/auth/* contract: session user and cookie payload, login request, error bodies (ADR-0004).
+export * from './authApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and

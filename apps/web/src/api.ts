@@ -3,9 +3,13 @@
 // call sits behind an interface). The api is same-origin (ADR-0002), so paths are relative.
 import {
   CREATE_ORDER_MESSAGES,
+  LOGIN_MESSAGES,
   createOrderResponseSchema,
+  meResponseSchema,
   type CreateOrderRequest,
   type CreateOrderResponse,
+  type LoginRequest,
+  type SessionUser,
 } from '@bottlerun/shared';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors, type FormErrors } from './orderForm/formValues.ts';
 
@@ -137,4 +141,123 @@ function isObject(value: unknown): value is Record<string, unknown> {
 /** A plain JSON object whose every value is a string, like the 400 body's `fieldErrors`. */
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isObject(value) && Object.values(value).every((item) => typeof item === 'string');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The collector's session (ADR-0004): /api/auth/*
+//
+// The api is same-origin, so the browser attaches the httpOnly session cookie and the Origin
+// header by itself (fetch's default `credentials: 'same-origin'`). Neither is set here: the api
+// refuses a POST whose Origin does not match its host, and only the browser's own header does.
+// ---------------------------------------------------------------------------------------------
+
+/** How POST /api/auth/login ended, as the login screen shows it. */
+export type LoginOutcome =
+  /** 200: the session cookie is set; the collector app opens. */
+  | { kind: 'loggedIn'; user: SessionUser }
+  /** 401: the password is wrong; shown next to the password field. */
+  | { kind: 'wrongPassword'; message: string }
+  /** 429: too many failed logins from this IP, or from everyone together (ADR-0004). */
+  | { kind: 'rateLimited'; message: string }
+  /** No usable answer: a network error, a 400, 403 or 5xx, or a 200 the app cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Sends the password to `POST /api/auth/login` and turns the answer into a {@link LoginOutcome}.
+ * The password goes exactly as typed: never trimmed, since spaces are part of a sentence password
+ * (loginRequestSchema), and never stored or logged here.
+ *
+ * Never retried, not even after a network error: a request that reached the api but lost its
+ * answer may have counted as a failed attempt, and every failure counts toward the limit (5 per
+ * IP in 15 minutes). Yoel taps "כניסה" again instead.
+ *
+ * The 401 and 429 messages are the shared constants, not the body's text, so a 429 from the
+ * hosting platform (an HTML body) still says to wait. A 200 that does not parse is `failed`, even
+ * though its cookie may be set: the next tap logs in again, and nothing is lost.
+ */
+export async function login(
+  password: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<LoginOutcome> {
+  const request: LoginRequest = { password };
+  const response = await fetchOrNull(fetchFn, '/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const user = await sessionUserOf(response);
+      return user === null ? { kind: 'failed' } : { kind: 'loggedIn', user };
+    }
+    case 401:
+      return { kind: 'wrongPassword', message: LOGIN_MESSAGES.wrongPassword };
+    case 429:
+      return { kind: 'rateLimited', message: LOGIN_MESSAGES.rateLimited };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** Who `GET /api/auth/me` says is logged in on this browser. */
+export type SessionOutcome =
+  /** 200: a valid session cookie (the api renews an old one on the way). */
+  | { kind: 'loggedIn'; user: SessionUser }
+  /** 401: no session cookie, or an expired, forged or outdated one; the login screen opens. */
+  | { kind: 'loggedOut' }
+  /** No usable answer (network error, 5xx, unreadable body): whether he is logged in is unknown. */
+  | { kind: 'failed' };
+
+/**
+ * Asks `GET /api/auth/me` whether this browser is logged in, for the collector app's guard.
+ * `cache: 'no-store'`, so the answer is never one the browser kept from before a login or a
+ * logout. `failed` is kept apart from `loggedOut`: a dropped connection mid-round must not look
+ * like a logout and send Yoel to the password screen.
+ */
+export async function fetchSession(fetchFn: FetchFn = globalFetch): Promise<SessionOutcome> {
+  const response = await fetchOrNull(fetchFn, '/api/auth/me', { method: 'GET', cache: 'no-store' });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const user = await sessionUserOf(response);
+      return user === null ? { kind: 'failed' } : { kind: 'loggedIn', user };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/**
+ * Logs out with `POST /api/auth/logout`, which clears the session cookie (the cookie is httpOnly,
+ * so the page cannot clear it itself). True when the api answered with success (204); false on
+ * any other answer or a network error, when the cookie may still be there.
+ */
+export async function logout(fetchFn: FetchFn = globalFetch): Promise<boolean> {
+  const response = await fetchOrNull(fetchFn, '/api/auth/logout', { method: 'POST' });
+  return response?.ok ?? false;
+}
+
+/**
+ * The answer of one fetch, or null when none arrived: fetch rejected (a network error) or threw
+ * instead of rejecting. Never retries.
+ */
+async function fetchOrNull(
+  fetchFn: FetchFn,
+  input: string,
+  init: RequestInit,
+): Promise<Response | null> {
+  try {
+    return await fetchFn(input, init);
+  } catch {
+    return null;
+  }
+}
+
+/** The user of a 200 from login or /me, or null when the body is not a `MeResponse`. */
+async function sessionUserOf(response: Response): Promise<SessionUser | null> {
+  const parsed = meResponseSchema.safeParse(await readJson(response));
+  return parsed.success ? parsed.data.user : null;
 }

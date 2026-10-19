@@ -1,9 +1,9 @@
 // The root component, and the single place routes are listed: the URL path picks a page
 // (router.tsx), and every page sits inside the shared Layout (header, main, OSM footer).
 import type { ReactNode } from 'react';
+import { CollectorApp } from './collector/CollectorApp.tsx';
 import { Layout } from './Layout.tsx';
 import { OrderFormPage } from './orderForm/OrderFormPage.tsx';
-import { CollectorPage } from './pages/CollectorPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OrderPage } from './pages/OrderPage.tsx';
@@ -26,8 +26,9 @@ function pageFor(route: Route): ReactNode {
     case 'login':
       return <LoginPage />;
     case 'collector':
-      // Section 5 passes `route.path` to choose the tab.
-      return <CollectorPage />;
+      // No `key` on purpose: every /app/* path renders the same component at the same place, so
+      // switching tabs keeps it mounted, and its login guard checks the session only once.
+      return <CollectorApp path={route.path} />;
     case 'notFound':
       return <NotFoundPage />;
   }

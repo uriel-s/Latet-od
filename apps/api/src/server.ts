@@ -2,7 +2,9 @@
 // apps/api/.env (see .env.example). It builds the real dependencies once for the process and
 // listens; the Vercel function entry (section 10) will build the same deps without listen().
 import { createApp } from './app.ts';
+import { authDepsFromEnv } from './auth/authConfig.ts';
 import { createMongoDeps } from './db/mongoDeps.ts';
+import type { AppDeps } from './deps.ts';
 
 const uri = process.env.MONGODB_URI;
 if (!uri) {
@@ -13,9 +15,22 @@ if (!uri) {
   process.exit(1);
 }
 
+let deps: AppDeps;
+try {
+  // The login's settings first: a missing or bad COLLECTOR_PASSWORD_HASH or SESSION_SECRET stops
+  // the startup before any database client exists.
+  const auth = authDepsFromEnv(process.env);
+  deps = { ...createMongoDeps(uri), auth };
+} catch (error) {
+  // Only the message: these errors name the variable that is wrong, never its value (both hold
+  // secrets), and the stack adds nothing for a configuration mistake.
+  console.error(error instanceof Error ? error.message : 'api could not start: invalid env');
+  process.exit(1);
+}
+
 const port = Number(process.env.PORT ?? 3000);
 
-createApp(createMongoDeps(uri)).listen(port, (error) => {
+createApp(deps).listen(port, (error) => {
   if (error) {
     // E.g. the port is taken. Startup errors hold no request data.
     console.error(`api could not listen on port ${port}: ${error.message}`);

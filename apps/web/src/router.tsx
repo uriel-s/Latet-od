@@ -117,6 +117,11 @@ export interface LinkProps {
   /** History state for the target page; see {@link NavigateOptions.state}. */
   state?: unknown;
   className?: string;
+  /**
+   * `'page'` on the link to the screen being shown, as in the collector app's bottom navigation:
+   * screen readers announce it as the current page, and CSS styles it through the attribute.
+   */
+  'aria-current'?: 'page';
   children: ReactNode;
 }
 
@@ -126,7 +131,7 @@ export interface LinkProps {
  * {@link navigate}, with no reload; a click with a modifier key (new tab, new window, download)
  * is left to the browser.
  */
-export function Link({ to, state, className, children }: LinkProps) {
+export function Link({ to, state, className, 'aria-current': ariaCurrent, children }: LinkProps) {
   function handleClick(event: MouseEvent<HTMLAnchorElement>): void {
     const isPlainLeftClick =
       event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -136,7 +141,7 @@ export function Link({ to, state, className, children }: LinkProps) {
   }
 
   return (
-    <a href={to} className={className} onClick={handleClick}>
+    <a href={to} className={className} aria-current={ariaCurrent} onClick={handleClick}>
       {children}
     </a>
   );

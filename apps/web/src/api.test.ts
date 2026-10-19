@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import type { CreateOrderRequest, CreateOrderResponse } from '@bottlerun/shared';
-import { createOrder, warmUp, type FetchFn } from './api.ts';
+import type { CreateOrderRequest, CreateOrderResponse, MeResponse } from '@bottlerun/shared';
+import { createOrder, fetchSession, login, logout, warmUp, type FetchFn } from './api.ts';
 import { UNKNOWN_FIELD_ERROR } from './orderForm/formValues.ts';
 
-/** One answer of the fake fetch: an HTTP answer with a JSON (or raw text) body, or no answer. */
+/**
+ * One answer of the fake fetch: an HTTP answer with a JSON (or raw text) body, one with no body
+ * at all (a 204, which a Response cannot carry a body with), or no answer.
+ */
 type FakeAnswer =
-  { status: number; body: unknown } | { status: number; text: string } | 'networkError' | 'throws';
+  | { status: number; body: unknown }
+  | { status: number; text: string }
+  | { status: number; noBody: true }
+  | 'networkError'
+  | 'throws';
 
 interface RecordedCall {
   input: string;
@@ -24,7 +31,8 @@ function makeFakeFetch(...answers: FakeAnswer[]): { fetchFn: FetchFn; calls: Rec
     if (answer === undefined) return Promise.reject(new Error(`unexpected call ${calls.length}`));
     if (answer === 'networkError') return Promise.reject(new TypeError('Failed to fetch'));
     if (answer === 'throws') throw new TypeError('fetch is not a function');
-    const body = 'text' in answer ? answer.text : JSON.stringify(answer.body);
+    const body =
+      'noBody' in answer ? null : 'text' in answer ? answer.text : JSON.stringify(answer.body);
     return Promise.resolve(
       new Response(body, {
         status: answer.status,
@@ -259,5 +267,179 @@ describe('warmUp', () => {
     expect(() => warmUp(fetchFn)).not.toThrow();
     await settle();
     expect(calls).toHaveLength(1);
+  });
+});
+
+/** The 200 body of login and of /me. */
+const ME: MeResponse = { user: { sub: 'collector' } };
+
+/** A sentence password with spaces at both ends: it must reach the api exactly as typed. */
+const PASSWORD = '  שמש עולה מעל ההרים הירוקים  ';
+
+/** Bodies of a 200 that are not a session user: each must answer `failed`. */
+const NOT_A_SESSION_USER: FakeAnswer[] = [
+  { status: 200, body: { user: { sub: 'admin' } } },
+  { status: 200, body: {} },
+  { status: 200, text: '<html>ok</html>' },
+];
+
+describe('login', () => {
+  it('posts the password, untrimmed, as JSON to /api/auth/login', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ME });
+
+    await login(PASSWORD, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/auth/login');
+    expect(calls[0]?.init?.method).toBe('POST');
+    // No Origin and no credentials of its own: the browser adds both to a same-origin request.
+    expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(calls[0]?.init?.credentials).toBeUndefined();
+    const body = calls[0]?.init?.body;
+    if (typeof body !== 'string') throw new Error('expected a JSON string body');
+    expect(JSON.parse(body)).toEqual({ password: PASSWORD });
+  });
+
+  it('answers loggedIn with the session user on 200', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ME });
+
+    expect(await login(PASSWORD, fetchFn)).toEqual({
+      kind: 'loggedIn',
+      user: { sub: 'collector' },
+    });
+  });
+
+  it('answers failed on a 200 whose body is not a session user', async () => {
+    for (const answer of NOT_A_SESSION_USER) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await login(PASSWORD, fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers wrongPassword with the shared message on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'invalid_credentials', message: 'x' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await login(PASSWORD, fetchFn)).toEqual({
+        kind: 'wrongPassword',
+        message: 'הסיסמה שגויה.',
+      });
+    }
+  });
+
+  it('answers rateLimited with the shared message on 429, also with a body that is not JSON', async () => {
+    for (const answer of [
+      { status: 429, body: { error: 'rate_limited', message: 'x' } },
+      { status: 429, text: '<html>Too Many Requests</html>' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await login(PASSWORD, fetchFn)).toEqual({
+        kind: 'rateLimited',
+        message: 'יותר מדי ניסיונות כניסה. נא לנסות שוב מאוחר יותר.',
+      });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [400, 403, 404, 500, 502, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await login(PASSWORD, fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error and does not retry it', async () => {
+    const { fetchFn, calls } = makeFakeFetch('networkError', { status: 200, body: ME });
+
+    expect(await login(PASSWORD, fetchFn)).toEqual({ kind: 'failed' });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('treats a fetch that throws instead of rejecting as a network error', async () => {
+    const { fetchFn, calls } = makeFakeFetch('throws', { status: 200, body: ME });
+
+    expect(await login(PASSWORD, fetchFn)).toEqual({ kind: 'failed' });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe('fetchSession', () => {
+  it('asks GET /api/auth/me, past the browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ME });
+
+    await fetchSession(fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/auth/me');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+  });
+
+  it('answers loggedIn with the session user on 200', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ME });
+
+    expect(await fetchSession(fetchFn)).toEqual({ kind: 'loggedIn', user: { sub: 'collector' } });
+  });
+
+  it('answers failed on a 200 whose body is not a session user', async () => {
+    for (const answer of NOT_A_SESSION_USER) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchSession(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchSession(fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed, not loggedOut, on any other status', async () => {
+    for (const status of [403, 404, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await fetchSession(fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ME });
+      expect(await fetchSession(fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe('logout', () => {
+  it('posts to /api/auth/logout and answers true on 204', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 204, noBody: true });
+
+    expect(await logout(fetchFn)).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/auth/logout');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  it('answers false on an error status', async () => {
+    for (const status of [403, 500, 503]) {
+      const { fetchFn } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await logout(fetchFn), String(status)).toBe(false);
+    }
+  });
+
+  it('answers false after a network error or a fetch that throws, without a retry', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 204, noBody: true });
+      expect(await logout(fetchFn), answer).toBe(false);
+      expect(calls, answer).toHaveLength(1);
+    }
   });
 });
