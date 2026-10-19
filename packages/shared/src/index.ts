@@ -7,8 +7,31 @@ export const APP_NAME = 'לתת עוד';
 
 // Street list, search and region (ADR-0005).
 export * from './streets.ts';
+// An address's region and map point, from its street codes (ADR-0005).
+export * from './location.ts';
+// Israeli mobile phone: form validation and the stored E.164 form.
+export * from './phone.ts';
+// Order statuses and allowed status changes (spec §4).
+export * from './orderStatus.ts';
+// The stored order (spec §5 + ADRs) and the booking-form input with its Hebrew messages (spec §3.1).
+export * from './order.ts';
 
-/** Body of GET /api/health. The web app calls it on load to warm up the function (ADR-0002). */
+/**
+ * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and
+ * the api's ping to the database opens the Mongo connection at the same time (ADR-0002, warm-up).
+ * `ok: true` with status 200 when the database answers; `ok: false` with status 503 when it does
+ * not.
+ */
 export interface HealthResponse {
-  ok: true;
+  ok: boolean;
+}
+
+/**
+ * Body of every api error response. `error` is a stable code for the web app to branch on, never
+ * text for the user and never detail about what went wrong inside the server. Codes every route
+ * may answer: `invalid_json` (400), `bad_request` (other 4xx), `too_large` (413), `not_found` (404),
+ * `internal` (500). Routes add their own codes, and a Hebrew `message` where the user sees it.
+ */
+export interface ApiErrorBody {
+  error: string;
 }
