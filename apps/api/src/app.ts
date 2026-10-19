@@ -6,6 +6,7 @@ import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
 import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
+import { requireSameOrigin } from './sameOrigin.ts';
 
 /**
  * Largest JSON body the api accepts. An order is a few hundred bytes; the limit leaves room for
@@ -14,8 +15,8 @@ import { createOrderHandlers } from './orders/createOrderRoute.ts';
 const JSON_BODY_LIMIT = '10kb';
 
 /**
- * Builds the api's Express app on `deps`. Every route goes through the same body parser and
- * error handler; nothing here keeps state between requests (serverless, ADR-0002).
+ * Builds the api's Express app on `deps`. Every route goes through the same Origin check, body
+ * parser and error handler; nothing here keeps state between requests (serverless, ADR-0002).
  */
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -28,6 +29,14 @@ export function createApp(deps: AppDeps): Express {
   // pick its IP by sending its own X-Forwarded-For: the entries it adds come before the proxy's
   // and are ignored.
   app.set('trust proxy', 1);
+  // CSRF (ADR-0004): every request that changes something (POST, PATCH, …) must carry an Origin
+  // that matches the host it was sent to, or it gets 403 (sameOrigin.ts). It covers every route,
+  // POST /api/orders now and those added later (/api/auth/*, /api/collector/*), and comes before the body
+  // parser, so a refused request's body is never parsed. The site's own requests always match:
+  // on Vercel the function sees the public host the browser used (X-Forwarded-Host, trusted
+  // above), and in dev Vite's proxy keeps the browser's Host (localhost:5173), because
+  // apps/web/vite.config.ts sets `changeOrigin: false`.
+  app.use(requireSameOrigin());
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
   // The form calls this when it loads (ADR-0002, warm-up): it wakes the function, and the ping
