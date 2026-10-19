@@ -229,7 +229,8 @@ export function buildUpdate(patch: OrderPatch): OrderUpdate | null {
 /**
  * The error to throw instead of a duplicate-key (E11000) error, or undefined for any other error.
  *
- * - The phone index: {@link DuplicateOpenOrderError}, which the api answers with the existing order.
+ * - The phone index: {@link DuplicateOpenOrderError}, which the api answers with 409 and a fixed
+ *   message, never the existing order (spec §3.1).
  * - The token or any other unique index: a plain Error. It is a bug, not a customer's duplicate.
  *
  * The raw error is never rethrown, nor kept as `cause`: its message and `keyValue` hold the phone
