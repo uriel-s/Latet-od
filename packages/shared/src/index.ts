@@ -17,6 +17,8 @@ export * from './streets.ts';
 export * from './location.ts';
 // Israeli mobile phone: form validation and the stored E.164 form.
 export * from './phone.ts';
+// Dates as the app shows them: DD/MM, in Israel's time zone (Asia/Jerusalem).
+export * from './dates.ts';
 // Order statuses and allowed status changes (spec §4).
 export * from './orderStatus.ts';
 // The stored order (spec §5 + ADRs) and the booking-form input with its Hebrew messages (spec §3.1).
@@ -25,6 +27,8 @@ export * from './order.ts';
 export * from './orderApi.ts';
 // The /api/auth/* contract: session user and cookie payload, login request, error bodies (ADR-0004).
 export * from './authApi.ts';
+// The /api/collector/orders contract: waiting orders by region, edit, cancel and add (spec §3.5).
+export * from './collectorOrdersApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and
