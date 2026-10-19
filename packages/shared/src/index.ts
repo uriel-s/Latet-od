@@ -15,6 +15,8 @@ export * from './phone.ts';
 export * from './orderStatus.ts';
 // The stored order (spec §5 + ADRs) and the booking-form input with its Hebrew messages (spec §3.1).
 export * from './order.ts';
+// The POST /api/orders contract: request, success summary, error bodies and messages (spec §3.1).
+export * from './orderApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and
