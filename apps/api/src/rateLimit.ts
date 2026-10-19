@@ -21,9 +21,10 @@ export interface RateLimitOptions {
 
 /**
  * Stands in for `req.ip` when Express has none (the socket closed before the request was handled).
- * Such requests share one key, so they are still limited, together, rather than let through.
+ * Such requests share one key, so they are still limited, together, rather than let through. The
+ * login's limit (auth/loginLimits.ts) uses it too.
  */
-const UNKNOWN_IP = 'unknown';
+export const UNKNOWN_IP = 'unknown';
 
 /**
  * Express middleware that allows each client IP `max` requests per sliding window of `windowMs`,
