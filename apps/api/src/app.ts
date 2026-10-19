@@ -1,8 +1,11 @@
 // The Express app, built by createApp(deps), with no listen() call. Two thin entry points wrap it
 // (ADR-0002): src/server.ts for local runs and plain Node hosting, and (section 10) a Vercel
-// function entry. Both pass the real dependencies (db/mongoDeps.ts); tests pass fakes (fakeDeps.ts).
+// function entry. Both pass the real dependencies (db/mongoDeps.ts, auth/authConfig.ts); tests
+// pass fakes (fakeDeps.ts).
 import express, { type Express } from 'express';
 import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
+import { createAuthRouter } from './auth/authRoutes.ts';
+import { requireCollector } from './auth/requireCollector.ts';
 import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
@@ -25,13 +28,13 @@ export function createApp(deps: AppDeps): Express {
   // The api runs behind exactly one proxy: Vercel's edge in production, Vite's dev proxy locally.
   // Trusting one hop makes `req.ip` the client's address, taken from the last entry of
   // X-Forwarded-For (the one that proxy added), which the per-IP rate limits need (POST
-  // /api/orders below, and the login in section 5). Trusting only one hop means a client cannot
+  // /api/orders and POST /api/auth/login below). Trusting only one hop means a client cannot
   // pick its IP by sending its own X-Forwarded-For: the entries it adds come before the proxy's
   // and are ignored.
   app.set('trust proxy', 1);
   // CSRF (ADR-0004): every request that changes something (POST, PATCH, …) must carry an Origin
-  // that matches the host it was sent to, or it gets 403 (sameOrigin.ts). It covers every route,
-  // POST /api/orders now and those added later (/api/auth/*, /api/collector/*), and comes before the body
+  // that matches the host it was sent to, or it gets 403 (sameOrigin.ts). It covers every route
+  // (POST /api/orders, /api/auth/*, /api/collector/* and any added later) and comes before the body
   // parser, so a refused request's body is never parsed. The site's own requests always match:
   // on Vercel the function sees the public host the browser used (X-Forwarded-Host, trusted
   // above), and in dev Vite's proxy keeps the browser's Host (localhost:5173), because
@@ -58,6 +61,16 @@ export function createApp(deps: AppDeps): Express {
 
   // The public booking form (spec §3.1): the per-IP rate limit, then the route (createOrderRoute.ts).
   app.post('/api/orders', ...createOrderHandlers(deps));
+
+  // The collector's login (ADR-0004): POST /api/auth/login, POST /api/auth/logout and
+  // GET /api/auth/me (auth/authRoutes.ts).
+  app.use('/api/auth', createAuthRouter(deps));
+
+  // Everything under /api/collector is Yoel's alone: without a valid session cookie it answers 401
+  // (auth/requireCollector.ts), and an old session is renewed on the way through. Every collector
+  // route (sections 6+) is added under /api/collector, AFTER this line, and is therefore protected.
+  // With a valid cookie, a path no route serves falls through to the 404 below.
+  app.use('/api/collector', requireCollector(deps.auth));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
   // a mistyped customer link holds the token.
