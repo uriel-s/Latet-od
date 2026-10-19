@@ -13,6 +13,8 @@ export * from './location.ts';
 export * from './phone.ts';
 // Order statuses and allowed status changes (spec §4).
 export * from './orderStatus.ts';
+// The stored order (spec §5 + ADRs) and the booking-form input with its Hebrew messages (spec §3.1).
+export * from './order.ts';
 
 /** Body of GET /api/health. The web app calls it on load to warm up the function (ADR-0002). */
 export interface HealthResponse {
