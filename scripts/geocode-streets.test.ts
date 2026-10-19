@@ -19,6 +19,7 @@ import {
   recomputeRegions,
   regionForPoint,
   serializeStreetsFile,
+  streetNameVariants,
   todayInJerusalem,
   userAgentFor,
   writeStreetsFile,
@@ -92,6 +93,28 @@ describe('regionForPoint', () => {
     expect(regionForPoint(CITY_CENTRE)).toBe('old');
   });
 
+  // Real street points from the geocode run of 2026-10-19, with their OSM suburb. Distances are
+  // north (+) or south (-) of REGION_DIVIDER at the point's longitude.
+  it('puts streets of Ramat Beit Shemesh in ramat', () => {
+    // נחל הקישון, RBS א: about 1.6 km south of the line.
+    expect(regionForPoint({ lat: 31.71979, lng: 34.99403 })).toBe('ramat');
+    // רבי עקיבא, RBS ב (קרית הרמ"א): about 600 m south.
+    expect(regionForPoint({ lat: 31.72851, lng: 34.99123 })).toBe('ramat');
+    // A street of RBS ד, in the west: about 1.5 km south.
+    expect(regionForPoint({ lat: 31.7141, lng: 34.9532 })).toBe('ramat');
+  });
+
+  it('puts streets of the old city and its industrial zone in old', () => {
+    // בן עזאי, יפה נוף: about 265 m north of the line.
+    expect(regionForPoint({ lat: 31.73756, lng: 34.99892 })).toBe('old');
+    // הרצל, the old city: about 1.7 km north.
+    expect(regionForPoint({ lat: 31.74919, lng: 34.99315 })).toBe('old');
+    // המלאכה, the western industrial zone (אזור תעשיה ברוש מערב): about 140 m north.
+    expect(regionForPoint({ lat: 31.73007, lng: 34.95931 })).toBe('old');
+    // The city centre (CITY_CENTRE): about 1.4 km north.
+    expect(regionForPoint({ lat: 31.7462, lng: 34.9887 })).toBe('old');
+  });
+
   it('splits just south / north of the line at both ends of REGION_DIVIDER', () => {
     for (const end of [REGION_DIVIDER.west, REGION_DIVIDER.east]) {
       expect(regionForPoint({ lat: end.lat - 0.0005, lng: end.lng })).toBe('ramat');
@@ -138,6 +161,48 @@ describe('parseNominatimResponse', () => {
     );
   });
 
+  // The town's boundary relation exactly as the free-form fallback returned it for "ש 160": its
+  // point is the centroid of Beit Shemesh, inside the bbox, but not a stop.
+  const TOWN_BOUNDARY = {
+    category: 'boundary',
+    type: 'administrative',
+    addresstype: 'town',
+    lat: '31.7462140',
+    lon: '34.9886825',
+  };
+  const HIGHWAY = { ...hit(RAMAT_POINT), category: 'highway', type: 'residential' };
+
+  it('skips the town boundary and returns the street after it', () => {
+    expect(parseNominatimResponse([TOWN_BOUNDARY, HIGHWAY])).toEqual(RAMAT_POINT);
+  });
+
+  it('returns undefined when the only result is the town boundary', () => {
+    expect(parseNominatimResponse([TOWN_BOUNDARY])).toBeUndefined();
+  });
+
+  it('skips a place=town or place=city node, and any result whose address type is the town', () => {
+    const townNode = { category: 'place', type: 'town', lat: '31.7462', lon: '34.9887' };
+    const cityNode = { category: 'place', type: 'city', lat: '31.7462', lon: '34.9887' };
+    const townByAddressType = { category: 'landuse', type: 'residential', addresstype: 'town' };
+    expect(parseNominatimResponse([townNode, cityNode, HIGHWAY])).toEqual(RAMAT_POINT);
+    expect(
+      parseNominatimResponse([{ ...townByAddressType, ...hit(CITY_CENTRE) }, HIGHWAY]),
+    ).toEqual(RAMAT_POINT);
+  });
+
+  it('keeps a neighbourhood mapped as a boundary polygon', () => {
+    // Only the town's own boundary is skipped (by its addresstype), not every boundary.
+    const suburbBoundary = { ...TOWN_BOUNDARY, addresstype: 'suburb', ...hit(RAMAT_POINT) };
+    expect(parseNominatimResponse([suburbBoundary])).toEqual(RAMAT_POINT);
+  });
+
+  it('keeps a place inside the town, such as a neighbourhood node', () => {
+    const neighbourhood = { ...hit(CITY_CENTRE), category: 'place', type: 'neighbourhood' };
+    expect(parseNominatimResponse([{ ...neighbourhood, addresstype: 'neighbourhood' }])).toEqual(
+      CITY_CENTRE,
+    );
+  });
+
   it('uses the bounding box it is given', () => {
     const modiinBox = { south: 31.85, north: 31.95, west: 34.95, east: 35.05 };
     expect(parseNominatimResponse([hit(CITY_CENTRE), hit(MODIIN_POINT)], modiinBox)).toEqual(
@@ -146,8 +211,59 @@ describe('parseNominatimResponse', () => {
   });
 });
 
+describe('streetNameVariants', () => {
+  it('returns only the official name when no pattern applies', () => {
+    expect(streetNameVariants('הרצל')).toEqual(['הרצל']);
+    expect(streetNameVariants('נהר הירדן')).toEqual(['נהר הירדן']);
+  });
+
+  it('removes the gershayim after the official name', () => {
+    expect(streetNameVariants('רשב"י')).toEqual(['רשב"י', 'רשבי']);
+    expect(streetNameVariants('המהרי"ל דיסקין')).toEqual(['המהרי"ל דיסקין', 'המהריל דיסקין']);
+  });
+
+  it('removes geresh and gershayim in every spelling: ASCII, Hebrew and typographic', () => {
+    for (const mark of ["'", '"', '`', '׳', '״', '‘', '’', '“', '”']) {
+      expect(streetNameVariants(`רשב${mark}י`)).toEqual([`רשב${mark}י`, 'רשבי']);
+    }
+  });
+
+  it('spells out a leading שד with or without its geresh, and adds no abbreviated spelling', () => {
+    expect(streetNameVariants("שד' האמוראים")).toEqual(["שד' האמוראים", 'שדרות האמוראים']);
+    expect(streetNameVariants('שד׳ האמוראים')).toEqual(['שד׳ האמוראים', 'שדרות האמוראים']);
+    expect(streetNameVariants('שד נהר הדן')).toEqual(['שד נהר הדן', 'שדרות נהר הדן']);
+  });
+
+  it('spells out a leading סמ, then removes the marks from both spellings', () => {
+    expect(streetNameVariants('סמ ויצ"ו')).toEqual([
+      'סמ ויצ"ו',
+      'סמטת ויצ"ו',
+      'סמ ויצו',
+      'סמטת ויצו',
+    ]);
+    expect(streetNameVariants('סמ האלון')).toEqual(['סמ האלון', 'סמטת האלון']);
+  });
+
+  it('expands an abbreviation only when it is the whole first word', () => {
+    expect(streetNameVariants('גבעת שד')).toEqual(['גבעת שד']);
+    expect(streetNameVariants("נחל שד' ים")).toEqual(["נחל שד' ים", 'נחל שד ים']);
+    expect(streetNameVariants('סמדר')).toEqual(['סמדר']);
+    expect(streetNameVariants('שדרות האמוראים')).toEqual(['שדרות האמוראים']);
+    expect(streetNameVariants('שד')).toEqual(['שד']);
+  });
+
+  it('puts the official name first and never repeats a spelling', () => {
+    const names = ['הרצל', 'רשב"י', "שד' האמוראים", 'סמ ויצ"ו', 'סמ הגפן', 'הרב האדמו"ר החלוץ'];
+    for (const name of names) {
+      const variants = streetNameVariants(name);
+      expect(variants[0]).toBe(name);
+      expect(new Set(variants).size).toBe(variants.length);
+    }
+  });
+});
+
 describe('nominatimSearchUrls', () => {
-  it('tries the structured street query first, then the free-form one', () => {
+  it('sends a name without variants as one structured query, then the free-form one', () => {
     const [structured, freeForm, ...rest] = nominatimSearchUrls('הרצל');
     expect(rest).toEqual([]);
     expect(structured?.searchParams.get('street')).toBe('הרצל');
@@ -157,9 +273,27 @@ describe('nominatimSearchUrls', () => {
     expect(freeForm?.searchParams.has('street')).toBe(false);
   });
 
-  it('bounds both queries to the city viewbox, in west,north,east,south order', () => {
+  it('tries every spelling as a structured query, then one free-form query with the official name', () => {
+    expect(nominatimSearchUrls('רשב"י').map(describeRequest)).toEqual([
+      'street:רשב"י',
+      'street:רשבי',
+      'q:רשב"י, בית שמש',
+    ]);
+    expect(nominatimSearchUrls('סמ ויצ"ו').map(describeRequest)).toEqual([
+      'street:סמ ויצ"ו',
+      'street:סמטת ויצ"ו',
+      'street:סמ ויצו',
+      'street:סמטת ויצו',
+      'q:סמ ויצ"ו, בית שמש',
+    ]);
+    for (const url of nominatimSearchUrls('סמ ויצ"ו').slice(0, -1)) {
+      expect(url.searchParams.get('city')).toBe('בית שמש');
+    }
+  });
+
+  it('bounds every query to the city viewbox, in west,north,east,south order', () => {
     const { west, north, east, south } = BEIT_SHEMESH_BBOX;
-    for (const url of nominatimSearchUrls('הרצל')) {
+    for (const url of [...nominatimSearchUrls('הרצל'), ...nominatimSearchUrls('סמ ויצ"ו')]) {
       expect(url.origin + url.pathname).toBe('https://nominatim.openstreetmap.org/search');
       expect(url.searchParams.get('viewbox')).toBe(`${west},${north},${east},${south}`);
       expect(url.searchParams.get('viewbox')).toBe('34.942,31.776,35.032,31.687');
@@ -194,6 +328,21 @@ describe('geocodeStreets', () => {
     ]);
   });
 
+  it('sends no request for the locality itself and logs why it was skipped', async () => {
+    const fake = fakeDeps(() => ({ body: [hit(CITY_CENTRE)] }));
+    const result = await geocodeStreets(
+      makeFile([
+        { code: 9000, name: 'בית שמש' },
+        { code: 101, name: 'הרצל' },
+      ]),
+      fake.deps,
+    );
+
+    expect(fake.requests.map((request) => describeRequest(request.url))).toEqual(['street:הרצל']);
+    expect(result.streets[0]).toEqual({ code: 9000, name: 'בית שמש' });
+    expect(fake.logs).toContain('skipped: 9000 "בית שמש": the locality itself, not a street');
+  });
+
   it('sends no request for a street that already has a point (resume)', async () => {
     const located = { code: 1, name: 'הרצל', region: 'old', ...CITY_CENTRE } as const;
     const fake = fakeDeps(() => ({ body: [hit(RAMAT_POINT)] }));
@@ -208,22 +357,67 @@ describe('geocodeStreets', () => {
     expect(result.streets[0]).toEqual(located);
   });
 
-  it('sleeps MIN_REQUEST_INTERVAL_MS before every request but the first', async () => {
-    // Street 1 is found by its structured query; street 2 needs both queries: three requests.
+  it('finds a street by its second spelling, keeps the official name and stops there', async () => {
     const fake = fakeDeps((url) => ({
-      body: url.searchParams.get('street') === 'ב' ? [] : [hit(RAMAT_POINT)],
+      body: url.searchParams.get('street') === 'רשבי' ? [hit(CITY_CENTRE)] : [],
     }));
+    const result = await geocodeStreets(makeFile([{ code: 1, name: 'רשב"י' }]), fake.deps);
+
+    expect(fake.requests.map((request) => describeRequest(request.url))).toEqual([
+      'street:רשב"י',
+      'street:רשבי',
+    ]);
+    expect(fake.events).toEqual(['fetch', `sleep ${MIN_REQUEST_INTERVAL_MS}`, 'fetch']);
+    expect(result.streets).toEqual([{ code: 1, name: 'רשב"י', region: 'old', ...CITY_CENTRE }]);
+  });
+
+  it('tries every spelling and then the free-form query for a street that none finds', async () => {
+    const fake = fakeDeps(() => ({ body: [] }));
+    const result = await geocodeStreets(makeFile([{ code: 143, name: 'סמ ויצ"ו' }]), fake.deps);
+
+    expect(fake.requests.map((request) => describeRequest(request.url))).toEqual([
+      'street:סמ ויצ"ו',
+      'street:סמטת ויצ"ו',
+      'street:סמ ויצו',
+      'street:סמטת ויצו',
+      'q:סמ ויצ"ו, בית שמש',
+    ]);
+    const sleeps = fake.events.filter((event) => event.startsWith('sleep')).length;
+    expect(sleeps).toBe(fake.requests.length - 1);
+    expect(result.streets).toEqual([{ code: 143, name: 'סמ ויצ"ו' }]);
+    expect(fake.saved).toEqual([]);
+  });
+
+  it('sleeps MIN_REQUEST_INTERVAL_MS before every request but the first', async () => {
+    // Street 1 is found by its structured query; street 2 needs the free-form one; street 3 its
+    // second spelling: five requests, one at a time, with a pause between each two.
+    const fake = fakeDeps((url) => {
+      const street = url.searchParams.get('street');
+      return { body: street === 'ב' || street === 'רשב"י' ? [] : [hit(RAMAT_POINT)] };
+    });
     await geocodeStreets(
       makeFile([
         { code: 1, name: 'א' },
         { code: 2, name: 'ב' },
+        { code: 3, name: 'רשב"י' },
       ]),
       fake.deps,
     );
 
     const sleep = `sleep ${MIN_REQUEST_INTERVAL_MS}`;
     expect(MIN_REQUEST_INTERVAL_MS).toBeGreaterThanOrEqual(1000);
-    expect(fake.events).toEqual(['fetch', sleep, 'fetch', sleep, 'fetch']);
+    expect(fake.requests).toHaveLength(5);
+    expect(fake.events).toEqual([
+      'fetch',
+      sleep,
+      'fetch',
+      sleep,
+      'fetch',
+      sleep,
+      'fetch',
+      sleep,
+      'fetch',
+    ]);
   });
 
   it('sends the identifying User-Agent with the contact mail on every request', async () => {

@@ -14,6 +14,12 @@
 //   - results are cached: they are committed to the repo, so the job is not repeated.
 // The file is saved after every point found, so an interrupted run loses nothing: re-running the
 // same command continues with the streets that still have no point.
+//
+// Per street, a few spellings of the name are tried, one request after another, and the search
+// stops at the first that finds a point (nominatimSearchUrls, streetNameVariants): the official
+// list abbreviates where OSM spells out ("סמ האלון" is "סמטת האלון" in OSM, `רשב"י` is "רשבי"). A
+// street OSM names as the list does still costs one request; a street that nothing finds costs
+// one per spelling plus one free-form fallback, still one at a time with the same pause.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,16 +67,29 @@ export type LatLng = { lat: number; lng: number };
  * בית שמש הוותיקה (`old`) is north of it.
  *
  * A straight line through two points rather than a single latitude, so it can be tilted to
- * follow the real gap between the neighbourhoods. Points west of `west` or east of `east` use
- * the line extended (see regionForPoint).
+ * follow the real gap between the neighbourhoods. Its ends sit on the west and east edges of
+ * BEIT_SHEMESH_BBOX; points beyond them use the line extended (see regionForPoint).
  *
- * PROVISIONAL: a horizontal line at 31.729 across the whole bbox, until the streets are geocoded
- * and the line is chosen from the real points. Changing it does not touch the file by itself:
- * run `npx tsx scripts/geocode-streets.ts --regions` to recompute every street's region.
+ * How it was chosen (fitted 2026-10-19; PENDING the developer's approval): every one of the 370
+ * geocoded street points was labelled with its OSM suburb (Nominatim reverse, addressdetails):
+ * - `ramat`: suburbs "רמת בית שמש א/ב/ג/ד/ה", "רמת אברהם", "נוה שמיר";
+ * - `old`: everything else: the old city (it has no suburb in OSM), the industrial zone "אזור
+ *   תעשיה ברוש מערב", and the OSM polygon tagged "רמת בית שמש ב'" (with geresh). That polygon's
+ *   quarters are old-city neighbourhoods (Sheinfeld/קרית אריה, הקריה החרדית/נחלה ומנוחה, גבעת
+ *   שרת, נופי אביב, רמת משה), so the tag is taken as over-broad; the real RBS ב is קרית הרמ"א.
+ * Of all lines with the fewest disagreements (4 of 370), this one keeps the most clearance to the
+ * nearest street, about 86 m. The 4 disagreements: בית ג'מאל (a monastery, no suburb) comes out
+ * `ramat`; 453 דובר שלום, 454 רבי פנחס בן יאיר and 455 אוהל יהושע (the north edge of קרית הרמ"א,
+ * mixed in with Sheinfeld) come out `old`.
+ *
+ * A wrong region is not final: Yoel can change any order's region (spec §3.5), and a street that
+ * keeps coming out wrong is fixed by hand in streets.json. Changing the line does not touch the
+ * file by itself: run `npx tsx scripts/geocode-streets.ts --regions` to recompute every street's
+ * region (that overwrites hand fixes, so redo them after).
  */
 export const REGION_DIVIDER: { west: LatLng; east: LatLng } = {
-  west: { lat: 31.729, lng: 34.942 },
-  east: { lat: 31.729, lng: 35.032 },
+  west: { lat: 31.726, lng: 34.942 },
+  east: { lat: 31.7405, lng: 35.032 },
 };
 
 /**
@@ -204,22 +223,125 @@ function nominatimBaseUrl(): URL {
 }
 
 /**
- * The Nominatim queries for one street, in the order to try them:
- * 1. structured `street=<name>&city=בית שמש`, which returns the street (highway) object itself;
- * 2. free-form `q=<name>, בית שמש`, which also finds names in the list that are neighbourhoods
- *    or places rather than streets ("שכ …", "גבעת …").
+ * Abbreviated first words of the official list and the word OSM spells out instead (probed:
+ * Nominatim finds nothing for "סמ האלון" or "שד נהר הדן", but finds "סמטת האלון" and "שדרות נהר
+ * הדן"). The key is the abbreviation without its geresh; it matches only as the whole first word,
+ * with or without a geresh (`שד`, `שד'`, `שד׳`), so "סמדר", "שדרות …" or "גבעת שד" stay as they
+ * are. A new abbreviation is one more line.
  */
-export function nominatimSearchUrls(streetName: string): URL[] {
-  const structured = nominatimBaseUrl();
-  structured.searchParams.set('street', streetName);
-  structured.searchParams.set('city', CITY_NAME);
-  const freeForm = nominatimBaseUrl();
-  freeForm.searchParams.set('q', `${streetName}, ${CITY_NAME}`);
-  return [structured, freeForm];
+const LEADING_ABBREVIATIONS: ReadonlyMap<string, string> = new Map([
+  ['סמ', 'סמטת'],
+  ['שד', 'שדרות'],
+]);
+
+/** Every geresh and gershayim as names write them: ASCII ' " `, Hebrew ׳ ״, typographic ‘ ’ “ ”. */
+const GERESH_AND_GERSHAYIM = /['"`׳״‘’“”]/gu;
+
+/** One geresh closing a word, in the same spellings: the mark of an abbreviation such as `שד'`. */
+const TRAILING_GERESH = /['`׳‘’]$/u;
+
+/** First word and rest of a name of two or more words; no match for a single word. */
+const FIRST_WORD_AND_REST = /^(\S+)\s+(.+)$/u;
+
+/** The name with every geresh and gershayim removed. */
+function withoutGershayim(text: string): string {
+  return text.replace(GERESH_AND_GERSHAYIM, '');
 }
 
-// jsonv2 search results: coordinates are strings. Other fields are not used.
-const nominatimResultsSchema = z.array(z.looseObject({ lat: z.string(), lon: z.string() }));
+/**
+ * The spellings of an official street name to search Nominatim for, in the order to try them,
+ * without duplicates; the first is always the official name itself.
+ *
+ * The official list abbreviates where OSM spells out, so a name Nominatim does not find as
+ * written may be found:
+ * - with its abbreviated first word spelled out (LEADING_ABBREVIATIONS): `שד' האמוראים` →
+ *   `שדרות האמוראים`;
+ * - with geresh and gershayim removed: `רשב"י` → `רשבי` (Nominatim finds neither `רשב"י` nor
+ *   `רשב״י`, but finds `רשבי`).
+ *
+ * Order: the official name first, because it is OSM's name for most streets, and a street it finds
+ * costs one request. Then the name with its abbreviated first word spelled out, then the official
+ * and the spelled-out name with the marks removed. Spelling out the abbreviation changes only the
+ * one word OSM writes in full, while removing marks changes the name itself, so the spelling
+ * closer to the official name is tried first.
+ *
+ * When the first word is an abbreviation, the marks are removed only from the rest of the name:
+ * the abbreviation's own geresh (`שד'`) is kept or replaced by the full word, never just dropped,
+ * since `שד האמוראים` would be one more abbreviation OSM does not use, a request with no new
+ * chance. Examples:
+ * - `סמ ויצ"ו` → `סמ ויצ"ו`, `סמטת ויצ"ו`, `סמ ויצו`, `סמטת ויצו`;
+ * - `שד' האמוראים` → `שד' האמוראים`, `שדרות האמוראים`;
+ * - `רשב"י` → `רשב"י`, `רשבי`;
+ * - `הרצל` → `הרצל`.
+ */
+export function streetNameVariants(name: string): string[] {
+  const words = FIRST_WORD_AND_REST.exec(name);
+  const firstWord = words?.[1] ?? '';
+  const rest = words?.[2] ?? '';
+  const expansion = LEADING_ABBREVIATIONS.get(firstWord.replace(TRAILING_GERESH, ''));
+  const spellings =
+    expansion === undefined
+      ? [name, withoutGershayim(name)]
+      : [
+          name,
+          `${expansion} ${rest}`,
+          `${firstWord} ${withoutGershayim(rest)}`,
+          `${expansion} ${withoutGershayim(rest)}`,
+        ];
+  return [...new Set(spellings)];
+}
+
+/**
+ * The Nominatim queries for one street, in the order to try them:
+ * 1. one structured `street=<spelling>&city=בית שמש` per spelling of streetNameVariants, in its
+ *    order (official name first); a structured query returns the street (highway) object itself;
+ * 2. last, one free-form `q=<official name>, בית שמש`, which also finds names in the list that are
+ *    neighbourhoods or places rather than streets ("שכ …", "גבעת …"). One is enough: the spellings
+ *    are for streets, and the structured queries have tried them all.
+ * geocodeStreets stops at the first query that finds a point, so a street OSM has under its
+ * official name still costs a single request.
+ */
+export function nominatimSearchUrls(streetName: string): URL[] {
+  const structured = streetNameVariants(streetName).map((spelling) => {
+    const url = nominatimBaseUrl();
+    url.searchParams.set('street', spelling);
+    url.searchParams.set('city', CITY_NAME);
+    return url;
+  });
+  const freeForm = nominatimBaseUrl();
+  freeForm.searchParams.set('q', `${streetName}, ${CITY_NAME}`);
+  return [...structured, freeForm];
+}
+
+// jsonv2 search results: coordinates are strings. category/type are the main OSM tag
+// (`highway`/`residential`, `boundary`/`administrative`, `place`/`town` …) and addresstype is the
+// address part the object stands for (`road`, `suburb`, `town` …); all three are optional so an
+// answer without them still parses. Other fields are not used.
+const nominatimResultSchema = z.looseObject({
+  lat: z.string(),
+  lon: z.string(),
+  category: z.string().optional(),
+  type: z.string().optional(),
+  addresstype: z.string().optional(),
+});
+const nominatimResultsSchema = z.array(nominatimResultSchema);
+
+/** OSM place / address types that mean the whole locality rather than a place inside it. */
+const LOCALITY_TYPES: ReadonlySet<string> = new Set(['city', 'town']);
+
+/**
+ * Whether a result is the city itself rather than a place inside it: a `place=city|town` node, or
+ * anything whose address type is the city or town (the town's boundary relation has
+ * `addresstype: 'town'`). Its point is the town's centroid (31.74621, 34.98868 for Beit Shemesh),
+ * which the free-form fallback returns for names it cannot place ("ש 160"). A centroid is not a
+ * stop: Yoel would be sent to the middle of town, so such a street is better left without a point,
+ * to fill by hand. Other boundaries are kept on purpose: OSM maps some neighbourhoods as boundary
+ * polygons (`addresstype: 'suburb'` / `'neighbourhood'`), and their centre is a fair stop point.
+ */
+function isTheLocalityItself(result: z.infer<typeof nominatimResultSchema>): boolean {
+  if (result.category === 'place' && LOCALITY_TYPES.has(result.type ?? '')) return true;
+  return LOCALITY_TYPES.has(result.addresstype ?? '');
+}
 
 /** Rounds to 5 decimals (≈1 m): a street-level point needs no more, and the file stays short. */
 function roundCoordinate(value: number): number {
@@ -228,8 +350,10 @@ function roundCoordinate(value: number): number {
 
 /**
  * The point of the first search result inside `bbox`, rounded to 5 decimals, or undefined when
- * no result qualifies. Results with unparseable coordinates are skipped. Throws when the answer
- * is not a result list (Nominatim reports errors as an object such as `{ error: … }`).
+ * no result qualifies. Skipped: results with unparseable coordinates, and results that are the
+ * city itself rather than a place inside it (isTheLocalityItself: its centroid is not a stop).
+ * Throws when the answer is not a result list (Nominatim reports errors as an object such as
+ * `{ error: … }`).
  */
 export function parseNominatimResponse(
   json: unknown,
@@ -241,6 +365,7 @@ export function parseNominatimResponse(
     throw new Error(`Nominatim did not return a result list: ${answer}`);
   }
   for (const result of nominatimResultsSchema.parse(json)) {
+    if (isTheLocalityItself(result)) continue;
     // Number(), not parseFloat(): "31.7abc" must be rejected, not read as 31.7.
     const lat = Number(result.lat);
     const lng = Number(result.lon);
@@ -299,10 +424,17 @@ function withPoint(street: Street, point: LatLng): Street {
  * Fills the point and region of every street that has no point, one Nominatim request at a time.
  *
  * Streets that already have a point are skipped: that is how a re-run resumes, since every point
- * found is saved at once. A street without one (not found last time, or not tried yet) is tried
- * again on every run, which also picks up fixes made in OSM since. Per street the queries of
- * nominatimSearchUrls are tried in order until one finds a point inside the city; a street that
- * none finds is logged and stays without point and region (fill it by hand, ADR-0005).
+ * found is saved at once. Also skipped, with no request and a log line: an entry named exactly
+ * CITY_NAME ("בית שמש", code 9000 in the official list), which is the locality itself, not a
+ * street; any point found for it would be the town's centroid, not a stop.
+ *
+ * Any other street without a point (not found last time, or not tried yet) is tried again on
+ * every run, which also picks up fixes made in OSM since (and new spellings added to
+ * streetNameVariants). Per street the queries of nominatimSearchUrls (each spelling of the name,
+ * then the free-form fallback) are tried in order until one finds a point inside the city, and no
+ * further query is sent for that street. The street keeps its official name whichever spelling
+ * found it. A street that none finds is logged and stays without point and region (fill it by
+ * hand, ADR-0005).
  *
  * Waits MIN_REQUEST_INTERVAL_MS before every request except the first. A non-2xx answer (429:
  * we are throttled, 403: blocked) stops the run with an Error naming the status and the street;
@@ -321,6 +453,10 @@ export async function geocodeStreets(file: StreetsFile, deps: GeocodeDeps): Prom
   for (const [index, street] of file.streets.entries()) {
     if (hasPoint(street)) continue;
     const label = `${street.code} "${street.name}"`;
+    if (street.name.trim() === CITY_NAME) {
+      deps.log(`skipped: ${label}: the locality itself, not a street`);
+      continue;
+    }
 
     let point: LatLng | undefined;
     for (const url of nominatimSearchUrls(street.name)) {
