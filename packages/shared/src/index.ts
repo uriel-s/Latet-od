@@ -5,6 +5,9 @@
 /** Project name, as shown to customers. */
 export const APP_NAME = 'לתת עוד';
 
+// Street list, search and region (ADR-0005).
+export * from './streets.ts';
+
 /** Body of GET /api/health. The web app calls it on load to warm up the function (ADR-0002). */
 export interface HealthResponse {
   ok: true;
