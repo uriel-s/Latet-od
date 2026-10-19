@@ -16,6 +16,14 @@ export default defineConfig({
           include: ['packages/shared/src/**/*.test.ts'],
         },
       },
+      // Root-level one-off scripts (scripts/geocode-streets.ts): not a workspace, so inline too.
+      {
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          include: ['scripts/**/*.test.ts'],
+        },
+      },
     ],
   },
 });

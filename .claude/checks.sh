@@ -28,7 +28,8 @@ cd "$(dirname "$0")/.." || exit 2
 export CI=true
 
 BIN="node_modules/.bin"
-WORKSPACES="apps/web apps/api packages/shared"
+# tsc projects for run_types: the three workspaces plus scripts/ (root-level, its own tsconfig).
+WORKSPACES="apps/web apps/api packages/shared scripts"
 
 # True if a devDependency's CLI is installed.
 have() { [ -e "$BIN/$1" ]; }
