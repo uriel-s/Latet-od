@@ -7,6 +7,12 @@ export const APP_NAME = 'לתת עוד';
 
 // Street list, search and region (ADR-0005).
 export * from './streets.ts';
+// An address's region and map point, from its street codes (ADR-0005).
+export * from './location.ts';
+// Israeli mobile phone: form validation and the stored E.164 form.
+export * from './phone.ts';
+// Order statuses and allowed status changes (spec §4).
+export * from './orderStatus.ts';
 
 /** Body of GET /api/health. The web app calls it on load to warm up the function (ADR-0002). */
 export interface HealthResponse {
