@@ -2,7 +2,7 @@
 // its place (spec §3.2). The rules live in the shared schema (formValues.ts), the request in
 // api.ts and the returning customer's prefill in savedDetails.ts: this file is the screen itself,
 // its state, and where focus goes after each answer.
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
   BOTTLES_SPOT_LABELS,
@@ -13,6 +13,7 @@ import {
   type CreateOrderRequest,
 } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE, createOrder, type CreateOrderOutcome } from '../api.ts';
+import { TextField } from '../components/TextField.tsx';
 import { navigate, useLocation } from '../router.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import {
@@ -45,12 +46,6 @@ const NO_ERRORS: FormErrors = { byField: {} };
 function initialFormValues(navigationState: unknown): OrderFormValues {
   const prefill = prefillFromNavigationState(navigationState) ?? loadSavedDetails();
   return prefill === null ? emptyOrderFormValues() : formValuesFromPrefill(prefill);
-}
-
-/** The ids for `aria-describedby`, space-separated; undefined when there is none. */
-function describedBy(...ids: (string | undefined)[]): string | undefined {
-  const present = ids.filter((id) => id !== undefined);
-  return present.length === 0 ? undefined : present.join(' ');
 }
 
 /** Props of {@link OrderFormPage}. */
@@ -315,78 +310,5 @@ export function OrderFormPage({ submitOrder = createOrder }: OrderFormPageProps)
         </button>
       </form>
     </>
-  );
-}
-
-/** Props of {@link TextField}. */
-interface TextFieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  /** Plain-Hebrew message shown under the input; the input is then marked invalid. */
-  error: string | undefined;
-  /** A short example or rule shown between the label and the input. */
-  hint?: ReactNode;
-  autoComplete: string;
-  maxLength?: number;
-  /** 'tel' for the phone: phones offer their own number. */
-  type?: 'text' | 'tel';
-  /**
-   * Digits (phone, number of bottles): the phone opens its numeric keyboard, and the digits read
-   * left to right inside the right-to-left page (CLAUDE.md).
-   */
-  digits?: boolean;
-}
-
-/**
- * One text field of the form: a visible label, an optional hint, the input, and its error next
- * to it. The hint and the error are linked to the input with aria-describedby, so a screen
- * reader reads them with the field.
- */
-function TextField({
-  label,
-  value,
-  onChange,
-  error,
-  hint,
-  autoComplete,
-  maxLength,
-  type = 'text',
-  digits = false,
-}: TextFieldProps) {
-  const inputId = useId();
-  const hintId = useId();
-  const errorId = useId();
-  const hasHint = hint !== undefined;
-
-  return (
-    <div className="field">
-      <label htmlFor={inputId} className="field-label">
-        {label}
-      </label>
-      {hasHint && (
-        <p id={hintId} className="field-hint">
-          {hint}
-        </p>
-      )}
-      <input
-        id={inputId}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        autoComplete={autoComplete}
-        maxLength={maxLength}
-        inputMode={digits ? 'numeric' : undefined}
-        dir={digits ? 'ltr' : undefined}
-        className={digits ? 'ltr' : undefined}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(hasHint ? hintId : undefined, error ? errorId : undefined)}
-      />
-      {error && (
-        <p id={errorId} className="field-error">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
