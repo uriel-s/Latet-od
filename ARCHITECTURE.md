@@ -8,7 +8,7 @@
 | רכיב | מה | איפה | החלטה |
 |---|---|---|---|
 | **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). | `apps/web` | ADR-0001 |
-| **api** | Express. `app.ts` מייצא את האפליקציה, ויש שתי נקודות כניסה דקות: `server.ts` (מקומי / hosting רגיל), ו-function ל-Vercel _(P4)_. | `apps/api` | ADR-0001, 0002 |
+| **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB). יש שתי נקודות כניסה דקות שבונות את התלויות האמיתיות (`createMongoDeps`): `server.ts` (מקומי / hosting רגיל), ו-function ל-Vercel _(P4)_. בבדיקות: `createFakeDeps()`. | `apps/api` | ADR-0001, 0002 |
 | **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק), ורשימת הרחובות עם אזור ונקודה (`data/streets.json`, `searchStreets`, `findStreet`). | `packages/shared` | ADR-0001, 0005 |
 | **סקריפט רחובות** | חד-פעמי, לא חלק מהאפליקציה: מוריד את הרשימה מ-data.gov.il (`--refresh-list`) וממלא נקודה ואזור לכל רחוב דרך Nominatim, בקשה בשנייה. אזור לפי `REGION_DIVIDER`. התוצאה נשמרת ב-git. | `scripts/geocode-streets.ts` | ADR-0005 |
 | **MongoDB Atlas Free** | אוספים `orders`, `rounds`, `loginAttempts` (TTL). driver רשמי, בלי Mongoose. | אירופה | ADR-0001 |
