@@ -137,7 +137,9 @@ describe('streetsFileSchema', () => {
 
 describe('findStreet', () => {
   it('returns the street for a known code', () => {
-    expect(findStreet(103)).toEqual({ code: 103, name: "ז'בוטינסקי" });
+    // Only code and name: the point and region come from the geocoded data and may change
+    // whenever the script runs again or the region line moves.
+    expect(findStreet(103)).toMatchObject({ code: 103, name: "ז'בוטינסקי" });
   });
 
   it('returns undefined for an unknown code', () => {
