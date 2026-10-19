@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PHONE_ERROR,
   e164MobileSchema,
+  formatIsraeliMobileLocal,
   israeliMobileSchema,
   normalizeIsraeliMobile,
 } from './phone.ts';
@@ -145,6 +146,38 @@ describe('e164MobileSchema', () => {
     for (const input of ['050-1234567', '00972 52 765 4321', '+972 058-111-2222']) {
       const e164 = normalizeIsraeliMobile(input);
       expect(e164MobileSchema.safeParse(e164).success, input).toBe(true);
+    }
+  });
+});
+
+describe('formatIsraeliMobileLocal', () => {
+  it('turns a stored E.164 mobile into the local form customers know', () => {
+    expect(formatIsraeliMobileLocal(E164)).toBe('050-1234567');
+  });
+
+  it('keeps every 05X prefix', () => {
+    expect(formatIsraeliMobileLocal('+972521234567')).toBe('052-1234567');
+    expect(formatIsraeliMobileLocal('+972587654321')).toBe('058-7654321');
+  });
+
+  it('outputs a number that normalizes back to the same E.164 number', () => {
+    for (const e164 of [E164, '+972521234567', '+972549876543']) {
+      expect(normalizeIsraeliMobile(formatIsraeliMobileLocal(e164)), e164).toBe(e164);
+    }
+  });
+
+  it('returns anything that is not an E.164 Israeli mobile unchanged', () => {
+    for (const input of [
+      '0501234567',
+      '050-1234567',
+      '+972 50 123 4567',
+      '972501234567',
+      '+97221234567',
+      '+9725012345678',
+      '',
+      'טלפון',
+    ]) {
+      expect(formatIsraeliMobileLocal(input), input).toBe(input);
     }
   });
 });

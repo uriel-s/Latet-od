@@ -5,6 +5,12 @@
 /** Project name, as shown to customers. */
 export const APP_NAME = 'לתת עוד';
 
+/**
+ * The slogan shown under {@link APP_NAME} at the top of the booking form (spec §3.1, branding in
+ * spec §7): the bottles a customer gives fund tefillin for bar-mitzvah boys and soldiers.
+ */
+export const APP_SLOGAN = 'הבקבוקים שלכם, התפילין שלהם!';
+
 // Street list, search and region (ADR-0005).
 export * from './streets.ts';
 // An address's region and map point, from its street codes (ADR-0005).

@@ -60,3 +60,21 @@ export const israeliMobileSchema = z.string({ error: PHONE_ERROR }).transform((i
 export const e164MobileSchema = z
   .string()
   .regex(E164_MOBILE, 'expected an E.164 Israeli mobile number (+9725XXXXXXXX)');
+
+// The parts of a stored E.164 mobile as customers group them locally: "05X" and the 7 digits after.
+const E164_MOBILE_PARTS = /^\+972(5\d)(\d{7})$/;
+
+/**
+ * A stored E.164 mobile (`+972501234567`) in the local form customers know and type
+ * (`050-1234567`), for showing a number back to a person: the booking form's prefill, and later
+ * the collector's and customer's screens. The output normalizes back to the same E.164 number.
+ *
+ * Returns the input unchanged when it is not an E.164 Israeli mobile: a display helper never
+ * throws or hides a value, and a stored number in another shape is shown as it is.
+ */
+export function formatIsraeliMobileLocal(e164: string): string {
+  const parts = E164_MOBILE_PARTS.exec(e164);
+  if (parts === null) return e164;
+  const [, prefix, number] = parts;
+  return `0${prefix}-${number}`;
+}
