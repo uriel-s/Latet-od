@@ -1,11 +1,13 @@
 // The booking form's values as its inputs hold them (spec §3.1), and the step from those values
-// to the POST /api/orders body. The rules themselves live in the shared `orderFormSchema`: this
+// to the POST /api/orders body, or to the order details Yoel's add and edit screens send (spec
+// §3.5: same fields, same rules). The rules themselves live in the shared `orderFormSchema`: this
 // module only shapes the values into the schema's input and maps its errors back onto fields, so
 // the form and the api can never disagree about what is valid.
 import {
   ORDER_HONEYPOT_FIELD,
   formFieldErrors,
   orderFormSchema,
+  type AddOrderRequest,
   type BottlesSpot,
   type CreateOrderRequest,
 } from '@bottlerun/shared';
@@ -61,6 +63,9 @@ export interface FormErrors {
   /** Set when a key no field shows came back. */
   other?: string;
 }
+
+/** No error anywhere: the form as it opens, and while a request is on its way. */
+export const NO_ERRORS: FormErrors = { byField: {} };
 
 /**
  * Shown above the form when an error cannot be placed next to a field (a path the form does not
@@ -143,20 +148,37 @@ function toRawForm(values: OrderFormValues) {
 }
 
 /**
- * Validates the form with the shared `orderFormSchema`, the same check the api runs, so the
- * customer sees every mistake next to its field before anything is sent (and before the request
- * counts toward the per-IP limit).
+ * Validates the order's details with the shared `orderFormSchema`, the same check the api runs,
+ * so every mistake shows next to its field before anything is sent. The booking form uses it
+ * through {@link validateOrderForm}; Yoel's add and edit screens use it as is, since their
+ * requests carry no honeypot (an `AddOrderRequest`, or the contact, address and bottles of an
+ * `UpdateOrderRequest`).
  *
  * On success, `request` is the schema's output (trimmed text, the phone in E.164, the official
- * street name, the number of bottles as a number), which is valid input to the same schema, plus
- * the honeypot exactly as the hidden input holds it: the api decides what a filled one means.
+ * street name, the number of bottles as a number), which is valid input to the same schema.
+ * `values.website` is ignored.
  */
-export function validateOrderForm(
+export function validateOrderDetails(
   values: OrderFormValues,
-): { ok: true; request: CreateOrderRequest } | { ok: false; errors: FormErrors } {
+): { ok: true; request: AddOrderRequest } | { ok: false; errors: FormErrors } {
   const parsed = orderFormSchema.safeParse(toRawForm(values));
   if (!parsed.success) {
     return { ok: false, errors: mapFieldErrors(formFieldErrors(parsed.error)) };
   }
-  return { ok: true, request: { ...parsed.data, [ORDER_HONEYPOT_FIELD]: values.website } };
+  return { ok: true, request: parsed.data };
+}
+
+/**
+ * Validates the public booking form: {@link validateOrderDetails} before anything is sent, so the
+ * customer sees every mistake next to its field before the request counts toward the per-IP limit.
+ *
+ * On success, `request` is the validated details plus the honeypot exactly as the hidden input
+ * holds it: the api decides what a filled one means.
+ */
+export function validateOrderForm(
+  values: OrderFormValues,
+): { ok: true; request: CreateOrderRequest } | { ok: false; errors: FormErrors } {
+  const validation = validateOrderDetails(values);
+  if (!validation.ok) return validation;
+  return { ok: true, request: { ...validation.request, [ORDER_HONEYPOT_FIELD]: values.website } };
 }

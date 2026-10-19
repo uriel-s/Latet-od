@@ -4,6 +4,7 @@ import {
   UNKNOWN_FIELD_ERROR,
   emptyOrderFormValues,
   mapFieldErrors,
+  validateOrderDetails,
   validateOrderForm,
   type OrderFormValues,
 } from './formValues.ts';
@@ -172,6 +173,45 @@ describe('validateOrderForm', () => {
     );
     expect(website).toBe('');
     expect(orderFormSchema.parse(form)).toEqual(form);
+  });
+});
+
+describe('validateOrderDetails', () => {
+  it('builds the same request as the booking form, without the honeypot', () => {
+    const values = makeValues({ bottlesSpot: 'apartmentDoor', floorApt: 'קומה 3', note: 'קוד' });
+    const { website, ...formRequest } = requestOf(values);
+
+    expect(website).toBe('');
+    expect(validateOrderDetails(values)).toEqual({ ok: true, request: formRequest });
+  });
+
+  it('leaves out the honeypot even when it is filled', () => {
+    const result = validateOrderDetails(makeValues({ website: 'http://spam.example' }));
+
+    if (!result.ok) throw new Error('expected valid values');
+    expect(result.request).not.toHaveProperty('website');
+  });
+
+  it('builds a request that the shared schema accepts again unchanged', () => {
+    const result = validateOrderDetails(
+      makeValues({ street: { kind: 'freeText', name: 'הרימון' } }),
+    );
+
+    if (!result.ok) throw new Error('expected valid values');
+    expect(orderFormSchema.parse(result.request)).toEqual(result.request);
+  });
+
+  it('gives the same errors as the booking form, each next to its field', () => {
+    for (const values of [
+      emptyOrderFormValues(),
+      makeValues({ bottlesEstimated: '29' }),
+      makeValues({ bottlesSpot: 'apartmentDoor', floorApt: '' }),
+      makeValues({ phone: '02-9912345', street: null }),
+    ]) {
+      const details = validateOrderDetails(values);
+      expect(details.ok, JSON.stringify(values)).toBe(false);
+      expect(details, JSON.stringify(values)).toEqual(validateOrderForm(values));
+    }
   });
 });
 
