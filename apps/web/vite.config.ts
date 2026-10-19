@@ -11,5 +11,7 @@ export default defineConfig({
     name: 'web',
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
+    // Cleanup between tests (no Vitest globals, so Testing Library cannot do it on its own).
+    setupFiles: ['./src/testSetup.ts'],
   },
 });
