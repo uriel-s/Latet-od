@@ -1,9 +1,11 @@
 // Tests of the app's shared plumbing (health, 404, body parser, proxy trust, headers) through
-// supertest against createApp(fakes): no listen(), no port, no database.
+// supertest against createApp(fakes): no listen(), no port, no database. POSTs send the site's
+// own Host and Origin, to get past the Origin check (tested in sameOrigin.test.ts).
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { createApp } from './app.ts';
 import { createFakeDeps } from './fakeDeps.ts';
+import { SAME_ORIGIN_HEADERS } from './testRequest.ts';
 
 const PHONE = '0521234567';
 
@@ -79,6 +81,7 @@ describe('request bodies', () => {
   it('answers malformed JSON with 400, logging no part of it', async () => {
     const res = await request(createApp(createFakeDeps()))
       .post('/api/orders')
+      .set(SAME_ORIGIN_HEADERS)
       .set('Content-Type', 'application/json')
       .send(`phone ${PHONE}`);
 
@@ -90,6 +93,7 @@ describe('request bodies', () => {
   it('refuses a body over 10kb with 413', async () => {
     const res = await request(createApp(createFakeDeps()))
       .post('/api/orders')
+      .set(SAME_ORIGIN_HEADERS)
       .send({ notes: 'x'.repeat(11 * 1024) });
 
     expect(res.status).toBe(413);
@@ -101,6 +105,7 @@ describe('request bodies', () => {
     // to the route instead of refusing it with 413.
     const res = await request(createApp(createFakeDeps()))
       .post('/api/orders')
+      .set(SAME_ORIGIN_HEADERS)
       .send({ notes: 'x'.repeat(9 * 1024) });
 
     expect(res.status).toBe(400);
