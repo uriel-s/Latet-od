@@ -1,6 +1,8 @@
 // Acceptance tests of POST /api/orders (spec §3.1, §7) through supertest against createApp(fakes):
 // no listen(), no port, no database, no network. Each test keeps the in-memory orders repo and
 // attempt store it passes in, to see what the route stored and what the rate limit counted.
+// Every request is sent from the site's own origin (SAME_ORIGIN_HEADERS), as the web form's is,
+// except in the Origin check's own tests.
 import { inspect } from 'node:util';
 import type { Express } from 'express';
 import request from 'supertest';
@@ -21,6 +23,7 @@ import {
 import { createApp } from '../app.ts';
 import { InMemoryAttemptStore } from '../attempts/inMemoryAttemptStore.ts';
 import { createFakeDeps } from '../fakeDeps.ts';
+import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { ORDER_RATE_LIMIT } from './createOrderRoute.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
 import { makeNewOrder } from './makeOrder.ts';
@@ -105,9 +108,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** POSTs `body` to /api/orders as if the proxy had seen the request come from `ip`. */
+/**
+ * POSTs `body` to /api/orders from the site's own origin, as if the proxy had seen the request
+ * come from `ip`.
+ */
 function postOrder(body: object, ip = IP, target: Express = app): request.Test {
-  return request(target).post('/api/orders').set('X-Forwarded-For', ip).send(body);
+  return request(target)
+    .post('/api/orders')
+    .set(SAME_ORIGIN_HEADERS)
+    .set('X-Forwarded-For', ip)
+    .send(body);
 }
 
 /** The 201 body, checked against the shared contract the web app parses it with. */
@@ -280,7 +290,7 @@ describe('POST /api/orders: an invalid booking', () => {
       send: (req: request.Test) => req.set('Content-Type', 'text/plain').send('website=x'),
     },
   ])('answers $label with 400 invalid_order and no field errors', async ({ send }) => {
-    const res = await send(request(app).post('/api/orders'));
+    const res = await send(request(app).post('/api/orders').set(SAME_ORIGIN_HEADERS));
 
     expect(res.status).toBe(400);
     expect(res.body).toStrictEqual({ error: 'invalid_order', fieldErrors: {} });
@@ -439,6 +449,39 @@ describe('POST /api/orders: the rate limit', () => {
     await postOrder({ ...bodyWithPhone(phoneNumber(1)), website: 'https://spam.example' });
 
     expect(await attempts.count(`order:ip:${IP}`, ORDER_RATE_LIMIT.windowMs)).toBe(4);
+  });
+});
+
+describe('POST /api/orders: the Origin check', () => {
+  it.each([
+    { label: 'from another site', origin: 'https://evil.example' },
+    { label: 'from the same host name on another port', origin: `https://${TEST_HOST}:8443` },
+    { label: 'with Origin: null', origin: 'null' },
+    { label: 'with no Origin', origin: undefined },
+  ])(
+    'refuses a valid booking $label with 403, before the rate limit: nothing stored or counted',
+    async ({ origin }) => {
+      const req = request(app)
+        .post('/api/orders')
+        .set('Host', TEST_HOST)
+        .set('X-Forwarded-For', IP);
+      if (origin !== undefined) req.set('Origin', origin);
+
+      const res = await req.send(validBody());
+
+      expect(res.status).toBe(403);
+      expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
+      expect(await orders.list()).toEqual([]);
+      expect(await attempts.count(`order:ip:${IP}`, ORDER_RATE_LIMIT.windowMs)).toBe(0);
+    },
+  );
+
+  it('accepts the same booking from the site itself', async () => {
+    // The control for the test above: only the Origin differs.
+    const res = await postOrder(validBody());
+
+    expect(res.status).toBe(201);
+    expect(await orders.list()).toHaveLength(1);
   });
 });
 
