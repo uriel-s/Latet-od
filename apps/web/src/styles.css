@@ -282,6 +282,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/*
+ * A button that is busy rather than disabled (the form's "שולח..." while its request runs): it
+ * keeps focus and its full contrast, so the new text stays readable; only the cursor changes.
+ */
+button[aria-disabled='true'] {
+  cursor: progress;
+}
+
 /* The shared shape of buttons and of links that look like buttons (<a class="button">). */
 .button {
   display: inline-flex;
