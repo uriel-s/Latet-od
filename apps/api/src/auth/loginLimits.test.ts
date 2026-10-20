@@ -1,4 +1,4 @@
-// Unit tests of the failed-login limit (ADR-0004: 5 per IP in 15 minutes, 30 per hour from all
+// Unit tests of the login-attempt limit (ADR-0004: 5 per IP in 15 minutes, 30 per hour from all
 // IPs), against the in-memory AttemptStore with a fake clock, so windows pass without waiting.
 // The route's use of it (429 before the password check) is tested in authRoutes.test.ts.
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -30,9 +30,9 @@ function advance(ms: number): void {
   clock = new Date(clock.getTime() + ms);
 }
 
-/** Records `failures` wrong passwords from `ip`. */
+/** Records `failures` login attempts from `ip`. */
 async function fail(ip: string | undefined, failures: number): Promise<void> {
-  for (let i = 0; i < failures; i += 1) await limiter.recordFailure(ip);
+  for (let i = 0; i < failures; i += 1) await limiter.recordAttempt(ip);
 }
 
 describe('LOGIN_LIMITS', () => {
@@ -110,6 +110,25 @@ describe('createLoginLimiter', () => {
     expect(await attempts.count(loginIpKey(IP), LOGIN_LIMITS.perIp.windowMs)).toBe(0);
     expect(await attempts.count(loginIpKey(OTHER_IP), LOGIN_LIMITS.perIp.windowMs)).toBe(1);
     expect(await attempts.count(LOGIN_GLOBAL_KEY, LOGIN_LIMITS.global.windowMs)).toBe(5);
+  });
+
+  it('lets exactly the first 5 attempts of a simultaneous burst through, for one IP', async () => {
+    const results = await Promise.all(Array.from({ length: 20 }, () => limiter.recordAttempt(IP)));
+
+    expect(results.filter(Boolean)).toHaveLength(LOGIN_LIMITS.perIp.max);
+  });
+
+  it('lets exactly the first 30 attempts of a burst through, spread over many IPs', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 60 }, (_unused, i) => limiter.recordAttempt(`10.0.2.${i}`)),
+    );
+
+    expect(results.filter(Boolean)).toHaveLength(LOGIN_LIMITS.global.max);
+  });
+
+  it('answers recordAttempt true up to the 5th attempt and false from the 6th', async () => {
+    for (let i = 0; i < 5; i += 1) expect(await limiter.recordAttempt(IP)).toBe(true);
+    expect(await limiter.recordAttempt(IP)).toBe(false);
   });
 
   it('limits requests without an IP together', async () => {
