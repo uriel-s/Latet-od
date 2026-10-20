@@ -1014,6 +1014,7 @@ const ROUND_VIEW: RoundView = {
       url: 'https://wa.me/972501234567?text=%D7%A9%D7%9C%D7%95%D7%9D',
     },
   ],
+  stops: [],
 };
 
 /** The same round once its customer confirmed: no "שלח" row left. */

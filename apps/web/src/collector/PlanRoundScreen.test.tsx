@@ -106,6 +106,7 @@ const ROUND_VIEW: RoundView = {
     { key: 'otherDate', orders: [] },
   ],
   sendList: [],
+  stops: [],
 };
 const PLANNED: PlanRoundOutcome = { kind: 'planned', view: ROUND_VIEW };
 
