@@ -2,8 +2,9 @@
 // (CLAUDE.md: minimum moving parts): the app has four routes and no nested layouts or data
 // loaders, which this file covers in a few dozen lines. App.tsx is the one place routes are listed.
 //
-// The server (Vercel rewrite, section 10) answers every non-/api path with index.html, so a deep
-// link such as /o/<token> from a WhatsApp message loads the app, and `matchRoute` picks the page.
+// The server (the SPA rewrite `/(.*)` → `/index.html` in vercel.json; Vite's dev server does the
+// same) answers every non-/api path that is not a built file with index.html, so a deep link such
+// as /o/<token> from a WhatsApp message loads the app, and `matchRoute` picks the page.
 import { useSyncExternalStore, type MouseEvent, type ReactNode } from 'react';
 
 /** A page of the app, decided by the URL path alone. */
