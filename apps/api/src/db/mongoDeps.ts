@@ -1,7 +1,7 @@
 // The production AppDeps that live in the database: the Mongo repos on the database named in
 // MONGODB_URI (ADR-0001); the login's and the WhatsApp messages' settings come from env instead
 // (auth/authConfig.ts, messages/messagingConfig.ts). Both entry points (server.ts and the Vercel
-// function entry api/index.ts) call createMongoDeps once per process, through depsFromEnv
+// function entry vercelEntry.ts) call createMongoDeps once per process, through depsFromEnv
 // (envDeps.ts). Nothing here touches the network; the driver connects on the first operation.
 import type { DbDeps } from '../deps.ts';
 import { MongoAttemptStore } from '../attempts/mongoAttemptStore.ts';
@@ -45,7 +45,7 @@ export function databaseNameFromUri(uri: string): string | undefined {
  * `messaging`, which come from env, not from the database (authDepsFromEnv, auth/authConfig.ts;
  * messagingDepsFromEnv, messages/messagingConfig.ts); depsFromEnv (envDeps.ts) joins the three.
  * Call it once per process, next to the client (the repos create their indexes once per instance):
- * server.ts and the Vercel function entry (api/index.ts, via vercelHandler.ts) both do.
+ * server.ts and the Vercel function entry (vercelEntry.ts, via vercelHandler.ts) both do.
  *
  * Creates the repos without connecting; `db.ping()` (GET /api/health) opens the connection early.
  *

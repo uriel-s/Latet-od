@@ -1,6 +1,6 @@
 // The one place that turns env into the api's real AppDeps. Both entry points use it, so they
 // cannot drift apart: server.ts (local runs and plain Node hosting) at startup, and the Vercel
-// function entry api/index.ts (through vercelHandler.ts) on its first request (ADR-0002). Every
+// function entry vercelEntry.ts (through vercelHandler.ts) on its first request (ADR-0002). Every
 // error it throws names the variable that is wrong and how to fix it, never the value: several
 // are secrets (MONGODB_URI holds the database password), and the message is printed or logged.
 import { authDepsFromEnv } from './auth/authConfig.ts';

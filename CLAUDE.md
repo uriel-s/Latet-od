@@ -72,7 +72,7 @@ BottleRun/
 │       └── vitest.config.ts # Vitest "api" project (node)
 ├── packages/
 │   └── shared/              # TS source consumed directly (no build): types, zod, config, message text
-├── api/index.ts             # Vercel function entry (ADR-0002): builds deps from env, exports the app
+├── api/index.js             # Vercel function (ADR-0002): GENERATED bundle of apps/api/src/vercelEntry.ts, committed; rebuild with `npm run build:api`
 ├── scripts/                 # one-off Node scripts: geocode-streets, smoke (post-deploy check)
 ├── vercel.json              # build, rewrites (/api → function, rest → index.html), region iad1, headers
 ├── .github/workflows/       # backup.yml: weekly mongodump artifact
@@ -116,10 +116,10 @@ Several global commands (/work, /pr) carry a fallback branch: "if `.claude/check
 | `lint` | `eslint .` | Includes the workspace import boundaries. |
 | `format` | `prettier --check .` | `*.md` and `docs/` are excluded (hand-written Hebrew). |
 | `arch` | — | Always `SKIP`: boundaries are ESLint rules and run under `lint`. |
-| `types` | `tsc --noEmit -p` for `apps/web`, `apps/api`, `packages/shared`, `scripts`, `api` | |
+| `types` | `tsc --noEmit -p` for `apps/web`, `apps/api`, `packages/shared`, `scripts` | |
 | `sec` | `npm audit --omit=dev --audit-level=high` | Needs network. |
 | `test` | `vitest run [files]` | Extra args narrow the run. |
-| `build` | `vite build apps/web` | web has one smoke test; the build is its main regression signal. |
+| `build` | `vite build apps/web`, then rebuilds `api/index.js` and fails if it differs from the committed one | web has one smoke test; the build is its main regression signal. After changing anything under `apps/api` or `packages/shared`, run `npm run build:api` and commit `api/index.js`. |
 | `all` | all of the above | Runs every check and reports every failure, not just the first. |
 
 A check whose tool is not installed prints `SKIP: <tool> not installed` and passes — on a fresh clone, run `npm install` first or `all` is green for the wrong reason.

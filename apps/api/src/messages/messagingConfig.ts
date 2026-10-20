@@ -1,7 +1,7 @@
 // The WhatsApp messages' settings from env (ADR-0003): MESSAGE_SENDER picks the MessageSender and
 // PUBLIC_BASE_URL is the site's origin, which every link inside a message starts with. Both entry
 // points call messagingDepsFromEnv once at startup through depsFromEnv (envDeps.ts): server.ts, and
-// the Vercel function entry api/index.ts on its first request. So a bad value stops the startup
+// the Vercel function entry vercelEntry.ts on its first request. So a bad value stops the startup
 // instead of sending customers broken links.
 import type { MessagingDeps } from '../deps.ts';
 import type { MessageSender } from './messageSender.ts';
