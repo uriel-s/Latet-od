@@ -14,11 +14,13 @@
     "dev:web": "npm run dev --workspace apps/web",
     "test": "bash .claude/checks.sh test",
     "check": "bash .claude/checks.sh all",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "build:api": "esbuild apps/api/src/vercelEntry.ts --bundle --platform=node --format=esm --target=node24 --external:express --external:mongodb --legal-comments=none --log-level=warning --outfile=api/index.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",

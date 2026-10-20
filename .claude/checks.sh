@@ -28,9 +28,10 @@ cd "$(dirname "$0")/.." || exit 2
 export CI=true
 
 BIN="node_modules/.bin"
-# tsc projects for run_types: the three workspaces plus two root-level folders with their own
-# tsconfig: scripts/ (one-off Node scripts) and api/ (the Vercel function entry, ADR-0002).
-WORKSPACES="apps/web apps/api packages/shared scripts api"
+# tsc projects for run_types: the three workspaces plus scripts/ (one-off Node scripts), a
+# root-level folder with its own tsconfig. The Vercel function entry (apps/api/src/vercelEntry.ts)
+# is part of apps/api; api/index.js is its generated bundle (ADR-0002).
+WORKSPACES="apps/web apps/api packages/shared scripts"
 
 # True if a devDependency's CLI is installed.
 have() { [ -e "$BIN/$1" ]; }
@@ -53,7 +54,28 @@ run_types() {
 # never need to bypass this wrapper. `vitest run` never enters watch mode.
 run_test()   { if have vitest; then "$BIN/vitest" run "$@"; else echo "SKIP: vitest not installed"; fi; }
 
-run_build()  { if have vite; then "$BIN/vite" build apps/web; else echo "SKIP: vite not installed"; fi; }
+run_build() {
+  if have vite; then "$BIN/vite" build apps/web || return 1; else echo "SKIP: vite not installed"; fi
+  run_bundle_api
+}
+
+# The Vercel function is a committed bundle (api/index.js, built from apps/api/src/vercelEntry.ts).
+# Rebuild it and fail when it differs from what was there, so a stale bundle never reaches a deploy.
+run_bundle_api() {
+  if ! have esbuild; then echo "SKIP: esbuild not installed"; return 0; fi
+  local before
+  before="$(mktemp)"
+  cp api/index.js "$before" 2>/dev/null || : > "$before"
+  npm run -s build:api || { rm -f "$before"; return 1; }
+  if cmp -s "$before" api/index.js; then
+    echo "api/index.js is up to date"
+    rm -f "$before"
+  else
+    echo "FAIL: api/index.js was stale; it is rebuilt now. Commit it (git add api/index.js)." >&2
+    rm -f "$before"
+    return 1
+  fi
+}
 
 # Production deps only; needs network access to the npm registry.
 run_sec()    { npm audit --omit=dev --audit-level=high; }

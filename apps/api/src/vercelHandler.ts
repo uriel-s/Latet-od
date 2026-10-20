@@ -1,5 +1,5 @@
 // Wraps the Express app as the plain Node (req, res) handler a Vercel function exports
-// (api/index.ts at the repo root, ADR-0002). It builds the app on the first request and keeps it
+// (vercelEntry.ts, bundled into api/index.js, ADR-0002). It builds the app on the first request and keeps it
 // for the life of the warm instance, as server.ts does once per process; nothing request-specific
 // is kept between requests (serverless).
 import type { IncomingMessage, ServerResponse } from 'node:http';

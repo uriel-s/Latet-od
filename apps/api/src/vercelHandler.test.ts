@@ -1,11 +1,11 @@
-// Tests of the Vercel function handler (createVercelHandler) and of the real entry, api/index.ts at
-// the repo root, which may hold nothing but itself (every file there becomes a function). supertest
-// serves the plain (req, res) handler on its own; no deploy, no database, no network.
+// Tests of the Vercel function handler (createVercelHandler) and of the real entry, vercelEntry.ts
+// (the source of the committed bundle api/index.js). supertest serves the plain (req, res) handler
+// on its own; no deploy, no database, no network.
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import handler from '../../../api/index.ts';
 import type { AppDeps } from './deps.ts';
 import { createFakeDeps } from './fakeDeps.ts';
+import handler from './vercelEntry.ts';
 import { createVercelHandler } from './vercelHandler.ts';
 
 /** What a bad env throws: a message that names the variable, like authDepsFromEnv's. */
@@ -115,7 +115,7 @@ describe('createVercelHandler', () => {
   });
 });
 
-describe('api/index.ts (the Vercel function entry)', () => {
+describe('vercelEntry.ts (the Vercel function entry)', () => {
   it('answers 500 internal and logs the missing variable when the env is empty', async () => {
     // Every variable the api reads, emptied: depsFromEnv throws on MONGODB_URI before any
     // database client exists, so nothing touches the network.

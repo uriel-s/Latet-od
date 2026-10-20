@@ -1,6 +1,6 @@
 // Local entry point: `npm run dev:api` (and plain Node hosting, ADR-0002). Env vars come from
 // apps/api/.env (see .env.example). It builds the real dependencies once for the process with
-// depsFromEnv (envDeps.ts) and listens. The Vercel function entry, api/index.ts at the repo root,
+// depsFromEnv (envDeps.ts) and listens. The Vercel function entry, vercelEntry.ts at the repo root,
 // builds the same deps through the same function, without listen().
 import { createApp } from './app.ts';
 import type { AppDeps } from './deps.ts';
