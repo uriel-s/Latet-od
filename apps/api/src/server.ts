@@ -1,32 +1,19 @@
 // Local entry point: `npm run dev:api` (and plain Node hosting, ADR-0002). Env vars come from
-// apps/api/.env (see .env.example). It builds the real dependencies once for the process and
-// listens; the Vercel function entry (section 10) will build the same deps without listen().
+// apps/api/.env (see .env.example). It builds the real dependencies once for the process with
+// depsFromEnv (envDeps.ts) and listens. The Vercel function entry, api/index.ts at the repo root,
+// builds the same deps through the same function, without listen().
 import { createApp } from './app.ts';
-import { authDepsFromEnv } from './auth/authConfig.ts';
-import { createMongoDeps } from './db/mongoDeps.ts';
 import type { AppDeps } from './deps.ts';
-import { messagingDepsFromEnv } from './messages/messagingConfig.ts';
-
-const uri = process.env.MONGODB_URI;
-if (!uri) {
-  // Fail fast: never fall back to in-memory storage, where every order would be lost on restart.
-  console.error(
-    'MONGODB_URI is not set: copy apps/api/.env.example to apps/api/.env and fill it in.',
-  );
-  process.exit(1);
-}
+import { depsFromEnv, envErrorMessage } from './envDeps.ts';
 
 let deps: AppDeps;
 try {
-  // The settings from env first: a missing or bad COLLECTOR_PASSWORD_HASH, SESSION_SECRET,
-  // MESSAGE_SENDER or PUBLIC_BASE_URL stops the startup before any database client exists.
-  const auth = authDepsFromEnv(process.env);
-  const messaging = messagingDepsFromEnv(process.env);
-  deps = { ...createMongoDeps(uri), auth, messaging };
+  // Fail fast: a missing MONGODB_URI, or a missing or bad COLLECTOR_PASSWORD_HASH, SESSION_SECRET,
+  // MESSAGE_SENDER or PUBLIC_BASE_URL, stops the startup before any database client exists.
+  deps = depsFromEnv(process.env);
 } catch (error) {
-  // Only the message: these errors name the variable that is wrong, never its value (some hold
-  // secrets), and the stack adds nothing for a configuration mistake.
-  console.error(error instanceof Error ? error.message : 'api could not start: invalid env');
+  // Only the message: it names the variable that is wrong, never its value (some hold secrets).
+  console.error(envErrorMessage(error));
   process.exit(1);
 }
 
