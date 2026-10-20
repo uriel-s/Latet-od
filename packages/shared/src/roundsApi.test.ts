@@ -7,8 +7,11 @@ import {
   ROUND_GROUP_KEYS,
   ROUND_GROUP_LABELS,
   ROUND_PLAN_ERRORS,
+  ROUND_STOP_STATES,
   buildRoundView,
+  moveStopRequestSchema,
   planRoundRequestSchema,
+  roundStopStateOf,
   roundViewSchema,
   roundsResponseSchema,
   type PlanRoundRequest,
@@ -357,6 +360,131 @@ describe('buildRoundView', () => {
     expect(order).not.toHaveProperty('token');
     expect(order).not.toHaveProperty('messages');
   });
+
+  it('returns no stops for a round still confirming', () => {
+    expect(buildRoundView(makeRound(['a']), [makeOrder('a')]).stops).toEqual([]);
+  });
+
+  it('returns a routed round’s stops in stored order, with stored hasLocation and state', () => {
+    // Plan order a, b, c, d; the route drives c, missing, a, d. 'b' left before the route.
+    const round = makeRound(['a', 'b', 'c', 'd', 'missing'], {
+      phase: 'routed',
+      stops: [
+        { orderId: 'c', hasLocation: true },
+        { orderId: 'missing', hasLocation: true },
+        { orderId: 'a', hasLocation: true },
+        { orderId: 'd', hasLocation: false },
+      ],
+    });
+    const view = buildRoundView(round, [
+      makeOrder('a', { status: 'collected' }),
+      makeOrder('b', {
+        status: 'waiting',
+        roundId: undefined,
+        lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
+      }),
+      makeOrder('c', { status: 'confirmed' }),
+      makeOrder('d', {
+        status: 'waiting',
+        roundId: undefined,
+        lastMiss: { date: '2026-11-05', reason: 'notFound', roundId: ROUND_ID },
+      }),
+    ]);
+    expect(
+      view.stops.map((stop) => ({
+        id: stop.order.id,
+        hasLocation: stop.hasLocation,
+        state: stop.state,
+      })),
+    ).toEqual([
+      // Free-text street, so the order has no point today: the stop keeps what was stored.
+      { id: 'c', hasLocation: true, state: 'toCollect' },
+      { id: 'a', hasLocation: true, state: 'collected' },
+      { id: 'd', hasLocation: false, state: 'notFound' },
+    ]);
+    expect(view.stops[0]?.order).toMatchObject({ id: 'c', hasLocation: false });
+    expect(view.stops[0]?.order).not.toHaveProperty('token');
+  });
+});
+
+describe('roundStopStateOf', () => {
+  const round = makeRound(['a'], { phase: 'routed', stops: [{ orderId: 'a', hasLocation: true }] });
+  /** The order out of the round, back to waiting, with this round's lastMiss for `reason`. */
+  const leftFor = (reason: 'notFound' | 'addressChanged' | 'askedOtherDate'): Order =>
+    makeOrder('a', {
+      status: 'waiting',
+      roundId: undefined,
+      lastMiss: { date: '2026-11-05', reason, roundId: ROUND_ID },
+    });
+
+  it('lists the states in a stable order', () => {
+    expect(ROUND_STOP_STATES).toEqual(['toCollect', 'collected', 'notFound', 'cancelled', 'left']);
+  });
+
+  it('is toCollect for a confirmed or pending order still in the round', () => {
+    expect(roundStopStateOf(round, makeOrder('a', { status: 'confirmed' }))).toBe('toCollect');
+    expect(roundStopStateOf(round, makeOrder('a'))).toBe('toCollect');
+  });
+
+  it('is collected or cancelled as the status of an order in the round says', () => {
+    expect(roundStopStateOf(round, makeOrder('a', { status: 'collected' }))).toBe('collected');
+    expect(roundStopStateOf(round, makeOrder('a', { status: 'cancelled' }))).toBe('cancelled');
+  });
+
+  it('is notFound for an order that left this round as not found', () => {
+    expect(roundStopStateOf(round, leftFor('notFound'))).toBe('notFound');
+  });
+
+  // What happened at THIS stop: a later round's or a later cancel does not rewrite it.
+  it('stays notFound once the order is planned, collected or cancelled elsewhere', () => {
+    const later = leftFor('notFound');
+    expect(roundStopStateOf(round, { ...later, status: 'pending', roundId: 'round-3' })).toBe(
+      'notFound',
+    );
+    expect(roundStopStateOf(round, { ...later, status: 'collected', roundId: 'round-3' })).toBe(
+      'notFound',
+    );
+    expect(roundStopStateOf(round, { ...later, status: 'cancelled' })).toBe('notFound');
+  });
+
+  it('is left for an order that left the round another way', () => {
+    expect(roundStopStateOf(round, leftFor('addressChanged'))).toBe('left');
+    expect(roundStopStateOf(round, leftFor('askedOtherDate'))).toBe('left');
+    // Not found, but in another round.
+    expect(
+      roundStopStateOf(
+        round,
+        makeOrder('a', {
+          status: 'waiting',
+          roundId: undefined,
+          lastMiss: { date: '2026-10-29', reason: 'notFound', roundId: 'round-1' },
+        }),
+      ),
+    ).toBe('left');
+    expect(roundStopStateOf(round, makeOrder('a', { status: 'waiting', roundId: undefined }))).toBe(
+      'left',
+    );
+  });
+});
+
+describe('moveStopRequestSchema', () => {
+  it('accepts up and down', () => {
+    expect(moveStopRequestSchema.parse({ direction: 'up' })).toEqual({ direction: 'up' });
+    expect(moveStopRequestSchema.parse({ direction: 'down' })).toEqual({ direction: 'down' });
+  });
+
+  it('refuses another direction, a missing one, and an unknown key', () => {
+    for (const body of [
+      { direction: 'left' },
+      { direction: '' },
+      { direction: 1 },
+      {},
+      { direction: 'up', to: 3 },
+      null,
+    ]) {
+      expect(moveStopRequestSchema.safeParse(body).success, JSON.stringify(body)).toBe(false);
+    }
+  });
 });
 
 describe('roundViewSchema and roundsResponseSchema', () => {
@@ -367,6 +495,33 @@ describe('roundViewSchema and roundsResponseSchema', () => {
       makeOrder('b', { messages: [confirmLink('b', OPENED_AT)] }),
     ]);
   }
+
+  it('parses the JSON of a routed view, stops included', () => {
+    const view = buildRoundView(
+      makeRound(['a', 'b'], {
+        phase: 'routed',
+        stops: [
+          { orderId: 'b', hasLocation: false },
+          { orderId: 'a', hasLocation: true },
+        ],
+      }),
+      [makeOrder('a', { status: 'confirmed' }), makeOrder('b', { status: 'collected' })],
+    );
+    expect(view.stops).toHaveLength(2);
+    const parsed = roundViewSchema.parse(JSON.parse(JSON.stringify(view)));
+    expect(parsed).toEqual(view);
+    expect(parsed.stops[0]?.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('refuses a stop with an unknown state', () => {
+    const view = buildRoundView(
+      makeRound(['a'], { phase: 'routed', stops: [{ orderId: 'a', hasLocation: true }] }),
+      [makeOrder('a', { status: 'confirmed' })],
+    );
+    const json = JSON.parse(JSON.stringify(view)) as { stops: { state: string }[] };
+    const broken = { ...json, stops: json.stops.map((stop) => ({ ...stop, state: 'archived' })) };
+    expect(roundViewSchema.safeParse(broken).success).toBe(false);
+  });
 
   // What the web gets is JSON: ISO strings that the schemas turn back into Dates.
   it('parses the JSON of a view back into the same view, with Dates', () => {
