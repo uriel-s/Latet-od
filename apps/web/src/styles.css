@@ -25,6 +25,14 @@
   --tap-target: max(48px, 3rem);
   --radius: 0.5rem;
   --gutter: 16px;
+  /*
+   * The side gutters, at least --gutter and at least the screen's safe area. index.html sets
+   * viewport-fit=cover, so in landscape the page reaches under a phone's notch; the inset keeps
+   * text out of it. env() is physical (left/right, not start/end), so these go on padding-left
+   * and padding-right, also in this right-to-left page. It is 0 without a notch: 16px as before.
+   */
+  --gutter-left: max(var(--gutter), env(safe-area-inset-left));
+  --gutter-right: max(var(--gutter), env(safe-area-inset-right));
 }
 
 *,
@@ -105,17 +113,21 @@ svg {
   min-height: 100dvh;
 }
 
-/* The single centred column every page lives in, with a 16px gutter on narrow phones. */
+/* The single centred column every page lives in, with a 16px gutter on narrow phones (wider
+   beside a notch, see --gutter-left). */
 .column {
   width: 100%;
   max-width: 32rem;
   margin-inline: auto;
-  padding-inline: var(--gutter);
+  padding-left: var(--gutter-left);
+  padding-right: var(--gutter-right);
 }
 
+/* The padding lives on the full-width header, not its .column, so the brand colour also fills
+   the strip behind the status bar or notch at the top (viewport-fit=cover, index.html). */
 .site-header {
   background: var(--color-accent);
-  padding-block: 0.75rem;
+  padding-block: calc(0.75rem + env(safe-area-inset-top)) 0.75rem;
 }
 
 /* The app name is plain text, not a heading: each page has its own <h1> (see Layout.tsx). */
@@ -136,9 +148,16 @@ svg {
   padding-block-end: 2rem;
 }
 
+/* The footer ends the page, so on a phone with a home bar the OSM credit is lifted above it. */
 .site-footer {
   border-block-start: 2px solid var(--color-gray);
-  padding-block: 0.5rem;
+  padding-block: 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+}
+
+/* With the bottom navigation, .layout already keeps the home bar's space below the footer
+   (see .layout:has(.bottom-nav)): no second inset here. */
+.layout:has(.bottom-nav) .site-footer {
+  padding-block-end: 0.5rem;
 }
 
 .site-footer p {
@@ -399,7 +418,8 @@ button[aria-disabled='true'] {
 /*
  * The bottom navigation (BottomNav.tsx): fixed to the bottom of the screen, full width, three
  * equal tabs. In the right-to-left row the first tab (הזמנות) is on the right. The padding keeps
- * the tabs above the iPhone's home bar.
+ * the tabs above the iPhone's home bar and, in landscape, out from under the notch at the sides
+ * (physical left/right, like env()); the white background still runs edge to edge.
  */
 .bottom-nav {
   position: fixed;
@@ -409,6 +429,8 @@ button[aria-disabled='true'] {
   border-block-start: 2px solid var(--color-text);
   background: var(--color-white);
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .bottom-nav-list {
