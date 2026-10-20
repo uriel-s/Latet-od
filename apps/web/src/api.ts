@@ -9,6 +9,7 @@ import {
   collectorOrdersResponseSchema,
   createOrderResponseSchema,
   meResponseSchema,
+  messageOpenedResponseSchema,
   type AddOrderRequest,
   type CollectorOrder,
   type CreateOrderRequest,
@@ -477,4 +478,62 @@ function conflictOutcome(body: unknown): CollectorOrderWriteOutcome {
 async function collectorOrderOf(response: Response): Promise<CollectorOrder | null> {
   const parsed = collectorOrderResponseSchema.safeParse(await readJson(response));
   return parsed.success ? parsed.data.order : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The "שלח" list (ADR-0003): POST /api/collector/orders/:id/messages/:index/opened
+//
+// Behind the login like the routes above, with the same rules: a 401 is `loggedOut`, nothing is
+// retried, and the success body is parsed with the shared schema.
+// ---------------------------------------------------------------------------------------------
+
+/** How marking a wa.me link as opened ended, as the "שלח" list shows it. */
+export type MarkMessageOpenedOutcome =
+  /** 200: the link is marked; `openedAt` is the FIRST time it was opened, a Date. */
+  | { kind: 'marked'; openedAt: Date }
+  /**
+   * 404: the order is gone (`order_not_found`), or it has no wa.me link at that index
+   * (`message_not_found`). Both mean the same to Yoel: this row's opening cannot be stored.
+   */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403 or 5xx, or a 200 the app cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Tells the api that Yoel opened the wa.me link of entry `messageIndex` in order `orderId`'s
+ * message log, with `POST /api/collector/orders/:id/messages/:index/opened` (no body). Called as
+ * his "שלח" tap opens WhatsApp.
+ *
+ * It never changes the order's status: nobody can know whether he then really tapped "send" in
+ * WhatsApp (ADR-0003). A link already opened answers `marked` with its FIRST `openedAt`, and the
+ * api writes nothing, so a second tap is harmless. That is also why it is never retried: an answer
+ * lost on the way is put right by the next tap.
+ */
+export async function markMessageOpened(
+  orderId: string,
+  messageIndex: number,
+  fetchFn: FetchFn = globalFetch,
+): Promise<MarkMessageOpenedOutcome> {
+  const response = await fetchOrNull(
+    fetchFn,
+    `${collectorOrderPath(orderId)}/messages/${messageIndex}/opened`,
+    { method: 'POST' },
+  );
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const parsed = messageOpenedResponseSchema.safeParse(await readJson(response));
+      return parsed.success
+        ? { kind: 'marked', openedAt: parsed.data.openedAt }
+        : { kind: 'failed' };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    default:
+      return { kind: 'failed' };
+  }
 }

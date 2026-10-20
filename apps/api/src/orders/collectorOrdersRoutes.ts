@@ -1,9 +1,10 @@
 // /api/collector/orders: the api of Yoel's "הזמנות" screen (spec §3.5): the waiting orders by
 // region, one order, editing it (and picking a region or a near street, ADR-0005), cancelling it,
-// and adding an order for a customer who phoned. createApp mounts the router built here AFTER
-// requireCollector, so every route needs the login (ADR-0004). The shapes are the shared contract
-// (packages/shared/src/collectorOrdersApi.ts); the edit rules live in orderPatch.ts, and the
-// orders are read and written through OrdersRepo.
+// and adding an order for a customer who phoned; plus marking a WhatsApp "שלח" link of an order
+// as opened (ADR-0003). createApp mounts the router built here AFTER requireCollector, so every
+// route needs the login (ADR-0004). The shapes are the shared contract
+// (packages/shared/src/collectorOrdersApi.ts and messages.ts); the edit rules live in
+// orderPatch.ts, and the orders are read and written through OrdersRepo.
 import { Router, type Response } from 'express';
 import {
   COLLECTOR_ORDER_MESSAGES,
@@ -20,6 +21,8 @@ import {
   type DuplicateOpenOrderErrorBody,
   type InvalidOrderErrorBody,
   type InvalidTransitionErrorBody,
+  type MessageNotFoundErrorBody,
+  type MessageOpenedResponse,
   type Order,
   type OrderNotFoundErrorBody,
 } from '@bottlerun/shared';
@@ -64,9 +67,19 @@ import { DuplicateOpenOrderError } from './ordersRepo.ts';
  * - 409 {@link DuplicateOpenOrderErrorBody}: the phone already has an open order.
  * No honeypot and no rate limit: only the logged-in collector gets here.
  *
- * Every status change goes through `canTransition` (only "cancel" changes one here); a PATCH never
- * changes the status. Each write is conditional on the status it was decided on (`ifStatus`), so
- * two screens racing on one order cannot both win.
+ * POST /:id/messages/:index/opened — Yoel's "שלח" button, as it opens the wa.me link of the entry
+ * at `:index` of the order's message log (ADR-0003); no body:
+ * - 200 {@link MessageOpenedResponse}: the entry's `openedAt`, set to now. An entry already
+ *   opened answers its FIRST `openedAt` and nothing is written again.
+ * - 404 {@link OrderNotFoundErrorBody}.
+ * - 404 {@link MessageNotFoundErrorBody}: `:index` is not a whole number (digits only), is past
+ *   the end of the log, or the entry there is not a `manual` link.
+ * Any status: a thank-you is opened for a `collected` order. It never changes the status, since
+ * nobody can know whether Yoel then really tapped "send" in WhatsApp.
+ *
+ * Every status change goes through `canTransition` (only "cancel" changes one here); a PATCH and
+ * "opened" never change the status. Each status-dependent write is conditional on the status it
+ * was decided on (`ifStatus`), so two screens racing on one order cannot both win.
  *
  * Logs nothing: bodies hold phones and addresses (CLAUDE.md, privacy). An unexpected error goes to
  * the app's error handler, which logs it without the request and answers 500. Times are the real
@@ -194,7 +207,66 @@ export function createCollectorOrdersRouter(deps: Pick<AppDeps, 'orders'>): Rout
     sendOrder(res, cancelled);
   });
 
+  router.post('/:id/messages/:index/opened', async (req, res) => {
+    const { id, index } = req.params;
+    const stored = await orders.findById(id);
+    if (stored === null) {
+      sendNotFound(res);
+      return;
+    }
+    const messageIndex = parseMessageIndex(index, stored.messages.length);
+    const entry = messageIndex === undefined ? undefined : stored.messages[messageIndex];
+    // Only a wa.me link can be opened: a `sent` or `failed` entry has no link.
+    if (entry?.mode !== 'manual') {
+      sendMessageNotFound(res);
+      return;
+    }
+    // Opened before: a repeated tap (or a second screen) keeps the first moment, and writes nothing.
+    if (entry.openedAt !== undefined) {
+      sendOpened(res, entry.openedAt);
+      return;
+    }
+
+    const now = new Date();
+    // A read-modify-write of the whole `messages` array, like sendAndLog
+    // (messages/sendAndLog.ts), with the same known limit. No status and no `ifStatus`: opening
+    // a link is not a status change, and works on an order in any status.
+    const updated = await orders.update(id, {
+      messages: stored.messages.map((other, position) =>
+        position === messageIndex ? { ...entry, openedAt: now } : other,
+      ),
+      updatedAt: new Date(now),
+    });
+    if (updated === null) {
+      sendNotFound(res);
+      return;
+    }
+    sendOpened(res, now);
+  });
+
   return router;
+}
+
+/**
+ * The `:index` of the "opened" route as a position in a log of `length` entries, or undefined
+ * when it is not one: digits only (no sign, no decimal point, no exponent), and inside the log.
+ */
+function parseMessageIndex(index: string, length: number): number | undefined {
+  if (!/^\d+$/.test(index)) return undefined;
+  const position = Number(index);
+  return position < length ? position : undefined;
+}
+
+/** 200 with the moment the entry's link was (first) opened. */
+function sendOpened(res: Response, openedAt: Date): void {
+  const body: MessageOpenedResponse = { openedAt };
+  res.json(body);
+}
+
+/** 404: the order has no `manual` message at this index. */
+function sendMessageNotFound(res: Response): void {
+  const body: MessageNotFoundErrorBody = { error: 'message_not_found' };
+  res.status(404).json(body);
 }
 
 /** 200 (or `status`) with the order as Yoel's screens get it: no token, no message log. */

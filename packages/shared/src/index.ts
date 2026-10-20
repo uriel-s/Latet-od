@@ -29,6 +29,8 @@ export * from './orderApi.ts';
 export * from './authApi.ts';
 // The /api/collector/orders contract: waiting orders by region, edit, cancel and add (spec §3.5).
 export * from './collectorOrdersApi.ts';
+// WhatsApp message text, the outgoing message, the "שלח" rows and the "opened" route (ADR-0003).
+export * from './messages.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and

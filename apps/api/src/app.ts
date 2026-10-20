@@ -74,7 +74,7 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/collector', requireCollector(deps.auth));
 
   // The "הזמנות" screen (spec §3.5): list the waiting orders by region, get, edit, cancel and add
-  // an order (orders/collectorOrdersRoutes.ts).
+  // an order, and mark an order's WhatsApp "שלח" link as opened (orders/collectorOrdersRoutes.ts).
   app.use('/api/collector/orders', createCollectorOrdersRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
