@@ -15,6 +15,8 @@ export const APP_SLOGAN = 'הבקבוקים שלכם, התפילין שלהם!';
 export * from './streets.ts';
 // An address's region and map point, from its street codes (ADR-0005).
 export * from './location.ts';
+// Route planning: straight-line distance, the DistanceMatrix interface and planRoute (ADR-0005).
+export * from './route.ts';
 // Israeli mobile phone: form validation and the stored E.164 form.
 export * from './phone.ts';
 // Dates as the app shows them: DD/MM, in Israel's time zone (Asia/Jerusalem).
