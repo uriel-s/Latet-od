@@ -19,6 +19,7 @@ import {
   confirmationSummary,
   type RoundsScreenProps,
 } from './RoundsScreen.tsx';
+import { returnToApp } from './visibilityTestHelper.ts';
 
 /** An order in round r1 still waiting for its confirmation, in רמת בית שמש; overrides change it. */
 function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
@@ -714,6 +715,58 @@ describe('RoundsScreen', () => {
 
       expect(await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeDefined();
       expect(screen.queryByRole('button', { name: 'לנסות שוב' })).toBeNull();
+    });
+  });
+
+  describe('coming back to the app', () => {
+    it('loads the rounds again, keeping them on screen until the answer replaces them', async () => {
+      const reload = deferred<RoundsOutcome>();
+      const rounds = fakeLoad(LOADED, reload.promise);
+      await renderLoaded({ loadRounds: rounds.load });
+
+      returnToApp();
+
+      expect(rounds.calls()).toBe(2);
+      // No "טוען..." in place of the rounds while the new answer is on its way.
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['משה לוי', 'יוסי מזרחי']);
+
+      // משה confirmed through his WhatsApp link meanwhile.
+      reload.resolve({ kind: 'loaded', rounds: [VIEW_MOSHE_CONFIRMED] });
+
+      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toEqual(['דנה כהן', 'משה לוי']));
+      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['יוסי מזרחי']);
+    });
+
+    it('keeps the "שלח" rows Yoel opened marked when he is back from WhatsApp', async () => {
+      const rounds = fakeLoad(LOADED);
+      await renderLoaded({ loadRounds: rounds.load });
+      fireEvent.click(screen.getByRole('link', { name: 'שלח למשה לוי' }));
+      await screen.findByRole('link', { name: 'שלח שוב למשה לוי' });
+
+      returnToApp();
+      await settle();
+
+      expect(rounds.calls()).toBe(2);
+      // LOADED's row for משה has no openedAt: the mark is the list's own state, kept.
+      expect(screen.getByRole('link', { name: 'שלח שוב למשה לוי' })).toBeDefined();
+    });
+
+    it('keeps the notice of a refused "אישר בטלפון"', async () => {
+      const rounds = fakeLoad(LOADED);
+      await renderLoaded({
+        loadRounds: rounds.load,
+        confirmByPhone: fakeConfirm({ kind: 'notFound' }).confirmByPhone,
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'אישר בטלפון, משה לוי' }));
+      await screen.findByText(ORDER_LEFT_ROUND_MESSAGE);
+      await settle();
+
+      returnToApp();
+      await settle();
+
+      expect(rounds.calls()).toBe(3);
+      expect(screen.getByRole('alert').textContent).toBe(ORDER_LEFT_ROUND_MESSAGE);
     });
   });
 

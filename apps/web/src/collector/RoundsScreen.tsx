@@ -26,6 +26,7 @@ import { Link, navigate } from '../router.tsx';
 import { bottlesText, ordersText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 import { SendList, type SendListProps } from './SendList.tsx';
+import { useReloadOnReturn } from './useReloadOnReturn.ts';
 
 /** Shown when the rounds got no usable answer (network error, 5xx, unreadable body). */
 export const ROUNDS_LOAD_FAILED_MESSAGE =
@@ -108,8 +109,11 @@ interface Notice {
 
 /**
  * The rounds tab. Renders the page's only `<h1>` (Layout's heading rule) in every state. The open
- * rounds load once per visit to the tab (each visit mounts the screen anew), and again on
- * "לנסות שוב". With none open, it says so and links to the planning screen.
+ * rounds load once per visit to the tab (each visit mounts the screen anew), again on
+ * "לנסות שוב", and again when Yoel comes back to the app ({@link useReloadOnReturn}: the installed
+ * app has no pull-to-refresh, and "שלח" sends him to WhatsApp and back all the time). That reload
+ * keeps what is shown until its answer replaces it. With none open, it says so and links to the
+ * planning screen.
  *
  * A 401 means the session ended: to the login, like the guard in CollectorApp.tsx. A failed load
  * stays here with a retry: a dropped connection is not a logout.
@@ -125,8 +129,8 @@ export function RoundsScreen({
   markOpened,
 }: RoundsScreenProps) {
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
-  // Counts the loads asked for after the first ("לנסות שוב", or a reload after a refused
-  // "אישר בטלפון"): a new value runs the load below again.
+  // Counts the loads asked for after the first ("לנסות שוב", a reload after a refused
+  // "אישר בטלפון", or Yoel coming back to the app): a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
   // The orders whose "אישר בטלפון" is on its way ("שומר..."), and those whose last one failed.
@@ -194,6 +198,11 @@ export function RoundsScreen({
   function reload(): void {
     setAttempt((previous) => previous + 1);
   }
+
+  // Back in the app: the same reload, rounds kept on screen. A notice stays: the usual trip away is
+  // to WhatsApp from "שלח", and the notice still explains why the card Yoel tapped moved or left;
+  // his next "אישר בטלפון" or "לנסות שוב" clears it, as before.
+  useReloadOnReturn(reload);
 
   /** Shows `view` in place of the round with its id; the other rounds stay as they are. */
   function replaceRound(view: RoundView): void {
