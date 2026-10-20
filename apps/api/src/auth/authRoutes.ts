@@ -1,6 +1,6 @@
 // /api/auth/* (ADR-0004): the collector's login, logout, and "who is logged in". createApp mounts
 // the router built here on /api/auth. The password check is AuthDeps.verifyCredentials, the
-// session cookie is session.ts + cookies.ts, and failed logins are limited by loginLimits.ts.
+// session cookie is session.ts + cookies.ts, and login attempts are limited by loginLimits.ts.
 import { Router } from 'express';
 import {
   LOGIN_MESSAGES,
@@ -24,13 +24,14 @@ import { newSessionPayload } from './session.ts';
  *
  * POST /login, body `{ password }` ({@link loginRequestSchema}, never trimmed):
  * - 429 `rate_limited` with {@link LOGIN_MESSAGES}.rateLimited when this IP or everyone together
- *   has used up the failed logins (loginLimits.ts). Answered BEFORE the password is checked, so a
+ *   has used up the login attempts (loginLimits.ts). Answered BEFORE the password is checked, so a
  *   blocked client learns nothing, even with the right password. An existing cookie keeps working.
  * - 400 `invalid_login_request`: no body, not an object, or the password missing, empty or over
  *   the length cap. Not counted as a failure: it is no guess at the password.
- * - 401 `invalid_credentials` with {@link LOGIN_MESSAGES}.wrongPassword: counted against this IP
- *   and the global cap.
- * - 200 {@link LoginResponse} and the session cookie (90 days): this IP's failures are forgotten.
+ * - 401 `invalid_credentials` with {@link LOGIN_MESSAGES}.wrongPassword. Every attempt with a
+ *   well-formed body is counted against this IP and the global cap before the password is checked,
+ *   so a parallel burst cannot get more than the cap's worth of guesses.
+ * - 200 {@link LoginResponse} and the session cookie (90 days): this IP's count is forgotten.
  *
  * POST /logout: clears the session cookie and answers 204, with or without a session (idempotent:
  * a second tap, or a cookie that already expired, still ends logged out).
@@ -71,9 +72,19 @@ export function createAuthRouter(deps: Pick<AppDeps, 'auth' | 'attempts'>): Rout
       return;
     }
 
+    // Counted BEFORE the password is checked (scrypt is slow, so a parallel burst would otherwise
+    // all pass the pre-check above): only the first few of a burst get to try the password.
+    if (!(await limiter.recordAttempt(req.ip))) {
+      const body: RateLimitedErrorBody = {
+        error: 'rate_limited',
+        message: LOGIN_MESSAGES.rateLimited,
+      };
+      res.status(429).json(body);
+      return;
+    }
+
     const user = await auth.verifyCredentials(parsed.data.password);
     if (user === null) {
-      await limiter.recordFailure(req.ip);
       const body: InvalidCredentialsErrorBody = {
         error: 'invalid_credentials',
         message: LOGIN_MESSAGES.wrongPassword,
