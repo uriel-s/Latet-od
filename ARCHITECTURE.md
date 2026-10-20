@@ -9,7 +9,7 @@
 
 | רכיב | מה | איפה | החלטה |
 |---|---|---|---|
-| **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). רק את אפליקציית האוסף אפשר להוסיף למסך הבית (PWA): `manifest.webmanifest`, `icon.svg` (המקור) והאייקונים ב-PNG נמצאים ב-`apps/web/public`, ו-`pwaHead.tsx` מוסיף את התגיות ל-head רק ב-`/login` וב-`/app/*`. בלי service worker. `viewport-fit=cover` ב-`index.html`, וריווח `safe-area` ב-`styles.css`. באפליקציה המותקנת אין רענון בגרירה, ולכן מסכי הרשימה (`OrdersScreen`, `RoundsScreen`, ורק הם) נטענים מחדש כשיואל חוזר לאפליקציה (`collector/useReloadOnReturn.ts`). מסכי ההוספה, העריכה והתכנון לא, כדי לא למחוק מה שהוקלד. ב-`/login` באייפון, מחוץ לאפליקציה המותקנת, מופיעה שורת התקנה (`pages/installHint.ts`). הבדיקה באייפון: `docs/deploy.md` סעיף 11. | `apps/web` | ADR-0001, 0006 |
+| **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). רק את אפליקציית האוסף אפשר להוסיף למסך הבית (PWA): `manifest.webmanifest`, `icon.svg` (המקור) והאייקונים ב-PNG נמצאים ב-`apps/web/public`, ו-`pwaHead.tsx` מוסיף את התגיות ל-head רק ב-`/login` וב-`/app/*`. בלי service worker. `viewport-fit=cover` ב-`index.html`, וריווח `safe-area` ב-`styles.css`. באפליקציה המותקנת אין רענון בגרירה, ולכן מסכי הרשימה (`OrdersScreen`, `RoundsScreen`, ורק הם) נטענים מחדש כשיואל חוזר לאפליקציה (`collector/useReloadOnReturn.ts`). מסכי ההוספה, העריכה והתכנון לא, כדי לא למחוק מה שהוקלד. מאותה סיבה `RoundsScreen` מדלג על הטעינה כל עוד שדה הכמות של "אספתי" פתוח במסלול. ב-`/login` באייפון, מחוץ לאפליקציה המותקנת, מופיעה שורת התקנה (`pages/installHint.ts`). הבדיקה באייפון: `docs/deploy.md` סעיף 11. | `apps/web` | ADR-0001, 0006 |
 | **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB, הגדרות ההתחברות וה-WhatsApp). יש שתי נקודות כניסה דקות, ושתיהן בונות את התלויות האמיתיות עם `depsFromEnv` (`envDeps.ts`: `createMongoDeps` + `authDepsFromEnv` + `messagingDepsFromEnv` + `routeDepsFromEnv`, נקודת ההתחלה מ-`ROUTE_START`): `server.ts` (מקומי / hosting רגיל), ו-`apps/api/src/vercelEntry.ts`, ה-function של Vercel (דרך `createVercelHandler`, שבונה את האפליקציה בבקשה הראשונה). Vercel לא אורז קבצי TS של הריפו, ולכן `npm run build:api` (esbuild) אורז אותו, יחד עם קוד ה-api ו-`packages/shared`, ל-`api/index.js` שנשמר ב-git. רק `express` ו-`mongodb` נשארים חיצוניים. `checks.sh build` נכשל אם החבילה לא מעודכנת. בבדיקות: `createFakeDeps()`. | `apps/api`, `api/index.js` (נוצר) | ADR-0001, 0002 |
 | **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק, `BOTTLE_VALUE_AGOROT` ב-`config.ts`), ורשימת הרחובות עם אזור ונקודה (`data/streets.json`, `searchStreets`, `findStreet`). סדר העצירות: `planRoute` (`route.ts`), פונקציה טהורה: עד 8 עצירות בודק את כל הסדרים, מעל זה השכן הקרוב + 2-opt, ועצירות בלי מיקום בסוף. | `packages/shared` | ADR-0001, 0005 |
 | **סקריפט רחובות** | חד-פעמי, לא חלק מהאפליקציה: מוריד את הרשימה מ-data.gov.il (`--refresh-list`) וממלא נקודה ואזור לכל רחוב דרך Nominatim, בקשה בשנייה. אזור לפי `REGION_DIVIDER`. התוצאה נשמרת ב-git. | `scripts/geocode-streets.ts` | ADR-0005 |
@@ -86,7 +86,6 @@ sequenceDiagram
     W->>A: POST /api/o/:token/confirm
     A->>D: pending → confirmed
 
-    Note over W,D: מכאן והלאה: P4, עוד לא בקוד
     Y->>W: "סגור אישורים ובנה מסלול"
     A->>D: מי שלא אישר → waiting + lastMiss<br/>planRoute(בית, עצירות, נקודת פריקה) נשמר בסבב
     loop לכל עצירה
@@ -95,6 +94,7 @@ sequenceDiagram
         A->>D: collected, או waiting + lastMiss
         A-->>W: תודה: קישור wa.me, יואל לוחץ "שלח"
     end
+    Note over W,D: מכאן והלאה: עוד לא בקוד
     Y->>W: "סגור סבב": עצירות שלא סומנו → waiting
 ```
 
