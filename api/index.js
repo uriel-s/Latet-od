@@ -22485,6 +22485,41 @@ function moveStop(stops, orderId, direction) {
   return moved;
 }
 
+// apps/api/src/rounds/roundResponses.ts
+function sendView(res, view, status = 200) {
+  res.status(status).json(view);
+}
+function sendRoundNotFound(res) {
+  const body = { error: "round_not_found" };
+  res.status(404).json(body);
+}
+function sendOrderNotFound(res) {
+  const body = { error: "order_not_found" };
+  res.status(404).json(body);
+}
+function sendRouteNotOpen(res) {
+  const body = {
+    error: "route_not_open",
+    message: ROUND_MESSAGES.routeNotOpen
+  };
+  res.status(409).json(body);
+}
+function sendInvalidTransition2(res) {
+  const body = {
+    error: "invalid_transition",
+    message: COLLECTOR_ORDER_MESSAGES.orderClosed
+  };
+  res.status(409).json(body);
+}
+function sendStopHandled(res) {
+  const body = { error: "stop_handled", message: ROUND_MESSAGES.stopHandled };
+  res.status(409).json(body);
+}
+function sendInvalidCollect(res, fieldErrors) {
+  const body = { error: "invalid_collect", fieldErrors };
+  res.status(400).json(body);
+}
+
 // apps/api/src/rounds/collectorRoundsRoutes.ts
 function createCollectorRoundsRouter(deps) {
   const { orders, rounds, messaging, route } = deps;
@@ -22696,9 +22731,6 @@ async function updateOrFail(update) {
   if (round === null) throw new Error("the round just planned is no longer stored");
   return round;
 }
-function sendView(res, view, status = 200) {
-  res.status(status).json(view);
-}
 function sendInvalidRound(res, fieldErrors) {
   const body = { error: "invalid_round", fieldErrors };
   res.status(400).json(body);
@@ -22711,14 +22743,6 @@ function sendOrdersNotWaiting(res, orderIds) {
   };
   res.status(409).json(body);
 }
-function sendRoundNotFound(res) {
-  const body = { error: "round_not_found" };
-  res.status(404).json(body);
-}
-function sendOrderNotFound(res) {
-  const body = { error: "order_not_found" };
-  res.status(404).json(body);
-}
 function sendConfirmationsClosed(res) {
   const body = {
     error: "confirmations_closed",
@@ -22730,23 +22754,83 @@ function sendInvalidMove(res) {
   const body = { error: "invalid_move" };
   res.status(400).json(body);
 }
-function sendRouteNotOpen(res) {
-  const body = {
-    error: "route_not_open",
-    message: ROUND_MESSAGES.routeNotOpen
-  };
-  res.status(409).json(body);
-}
 function sendStopAtEdge(res) {
   const body = { error: "stop_at_edge", message: ROUND_MESSAGES.stopAtEdge };
   res.status(409).json(body);
 }
-function sendInvalidTransition2(res) {
-  const body = {
-    error: "invalid_transition",
-    message: COLLECTOR_ORDER_MESSAGES.orderClosed
-  };
-  res.status(409).json(body);
+
+// apps/api/src/rounds/collectorStopActionsRoutes.ts
+import { Router as Router5 } from "express";
+function createCollectorStopActionsRouter(deps) {
+  const { orders, rounds, messaging } = deps;
+  const router = Router5();
+  async function loadRoundView(round) {
+    return buildRoundView(round, await orders.list({ ids: round.orderIds }));
+  }
+  router.post("/:id/stops/:orderId/collected", async (req, res) => {
+    const parsed = collectStopRequestSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      sendInvalidCollect(res, formFieldErrors(parsed.error));
+      return;
+    }
+    const request = parsed.data;
+    const { id, orderId } = req.params;
+    const round = await rounds.findById(id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    if (round.status !== "open" || round.phase !== "routed") {
+      sendRouteNotOpen(res);
+      return;
+    }
+    const order = round.stops.some((stop) => stop.orderId === orderId) ? await orders.findById(orderId) : null;
+    if (order === null) {
+      sendOrderNotFound(res);
+      return;
+    }
+    const state = roundStopStateOf(round, order);
+    if (state === "collected") {
+      sendView(res, await loadRoundView(round));
+      return;
+    }
+    if (state !== "toCollect") {
+      sendStopHandled(res);
+      return;
+    }
+    if (!canTransition(order.status, "collected")) {
+      sendInvalidTransition2(res);
+      return;
+    }
+    const now = /* @__PURE__ */ new Date();
+    const collected = await orders.update(
+      orderId,
+      {
+        status: "collected",
+        // Below the 30-bottle minimum is fine: that is a booking rule, not a count.
+        bottlesCollected: request.bottlesCollected ?? order.bottlesEstimated,
+        collectedAt: now,
+        updatedAt: new Date(now)
+      },
+      { ifStatus: [order.status] }
+    );
+    if (collected === null) {
+      const current = await orders.findById(orderId);
+      if (current !== null && roundStopStateOf(round, current) === "collected") {
+        sendView(res, await loadRoundView(round));
+        return;
+      }
+      sendInvalidTransition2(res);
+      return;
+    }
+    await sendAndLog(
+      { orders, sender: messaging.sender },
+      collected,
+      orderMessage(collected, "thankYou", { publicBaseUrl: messaging.publicBaseUrl })
+    );
+    sendView(res, await loadRoundView(round));
+  });
+  return router;
 }
 
 // apps/api/src/sameOrigin.ts
@@ -22793,6 +22877,7 @@ function createApp(deps) {
   app.use("/api/collector", requireCollector(deps.auth));
   app.use("/api/collector/orders", createCollectorOrdersRouter(deps));
   app.use("/api/collector/rounds", createCollectorRoundsRouter(deps));
+  app.use("/api/collector/rounds", createCollectorStopActionsRouter(deps));
   app.use("/api", (_req, res) => {
     const body = { error: "not_found" };
     res.status(404).json(body);
