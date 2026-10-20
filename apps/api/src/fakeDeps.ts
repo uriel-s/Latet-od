@@ -5,6 +5,7 @@ import { InMemoryAttemptStore } from './attempts/inMemoryAttemptStore.ts';
 import type { AppDeps, AuthDeps, MessagingDeps } from './deps.ts';
 import { FakeSender } from './messages/fakeSender.ts';
 import { InMemoryOrdersRepo } from './orders/inMemoryOrdersRepo.ts';
+import { InMemoryRoundsRepo } from './rounds/inMemoryRoundsRepo.ts';
 
 /**
  * The password {@link createFakeAuth}'s verifier accepts. Test-only, like this whole module: the
@@ -50,7 +51,8 @@ export function createFakeMessaging(overrides: Partial<MessagingDeps> = {}): Mes
 
 /**
  * Fresh, empty fakes for every dependency: an {@link InMemoryOrdersRepo}, an
- * {@link InMemoryAttemptStore} on the real clock, a database whose ping always answers,
+ * {@link InMemoryRoundsRepo}, an {@link InMemoryAttemptStore} on the real clock, a database whose
+ * ping always answers,
  * {@link createFakeAuth}'s login, and {@link createFakeMessaging}'s WhatsApp sender. Each call makes
  * new instances, so tests never share state.
  *
@@ -60,6 +62,7 @@ export function createFakeMessaging(overrides: Partial<MessagingDeps> = {}): Mes
 export function createFakeDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
     orders: new InMemoryOrdersRepo(),
+    rounds: new InMemoryRoundsRepo(),
     attempts: new InMemoryAttemptStore(),
     db: { ping: () => Promise.resolve() },
     auth: createFakeAuth(),
