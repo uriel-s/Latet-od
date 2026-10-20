@@ -18,7 +18,7 @@ One developer maintains it alone. Priorities, in order: **zero cost, minimum mov
 
 Sources of truth — read these before changing behaviour:
 - `docs/spec.md` — spec v2 (Hebrew). Supersedes the v1 `.docx` in the root.
-- `docs/decisions/` — ADRs 0001-0005. Where an ADR and the spec disagree, the ADR is newer and wins (its README lists what it changes in the spec).
+- `docs/decisions/` — ADRs 0001-0006. Where an ADR and the spec disagree, the ADR is newer and wins (its README lists what it changes in the spec).
 - `ARCHITECTURE.md` — components, order flow, workspace boundaries.
 
 ### Glossary (for developers and AI)
