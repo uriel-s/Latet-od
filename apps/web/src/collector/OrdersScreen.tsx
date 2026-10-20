@@ -38,8 +38,11 @@ function editOrderPath(id: string): string {
   return `/app/orders/${encodeURIComponent(id)}`;
 }
 
-/** "הזמנה אחת", "3 הזמנות": Hebrew says "one" after the noun, and the plural from two up. */
-function ordersText(count: number): string {
+/**
+ * "הזמנה אחת", "3 הזמנות": Hebrew says "one" after the noun, and the plural from two up. The
+ * rounds tab's groups use it too, so both tabs count orders the same way.
+ */
+export function ordersText(count: number): string {
   return count === 1 ? 'הזמנה אחת' : `${count} הזמנות`;
 }
 

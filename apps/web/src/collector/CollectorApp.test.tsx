@@ -175,6 +175,8 @@ describe('CollectorApp', () => {
 
       expect(await screen.findByRole('heading', { level: 1, name: 'סבבים' })).toBeDefined();
       expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      // The rounds tab loads its own list (no round open in the stub); then nothing is loading.
+      expect(await screen.findByText('אין סבב פתוח.')).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
       expect(screen.getByRole('button', { name: 'יציאה' })).toBeDefined();
       expect(tabNames()).toEqual(['הזמנות', 'סבבים', 'היסטוריה']);
@@ -200,7 +202,7 @@ describe('CollectorApp', () => {
       ['/app/orders/plan', 'תכנון סבב', 'הזמנות', 'שלח בקשות אישור'],
       ['/app/orders/o1', 'עריכת הזמנה', 'הזמנות', 'שמירת השינויים'],
       ['/app/orders/no-such-order', 'עריכת הזמנה', 'הזמנות', 'ההזמנה לא נמצאה.'],
-      ['/app/rounds', 'סבבים', 'סבבים', 'בקרוב.'],
+      ['/app/rounds', 'סבבים', 'סבבים', 'אין סבב פתוח.'],
       ['/app/history', 'היסטוריה', 'היסטוריה', 'בקרוב.'],
     ])(
       'at %s shows the screen "%s" with the tab "%s" current',
@@ -263,6 +265,10 @@ describe('CollectorApp', () => {
       fireEvent.click(within(bottomNav()).getByRole('link', { name: 'סבבים' }));
 
       expect(screen.getByRole('heading', { level: 1, name: 'סבבים' })).toBeDefined();
+      // A new session check would replace the app with its own heading and no navigation.
+      expect(currentTabs()).toEqual(['סבבים']);
+      // The rounds tab loads its own list; once it is there, nothing is loading.
+      expect(await screen.findByText('אין סבב פתוח.')).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
       // Let any check that was (wrongly) started settle before counting.
       await new Promise((settle) => setTimeout(settle, 0));

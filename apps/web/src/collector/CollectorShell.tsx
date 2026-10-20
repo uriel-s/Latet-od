@@ -76,8 +76,8 @@ export function CollectorShell({ path, logOut }: CollectorShellProps) {
 
 /**
  * The screen of a tab at `path`; a null tab is a path no screen has. The orders tab has four
- * screens (the list, add, plan and edit), all under the one tab "הזמנות". Section 8 fills the
- * rounds screen with the open rounds; the history screen stays a placeholder until its section.
+ * screens (the list, add, plan and edit), all under the one tab "הזמנות". The rounds tab shows the
+ * open rounds and their confirmations; the history screen stays a placeholder until its section.
  */
 function screenFor(tab: CollectorTab | null, path: string): ReactNode {
   switch (tab) {
