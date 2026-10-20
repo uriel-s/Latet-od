@@ -20,6 +20,11 @@
   --color-gray: #9aa3ad;
   /* Error red: 6.5:1 on white and 5.3:1 on --color-background, AA on both. */
   --color-error: #b91c1c;
+  /*
+   * A handled route stop's background (StopCard.tsx), a quiet gray apart from the page's blue:
+   * --color-text on it is 8.4:1 and --color-error 5.2:1, AA for both.
+   */
+  --color-handled: #e5e7eb;
 
   /* 48px is the floor (CLAUDE.md); 3rem (54px at the default 18px) grows with the user's font. */
   --tap-target: max(48px, 3rem);
@@ -735,6 +740,111 @@ html:has(.bottom-nav) {
 .order-card-confirm {
   min-width: var(--tap-target);
   margin-block: 0.5rem 0.25rem;
+}
+
+/* --- Route stops (collector/StopCard.tsx) ------------------------------------------ */
+
+/*
+ * One stop of the route, framed like an .order-card: white on the page's blue, the gray edge
+ * decoration only. The route screen lists the cards in an .order-list.
+ */
+.stop-card {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-gray);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.stop-card > p {
+  margin-block: 0 0.25rem;
+}
+
+/*
+ * A handled stop (collected, not found, cancelled, left the round): a quieter gray background
+ * (--color-handled) and a thick --color-text bar on its start edge, next to the state in words,
+ * so it is told apart by shape and text, not by colour alone.
+ */
+.stop-card-handled {
+  border-inline-start: 6px solid var(--color-text);
+  background: var(--color-handled);
+}
+
+/* "עצירה 2": a small header line above the name. */
+.stop-card-position {
+  font-weight: 700;
+}
+
+/* The customer's name heads the card, like .order-card-name. */
+.stop-card-name {
+  margin-block: 0 0.25rem;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+/* The street is what Yoel looks for at the door: bold, like the bottles. */
+.stop-card-street,
+.stop-card-bottles {
+  font-weight: 700;
+}
+
+/* The customer's note keeps the line breaks they typed. */
+.stop-card-note {
+  white-space: pre-line;
+}
+
+/*
+ * "נאסף", "לא נמצא", ...: a badge like .tag, but white inside, so it stands out on the gray of a
+ * handled card (--color-text on white, 10.4:1).
+ */
+.stop-card-state {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border: 2px solid var(--color-text);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/*
+ * A row of the card's buttons ("נווט" and "חייג", "אספתי" and "לא נמצא", the arrows), each at
+ * least 8rem wide, one under the other when the phone is too narrow for two.
+ */
+.stop-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 0.75rem;
+}
+
+.stop-card-actions .button {
+  flex: 1 1 8rem;
+}
+
+/* The quantity field and the "לא נמצא" question sit under the links, with room above. */
+.stop-card-quantity,
+.stop-card .cancel-confirm {
+  margin-block-start: 0.75rem;
+}
+
+/* The field's own bottom margin would leave a gap above "שמור"; the actions keep their gap. */
+.stop-card-quantity .field {
+  margin-block-end: 0.75rem;
+}
+
+/* The thank-you's "שלח" row under a handled card's street. */
+.stop-card-thanks {
+  margin-block-start: 0.75rem;
+}
+
+.stop-card-thanks-title {
+  margin-block: 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+/* The card's error under its buttons. */
+.stop-card .field-error {
+  margin-block-start: 0.5rem;
 }
 
 /* --- Customer order page (pages/OrderPage.tsx) ------------------------------------ */
