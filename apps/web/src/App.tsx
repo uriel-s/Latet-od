@@ -21,8 +21,8 @@ function pageFor(route: Route): ReactNode {
     case 'orderForm':
       return <OrderFormPage />;
     case 'orderPage':
-      // Section 9 passes `route.token` to the real page.
-      return <OrderPage />;
+      // `key`: another token is another order, so the page mounts anew and loads it.
+      return <OrderPage key={route.token} token={route.token} />;
     case 'login':
       return <LoginPage />;
     case 'collector':
