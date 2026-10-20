@@ -13,7 +13,8 @@
 //        the original path. It must come before the catch-all, or an api call would get index.html.
 //     2. /(.*) → /index.html: every other path loads the SPA, which picks the page from the URL
 //        (apps/web/src/router.tsx), so a deep link like /o/<token> from WhatsApp works.
-// - headers: /o/(.*) gets `X-Robots-Tag: noindex`, keeping a customer's private page out of search
+// - headers: every page gets nosniff, X-Frame-Options and Referrer-Policy. /o/(.*) also gets
+//   `X-Robots-Tag: noindex`, keeping a customer's private page out of search
 //   engines without hiding the public form at / (a <meta name="robots"> in index.html would apply
 //   to every page, since every page is index.html).
 import fs from 'node:fs';
@@ -75,8 +76,15 @@ describe('vercel.json', () => {
     ]);
   });
 
-  it('adds no header to the public form, so it stays indexable', () => {
-    // Only /o/* is private; a rule matching / (or everything) would hide the booking form.
-    expect(config.headers.map((rule) => rule.source)).toEqual(['/o/(.*)']);
+  it('sends the security headers on every page, and no noindex outside /o/', () => {
+    const everyPage = config.headers.find((rule) => rule.source === '/(.*)');
+    expect(everyPage?.headers).toEqual([
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+      // Not "no-referrer": the api's same-origin check needs the Origin the browser sends (ADR-0004).
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+    ]);
+    // Only /o/* is private; noindex on the general rule would hide the public booking form.
+    expect(everyPage?.headers.some((header) => header.key === 'X-Robots-Tag')).toBe(false);
   });
 });
