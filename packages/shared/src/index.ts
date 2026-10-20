@@ -31,6 +31,10 @@ export * from './authApi.ts';
 export * from './collectorOrdersApi.ts';
 // WhatsApp message text, the outgoing message, the "שלח" rows and the "opened" route (ADR-0003).
 export * from './messages.ts';
+// The stored round: date, region, status and phase, its orders and stops (spec §4, §5).
+export * from './round.ts';
+// The /api/collector/rounds contract: planning a round, its view in three groups, errors (spec §3.6).
+export * from './roundsApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and
