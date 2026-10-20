@@ -61,8 +61,9 @@ export function ordersSentBackCount(view: RoundView): number {
 }
 
 /**
- * The question "סגור סבב" asks first, in plain words like buildRouteQuestion (RoundsScreen.tsx):
- * how many customers go back to waiting for the next round, so Yoel hears it before he decides.
+ * The question "סגור סבב" asks first, in plain words like buildRouteQuestion
+ * (BuildRouteConfirm.tsx): how many customers go back to waiting for the next round, so Yoel hears
+ * it before he decides.
  * In phase `routed` they are the stops he has not collected from yet, and it says so; in phase
  * `confirming` it is everyone still in the round.
  */
@@ -99,8 +100,8 @@ export interface CloseRoundConfirmProps {
 }
 
 /**
- * "סגור סבב" and, once tapped, its question in its place. Built like BuildRouteConfirm
- * (RoundsScreen.tsx) and components/CancelConfirm.tsx: a question in the page, not
+ * "סגור סבב" and, once tapped, its question in its place. Built like BuildRouteConfirm.tsx and
+ * components/CancelConfirm.tsx: a question in the page, not
  * `window.confirm`, and the focus where the next step is. The button is the quiet outline style,
  * so it does not compete with the round's main step ("סגור אישורים ובנה מסלול", or the route).
  *
