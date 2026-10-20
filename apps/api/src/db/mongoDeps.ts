@@ -1,7 +1,8 @@
 // The production AppDeps that live in the database: the Mongo repos on the database named in
-// MONGODB_URI (ADR-0001); the login's settings come from env instead (auth/authConfig.ts). The
-// entry points call createMongoDeps once per process: server.ts now, the Vercel function entry in
-// section 10. Nothing here touches the network; the driver connects on the first operation.
+// MONGODB_URI (ADR-0001); the login's and the WhatsApp messages' settings come from env instead
+// (auth/authConfig.ts, messages/messagingConfig.ts). The entry points call createMongoDeps once
+// per process: server.ts now, the Vercel function entry in section 10. Nothing here touches the
+// network; the driver connects on the first operation.
 import type { AppDeps } from '../deps.ts';
 import { MongoAttemptStore } from '../attempts/mongoAttemptStore.ts';
 import { MongoOrdersRepo } from '../orders/mongoOrdersRepo.ts';
@@ -39,10 +40,11 @@ export function databaseNameFromUri(uri: string): string | undefined {
 }
 
 /**
- * The api's real dependencies on the database named in `uri`: every AppDeps piece but `auth`,
- * which comes from env, not from the database (authDepsFromEnv, auth/authConfig.ts); the entry
- * point joins the two. Call it once per process, next to the client (the repos create their
- * indexes once per instance): server.ts does now, and so will the Vercel function entry (section 10).
+ * The api's real dependencies on the database named in `uri`: every AppDeps piece but `auth` and
+ * `messaging`, which come from env, not from the database (authDepsFromEnv, auth/authConfig.ts;
+ * messagingDepsFromEnv, messages/messagingConfig.ts); the entry point joins the three. Call it
+ * once per process, next to the client (the repos create their indexes once per instance):
+ * server.ts does now, and so will the Vercel function entry (section 10).
  *
  * Creates the repos without connecting; `db.ping()` (GET /api/health) opens the connection early.
  *
@@ -50,7 +52,7 @@ export function databaseNameFromUri(uri: string): string | undefined {
  * @throws Error when the URI names no database, before any client is created: without one the
  *   driver would silently store the orders in a database called `test`.
  */
-export function createMongoDeps(uri: string): Omit<AppDeps, 'auth'> {
+export function createMongoDeps(uri: string): Omit<AppDeps, 'auth' | 'messaging'> {
   if (databaseNameFromUri(uri) === undefined) {
     throw new Error(
       'MONGODB_URI must name the database, e.g. mongodb+srv://<user>:<password>@<cluster>.mongodb.net/bottlerun',
