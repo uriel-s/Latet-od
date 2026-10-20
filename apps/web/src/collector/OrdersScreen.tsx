@@ -2,7 +2,8 @@
 // groups of GET /api/collector/orders (רמת בית שמש, בית שמש, בלי אזור), each with its order count
 // and bottle total, and each order as a card with its tags (orderTags.ts) and an "עריכה" link.
 // "הוספת הזמנה" and "עריכה" lead to /app/orders/new and /app/orders/<id>, the add and edit screens
-// built from the booking form's parts (OrderFields); the cards here only show.
+// built from the booking form's parts (OrderFields); "תכנון סבב" leads to /app/orders/plan
+// (PlanRoundScreen.tsx). The cards here only show.
 import { useEffect, useId, useState } from 'react';
 import {
   BOTTLES_SPOT_LABELS,
@@ -26,6 +27,9 @@ export const EMPTY_GROUP_TEXT = 'אין הזמנות שממתינות';
 /** Where "הוספת הזמנה" leads: the add screen for a customer who phoned (spec §3.5). */
 const ADD_ORDER_PATH = '/app/orders/new';
 
+/** Where "תכנון סבב" leads: a round planned from the waiting orders of one region (spec §3.5). */
+const PLAN_ROUND_PATH = '/app/orders/plan';
+
 /**
  * The edit screen of one order. The id is encoded, so a `/` or `?` in it stays part of the id
  * instead of adding a path segment or a query (the same rule as api.ts's request paths).
@@ -39,8 +43,11 @@ function ordersText(count: number): string {
   return count === 1 ? 'הזמנה אחת' : `${count} הזמנות`;
 }
 
-/** "בקבוק אחד", "40 בקבוקים". A real order has at least 30, but a count of one still reads right. */
-function bottlesText(count: number): string {
+/**
+ * "בקבוק אחד", "40 בקבוקים". A real order has at least 30, but a count of one still reads right.
+ * The planning screen's order rows use it too, so a card and a row say the count the same way.
+ */
+export function bottlesText(count: number): string {
   return count === 1 ? 'בקבוק אחד' : `${count} בקבוקים`;
 }
 
@@ -69,9 +76,10 @@ type ScreenState =
 
 /**
  * The orders tab. Renders the page's only `<h1>` (Layout's heading rule) in every state, and the
- * "הוספת הזמנה" link right under it: a customer who phones while the list loads, or while the
- * connection is down, can still be added. The list loads once per visit to the tab (each visit
- * mounts the screen anew), and again when Yoel taps "לנסות שוב".
+ * "הוספת הזמנה" and "תכנון סבב" links right under it: a customer who phones while the list loads,
+ * or while the connection is down, can still be added, and the planning screen loads its own
+ * list. The list loads once per visit to the tab (each visit mounts the screen anew), and again
+ * when Yoel taps "לנסות שוב".
  *
  * A 401 means the session ended (expired, or logged out on another tab): to the login, like the
  * guard in CollectorApp.tsx. A failed load stays here with a retry: a dropped connection is not a
@@ -121,6 +129,9 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
       <h1>הזמנות</h1>
       <Link to={ADD_ORDER_PATH} className="button button-primary button-block orders-add">
         הוספת הזמנה
+      </Link>
+      <Link to={PLAN_ROUND_PATH} className="button button-secondary button-block orders-plan">
+        תכנון סבב
       </Link>
 
       {state.kind === 'loading' && <p role="status">טוען...</p>}
