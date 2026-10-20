@@ -9,7 +9,7 @@
 //   us-east-1 (ADR-0002), so every database round trip stays short.
 // - rewrites, in order. Vercel serves a file that exists in the build output before it looks at any
 //   rewrite, so /assets/* and /og-image.jpg are served as files. Then:
-//     1. /api/(.*) → /api: every api path goes to the one function, api/index.ts; Express still sees
+//     1. /api/(.*) → /api: every api path goes to the one function, api/index.js; Express still sees
 //        the original path. It must come before the catch-all, or an api call would get index.html.
 //     2. /(.*) → /index.html: every other path loads the SPA, which picks the page from the URL
 //        (apps/web/src/router.tsx), so a deep link like /o/<token> from WhatsApp works.
@@ -24,7 +24,7 @@ import { z } from 'zod';
 
 const VERCEL_JSON = fileURLToPath(new URL('../vercel.json', import.meta.url));
 /** The one Vercel function: rewrites send every /api path here. */
-const API_FUNCTION = fileURLToPath(new URL('../api/index.ts', import.meta.url));
+const API_FUNCTION = fileURLToPath(new URL('../api/index.js', import.meta.url));
 
 /** The part of Vercel's config schema this repo uses; anything else in the file fails the parse. */
 const vercelConfigSchema = z.strictObject({

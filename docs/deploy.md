@@ -24,11 +24,11 @@
   - `buildCommand` ו-`outputDirectory`: אותם ערכים כמו בטבלה, כדי שהריפו יהיה המקום היחיד שבו הם כתובים.
   - `regions: ["iad1"]`: ה-function רץ ב-Washington, D.C., ליד הקלאסטר של Atlas ב-AWS us-east-1 (סעיף 4).
     הקלאסטר נשאר שם בהחלטת המפתח.
-  - `rewrites`, לפי הסדר: קודם `/api/(.*)` ל-function (`api/index.ts`), ואז כל השאר ל-`index.html` (SPA).
+  - `rewrites`, לפי הסדר: קודם `/api/(.*)` ל-function (`api/index.js`), ואז כל השאר ל-`index.html` (SPA).
     קובץ שקיים ב-build (`/assets/*`, `/og-image.jpg`) מוגש לפני כל rewrite.
     הסדר חשוב: אם ה-SPA יבוא קודם, כל קריאה ל-api תקבל `index.html`.
   - header: `X-Robots-Tag: noindex` על `/o/*`, כדי שעמודי ההזמנה הפרטיים לא ייכנסו למנועי חיפוש. הטופס ב-`/` נשאר גלוי.
-- **ה-function: `api/index.ts`.** הוא מייצא רק `createVercelHandler(() => depsFromEnv(process.env))`.
+- **ה-function: `api/index.js`.** זו חבילה שנוצרת (`npm run build:api`, esbuild) מ-`apps/api/src/vercelEntry.ts`, שמייצא רק `createVercelHandler(() => depsFromEnv(process.env))`. החבילה נשמרת ב-git: Vercel לא אורז את קבצי ה-TS של הריפו (בניסיון הראשון ה-function נפל עם `ERR_MODULE_NOT_FOUND` על `apps/api/src/envDeps.ts`). רק `express` ו-`mongodb` נשארים חיצוניים. אחרי כל שינוי ב-`apps/api` או ב-`packages/shared`: `npm run build:api` ו-commit של `api/index.js` (`checks.sh build` נכשל אחרת).
   האפליקציה נבנית בבקשה הראשונה. לכן env לא תקין עונה 500 ב-JSON עם שורת לוג ברורה, ולא דף שגיאה של Vercel.
   כל קובץ `.ts` בתיקייה `api/` הופך ל-function, ולכן אין בה שום דבר אחר.
   `apps/api/src/server.ts` נשאר להרצה מקומית (`npm run dev:api`). שתי הכניסות בונות את התלויות עם `depsFromEnv`.
@@ -157,12 +157,8 @@ Settings → Environment Variables, בסביבה **Production**. ההסבר המ
 | `spa-deep-link` | `/o/...` לא מחזיר את `index.html`, או שאין `X-Robots-Tag` | ה-rewrites וה-headers ב-`vercel.json` |
 | הכל 401 | deployment protection (כנראה preview) | להריץ מול production |
 
-### לא נבדק לפני ה-deploy הראשון
-ה-api הוא קוד TypeScript עם import של קבצי `.ts`, ו-`packages/shared` נצרך כ-TS בלי build.
-Node 24 מריץ את זה כמו שזה (נבדק מקומית: import של `api/index.ts` עובד).
-**לא נבדק איך ה-builder של Vercel ל-Node אורז את זה.**
-אם ה-function לא נטען (למשל `FUNCTION_INVOCATION_FAILED`, `ERR_MODULE_NOT_FOUND`, או שגיאה על קובץ `.ts`):
-עושים rollback (סעיף 10), ומתקנים בענף, למשל bundle של ה-function בזמן ה-build. **לא מתקנים ישירות על `main`.**
+### מה למדנו ב-deploy הראשון
+ה-function של `api/index.ts` עם import של קבצי `.ts` נפל ב-Vercel: `ERR_MODULE_NOT_FOUND` על `/var/task/apps/api/src/envDeps.ts`. ה-builder הדר רק את קובץ הכניסה. התיקון: bundle מראש (`api/index.js`, ראו סעיף 1). אם `FUNCTION_INVOCATION_FAILED` חוזר: הלוגים של ה-function ב-Vercel, ו-rollback (סעיף 10).
 
 ## 7. בדיקות אבטחה אחרי ה-deploy הראשון
 

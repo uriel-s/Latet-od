@@ -1,6 +1,6 @@
 // The login's settings from env (ADR-0004): COLLECTOR_PASSWORD_HASH, SESSION_SECRET and NODE_ENV
 // become the AuthDeps createApp needs. Both entry points call it once at startup through
-// depsFromEnv (envDeps.ts): server.ts, and the Vercel function entry api/index.ts on its first
+// depsFromEnv (envDeps.ts): server.ts, and the Vercel function entry vercelEntry.ts on its first
 // request. A missing or bad value stops the startup, so a misconfigured deploy fails at once
 // instead of refusing every login.
 import type { AuthDeps } from '../deps.ts';
