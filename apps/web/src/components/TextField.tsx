@@ -33,6 +33,11 @@ export interface TextFieldProps {
    * left to right inside the right-to-left page (CLAUDE.md).
    */
   digits?: boolean;
+  /**
+   * The earliest date a `type="date"` picker offers (`YYYY-MM-DD`): past days are greyed out. A
+   * help for the picker only; typing can still go around it, so the page validates too.
+   */
+  min?: string;
   /** The `<input>` itself, for a page that moves focus to it or selects its text. */
   inputRef?: Ref<HTMLInputElement>;
 }
@@ -52,6 +57,7 @@ export function TextField({
   maxLength,
   type = 'text',
   digits = false,
+  min,
   inputRef,
 }: TextFieldProps) {
   const inputId = useId();
@@ -80,6 +86,7 @@ export function TextField({
         onChange={(event) => onChange(event.target.value)}
         autoComplete={autoComplete}
         maxLength={maxLength}
+        min={min}
         inputMode={digits ? 'numeric' : undefined}
         dir={leftToRight ? 'ltr' : undefined}
         className={leftToRight ? 'ltr' : undefined}

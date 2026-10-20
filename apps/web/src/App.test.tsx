@@ -8,7 +8,9 @@ import {
   type MeResponse,
   type RoundsResponse,
 } from '@bottlerun/shared';
+import { act } from '@testing-library/react';
 import { App } from './App.tsx';
+import { navigate } from './router.tsx';
 
 /** One path for each route, with the heading its page settles on, for the checks every page must pass. */
 const ONE_PATH_PER_ROUTE: [path: string, heading: string][] = [
@@ -112,6 +114,20 @@ async function renderSettledAt(path: string, heading: string): Promise<void> {
 }
 
 describe('App', () => {
+  it('after an in-app navigation, scrolls to the top, titles the tab and focuses the heading', () => {
+    renderAt('/');
+    // The first load is the browser's own business: no focus is moved.
+    expect(document.activeElement).toBe(document.body);
+
+    act(() => navigate('/login'));
+
+    const heading = screen.getByRole('heading', { level: 1, name: 'כניסה' });
+    expect(document.activeElement).toBe(heading);
+    expect(document.title).toBe('כניסה | לתת עוד');
+    // The spy comes from testSetup.ts; spying again returns it.
+    expect(vi.spyOn(window, 'scrollTo')).toHaveBeenCalledWith(0, 0);
+  });
+
   it('shows the booking form at /', () => {
     renderAt('/');
 

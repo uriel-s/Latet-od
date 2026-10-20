@@ -64,6 +64,31 @@ describe('StreetPicker search', () => {
     expect(screen.queryByRole('button', { name: 'דרך רבין יצחק' })).toBeNull();
   });
 
+  it('after a keyboard choice, puts focus back on the input and says which street was chosen', () => {
+    renderPicker();
+    const input = typeInto('רחוב', 'רבין');
+
+    // A click with no pointer (Enter or Space on the button, or a screen reader): detail is 0.
+    fireEvent.click(screen.getByRole('button', { name: 'דרך רבין יצחק' }), { detail: 0 });
+
+    expect(document.activeElement).toBe(input);
+    expect(screen.getByText('נבחר: דרך רבין יצחק')).toBeDefined();
+
+    // Typing again drops the line: the choice no longer holds.
+    fireEvent.change(input, { target: { value: 'רבי' } });
+    expect(screen.queryByText('נבחר: דרך רבין יצחק')).toBeNull();
+  });
+
+  it('after a finger tap, leaves focus alone so the phone keyboard stays down', () => {
+    renderPicker();
+    const input = typeInto('רחוב', 'רבין');
+
+    fireEvent.click(screen.getByRole('button', { name: 'דרך רבין יצחק' }), { detail: 1 });
+
+    expect(document.activeElement).not.toBe(input);
+    expect(input.value).toBe('דרך רבין יצחק');
+  });
+
   it('clears the choice when the text is edited after a choice, and searches again', () => {
     const { changes } = renderPicker();
     typeInto('רחוב', 'רבין');

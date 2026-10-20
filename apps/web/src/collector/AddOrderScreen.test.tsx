@@ -139,6 +139,8 @@ describe('AddOrderScreen', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
     // Replaced, not pushed: "back" from the list does not reopen the form just sent.
     expect(window.history.length).toBe(historyLength);
+    // The list tells Yoel it worked, since this form is gone.
+    expect(window.history.state).toEqual({ notice: 'ההזמנה נוספה.' });
     expect(requests).toEqual([
       {
         contact: { name: 'רחל כהן', phone: '+972501234567' },

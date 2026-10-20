@@ -281,6 +281,21 @@ describe('confirmationSummary', () => {
 });
 
 describe('RoundsScreen', () => {
+  it('tells the notice the planning screen sent along, once', async () => {
+    window.history.replaceState({ notice: 'הסבב נוצר.' }, '', '/app/rounds');
+    render(
+      <RoundsScreen
+        loadRounds={fakeLoad(LOADED).load}
+        confirmByPhone={fakeConfirm().confirmByPhone}
+        markOpened={fakeMarkOpened().markOpened}
+      />,
+    );
+
+    expect((await screen.findByText('הסבב נוצר.')).getAttribute('role')).toBe('status');
+    expect(window.history.state).toBeNull();
+    await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+  });
+
   describe('while the rounds load', () => {
     it('shows the heading and a loading status, nothing else', () => {
       renderScreen({ loadRounds: () => deferred<RoundsOutcome>().promise });

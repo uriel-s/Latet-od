@@ -127,6 +127,24 @@ describe('groupSummary', () => {
 });
 
 describe('OrdersScreen', () => {
+  describe('the notice from the screen Yoel just left', () => {
+    it('tells it under the heading, once', async () => {
+      window.history.replaceState({ notice: 'ההזמנה נוספה.' }, '', '/app/orders');
+      render(<OrdersScreen loadOrders={fakeLoad(LOADED).load} />);
+
+      expect((await screen.findByText('ההזמנה נוספה.')).getAttribute('role')).toBe('status');
+      // Cleared from the history entry, so a reload or the back button does not show it again.
+      expect(window.history.state).toBeNull();
+    });
+
+    it('shows no notice on a plain visit', async () => {
+      renderScreen(fakeLoad(LOADED).load);
+
+      await screen.findByRole('region', { name: /רמת בית שמש/ });
+      expect(screen.queryByText('ההזמנה נוספה.')).toBeNull();
+    });
+  });
+
   describe('while the orders load', () => {
     it('shows the heading, the add and plan links and a loading status', () => {
       renderScreen(() => deferred<WaitingOrdersOutcome>().promise);

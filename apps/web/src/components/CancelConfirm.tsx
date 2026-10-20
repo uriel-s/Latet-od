@@ -30,6 +30,15 @@ export interface CancelConfirmProps {
   onConfirm: () => void;
   /** The question opened or closed; the screen clears an old error here. */
   onOpenChange?: (open: boolean) => void;
+  /** Words for another question than a cancel ("כן, לא מתאים"); default "כן, לבטל". */
+  confirmLabel?: string;
+  /** The confirm button while the request is on its way; default "מבטל...". */
+  busyLabel?: string;
+  /**
+   * True for a question that sits among other buttons (the customer page's "לא מתאים הפעם"):
+   * without the gap and the line that set a cancel apart from the buttons above it.
+   */
+  inline?: boolean;
 }
 
 /**
@@ -46,6 +55,9 @@ export function CancelConfirm({
   error,
   onConfirm,
   onOpenChange,
+  confirmLabel = CONFIRM_CANCEL_LABEL,
+  busyLabel = CANCELLING_LABEL,
+  inline = false,
 }: CancelConfirmProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -65,7 +77,7 @@ export function CancelConfirm({
   }
 
   return (
-    <div className="cancel-order">
+    <div className={inline ? 'cancel-order cancel-order-inline' : 'cancel-order'}>
       {open ? (
         <div role="group" aria-labelledby={questionId} className="cancel-confirm">
           {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}
@@ -86,7 +98,7 @@ export function CancelConfirm({
               aria-disabled={cancelling ? true : undefined}
               onClick={onConfirm}
             >
-              {cancelling ? CANCELLING_LABEL : CONFIRM_CANCEL_LABEL}
+              {cancelling ? busyLabel : confirmLabel}
             </button>
             <button
               type="button"

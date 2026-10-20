@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_ROUND_ORDERS,
   ROUND_MESSAGES,
@@ -534,6 +534,20 @@ describe('PlanRoundScreen', () => {
       await waitFor(() => expect(window.location.pathname).toBe('/app/rounds'));
       // Replaced: "back" from the rounds returns to the orders, not to this sent form.
       expect(window.history.length).toBe(historyLength);
+      expect(window.history.state).toEqual({ notice: 'הסבב נוצר.' });
+    });
+
+    it('offers no round date before today by the Israeli calendar, not the UTC one', async () => {
+      // 00:30 on 12/11 in Israel (UTC+2 in winter) is still 11/11 in UTC.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-11T22:30:00Z'));
+      try {
+        await renderLoaded();
+
+        expect(dateInput().min).toBe('2026-11-12');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('says "שולח..." while sending, and a second tap sends nothing more', async () => {

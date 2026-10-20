@@ -15,6 +15,7 @@ import {
 } from '@bottlerun/shared';
 import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api.ts';
 import { Link, navigate } from '../router.tsx';
+import { useFlashNotice } from './flashNotice.ts';
 import { orderTags } from './orderTags.ts';
 
 /** Shown when the list got no usable answer (network error, 5xx, unreadable body). */
@@ -122,6 +123,8 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
     };
   }, [loadOrders, attempt]);
 
+  const flash = useFlashNotice();
+
   function retry(): void {
     setState({ kind: 'loading' });
     setAttempt((previous) => previous + 1);
@@ -130,6 +133,12 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
   return (
     <>
       <h1>הזמנות</h1>
+      {/* What the screen Yoel just left did ("ההזמנה נשמרה"): its form is gone, so this tells it. */}
+      {flash !== null && (
+        <p className="order-notice" role="status">
+          {flash}
+        </p>
+      )}
       <Link to={ADD_ORDER_PATH} className="button button-primary button-block orders-add">
         הוספת הזמנה
       </Link>

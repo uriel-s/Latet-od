@@ -83,6 +83,10 @@ export const PHONE_NOT_CHANGED_TEXT = 'את מספר הטלפון אי אפשר 
 
 const CONFIRM_LABEL = 'מאשר/ת איסוף';
 const DECLINE_LABEL = 'לא מתאים הפעם';
+// A tap on "לא מתאים הפעם" sits just under the big "מאשר/ת איסוף" and takes the order out of the
+// round, so it asks first (elderly customers mis-tap).
+const DECLINE_QUESTION = 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.';
+const CONFIRM_DECLINE_LABEL = 'כן, לא מתאים';
 const SENDING_LABEL = 'שולח...';
 const CANCEL_ORDER_LABEL = 'ביטול ההזמנה';
 const CANCEL_QUESTION = 'לבטל את ההזמנה?';
@@ -175,6 +179,8 @@ export function OrderPage({
   const [busy, setBusy] = useState<Action | null>(null);
   // A failed cancel is told inside the cancel question, next to the buttons to try again.
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // The same for a failed "לא מתאים הפעם", inside its own question.
+  const [declineError, setDeclineError] = useState<string | null>(null);
   // True while the change form is open, in place of the order's details and buttons.
   const [changing, setChanging] = useState(false);
   // One request at a time: `busy` reaches the handlers only after a re-render, and this ref stops
@@ -245,6 +251,7 @@ export function OrderPage({
     setBusy(action);
     setNotice(null);
     setCancelError(null);
+    setDeclineError(null);
     let outcome: CustomerOrderWriteOutcome;
     try {
       outcome = await send();
@@ -290,6 +297,7 @@ export function OrderPage({
       case 'failed':
         // The page stays as it was, so the same button is one tap away from another try.
         if (action === 'cancel') setCancelError(NETWORK_ERROR_MESSAGE);
+        else if (action === 'decline') setDeclineError(NETWORK_ERROR_MESSAGE);
         else setNotice({ role: 'alert', text: NETWORK_ERROR_MESSAGE, focus: false });
         return;
     }
@@ -425,14 +433,17 @@ export function OrderPage({
                   >
                     {busy === 'confirm' ? SENDING_LABEL : CONFIRM_LABEL}
                   </button>
-                  <button
-                    type="button"
-                    className="button button-secondary button-block"
-                    aria-disabled={busy !== null ? true : undefined}
-                    onClick={() => void press('decline', declineOrder)}
-                  >
-                    {busy === 'decline' ? SENDING_LABEL : DECLINE_LABEL}
-                  </button>
+                  <CancelConfirm
+                    inline
+                    buttonLabel={DECLINE_LABEL}
+                    question={DECLINE_QUESTION}
+                    confirmLabel={CONFIRM_DECLINE_LABEL}
+                    busyLabel={SENDING_LABEL}
+                    cancelling={busy === 'decline'}
+                    error={declineError}
+                    onConfirm={() => void press('decline', declineOrder)}
+                    onOpenChange={() => setDeclineError(null)}
+                  />
                 </div>
               )}
 

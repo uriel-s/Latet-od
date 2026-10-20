@@ -9,6 +9,7 @@ import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderF
 import { OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
+import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { ORDERS_LIST_PATH, saveErrors } from './orderEditing.ts';
 
 const SAVE_LABEL = 'שמירת ההזמנה';
@@ -69,7 +70,10 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
       case 'saved':
         // Replace, not push: "back" from the list must not reopen a form already sent, whose
         // second save would only answer that the phone has an open order.
-        navigate(ORDERS_LIST_PATH, { replace: true });
+        navigate(ORDERS_LIST_PATH, {
+          replace: true,
+          state: flashNoticeState(FLASH_NOTICES.orderAdded),
+        });
         return;
       case 'loggedOut':
         navigate('/login', { replace: true });

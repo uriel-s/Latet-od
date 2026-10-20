@@ -1,17 +1,31 @@
 // The root component, and the single place routes are listed: the URL path picks a page
 // (router.tsx), and every page sits inside the shared Layout (header, main, OSM footer).
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { APP_NAME } from '@bottlerun/shared';
 import { CollectorApp } from './collector/CollectorApp.tsx';
 import { Layout } from './Layout.tsx';
 import { OrderFormPage } from './orderForm/OrderFormPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OrderPage } from './pages/OrderPage.tsx';
+import { announcePageChange } from './pageChange.ts';
 import { matchRoute, useLocation, type Route } from './router.tsx';
 
 /** The whole web app: public form, customer page and collector app, chosen by the URL. */
 export function App() {
   const { pathname } = useLocation();
+  const isFirstRender = useRef(true);
+
+  // pushState does not do what a page load does: scroll to the top, name the page, tell a screen
+  // reader. So after every path change but the first load, this does it (pageChange.ts).
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    announcePageChange(APP_NAME);
+  }, [pathname]);
+
   return <Layout>{pageFor(matchRoute(pathname))}</Layout>;
 }
 

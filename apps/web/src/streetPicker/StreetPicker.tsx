@@ -19,6 +19,7 @@ const FREE_TEXT_LABEL = 'שם הרחוב';
 const FREE_TEXT_BUTTON = 'הרחוב שלי לא ברשימה';
 const BACK_TO_LIST_BUTTON = 'חזרה לרשימת הרחובות';
 const RESULTS_LIST_LABEL = 'רחובות שמתאימים לחיפוש';
+const CHOSEN_STREET_PREFIX = 'נבחר:';
 const NOT_FOUND = 'לא מצאנו רחוב בשם הזה.';
 
 /** Props of {@link StreetPicker}. */
@@ -93,6 +94,8 @@ export function StreetPicker({
   );
   // What the input shows: the search text in search mode, the street's name in free-text mode.
   const [text, setText] = useState(value?.name ?? '');
+  // "נבחר: <רחוב>", told through the status line after a keyboard choice; cleared on the next edit.
+  const [chosenNote, setChosenNote] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const hintId = useId();
@@ -112,6 +115,7 @@ export function StreetPicker({
 
   function handleTextChange(nextText: string): void {
     setText(nextText);
+    setChosenNote('');
     if (mode === 'freeText') {
       onChange({ kind: 'freeText', name: nextText });
     } else if (value !== null) {
@@ -120,9 +124,19 @@ export function StreetPicker({
     }
   }
 
-  function chooseStreet(street: Street): void {
+  /**
+   * `fromKeyboard`: the tap came from Enter or Space, or a screen reader (a click with no pointer,
+   * `event.detail === 0`). The list closes and the button just used is gone, so focus goes back to
+   * the input, and the status line says what was chosen. A finger tap leaves focus alone: on a
+   * phone, focusing the input here would raise the keyboard again right after the choice.
+   */
+  function chooseStreet(street: Street, fromKeyboard: boolean): void {
     setText(street.name);
     onChange({ kind: 'listed', code: street.code, name: street.name });
+    if (fromKeyboard) {
+      setChosenNote(`${CHOSEN_STREET_PREFIX} ${street.name}`);
+      inputRef.current?.focus();
+    }
   }
 
   /**
@@ -184,7 +198,7 @@ export function StreetPicker({
         <>
           {/* Always rendered, so screen readers announce the line when its text changes. */}
           <p className="field-hint" aria-live="polite">
-            {status}
+            {status || chosenNote}
           </p>
           {matches.length > 0 && (
             <ul className="street-results" aria-label={RESULTS_LIST_LABEL}>
@@ -193,7 +207,7 @@ export function StreetPicker({
                   <button
                     type="button"
                     className="street-result"
-                    onClick={() => chooseStreet(street)}
+                    onClick={(event) => chooseStreet(street, event.detail === 0)}
                   >
                     {street.name}
                   </button>
