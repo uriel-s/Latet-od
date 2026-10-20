@@ -52,7 +52,10 @@ describe('roundSchema', () => {
     const round = makeRound({
       status: 'closed',
       phase: 'routed',
-      stops: [{ orderId: '6710f3a2c4b5d6e7f8a9b0c2' }, { orderId: '6710f3a2c4b5d6e7f8a9b0c1' }],
+      stops: [
+        { orderId: '6710f3a2c4b5d6e7f8a9b0c2', hasLocation: true },
+        { orderId: '6710f3a2c4b5d6e7f8a9b0c1', hasLocation: false },
+      ],
       closedAt: CLOSED_AT,
     });
     expect(roundSchema.parse(round)).toEqual(round);
@@ -99,6 +102,15 @@ describe('roundSchema', () => {
     expect(roundSchema.safeParse(makeRound({ orderIds: [''] })).success).toBe(false);
     expect(roundSchema.safeParse({ ...makeRound(), stops: [{}] }).success).toBe(false);
     expect(roundSchema.safeParse({ ...makeRound(), closedAt: null }).success).toBe(false);
+  });
+
+  // hasLocation is stored when the route is built, not re-derived, so a stop must carry it.
+  it('rejects a stop without hasLocation, or with a non-boolean one', () => {
+    const withStop = (stop: Record<string, unknown>) =>
+      roundSchema.safeParse({ ...makeRound(), stops: [stop] }).success;
+    expect(withStop({ orderId: '6710f3a2c4b5d6e7f8a9b0c1', hasLocation: true })).toBe(true);
+    expect(withStop({ orderId: '6710f3a2c4b5d6e7f8a9b0c1' })).toBe(false);
+    expect(withStop({ orderId: '6710f3a2c4b5d6e7f8a9b0c1', hasLocation: 'yes' })).toBe(false);
   });
 
   // Mongo's `_id` and anything else unknown must not leak into what the api returns.

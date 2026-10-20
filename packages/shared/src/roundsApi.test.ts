@@ -330,7 +330,7 @@ describe('buildRoundView', () => {
   it('returns the round without orderIds and stops', () => {
     // With the Mongo document's own key too, in case a repo passes it through.
     const stored = {
-      ...makeRound(['a'], { personalText: 'תודה!', stops: [{ orderId: 'a' }] }),
+      ...makeRound(['a'], { personalText: 'תודה!', stops: [{ orderId: 'a', hasLocation: true }] }),
       _id: 'mongo',
     };
     expect(buildRoundView(stored, [makeOrder('a')]).round).toEqual({

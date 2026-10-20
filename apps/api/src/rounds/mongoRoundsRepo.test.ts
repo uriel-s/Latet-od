@@ -59,7 +59,7 @@ describe('toRound', () => {
       status: 'closed',
       phase: 'routed',
       orderIds: [HEX_ID],
-      stops: [{ orderId: HEX_ID }],
+      stops: [{ orderId: HEX_ID, hasLocation: true }],
       closedAt: new Date('2026-11-12T15:00:00.000Z'),
     });
     const _id = new ObjectId();
@@ -111,7 +111,7 @@ describe('buildRoundUpdate', () => {
   });
 
   it('replaces an array as a whole', () => {
-    const stops = [{ orderId: HEX_ID }];
+    const stops = [{ orderId: HEX_ID, hasLocation: false }];
 
     expect(buildRoundUpdate({ stops })).toEqual({ $set: { stops } });
   });
