@@ -67,9 +67,10 @@ export function createApp(deps: AppDeps): Express {
   // The public booking form (spec §3.1): the per-IP rate limit, then the route (createOrderRoute.ts).
   app.post('/api/orders', ...createOrderHandlers(deps));
 
-  // The customer's own page /o/<token> (spec §3.3): GET the order, and POST confirm / decline /
-  // cancel (orders/customerOrderRoutes.ts). Public, so NOT behind requireCollector: the long
-  // random token in the path is the only key, and an unknown or malformed one is a 404. The POSTs
+  // The customer's own page /o/<token> (spec §3.3): GET the order, POST confirm / decline /
+  // cancel, and PATCH "שינוי" (address, quantity, note; never the phone)
+  // (orders/customerOrderRoutes.ts). Public, so NOT behind requireCollector: the long random token
+  // in the path is the only key, and an unknown or malformed one is a 404. The POSTs and the PATCH
   // still go through the Origin check above. Every answer is `Cache-Control: no-store`.
   app.use('/api/o', createCustomerOrderRouter(deps));
 
