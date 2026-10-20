@@ -464,8 +464,10 @@ html:has(.bottom-nav) {
 
 /* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */
 
-/* "הוספת הזמנה" right under the heading, with room before the first group. */
-.orders-add {
+/* "הוספת הזמנה" and "תכנון סבב" right under the heading, one under the other, with room before
+   the first group. */
+.orders-add,
+.orders-plan {
   margin-block-end: 0.5rem;
 }
 
@@ -639,6 +641,77 @@ html:has(.bottom-nav) {
   margin: 0;
   color: var(--color-error);
   font-weight: 700;
+}
+
+/* --- Planning screen (collector/PlanRoundScreen.tsx) ------------------------------- */
+
+/*
+ * One order row of the plan: the checkbox, then the order's details one under the other. The
+ * whole row is the .choice tap target; the checkbox stays at the top when the details wrap.
+ */
+.plan-order {
+  align-items: flex-start;
+}
+
+/* The name, then the address, bottles and tags (.plan-order-more), each on its own line. */
+.plan-order-details,
+.plan-order-more {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/* The tags under the bottles, with a little room above. */
+.plan-order-more .tag-list {
+  margin-block-start: 0.25rem;
+}
+
+.plan-order-name {
+  font-weight: 700;
+}
+
+/* --- Rounds tab (collector/RoundsScreen.tsx) --------------------------------------- */
+
+/* A second open round (rare) starts under a decorative line, apart from the first. */
+.round + .round {
+  margin-block-start: 2rem;
+  padding-block-start: 0.5rem;
+  border-block-start: 2px solid var(--color-gray);
+}
+
+/* "בקשות אישור" and the group titles: under the round's <h2>, above the cards' names. */
+.round h3 {
+  margin-block: 1.5rem 0.5rem;
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+
+/* Yoel's personal text keeps the line breaks he typed into it. */
+.round-personal-text {
+  white-space: pre-line;
+}
+
+/* "אישרו: 2 · עוד לא אישרו: 3 · ...": bold, the round's state at a glance. */
+.round-summary {
+  font-weight: 700;
+}
+
+.round-hint {
+  margin-block: 0 0.75rem;
+}
+
+/* The phone on a round's card dials; a full-size tap target although it reads as a link. */
+.order-card-phone {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target);
+}
+
+/* "אישר בטלפון" at the end of a card; .button keeps it at least 48px tall. */
+.order-card-confirm {
+  min-width: var(--tap-target);
+  margin-block: 0.5rem 0.25rem;
 }
 
 /* --- Messages and helpers -------------------------------------------------------- */

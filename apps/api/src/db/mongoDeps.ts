@@ -6,6 +6,7 @@
 import type { AppDeps } from '../deps.ts';
 import { MongoAttemptStore } from '../attempts/mongoAttemptStore.ts';
 import { MongoOrdersRepo } from '../orders/mongoOrdersRepo.ts';
+import { MongoRoundsRepo } from '../rounds/mongoRoundsRepo.ts';
 import { getMongoDb, pingMongo } from './mongoClient.ts';
 
 /**
@@ -61,6 +62,7 @@ export function createMongoDeps(uri: string): Omit<AppDeps, 'auth' | 'messaging'
   const db = getMongoDb(uri);
   return {
     orders: new MongoOrdersRepo(db),
+    rounds: new MongoRoundsRepo(db),
     attempts: new MongoAttemptStore(db),
     db: { ping: () => pingMongo(db) },
   };

@@ -1,0 +1,86 @@
+// Rounds (spec §3.5, §3.6, §4 "מצבי סבב", §5 `rounds`): a planned collection trip, a date and a
+// half of the city. Like orderSchema, roundSchema checks structure only, so a stored round stays
+// readable; the rules for planning one (at most 25 orders, all waiting) live in roundsApi.ts and
+// the api.
+import { z } from 'zod';
+import { pickupTimeSchema } from './messages.ts';
+import { timestampSchema } from './order.ts';
+import { regionSchema } from './streets.ts';
+
+/**
+ * Most orders one round may have (spec §1: a round of more than 25 stops is out of the MVP). The
+ * planning request is refused above it; the stored shape does not repeat the cap.
+ */
+export const MAX_ROUND_ORDERS = 25;
+
+// ---------------------------------------------------------------------------------------------
+// Status and phase
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A round's status (spec §4, "מצבי סבב"): `open` from planning until Yoel taps "סגור סבב", then
+ * `closed`. An order is in at most one open round.
+ */
+export const ROUND_STATUSES = ['open', 'closed'] as const;
+export const roundStatusSchema = z.enum(ROUND_STATUSES);
+export type RoundStatus = z.infer<typeof roundStatusSchema>;
+
+/**
+ * Where an open round is (spec §3.6):
+ * - `confirming`: the confirmation requests went out, and the customers are confirming (step 1).
+ * - `routed`: Yoel tapped "סגור אישורים ובנה מסלול"; whoever did not confirm left the round and
+ *   the route is built and stored (step 2, a later section).
+ */
+export const ROUND_PHASES = ['confirming', 'routed'] as const;
+export const roundPhaseSchema = z.enum(ROUND_PHASES);
+export type RoundPhase = z.infer<typeof roundPhaseSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Stored round
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * One stop of the stored route, in driving order. Only the order for now: the route-building
+ * section extends it, and `stops` stays empty until then. The route is computed once and stored,
+ * so the order of the stops does not change in the middle of the drive (spec §3.6).
+ */
+export const roundStopSchema = z.object({
+  orderId: z.string().min(1),
+});
+export type RoundStop = z.infer<typeof roundStopSchema>;
+
+/**
+ * A round as the api reads it from Mongo (spec §5 `rounds`, with ADR-0003's `pickupBy`). Unknown
+ * keys are stripped, so Mongo's `_id` does not leak: the repo maps it to the hex `id`.
+ */
+export const roundSchema = z.object({
+  id: z.string().min(1),
+  /** The round's calendar day in Israel, `YYYY-MM-DD` (formatted as DD/MM by `formatDayMonth`). */
+  date: z.iso.date(),
+  /** Half of the city: a round is planned per region (spec §3.5, "תכנון סבב"). */
+  region: regionSchema,
+  status: roundStatusSchema,
+  phase: roundPhaseSchema,
+  /** Yoel's own words for the confirmation request (spec §3.5, ת11); absent when he wrote none. */
+  personalText: z.string().min(1).optional(),
+  /**
+   * "עד איזו שעה להוציא את הבקבוקים" (ADR-0003), `HH:MM`. The next planning screen pre-fills it
+   * from the last round's.
+   */
+  pickupBy: pickupTimeSchema.optional(),
+  /**
+   * Every order put into the round, in plan order. It never shrinks when an order leaves the
+   * round (its `roundId` goes, `lastMiss.roundId` points here), so the round's view still finds
+   * who asked for another date.
+   */
+  orderIds: z.array(z.string().min(1)),
+  /** The stored route, in driving order. Empty until the route is built (phase `routed`). */
+  stops: z.array(roundStopSchema),
+  createdAt: timestampSchema,
+  /** Set when Yoel taps "סגור סבב". */
+  closedAt: timestampSchema.optional(),
+});
+export type Round = z.infer<typeof roundSchema>;
+
+/** A round before it is stored: what a repository's `create()` takes. The repo assigns `id`. */
+export type NewRound = Omit<Round, 'id'>;

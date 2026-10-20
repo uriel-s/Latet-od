@@ -4,6 +4,7 @@
 // patches, undefined fields left out, and a copy for every order handed out.
 import { randomBytes } from 'node:crypto';
 import { isOpenStatus, type NewOrder, type Order } from '@bottlerun/shared';
+import { withoutUndefined } from '../db/patchUpdate.ts';
 import {
   DuplicateOpenOrderError,
   type OrderListFilter,
@@ -42,11 +43,13 @@ export class InMemoryOrdersRepo implements OrdersRepo {
   }
 
   list(filter: OrderListFilter = {}): Promise<Order[]> {
-    const { statuses, roundId } = filter;
+    const { statuses, roundId, ids } = filter;
     const matching = [...this.orders.values()].filter(
       (order) =>
         (statuses === undefined || statuses.includes(order.status)) &&
-        (roundId === undefined || order.roundId === roundId),
+        (roundId === undefined || order.roundId === roundId) &&
+        // An unknown or malformed id is simply not any order's id, so it matches nothing.
+        (ids === undefined || ids.includes(order.id)),
     );
     // Array sort is stable, so orders created at the same moment keep their creation order.
     matching.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -127,20 +130,4 @@ export class InMemoryOrdersRepo implements OrdersRepo {
 /** The caller's own copy of a stored order, or null. */
 function copyOrNull(order: Order | undefined): Order | null {
   return order === undefined ? null : structuredClone(order);
-}
-
-/**
- * `value` without object keys whose value is `undefined`, at any depth, like the Mongo driver
- * with `ignoreUndefined: true`: a stored order has optional fields absent, never undefined
- * (orderSchema rejects null, which is what the driver would otherwise store). Dates are kept
- * as they are; the caller copies the result.
- */
-function withoutUndefined(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutUndefined);
-  if (value === null || typeof value !== 'object' || value instanceof Date) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, field]) => field !== undefined)
-      .map(([key, field]) => [key, withoutUndefined(field)]),
-  );
 }
