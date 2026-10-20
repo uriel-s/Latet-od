@@ -13,7 +13,7 @@ const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 export interface LayoutProps {
   children: ReactNode;
   /**
-   * Adds "כניסה ליואל" to the footer: a small link to /login, for the public booking form only.
+   * Adds "כניסת מנהל" to the footer: a small link to /login, for the public booking form only.
    * The customer's own page and Yoel's app do not need it, and an extra link there would only
    * confuse an elderly customer.
    */
@@ -59,7 +59,7 @@ export function Layout({ children, collectorLink = false }: LayoutProps) {
           {collectorLink && (
             <p>
               <Link to="/login" className="footer-link">
-                כניסה ליואל
+                כניסת מנהל
               </Link>
             </p>
           )}

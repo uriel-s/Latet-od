@@ -217,22 +217,22 @@ describe('App', () => {
   it('offers Yoel a quiet way in from the booking form, and from no other page', () => {
     renderAt('/');
     const entrance = within(screen.getByRole('contentinfo')).getByRole('link', {
-      name: 'כניסה ליואל',
+      name: 'כניסת מנהל',
     });
     expect(entrance.getAttribute('href')).toBe('/login');
 
     fireEvent.click(entrance);
     expect(window.location.pathname).toBe('/login');
-    expect(screen.queryByRole('link', { name: 'כניסה ליואל' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'כניסת מנהל' })).toBeNull();
   });
 
   it.each(['/o/abc', '/login', '/app/rounds', '/no-such-page'])(
-    'has no "כניסה ליואל" link at %s',
+    'has no "כניסת מנהל" link at %s',
     async (path) => {
       renderAt(path);
       await screen.findByRole('heading', { level: 1 });
 
-      expect(screen.queryByRole('link', { name: 'כניסה ליואל' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'כניסת מנהל' })).toBeNull();
       await waitFor(() => expect(screen.queryByText('טוען...')).toBeNull());
     },
   );

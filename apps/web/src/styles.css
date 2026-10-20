@@ -141,20 +141,20 @@ h1[tabindex='-1']:focus {
   padding-block-end: 2rem;
 }
 
-/* A quiet footer: a thin accent line like the header's, and small centred text (14px, the floor
-   for text that is not a control). The credit is legally required (ODbL), so it stays readable:
-   --color-text on the page is 8.5:1. */
+/* A quiet footer: a thin accent line like the header's, and very small centred text (about 12px,
+   the smallest size in the app, chosen on purpose). The credit is legally required (ODbL), so it
+   stays readable: --color-text on the page is 8.5:1. */
 .site-footer {
   border-block-start: 2px solid var(--color-accent);
   padding-block: 0.25rem;
-  font-size: 0.8125rem;
+  font-size: 0.7rem;
 }
 
 .site-footer p {
   margin: 0;
 }
 
-/* The credit and, on the booking form, "כניסה ליואל": side by side, one under the other when the
+/* The credit and, on the booking form, "כניסת מנהל": side by side, one under the other when the
    phone is too narrow. */
 .site-footer-inner {
   display: flex;
