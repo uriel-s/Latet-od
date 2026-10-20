@@ -26,8 +26,11 @@ const SECOND_MS = 1000;
 const HOUR_MS = 60 * 60 * SECOND_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-/** Paths behind the guard: a collector path no route serves yet, and "who is logged in". */
-const COLLECTOR_PATH = '/api/collector/orders';
+/**
+ * Paths behind the guard: a collector path no route serves (so a request that passes the guard
+ * gets the app's 404, whatever the collector routes do), and "who is logged in".
+ */
+const COLLECTOR_PATH = '/api/collector/no-such-route';
 const ME_PATH = '/api/auth/me';
 
 let clock: Date;

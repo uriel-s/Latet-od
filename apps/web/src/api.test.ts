@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import type { CreateOrderRequest, CreateOrderResponse, MeResponse } from '@bottlerun/shared';
-import { createOrder, fetchSession, login, logout, warmUp, type FetchFn } from './api.ts';
+import type {
+  AddOrderRequest,
+  CollectorOrder,
+  CreateOrderRequest,
+  CreateOrderResponse,
+  MeResponse,
+  OrderGroup,
+  UpdateOrderRequest,
+} from '@bottlerun/shared';
+import {
+  addCollectorOrder,
+  cancelCollectorOrder,
+  createOrder,
+  fetchCollectorOrder,
+  fetchSession,
+  fetchWaitingOrders,
+  login,
+  logout,
+  updateCollectorOrder,
+  warmUp,
+  type CollectorOrderWriteOutcome,
+  type FetchFn,
+} from './api.ts';
 import { UNKNOWN_FIELD_ERROR } from './orderForm/formValues.ts';
 
 /**
@@ -443,3 +464,412 @@ describe('logout', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// The collector's orders: /api/collector/orders
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * One order as Yoel's screens get it. The fake fetch's JSON.stringify writes `createdAt` as the
+ * ISO string the api sends, so a parsed answer equal to this one has turned it back into a Date.
+ */
+const ORDER: CollectorOrder = {
+  id: '6710f3a2c4b5d6e7f8a9b0c1',
+  contact: { name: 'משה כהן', phone: '+972501234567' },
+  address: {
+    streetCode: 247,
+    streetName: 'דרך רבין יצחק',
+    houseNumber: '12א',
+    bottlesSpot: 'apartmentDoor',
+    floorApt: 'קומה 3, דירה 12',
+  },
+  bottlesEstimated: 45,
+  status: 'waiting',
+  region: 'ramat',
+  lastMiss: { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-0' },
+  source: 'collector',
+  createdAt: new Date('2026-10-19T08:30:00.000Z'),
+  hasLocation: true,
+};
+
+/** The three groups of the "הזמנות" screen, as GET /api/collector/orders answers them. */
+const GROUPS: OrderGroup[] = [
+  { key: 'ramat', orderCount: 1, bottlesTotal: 45, orders: [ORDER] },
+  { key: 'old', orderCount: 0, bottlesTotal: 0, orders: [] },
+  { key: 'none', orderCount: 0, bottlesTotal: 0, orders: [] },
+];
+
+/** An id that is not a path segment as it is: its `/`, `?` and `#` must be encoded. */
+const ODD_ID = 'a/b?c#d';
+const ODD_ID_IN_PATH = 'a%2Fb%3Fc%23d';
+
+/** Yoel's "הוספת הזמנה": the booking form's request without the honeypot. */
+const ADD_REQUEST: AddOrderRequest = {
+  contact: { name: 'רחל לוי', phone: '052-7654321' },
+  address: { streetName: 'הרימון', houseNumber: '7', bottlesSpot: 'buildingEntrance' },
+  bottlesEstimated: '60',
+};
+
+/** An edit: a new count, an explicit region, and the near street removed (null). */
+const UPDATE_REQUEST: UpdateOrderRequest = {
+  bottlesEstimated: 60,
+  region: 'old',
+  nearStreetCode: null,
+};
+
+/** The JSON body of a recorded call, parsed; fails the test when it has no string body. */
+function jsonBodyOf(call: RecordedCall | undefined): unknown {
+  const body = call?.init?.body;
+  if (typeof body !== 'string') throw new Error('expected a JSON string body');
+  return JSON.parse(body);
+}
+
+/** Bodies of a success that are not a `CollectorOrderResponse`: each must answer `failed`. */
+const NOT_AN_ORDER: ({ body: unknown } | { text: string })[] = [
+  { body: { order: { ...ORDER, status: 'archived' } } },
+  { body: { order: { ...ORDER, createdAt: 'yesterday' } } },
+  { body: ORDER },
+  { body: {} },
+  { text: '<html>ok</html>' },
+];
+
+describe('fetchWaitingOrders', () => {
+  it('asks GET /api/collector/orders, past the browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: { groups: GROUPS } });
+
+    await fetchWaitingOrders(fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/orders');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  it('answers loaded with the groups on 200, createdAt parsed into a Date', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: { groups: GROUPS } });
+
+    const outcome = await fetchWaitingOrders(fetchFn);
+
+    expect(outcome).toEqual({ kind: 'loaded', groups: GROUPS });
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.groups[0]?.orders[0]?.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not the groups', async () => {
+    for (const answer of [
+      { status: 200, body: { groups: [{ ...GROUPS[0], key: 'north' }] } },
+      { status: 200, body: { groups: [{ ...GROUPS[0], orders: [{ ...ORDER, id: '' }] }] } },
+      { status: 200, body: GROUPS },
+      { status: 200, text: '<html>ok</html>' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchWaitingOrders(fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchWaitingOrders(fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [403, 404, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await fetchWaitingOrders(fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: { groups: GROUPS } });
+      expect(await fetchWaitingOrders(fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe('fetchCollectorOrder', () => {
+  it('asks GET /api/collector/orders/:id with the id encoded, past the browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: { order: ORDER } });
+
+    await fetchCollectorOrder(ODD_ID, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/orders/${ODD_ID_IN_PATH}`);
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+  });
+
+  it('answers loaded with the order on 200, createdAt parsed into a Date', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: { order: ORDER } });
+
+    const outcome = await fetchCollectorOrder(ORDER.id, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'loaded', order: ORDER });
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not an order', async () => {
+    for (const answer of NOT_AN_ORDER) {
+      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
+      expect(await fetchCollectorOrder(ORDER.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers notFound on 404', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 404, body: { error: 'order_not_found' } });
+
+    expect(await fetchCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'notFound' });
+  });
+
+  it('answers loggedOut on 401', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
+
+    expect(await fetchCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'loggedOut' });
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [400, 403, 409, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await fetchCollectorOrder(ORDER.id, fetchFn), String(status)).toEqual({
+        kind: 'failed',
+      });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: { order: ORDER } });
+      expect(await fetchCollectorOrder(ORDER.id, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe('addCollectorOrder', () => {
+  it('posts the request as JSON to /api/collector/orders', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 201, body: { order: ORDER } });
+
+    await addCollectorOrder(ADD_REQUEST, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/orders');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(jsonBodyOf(calls[0])).toEqual(ADD_REQUEST);
+  });
+
+  it('answers failed on a 404: an add has no order to be missing', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 404, body: { error: 'order_not_found' } });
+
+    expect(await addCollectorOrder(ADD_REQUEST, fetchFn)).toEqual({ kind: 'failed' });
+  });
+});
+
+describe('updateCollectorOrder', () => {
+  it('patches /api/collector/orders/:id with the id encoded and the request as JSON', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: { order: ORDER } });
+
+    await updateCollectorOrder(ODD_ID, UPDATE_REQUEST, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/orders/${ODD_ID_IN_PATH}`);
+    expect(calls[0]?.init?.method).toBe('PATCH');
+    expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+    // `nearStreetCode: null` is sent, not dropped: it is what removes the near street.
+    expect(jsonBodyOf(calls[0])).toEqual({
+      bottlesEstimated: 60,
+      region: 'old',
+      nearStreetCode: null,
+    });
+  });
+});
+
+describe('cancelCollectorOrder', () => {
+  it('posts to /api/collector/orders/:id/cancel with the id encoded and no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: { order: ORDER } });
+
+    await cancelCollectorOrder(ODD_ID, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/orders/${ODD_ID_IN_PATH}/cancel`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+});
+
+/** One of the three writes, called with a fake fetch. */
+interface CollectorWrite {
+  name: string;
+  /** 201 for the add, 200 for an edit or a cancel. */
+  successStatus: number;
+  write: (fetchFn: FetchFn) => Promise<CollectorOrderWriteOutcome>;
+}
+
+/**
+ * The three writes share every answer but their success status and the 404, which only an edit or
+ * a cancel can mean as "the order is gone".
+ */
+const WRITES: CollectorWrite[] = [
+  {
+    name: 'addCollectorOrder',
+    successStatus: 201,
+    write: (fetchFn) => addCollectorOrder(ADD_REQUEST, fetchFn),
+  },
+  {
+    name: 'updateCollectorOrder',
+    successStatus: 200,
+    write: (fetchFn) => updateCollectorOrder(ORDER.id, UPDATE_REQUEST, fetchFn),
+  },
+  {
+    name: 'cancelCollectorOrder',
+    successStatus: 200,
+    write: (fetchFn) => cancelCollectorOrder(ORDER.id, fetchFn),
+  },
+];
+
+describe.each(WRITES)('$name answers', ({ successStatus, write }) => {
+  it('saved with the stored order on its success status, createdAt parsed into a Date', async () => {
+    const { fetchFn } = makeFakeFetch({ status: successStatus, body: { order: ORDER } });
+
+    const outcome = await write(fetchFn);
+
+    expect(outcome).toEqual({ kind: 'saved', order: ORDER });
+    if (outcome.kind !== 'saved') throw new Error('expected saved');
+    expect(outcome.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('failed on a success whose body is not an order', async () => {
+    for (const answer of NOT_AN_ORDER) {
+      const { fetchFn } = makeFakeFetch({ status: successStatus, ...answer });
+      expect(await write(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('failed on a success status that is not its own', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: successStatus === 201 ? 200 : 201,
+      body: { order: ORDER },
+    });
+
+    expect(await write(fetchFn)).toEqual({ kind: 'failed' });
+  });
+
+  it('invalid on a 400, with a path no field shows (nearStreetCode) above the form', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 400,
+      body: {
+        error: 'invalid_order',
+        fieldErrors: { 'contact.phone': 'מספר נייד לא תקין', nearStreetCode: 'הרחוב לא נמצא' },
+      },
+    });
+
+    expect(await write(fetchFn)).toEqual({
+      kind: 'invalid',
+      errors: { byField: { phone: 'מספר נייד לא תקין' }, other: UNKNOWN_FIELD_ERROR },
+    });
+  });
+
+  it('invalid with a message above the form on a 400 without usable field errors', async () => {
+    for (const answer of [
+      { status: 400, body: { error: 'invalid_order', fieldErrors: {} } },
+      { status: 400, body: { error: 'invalid_json' } },
+      { status: 400, text: 'Bad Request' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await write(fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'invalid',
+        errors: { byField: {}, other: UNKNOWN_FIELD_ERROR },
+      });
+    }
+  });
+
+  it('duplicate with the shared message on a 409 duplicate_open_order', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'duplicate_open_order', message: 'anything' },
+    });
+
+    expect(await write(fetchFn)).toEqual({
+      kind: 'duplicate',
+      message: 'כבר יש הזמנה פתוחה למספר הזה.',
+    });
+  });
+
+  it('closed with the shared message on a 409 invalid_transition', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'invalid_transition', message: 'anything' },
+    });
+
+    expect(await write(fetchFn)).toEqual({
+      kind: 'closed',
+      message: 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
+    });
+  });
+
+  it('failed on a 409 whose body has no known error code', async () => {
+    for (const answer of [
+      { status: 409, body: { error: 'conflict', message: 'x' } },
+      { status: 409, body: { message: 'x' } },
+      { status: 409, body: ['duplicate_open_order'] },
+      { status: 409, text: 'Conflict' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await write(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await write(fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('failed on any other status, without a retry', async () => {
+    for (const status of [403, 413, 429, 500, 502, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await write(fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, {
+        status: successStatus,
+        body: { order: ORDER },
+      });
+      expect(await write(fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe.each(WRITES.filter(({ name }) => name !== 'addCollectorOrder'))(
+  '$name answers',
+  ({ write }) => {
+    it('notFound with the shared message on 404', async () => {
+      const { fetchFn } = makeFakeFetch({ status: 404, body: { error: 'order_not_found' } });
+
+      expect(await write(fetchFn)).toEqual({ kind: 'notFound', message: 'ההזמנה לא נמצאה.' });
+    });
+  },
+);

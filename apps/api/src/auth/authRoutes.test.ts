@@ -406,11 +406,13 @@ describe('protected routes', () => {
     expect(res.body).toStrictEqual({ error: 'unauthenticated' });
   });
 
-  it('let a logged-in request past the guard: 404 not_found for a path no route serves yet', async () => {
+  // The probe path must stay unserved: a real collector route would answer 200 and hide whether
+  // the guard let the request through (section 6 made /api/collector/orders a real route).
+  it('let a logged-in request past the guard: 404 not_found for a path no route serves', async () => {
     const line = setCookieLine(await login(FAKE_COLLECTOR_PASSWORD));
 
     const res = await request(app)
-      .get('/api/collector/orders')
+      .get('/api/collector/no-such-route')
       .set('Cookie', sessionCookieHeader(setCookieValue(line ?? '')));
 
     expect(res.status).toBe(404);

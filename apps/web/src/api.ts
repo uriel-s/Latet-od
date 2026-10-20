@@ -2,14 +2,21 @@
 // the fetch to use, so tests pass a fake and never touch the network (CLAUDE.md: every external
 // call sits behind an interface). The api is same-origin (ADR-0002), so paths are relative.
 import {
+  COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
   LOGIN_MESSAGES,
+  collectorOrderResponseSchema,
+  collectorOrdersResponseSchema,
   createOrderResponseSchema,
   meResponseSchema,
+  type AddOrderRequest,
+  type CollectorOrder,
   type CreateOrderRequest,
   type CreateOrderResponse,
   type LoginRequest,
+  type OrderGroup,
   type SessionUser,
+  type UpdateOrderRequest,
 } from '@bottlerun/shared';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors, type FormErrors } from './orderForm/formValues.ts';
 
@@ -260,4 +267,214 @@ async function fetchOrNull(
 async function sessionUserOf(response: Response): Promise<SessionUser | null> {
   const parsed = meResponseSchema.safeParse(await readJson(response));
   return parsed.success ? parsed.data.user : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The collector's orders: /api/collector/orders (spec §3.5, the "הזמנות" screen)
+//
+// Every route is behind the login (ADR-0004), so every call here answers `loggedOut` on a 401 and
+// the screen sends Yoel to /login. The cookie and Origin are the browser's, as in the auth
+// section. Nothing is retried, not even after a network error: a write that reached the api but
+// lost its answer may have been stored, and Yoel taps again instead (a second add then answers
+// `duplicate`, a second cancel answers `saved`). Every message is a shared constant, never the
+// body's text, and every success body is parsed with the shared schema.
+// ---------------------------------------------------------------------------------------------
+
+const COLLECTOR_ORDERS_PATH = '/api/collector/orders';
+
+/**
+ * The path of one order. The id is encoded: the edit screen takes it from its own URL, and a `/`
+ * or `?` in it must stay part of the id instead of adding a path segment or a query.
+ */
+function collectorOrderPath(id: string): string {
+  return `${COLLECTOR_ORDERS_PATH}/${encodeURIComponent(id)}`;
+}
+
+/** How GET /api/collector/orders ended, as the "הזמנות" screen shows it. */
+export type WaitingOrdersOutcome =
+  /** 200: the waiting orders in their three groups, in screen order (`groupWaitingOrders`). */
+  | { kind: 'loaded'; groups: OrderGroup[] }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 5xx, or a 200 the app cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Loads the waiting orders, by region group, from `GET /api/collector/orders`. `cache: 'no-store'`
+ * so the list is never one the browser kept from before an edit, a cancel or an add.
+ */
+export async function fetchWaitingOrders(
+  fetchFn: FetchFn = globalFetch,
+): Promise<WaitingOrdersOutcome> {
+  const response = await fetchOrNull(fetchFn, COLLECTOR_ORDERS_PATH, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const parsed = collectorOrdersResponseSchema.safeParse(await readJson(response));
+      return parsed.success ? { kind: 'loaded', groups: parsed.data.groups } : { kind: 'failed' };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How GET /api/collector/orders/:id ended, as the edit screen shows it. */
+export type CollectorOrderOutcome =
+  /** 200: the order as it is stored now (`createdAt` a Date). */
+  | { kind: 'loaded'; order: CollectorOrder }
+  /** 404: no order has this id, or the id is not one at all. */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 5xx, or a 200 the app cannot read. */
+  | { kind: 'failed' };
+
+/** Loads one order for the edit screen from `GET /api/collector/orders/:id`, past the cache. */
+export async function fetchCollectorOrder(
+  id: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CollectorOrderOutcome> {
+  const response = await fetchOrNull(fetchFn, collectorOrderPath(id), {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const order = await collectorOrderOf(response);
+      return order === null ? { kind: 'failed' } : { kind: 'loaded', order };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How a change to an order ended (add, edit, cancel). */
+export type CollectorOrderWriteOutcome =
+  /** 200 (201 for an add): the order as stored now, which the screen shows. */
+  | { kind: 'saved'; order: CollectorOrder }
+  /** 400: a field was refused; placed next to its field like the booking form's own check. */
+  | { kind: 'invalid'; errors: FormErrors }
+  /** 409 `duplicate_open_order`: the phone has another open order (spec §3.1). */
+  | { kind: 'duplicate'; message: string }
+  /** 409 `invalid_transition`: the order was collected or cancelled meanwhile. */
+  | { kind: 'closed'; message: string }
+  /** 404 (edit and cancel only): the order is gone, or the id is not one. */
+  | { kind: 'notFound'; message: string }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403 or 5xx, or a body the app cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Adds an order for a customer who phoned (Yoel's "הוספת הזמנה", spec §3.5) with
+ * `POST /api/collector/orders`: the booking form's request, without the honeypot.
+ */
+export async function addCollectorOrder(
+  request: AddOrderRequest,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CollectorOrderWriteOutcome> {
+  const response = await fetchOrNull(fetchFn, COLLECTOR_ORDERS_PATH, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  // No order id in the path, so a 404 is not "the order is gone": the route itself is missing.
+  return writeOutcomeOf(response, { successStatus: 201, notFoundMeansOrder: false });
+}
+
+/**
+ * Changes an open order (Yoel's "עריכה", "שינוי אזור", "רחוב קרוב") with
+ * `PATCH /api/collector/orders/:id`. Only the keys in `request` change; see
+ * `updateOrderRequestSchema` for what each does to the region.
+ */
+export async function updateCollectorOrder(
+  id: string,
+  request: UpdateOrderRequest,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CollectorOrderWriteOutcome> {
+  const response = await fetchOrNull(fetchFn, collectorOrderPath(id), {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  return writeOutcomeOf(response, { successStatus: 200, notFoundMeansOrder: true });
+}
+
+/**
+ * Cancels an order (Yoel's "ביטול") with `POST /api/collector/orders/:id/cancel`, which takes no
+ * body. An order already cancelled answers `saved` too, so a second tap is harmless.
+ */
+export async function cancelCollectorOrder(
+  id: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CollectorOrderWriteOutcome> {
+  const response = await fetchOrNull(fetchFn, `${collectorOrderPath(id)}/cancel`, {
+    method: 'POST',
+  });
+  return writeOutcomeOf(response, { successStatus: 200, notFoundMeansOrder: true });
+}
+
+/**
+ * The outcome of a write's answer (null: none arrived). `successStatus` is the route's success
+ * (201 for an add, 200 otherwise); any other 2xx is `failed`, since the app cannot tell what it
+ * means. `notFoundMeansOrder` is false for the add, whose path has no order id to be missing.
+ */
+async function writeOutcomeOf(
+  response: Response | null,
+  expected: { successStatus: 200 | 201; notFoundMeansOrder: boolean },
+): Promise<CollectorOrderWriteOutcome> {
+  if (response === null) return { kind: 'failed' };
+  if (response.status === expected.successStatus) {
+    const order = await collectorOrderOf(response);
+    return order === null ? { kind: 'failed' } : { kind: 'saved', order };
+  }
+  switch (response.status) {
+    case 400:
+      // The same mapping as the booking form's: a path no field shows (`nearStreetCode`,
+      // `region`, an unknown key) becomes the message above the form.
+      return { kind: 'invalid', errors: invalidOrderErrors(await readJson(response)) };
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return expected.notFoundMeansOrder
+        ? { kind: 'notFound', message: COLLECTOR_ORDER_MESSAGES.orderNotFound }
+        : { kind: 'failed' };
+    case 409:
+      return conflictOutcome(await readJson(response));
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/**
+ * A 409 told apart by the body's `error` code: the two conflicts need different words and a
+ * different next step (check the phone, or go back to the list). A body without a known code is
+ * `failed`: guessing could tell Yoel the wrong thing.
+ */
+function conflictOutcome(body: unknown): CollectorOrderWriteOutcome {
+  const code = isObject(body) ? body.error : undefined;
+  switch (code) {
+    case 'duplicate_open_order':
+      return { kind: 'duplicate', message: CREATE_ORDER_MESSAGES.duplicateOpenOrder };
+    case 'invalid_transition':
+      return { kind: 'closed', message: COLLECTOR_ORDER_MESSAGES.orderClosed };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** The order of a success body, or null when the body is not a `CollectorOrderResponse`. */
+async function collectorOrderOf(response: Response): Promise<CollectorOrder | null> {
+  const parsed = collectorOrderResponseSchema.safeParse(await readJson(response));
+  return parsed.success ? parsed.data.order : null;
 }

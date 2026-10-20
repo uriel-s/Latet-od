@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MeResponse } from '@bottlerun/shared';
+import {
+  groupWaitingOrders,
+  type CollectorOrdersResponse,
+  type MeResponse,
+} from '@bottlerun/shared';
 import { App } from './App.tsx';
 
 /** One path for each route, with the heading its page settles on, for the checks every page must pass. */
@@ -19,12 +23,24 @@ let requests: string[] = [];
 /** Whether the fake api says this browser is logged in (GET /api/auth/me). */
 let loggedIn = true;
 
+/** GET /api/collector/orders: no order is waiting. */
+const NO_WAITING_ORDERS_BODY: CollectorOrdersResponse = { groups: groupWaitingOrders([]) };
+
 /**
  * Stands in for the api in every test of this file, so no page sends a real request from jsdom.
- * Only the collector app's guard calls it here (GET /api/auth/me); anything else gets a 404.
+ * The collector app's guard calls it (GET /api/auth/me), and so does its orders tab (GET
+ * /api/collector/orders); anything else gets a 404.
  */
 function fakeApi(input: string): Promise<Response> {
   requests.push(input);
+  if (input === '/api/collector/orders') {
+    return Promise.resolve(
+      new Response(JSON.stringify(NO_WAITING_ORDERS_BODY), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  }
   if (input !== '/api/auth/me') return Promise.resolve(new Response(null, { status: 404 }));
   return Promise.resolve(
     loggedIn
@@ -105,7 +121,8 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'היסטוריה' })).toBeDefined();
     expect(window.location.pathname).toBe('/app/history');
-    await waitFor(() => expect(requests).toEqual(['/api/auth/me']));
+    // The session once, and the orders tab's own list once; no tab switch checks the session.
+    await waitFor(() => expect(requests).toEqual(['/api/auth/me', '/api/collector/orders']));
   });
 
   it('shows "page not found" for an unknown path', () => {
