@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build --workspace apps/web",
+  "outputDirectory": "apps/web/dist",
+  "regions": ["iad1"],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [{ "source": "/o/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }] }]
+}

@@ -24,4 +24,5 @@ bash .claude/checks.sh all                 # כל הבדיקות: זו ההגד�
 - [`docs/spec.md`](docs/spec.md): אפיון v2.
 - [`docs/decisions/`](docs/decisions/README.md): החלטות ארכיטקטורה (ADRs).
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): רכיבים, זרימת הזמנה, גבולות.
+- [`docs/deploy.md`](docs/deploy.md): ה-deploy ל-Vercel, משתני סביבה, גיבוי ושחזור, ובדיקות אחרי deploy.
 - [`CLAUDE.md`](CLAUDE.md): כללי פיתוח, מונחים, פקודות.

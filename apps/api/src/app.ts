@@ -1,9 +1,9 @@
 // The Express app, built by createApp(deps), with no listen() call: the public booking form, the
 // customer's own order page (/api/o/:token, reached by its token, no login), the collector's
 // login, and Yoel's screens under /api/collector (orders, rounds). Two thin entry points wrap it
-// (ADR-0002): src/server.ts for local runs and plain Node hosting, and (section 10) a Vercel
-// function entry. Both pass the real dependencies (db/mongoDeps.ts, auth/authConfig.ts,
-// messages/messagingConfig.ts); tests pass fakes (fakeDeps.ts).
+// (ADR-0002): src/server.ts for local runs and plain Node hosting, and the Vercel function entry
+// api/index.ts (at the repo root, through vercelHandler.ts). Both pass the real dependencies, built
+// from env by depsFromEnv (envDeps.ts); tests pass fakes (fakeDeps.ts).
 import express, { type Express } from 'express';
 import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
 import { createAuthRouter } from './auth/authRoutes.ts';

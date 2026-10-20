@@ -1,7 +1,8 @@
 // The login's settings from env (ADR-0004): COLLECTOR_PASSWORD_HASH, SESSION_SECRET and NODE_ENV
-// become the AuthDeps createApp needs. The entry points call it once at startup: server.ts now,
-// the Vercel function entry in section 10. A missing or bad value stops the startup, so a
-// misconfigured deploy fails at once instead of refusing every login.
+// become the AuthDeps createApp needs. Both entry points call it once at startup through
+// depsFromEnv (envDeps.ts): server.ts, and the Vercel function entry api/index.ts on its first
+// request. A missing or bad value stops the startup, so a misconfigured deploy fails at once
+// instead of refusing every login.
 import type { AuthDeps } from '../deps.ts';
 import { createVerifyCredentials } from './credentials.ts';
 
@@ -43,7 +44,7 @@ export function authDepsFromEnv(env: NodeJS.ProcessEnv): AuthDeps {
     verifyCredentials = createVerifyCredentials(passwordHash);
   } catch (error) {
     // parsePasswordHash's message describes the shape that is wrong, never the value, and so does
-    // the cause (server.ts prints only the message anyway).
+    // the cause (both entry points log only the message anyway, envErrorMessage in envDeps.ts).
     const reason = error instanceof Error ? error.message : 'malformed';
     throw new Error(`COLLECTOR_PASSWORD_HASH is invalid. ${reason}`, { cause: error });
   }
