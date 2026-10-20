@@ -74,10 +74,7 @@ export class MongoRoundsRepo implements RoundsRepo {
   ): Promise<Round | null> {
     const _id = parseObjectId(id);
     if (_id === null) return null;
-    // The status check is part of the query, so the check and the write are one atomic step:
-    // of two racing updates with the same ifStatus, the second finds no match and gets null.
-    const filter: Filter<RoundDocument> = { _id };
-    if (options.ifStatus !== undefined) filter.status = { $in: [...options.ifStatus] };
+    const filter = buildRoundUpdateFilter(_id, options);
 
     const update = buildRoundUpdate(patch);
     // Nothing to change: Mongo refuses an empty `$set`, and the contract returns the round as is.
@@ -117,6 +114,23 @@ export function buildRoundListFilter(filter: RoundListFilter): Filter<RoundDocum
   // An empty list stays `$in: []`, which matches nothing, as the contract says.
   if (filter.statuses !== undefined) query.status = { $in: [...filter.statuses] };
   return query;
+}
+
+/**
+ * The query of `update(id, patch, options)`: the round `_id`, and, when given, its status and phase
+ * among `options.ifStatus` / `options.ifPhase`. The conditions are part of the query, so the check
+ * and the write are one atomic step: of two racing updates with the same condition, where the first
+ * changes the field checked, the second finds no match and gets null. An empty list stays
+ * `$in: []`, which matches nothing, as the contract says.
+ */
+export function buildRoundUpdateFilter(
+  _id: ObjectId,
+  options: RoundUpdateOptions,
+): Filter<RoundDocument> {
+  const filter: Filter<RoundDocument> = { _id };
+  if (options.ifStatus !== undefined) filter.status = { $in: [...options.ifStatus] };
+  if (options.ifPhase !== undefined) filter.phase = { $in: [...options.ifPhase] };
+  return filter;
 }
 
 /** The update document {@link buildRoundUpdate} makes from a patch. */

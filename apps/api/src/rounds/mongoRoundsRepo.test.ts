@@ -3,10 +3,12 @@
 // by hand with the contract suite (outside green).
 import { describe, expect, it } from 'vitest';
 import { ObjectId } from 'mongodb';
+import type { RoundPhase } from '@bottlerun/shared';
 import { makeNewRound } from './makeRound.ts';
 import {
   buildRoundListFilter,
   buildRoundUpdate,
+  buildRoundUpdateFilter,
   toRound,
   toRoundDocument,
 } from './mongoRoundsRepo.ts';
@@ -95,6 +97,35 @@ describe('buildRoundListFilter', () => {
 
   it('keeps an empty status list, which matches nothing', () => {
     expect(buildRoundListFilter({ statuses: [] })).toEqual({ status: { $in: [] } });
+  });
+});
+
+describe('buildRoundUpdateFilter', () => {
+  const _id = ObjectId.createFromHexString(HEX_ID);
+
+  it('matches only the id without conditions', () => {
+    expect(buildRoundUpdateFilter(_id, {})).toEqual({ _id });
+  });
+
+  it('adds ifStatus and ifPhase with $in, both required', () => {
+    expect(buildRoundUpdateFilter(_id, { ifStatus: ['open'], ifPhase: ['confirming'] })).toEqual({
+      _id,
+      status: { $in: ['open'] },
+      phase: { $in: ['confirming'] },
+    });
+  });
+
+  it('keeps an empty phase list, which matches nothing', () => {
+    expect(buildRoundUpdateFilter(_id, { ifPhase: [] })).toEqual({ _id, phase: { $in: [] } });
+  });
+
+  it('copies the lists, sharing nothing with the caller', () => {
+    const ifPhase: RoundPhase[] = ['routed'];
+    const filter = buildRoundUpdateFilter(_id, { ifPhase });
+
+    ifPhase.push('confirming');
+
+    expect(filter.phase).toEqual({ $in: ['routed'] });
   });
 });
 
