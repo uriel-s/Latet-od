@@ -67,7 +67,7 @@ describe('runHashPassword', () => {
     expect(await runHashPassword(io)).toBe(1);
     expect(io.prompts).toHaveLength(1);
     expect(io.out).toBe('');
-    expect(io.err).toMatch(/shorter than 16 characters/);
+    expect(io.err).toMatch(/shorter than 8 characters/);
   });
 
   it(`refuses a password longer than the login accepts (${LOGIN_PASSWORD_MAX_LENGTH})`, async () => {

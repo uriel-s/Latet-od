@@ -88,7 +88,7 @@ function login(password: unknown, ip = IP, target: Express = app): request.Test 
     .send({ password });
 }
 
-/** Failed logins counted for `ip`, and for everyone together. */
+/** Login attempts counted for `ip`, and for everyone together. */
 async function failuresCounted(ip = IP): Promise<{ ip: number; all: number }> {
   return {
     ip: await attempts.count(loginIpKey(ip), LOGIN_LIMITS.perIp.windowMs),
@@ -223,7 +223,7 @@ describe('POST /api/auth/login', () => {
   });
 });
 
-describe('POST /api/auth/login: failed-login limits (ADR-0004)', () => {
+describe('POST /api/auth/login: login-attempt limits (ADR-0004)', () => {
   it('answers 429 to the 6th attempt after 5 failures from one IP, even with the right password, without checking it', async () => {
     await failLogins(5);
     verifyCredentials.mockClear();
@@ -270,12 +270,38 @@ describe('POST /api/auth/login: failed-login limits (ADR-0004)', () => {
     expectRateLimited(await login(FAKE_COLLECTOR_PASSWORD));
   });
 
-  it('keeps the global count on success', async () => {
+  it('keeps the global count on success, with the successful attempt in it', async () => {
     await failLogins(4);
 
     await login(FAKE_COLLECTOR_PASSWORD);
 
-    expect(await failuresCounted()).toEqual({ ip: 0, all: 4 });
+    expect(await failuresCounted()).toEqual({ ip: 0, all: 5 });
+  });
+
+  it('lets a parallel burst of wrong passwords check no more than 5 of them (the cap)', async () => {
+    // A slow check, like scrypt: every request of the burst is in flight before the first ends.
+    verifyCredentials.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(null), 30)),
+    );
+
+    const answers = await Promise.all(Array.from({ length: 30 }, () => login(WRONG_PASSWORD)));
+
+    const statuses = answers.map((answer) => answer.status);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(LOGIN_LIMITS.perIp.max);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(30 - LOGIN_LIMITS.perIp.max);
+    expect(verifyCredentials).toHaveBeenCalledTimes(LOGIN_LIMITS.perIp.max);
+  });
+
+  it('answers 429 to the right password sent in the middle of a burst that used up the cap', async () => {
+    await failLogins(5);
+
+    const answers = await Promise.all([
+      login(WRONG_PASSWORD),
+      login(FAKE_COLLECTOR_PASSWORD),
+      login(WRONG_PASSWORD),
+    ]);
+
+    expect(answers.map((answer) => answer.status)).toEqual([429, 429, 429]);
   });
 
   it('answers 429 to everyone after 30 failures from different IPs within an hour', async () => {

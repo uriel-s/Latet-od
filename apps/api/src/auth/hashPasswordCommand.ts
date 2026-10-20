@@ -6,11 +6,12 @@ import { LOGIN_PASSWORD_MAX_LENGTH } from '@bottlerun/shared';
 import { hashPassword } from './passwordHash.ts';
 
 /**
- * Shortest password the script accepts. ADR-0004: a long sentence of four words or more is the
- * main protection, the login's rate limit only adds to it; 16 characters is the floor of such a
- * sentence.
+ * Shortest password the script accepts. Yoel wants one he can type easily, so the floor is 8
+ * (decided 2026-10-20, amending ADR-0004's "sentence of four words"). At this length the login's
+ * attempt limit (loginLimits.ts) is the real protection, which is why it counts attempts before
+ * the password is checked.
  */
-export const MIN_PASSWORD_LENGTH = 16;
+export const MIN_PASSWORD_LENGTH = 8;
 
 /** How {@link runHashPassword} talks to the outside world. */
 export interface HashPasswordIO {
@@ -46,10 +47,7 @@ export function stripOneTrailingNewline(text: string): string {
  */
 function passwordProblem(password: string): string | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
-    return (
-      `The password is shorter than ${MIN_PASSWORD_LENGTH} characters. ` +
-      'Use a sentence of four words or more (ADR-0004).'
-    );
+    return `The password is shorter than ${MIN_PASSWORD_LENGTH} characters. ` + 'Use a longer one.';
   }
   if (password.length > LOGIN_PASSWORD_MAX_LENGTH) {
     return `The password is longer than ${LOGIN_PASSWORD_MAX_LENGTH} characters; the login would refuse it.`;
@@ -69,7 +67,7 @@ function passwordProblem(password: string): string | null {
  * password, and never takes it from the command line, where it would stay in the shell history.
  */
 export async function runHashPassword(io: HashPasswordIO): Promise<number> {
-  const password = await io.readPassword('New password (a sentence of four words or more): ');
+  const password = await io.readPassword('New password (at least 8 characters): ');
 
   const problem = passwordProblem(password);
   if (problem !== null) {
