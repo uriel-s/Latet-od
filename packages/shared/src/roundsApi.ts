@@ -1,7 +1,8 @@
 // The contract of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 step 1 "אישורים" and step 2
 // "מסלול"): planning a round, the round's view with its orders in three groups, its "שלח" list and
 // its route's stops, "אישר בטלפון", building the route ("סגור אישורים ובנה מסלול"), moving a stop
-// up or down, and the error bodies with their plain-Hebrew messages. Every route is behind
+// up or down, the two stop actions "אספתי" (collected, with its "שלח תודה" row) and "לא נמצא"
+// (not found), and the error bodies with their plain-Hebrew messages. Every route is behind
 // requireCollector (ADR-0004). apps/api implements the routes with it and apps/web's screens call
 // them, so the two sides agree on one definition.
 import { z } from 'zod';
@@ -12,7 +13,7 @@ import {
   type OrderNotFoundErrorBody,
 } from './collectorOrdersApi.ts';
 import { messageLinkSchema, pickupTimeSchema, toMessageLink } from './messages.ts';
-import type { Order } from './order.ts';
+import { MAX_BOTTLES, type Order } from './order.ts';
 import { MAX_ROUND_ORDERS, roundSchema, roundStopSchema, type Round } from './round.ts';
 import { regionSchema } from './streets.ts';
 
@@ -185,6 +186,15 @@ export const routeStopViewSchema = z.object({
   hasLocation: roundStopSchema.shape.hasLocation,
   /** Derived from the order, never stored; see {@link roundStopStateOf}. */
   state: roundStopStateSchema,
+  /**
+   * The stop's "שלח תודה" row: the NEWEST `thankYou` entry of the order as a wa.me link
+   * (`toMessageLink(order, 'thankYou')`). Set only while `state` is `collected`, and left out
+   * (not set to undefined) otherwise, or when that newest entry is not a `manual` link (it failed,
+   * or was sent automatically). This is how the "אספתי" response returns the wa.me link, and how
+   * the route screen and "סגור סבב" find it again after a refresh: an unsent thank-you is a
+   * collected stop whose `thankYou` has no `openedAt`.
+   */
+  thankYou: messageLinkSchema.optional(),
 });
 export type RouteStopView = z.infer<typeof routeStopViewSchema>;
 
@@ -192,7 +202,9 @@ export type RouteStopView = z.infer<typeof routeStopViewSchema>;
  * One round with its orders, as the round screen shows it; see {@link buildRoundView}. Body of a
  * 201 from POST /api/collector/rounds, and of a 200 from GET /api/collector/rounds/:id, from
  * POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone, from
- * POST /api/collector/rounds/:id/route and from POST /api/collector/rounds/:id/stops/:orderId/move.
+ * POST /api/collector/rounds/:id/route, from POST /api/collector/rounds/:id/stops/:orderId/move,
+ * and from the two stop actions POST /api/collector/rounds/:id/stops/:orderId/collected and
+ * .../not-found.
  */
 export const roundViewSchema = z.object({
   round: collectorRoundSchema,
@@ -255,6 +267,14 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
  * `roundId` (collectorOrdersRoutes.ts), so a stop collected or cancelled here is found by it; an
  * order that was not found here and was collected or cancelled LATER, in another round or while
  * waiting, stays `notFound` in this round's route, which is what happened at this stop.
+ *
+ * `notFound` works because "לא נמצא" stores `lastMiss { roundId: this round, reason: 'notFound' }`
+ * and unsets `roundId`. Known limit: only one `lastMiss` is kept (spec §4), so if the same order
+ * later leaves ANOTHER round uncollected (did not confirm in time, asked for another date, not
+ * found again, ...), its `lastMiss` points at that round and this round's stop then shows `left`.
+ * That is still a handled state, never `toCollect`, so the route screen and "סגור סבב" (which
+ * touches only `toCollect` stops) are unaffected; only this old stop's history label loses
+ * "לא נמצא".
  */
 export function roundStopStateOf(round: Round, order: Order): RoundStopState {
   if (order.roundId === round.id) {
@@ -284,6 +304,9 @@ export function roundStopStateOf(round: Round, order: Order): RoundStopState {
  * - `stops`: walks `round.stops` in their STORED driving order (not plan order), skipping a stop
  *   whose order is not given. Each has the order ({@link toCollectorOrder}), the stored
  *   `hasLocation`, and the state from {@link roundStopStateOf}. Empty until the route is built.
+ *   A `collected` stop also gets its `thankYou` row ({@link toMessageLink}) when the newest
+ *   thank-you is a wa.me link; any other stop never has the key, even if its order holds a
+ *   thank-you from before.
  * - `round` without `orderIds` and `stops` ({@link collectorRoundSchema}).
  */
 export function buildRoundView(round: Round, orders: readonly Order[]): RoundView {
@@ -311,11 +334,17 @@ export function buildRoundView(round: Round, orders: readonly Order[]): RoundVie
     stops: round.stops.flatMap((stop) => {
       const order = ordersById.get(stop.orderId);
       if (order === undefined) return [];
+      const state = roundStopStateOf(round, order);
+      // Only a collected stop has a thank-you to send; an older one (an earlier round's) on an
+      // order that is not collected here must not show a "שלח תודה" row.
+      const thankYou = state === 'collected' ? toMessageLink(order, 'thankYou') : undefined;
       return [
         {
           order: toCollectorOrder(order),
           hasLocation: stop.hasLocation,
-          state: roundStopStateOf(round, order),
+          state,
+          // Left out rather than set to undefined, like toMessageLink's `openedAt`.
+          ...(thankYou === undefined ? {} : { thankYou }),
         },
       ];
     }),
@@ -343,6 +372,41 @@ export const moveStopRequestSchema = z.strictObject({
 export type MoveStopRequest = z.infer<typeof moveStopRequestSchema>;
 
 // ---------------------------------------------------------------------------------------------
+// Request: POST /api/collector/rounds/:id/stops/:orderId/collected ("אספתי")
+// ---------------------------------------------------------------------------------------------
+
+/** Plain-Hebrew messages of "אספתי", shown next to the quantity field. */
+export const COLLECT_STOP_ERRORS = {
+  bottlesInvalid: 'נא לכתוב כמה בקבוקים נאספו, מספר שלם מ-1 ומעלה',
+  bottlesTooMany: `אפשר לכתוב עד ${MAX_BOTTLES} בקבוקים`,
+} as const;
+
+/**
+ * Body of POST /api/collector/rounds/:id/stops/:orderId/collected ("אספתי", spec §3.6 step 2).
+ * Strict: an unknown key is refused with 400 `invalid_collect`.
+ *
+ * `bottlesCollected` is how many bottles Yoel really took: a JSON number, a whole one from 1 up
+ * to {@link MAX_BOTTLES} (a string such as "40", 0, a negative or a fraction is refused). Below
+ * MIN_BOTTLES (30) IS allowed: the minimum is a booking rule, and the real count can be lower than
+ * the customer's estimate. Absent means the order's `bottlesEstimated`, which the api fills in.
+ * The api treats a missing body (Express 5 leaves `req.body` undefined) like `{}`.
+ *
+ * The api then moves the order `confirmed` → `collected`, sets `collectedAt`, and sends a
+ * `thankYou`; the 200 is the round's view, whose stop carries the "שלח תודה" row
+ * ({@link routeStopViewSchema}'s `thankYou`). Idempotent: "אספתי" on a stop already collected
+ * answers 200 again and sends no second thank-you.
+ */
+export const collectStopRequestSchema = z.strictObject({
+  bottlesCollected: z
+    .int({ error: COLLECT_STOP_ERRORS.bottlesInvalid })
+    .min(1, COLLECT_STOP_ERRORS.bottlesInvalid)
+    .max(MAX_BOTTLES, COLLECT_STOP_ERRORS.bottlesTooMany)
+    .optional(),
+});
+/** What the route screen sends on "אספתי": the count, or nothing for the estimate. */
+export type CollectStopRequest = z.input<typeof collectStopRequestSchema>;
+
+// ---------------------------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------------------------
 
@@ -363,6 +427,11 @@ export const ROUND_MESSAGES = {
   routeNotOpen: 'אין מסלול פתוח בסבב הזה. נא לרענן את המסך.',
   /** Moving the first stop up, or the last one down. */
   stopAtEdge: 'העצירה כבר בקצה המסלול.',
+  /**
+   * A stop action on a stop already handled another way ("אספתי" on one not found, "לא נמצא" on
+   * one collected, ...): the screen is stale, so refreshing shows what happened there.
+   */
+  stopHandled: 'העצירה הזאת כבר טופלה. נא לרענן את המסך.',
 } as const;
 
 // The bodies below follow ApiErrorBody (index.ts): a stable `error` code, plus a Hebrew `message`
@@ -411,8 +480,9 @@ export interface ConfirmationsClosedErrorBody {
 }
 
 /**
- * 409 from a stop's action or move (e.g. POST /api/collector/rounds/:id/stops/:orderId/move): the
- * round has no open route, because it is still `confirming` or it is closed. `message` is
+ * 409 from a stop's action ("אספתי": POST /api/collector/rounds/:id/stops/:orderId/collected,
+ * "לא נמצא": .../not-found) or move (.../move): the round has no open route, because it is still
+ * `confirming` or it is closed. Only a round in phase `routed` takes them. `message` is
  * {@link ROUND_MESSAGES}.routeNotOpen.
  */
 export interface RouteNotOpenErrorBody {
@@ -438,10 +508,31 @@ export interface InvalidMoveErrorBody {
 }
 
 /**
+ * 409 from a stop action on a stop already handled another way: "אספתי" on a stop that is
+ * `notFound`, `cancelled` or `left`, or "לא נמצא" on one that is `collected`, `cancelled` or
+ * `left` ({@link ROUND_STOP_STATES}). The SAME action again is not this error: it is an idempotent
+ * 200 that changes and sends nothing. `message` is {@link ROUND_MESSAGES}.stopHandled.
+ */
+export interface StopHandledErrorBody {
+  error: 'stop_handled';
+  message: string;
+}
+
+/**
+ * 400 from "אספתי": the body did not validate ({@link collectStopRequestSchema}). `fieldErrors`
+ * maps `bottlesCollected` to its plain-Hebrew message from {@link COLLECT_STOP_ERRORS}, built with
+ * orderApi.ts's `formFieldErrors`, like {@link InvalidRoundErrorBody}.
+ */
+export interface InvalidCollectErrorBody {
+  error: 'invalid_collect';
+  fieldErrors: Record<string, string>;
+}
+
+/**
  * Every error body /api/collector/rounds adds to the ones every route may answer (ApiErrorBody).
  * Also, from other files' contracts:
- * - `order_not_found` (404): "אישר בטלפון" for an order that is not in the round, and a move for
- *   an order that is not a stop of the round's route.
+ * - `order_not_found` (404): "אישר בטלפון" for an order that is not in the round, and a move or
+ *   a stop action ("אספתי", "לא נמצא") for an order that is not a stop of the round's route.
  * - `invalid_transition` (409): "אישר בטלפון" for an order that can no longer be confirmed.
  * A 401 comes from the login guard: authApi.ts's `UnauthenticatedErrorBody`.
  */
@@ -453,5 +544,7 @@ export type CollectorRoundErrorBody =
   | RouteNotOpenErrorBody
   | StopAtEdgeErrorBody
   | InvalidMoveErrorBody
+  | StopHandledErrorBody
+  | InvalidCollectErrorBody
   | OrderNotFoundErrorBody
   | InvalidTransitionErrorBody;

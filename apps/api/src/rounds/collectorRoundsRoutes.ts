@@ -2,15 +2,15 @@
 // "אישורים"): planning a round and sending its confirmation requests (ADR-0003), the open rounds
 // of the "סבבים" tab, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול" (spec §3.6: whoever
 // did not confirm leaves the round, and the confirmed orders are ordered into the stored route),
-// and moving one stop of that route up or down by hand (spec §3.6 step 2).
+// and moving one stop of that route up or down by hand (spec §3.6 step 2). The stop actions on
+// that route ("אספתי", "לא נמצא") are in collectorStopActionsRoutes.ts, mounted on the same path.
 // createApp mounts the router built here AFTER requireCollector, so every route needs the login
 // (ADR-0004). The shapes are the shared contract (packages/shared/src/roundsApi.ts); rounds and
 // orders are read and written through RoundsRepo and OrdersRepo, each confirmation request goes
 // through messages/sendAndLog.ts, and the route's order (and each manual move) comes from
-// buildRoute.ts (planRoute, moveStop).
+// buildRoute.ts (planRoute, moveStop). The answers both routers send are in roundResponses.ts.
 import { Router, type Response } from 'express';
 import {
-  COLLECTOR_ORDER_MESSAGES,
   ROUND_MESSAGES,
   buildRoundView,
   canTransition,
@@ -20,17 +20,13 @@ import {
   type ConfirmationsClosedErrorBody,
   type InvalidMoveErrorBody,
   type InvalidRoundErrorBody,
-  type InvalidTransitionErrorBody,
   type NewRound,
   type Order,
-  type OrderNotFoundErrorBody,
   type OrdersNotWaitingErrorBody,
   type PlanRound,
   type Round,
-  type RoundNotFoundErrorBody,
   type RoundView,
   type RoundsResponse,
-  type RouteNotOpenErrorBody,
   type StopAtEdgeErrorBody,
 } from '@bottlerun/shared';
 import { DROP_OFF } from '../config.ts';
@@ -38,6 +34,13 @@ import type { AppDeps } from '../deps.ts';
 import { orderMessage, sendAndLog, type OrderMessageOptions } from '../messages/sendAndLog.ts';
 import { buildRouteStops, moveStop } from './buildRoute.ts';
 import { leaveRoundPatch } from './leaveRound.ts';
+import {
+  sendInvalidTransition,
+  sendOrderNotFound,
+  sendRoundNotFound,
+  sendRouteNotOpen,
+  sendView,
+} from './roundResponses.ts';
 
 /**
  * The router of /api/collector/rounds. Mount it with
@@ -413,11 +416,6 @@ async function updateOrFail(update: Promise<Round | null>): Promise<Round> {
   return round;
 }
 
-/** 200 (or `status`) with the round's view. */
-function sendView(res: Response, view: RoundView, status = 200): void {
-  res.status(status).json(view);
-}
-
 /**
  * 400 with `formFieldErrors`: the first plain-Hebrew message of each invalid field, never the
  * values sent. A body that is not an object, or has an unknown key, has no field to show it on,
@@ -436,18 +434,6 @@ function sendOrdersNotWaiting(res: Response, orderIds: string[]): void {
     orderIds,
   };
   res.status(409).json(body);
-}
-
-/** 404, the same body for an unknown and a malformed round id. */
-function sendRoundNotFound(res: Response): void {
-  const body: RoundNotFoundErrorBody = { error: 'round_not_found' };
-  res.status(404).json(body);
-}
-
-/** 404: no such order, or it is not in the round of the path. */
-function sendOrderNotFound(res: Response): void {
-  const body: OrderNotFoundErrorBody = { error: 'order_not_found' };
-  res.status(404).json(body);
 }
 
 /**
@@ -471,26 +457,8 @@ function sendInvalidMove(res: Response): void {
   res.status(400).json(body);
 }
 
-/** 409: a move on a round whose route is not built yet (confirming), or that is closed. */
-function sendRouteNotOpen(res: Response): void {
-  const body: RouteNotOpenErrorBody = {
-    error: 'route_not_open',
-    message: ROUND_MESSAGES.routeNotOpen,
-  };
-  res.status(409).json(body);
-}
-
 /** 409: the first stop moved up, or the last one down; nothing was written. */
 function sendStopAtEdge(res: Response): void {
   const body: StopAtEdgeErrorBody = { error: 'stop_at_edge', message: ROUND_MESSAGES.stopAtEdge };
-  res.status(409).json(body);
-}
-
-/** 409: the order's status does not allow the change (it is closed, or it changed meanwhile). */
-function sendInvalidTransition(res: Response): void {
-  const body: InvalidTransitionErrorBody = {
-    error: 'invalid_transition',
-    message: COLLECTOR_ORDER_MESSAGES.orderClosed,
-  };
   res.status(409).json(body);
 }
