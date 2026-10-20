@@ -926,6 +926,48 @@ function stopConflictOutcome(body: unknown): StopActionOutcome {
   }
 }
 
+/** How "סגור סבב" ended, as the round screen shows it. */
+export type CloseRoundOutcome =
+  /**
+   * 200: the round is closed (`view.round.status` is `closed`, `closedAt` set), also when it was
+   * already closed. Every order it did not handle is back in `waiting` with its `lastMiss`.
+   */
+  | { kind: 'closed'; view: RoundView }
+  /** 404: the round is gone. */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403, 409 or 5xx, or a body it cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Yoel's "סגור סבב" (spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
+ * closes the round and sends every order it did not handle back to `waiting` (a pending or
+ * confirmed order of a round still confirming as "לא אישר בזמן", a stop not reached as "לא הגענו
+ * אליו"). No message is sent. Not retried: a close whose answer was lost is stored, and a second
+ * close is harmless anyway, since it answers `closed` with the round as it is.
+ */
+export async function closeRound(
+  roundId: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CloseRoundOutcome> {
+  const response = await fetchOrNull(fetchFn, `${roundPath(roundId)}/close`, { method: 'POST' });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const view = await roundViewOf(response);
+      return view === null ? { kind: 'failed' } : { kind: 'closed', view };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    default:
+      // The route has no 409: a conflict here is from something in between, and so `failed`.
+      return { kind: 'failed' };
+  }
+}
+
 /** The round of a success body, or null when the body is not a `RoundView`. */
 async function roundViewOf(response: Response): Promise<RoundView | null> {
   const parsed = roundViewSchema.safeParse(await readJson(response));

@@ -72,10 +72,15 @@ import {
  * Every status change goes through `canTransition` and is conditional on the status read
  * (`ifStatus`), so a double tap, or a tap racing the customer's cancel, cannot both win.
  *
- * Known limits:
- * - Nothing is written to the round, so an action racing "סגור סבב" on another screen is not
- *   atomic with it: the order may end up collected (or sent back) in a round that was just
- *   closed. With one collector on one screen that does not happen.
+ * Racing "סגור סבב" (closeRound.ts): the close writes the round `closed` BEFORE it sends the
+ * unhandled orders back, so an action that reads the round after that answers 409
+ * `route_not_open`. An action that read the round just before the close is decided by its order's
+ * conditional write against the close's (both `ifStatus`): if "אספתי" (or "לא נמצא") writes
+ * first, the close's sweep misses, reads the order again and leaves it as the action stored it
+ * (collected in the round just closed, or not found); if the sweep writes first, the action
+ * misses and answers 409 `invalid_transition`. Either way exactly one of them wins.
+ *
+ * Known limit:
  * - If writing the thank-you's log entry fails after the status was written (a repo error, so a
  *   500), a retry finds the stop collected and answers 200 without a thank-you. It does not try to
  *   "heal" by sending one then on purpose: two racing taps would then both send.

@@ -2,8 +2,9 @@
 // "אישורים"): planning a round and sending its confirmation requests (ADR-0003), the open rounds
 // of the "סבבים" tab, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול" (spec §3.6: whoever
 // did not confirm leaves the round, and the confirmed orders are ordered into the stored route),
-// and moving one stop of that route up or down by hand (spec §3.6 step 2). The stop actions on
-// that route ("אספתי", "לא נמצא") are in collectorStopActionsRoutes.ts, mounted on the same path.
+// moving one stop of that route up or down by hand (spec §3.6 step 2), and "סגור סבב" (the close
+// itself is closeRound.ts). The stop actions on that route ("אספתי", "לא נמצא") are in
+// collectorStopActionsRoutes.ts, mounted on the same path.
 // createApp mounts the router built here AFTER requireCollector, so every route needs the login
 // (ADR-0004). The shapes are the shared contract (packages/shared/src/roundsApi.ts); rounds and
 // orders are read and written through RoundsRepo and OrdersRepo, each confirmation request goes
@@ -33,6 +34,7 @@ import { DROP_OFF } from '../config.ts';
 import type { AppDeps } from '../deps.ts';
 import { orderMessage, sendAndLog, type OrderMessageOptions } from '../messages/sendAndLog.ts';
 import { buildRouteStops, moveStop } from './buildRoute.ts';
+import { closeRound } from './closeRound.ts';
 import { leaveRoundPatch } from './leaveRound.ts';
 import {
   sendInvalidTransition,
@@ -79,7 +81,7 @@ import {
  *   order (home → stops → DROP_OFF), each with its order, `hasLocation` and state. Every order that
  *   had not confirmed (`pending`) left the round: it is `waiting` again, with `lastMiss` reason
  *   `notConfirmed`, so it is in none of the view's groups. A round where nobody confirmed still
- *   becomes routed, with no stops: Yoel then closes it ("סגור סבב", section 7).
+ *   becomes routed, with no stops: Yoel then closes it ("סגור סבב", POST /:id/close).
  * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
  * - 409 {@link ConfirmationsClosedErrorBody}: the round is closed, or already routed. The route is
  *   computed once (spec §3.6: its order must not change in the middle of the drive), so a second
@@ -100,6 +102,19 @@ import {
  * - 409 {@link StopAtEdgeErrorBody}: the first stop moved up, or the last one down. Nothing is
  *   written.
  * Two moves racing on one round: the later write wins (each is one swap of the stops it read).
+ *
+ * POST /:id/close — "סגור סבב" (spec §3.6, §4); no body (any body is ignored); see closeRound.ts:
+ * - 200 {@link RoundView}: the round is now `closed`, with `closedAt`, in the phase it was closed
+ *   in (`confirming` or `routed`, unchanged), so it leaves GET / (the "סבבים" tab) while GET /:id
+ *   still answers it. Every order still in it and `pending` or `confirmed` is `waiting` again, out
+ *   of the round: `lastMiss` reason `notReached` for a confirmed stop of a routed round,
+ *   `notConfirmed` otherwise. Collected, cancelled and not-found stops, and orders that already
+ *   left the round, stay as they are. No message is sent.
+ * - 200 {@link RoundView} again for a round already closed: it keeps its first `closedAt`, and the
+ *   sweep runs again, so an order a first close left behind (it failed half way) is sent back now.
+ * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
+ * The round is closed BEFORE its orders are swept, so a stop action, a move, "אישר בטלפון" or the
+ * customer's confirm arriving meanwhile is refused with 409 instead of acting on a closing round.
  *
  * Every order status change goes through `canTransition` and is conditional on the status it was
  * decided on (`ifStatus`), so two screens (or the customer's own page) racing on one order cannot
@@ -346,6 +361,17 @@ export function createCollectorRoundsRouter(
       return;
     }
     sendView(res, await loadRoundView(updated));
+  });
+
+  router.post('/:id/close', async (req, res) => {
+    // No body: whatever was sent is ignored, like POST /:id/route. Never validated here: the repo
+    // answers null for a malformed id, so it is a 404 too.
+    const view = await closeRound({ orders, rounds }, req.params.id);
+    if (view === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    sendView(res, view);
   });
 
   /**

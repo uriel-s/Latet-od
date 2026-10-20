@@ -1,15 +1,15 @@
 # ארכיטקטורה: BottleRun ("לתת עוד")
 
 > מסכם את `docs/spec.md` ואת `docs/decisions/` (ADRs 0001-0006). איפה שיש סתירה, ה-ADR קובע.
-> מצב נוכחי (2026-10-20): P4 בעבודה. קיימים: רשימת הרחובות, הטופס הציבורי, ההתחברות, מסך ההזמנות, הודעות wa.me,
-> תכנון סבב ואישורים, עמוד ההזמנה של הלקוח, ה-function ב-Vercel והגיבוי. מה שמסומן _(P4)_ עוד לא קיים בקוד
-> (בעיקר: המסלול, "אספתי", סגירת סבב וההיסטוריה).
+> מצב נוכחי (2026-10-21): P4 בעבודה. קיימים: רשימת הרחובות, הטופס הציבורי, ההתחברות, מסך ההזמנות, הודעות wa.me,
+> תכנון סבב ואישורים, עמוד ההזמנה של הלקוח, המסלול, "אספתי" ו"לא נמצא", "סגור סבב", ה-function ב-Vercel והגיבוי.
+> עוד לא בקוד: ההיסטוריה (הטאב קיים, בלי תוכן).
 
 ## רכיבים
 
 | רכיב | מה | איפה | החלטה |
 |---|---|---|---|
-| **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). רק את אפליקציית האוסף אפשר להוסיף למסך הבית (PWA): `manifest.webmanifest`, `icon.svg` (המקור) והאייקונים ב-PNG נמצאים ב-`apps/web/public`, ו-`pwaHead.tsx` מוסיף את התגיות ל-head רק ב-`/login` וב-`/app/*`. בלי service worker. `viewport-fit=cover` ב-`index.html`, וריווח `safe-area` ב-`styles.css`. באפליקציה המותקנת אין רענון בגרירה, ולכן מסכי הרשימה (`OrdersScreen`, `RoundsScreen`, ורק הם) נטענים מחדש כשיואל חוזר לאפליקציה (`collector/useReloadOnReturn.ts`). מסכי ההוספה, העריכה והתכנון לא, כדי לא למחוק מה שהוקלד. מאותה סיבה `RoundsScreen` מדלג על הטעינה כל עוד שדה הכמות של "אספתי" פתוח במסלול. ב-`/login` באייפון, מחוץ לאפליקציה המותקנת, מופיעה שורת התקנה (`pages/installHint.ts`). הבדיקה באייפון: `docs/deploy.md` סעיף 11. | `apps/web` | ADR-0001, 0006 |
+| **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). רק את אפליקציית האוסף אפשר להוסיף למסך הבית (PWA): `manifest.webmanifest`, `icon.svg` (המקור) והאייקונים ב-PNG נמצאים ב-`apps/web/public`, ו-`pwaHead.tsx` מוסיף את התגיות ל-head רק ב-`/login` וב-`/app/*`. בלי service worker. `viewport-fit=cover` ב-`index.html`, וריווח `safe-area` ב-`styles.css`. באפליקציה המותקנת אין רענון בגרירה, ולכן מסכי הרשימה (`OrdersScreen`, `RoundsScreen`, ורק הם) נטענים מחדש כשיואל חוזר לאפליקציה (`collector/useReloadOnReturn.ts`). מסכי ההוספה, העריכה והתכנון לא, כדי לא למחוק מה שהוקלד. מאותה סיבה `RoundsScreen` מדלג על הטעינה כל עוד שדה הכמות של "אספתי" פתוח במסלול. שתי השאלות של סוף סבב יושבות בקבצים משלהן: `collector/BuildRouteConfirm.tsx` ("סגור אישורים ובנה מסלול") ו-`collector/CloseRoundConfirm.tsx` ("סגור סבב"). ב-`/login` באייפון, מחוץ לאפליקציה המותקנת, מופיעה שורת התקנה (`pages/installHint.ts`). הבדיקה באייפון: `docs/deploy.md` סעיף 11. | `apps/web` | ADR-0001, 0006 |
 | **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB, הגדרות ההתחברות וה-WhatsApp). יש שתי נקודות כניסה דקות, ושתיהן בונות את התלויות האמיתיות עם `depsFromEnv` (`envDeps.ts`: `createMongoDeps` + `authDepsFromEnv` + `messagingDepsFromEnv` + `routeDepsFromEnv`, נקודת ההתחלה מ-`ROUTE_START`): `server.ts` (מקומי / hosting רגיל), ו-`apps/api/src/vercelEntry.ts`, ה-function של Vercel (דרך `createVercelHandler`, שבונה את האפליקציה בבקשה הראשונה). Vercel לא אורז קבצי TS של הריפו, ולכן `npm run build:api` (esbuild) אורז אותו, יחד עם קוד ה-api ו-`packages/shared`, ל-`api/index.js` שנשמר ב-git. רק `express` ו-`mongodb` נשארים חיצוניים. `checks.sh build` נכשל אם החבילה לא מעודכנת. בבדיקות: `createFakeDeps()`. | `apps/api`, `api/index.js` (נוצר) | ADR-0001, 0002 |
 | **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק, `BOTTLE_VALUE_AGOROT` ב-`config.ts`), ורשימת הרחובות עם אזור ונקודה (`data/streets.json`, `searchStreets`, `findStreet`). סדר העצירות: `planRoute` (`route.ts`), פונקציה טהורה: עד 8 עצירות בודק את כל הסדרים, מעל זה השכן הקרוב + 2-opt, ועצירות בלי מיקום בסוף. | `packages/shared` | ADR-0001, 0005 |
 | **סקריפט רחובות** | חד-פעמי, לא חלק מהאפליקציה: מוריד את הרשימה מ-data.gov.il (`--refresh-list`) וממלא נקודה ואזור לכל רחוב דרך Nominatim, בקשה בשנייה. אזור לפי `REGION_DIVIDER`. התוצאה נשמרת ב-git. | `scripts/geocode-streets.ts` | ADR-0005 |
@@ -21,7 +21,7 @@
 | **בדיקת smoke** | אחרי כל deploy: כמה GET מול האתר (`/api/health`, 404 של ה-api, תגיות OG, קישור עמוק ל-`/o/...`). לא משנה כלום. | `scripts/smoke.ts` | ADR-0002 |
 
 **אין בזמן ריצה:** geocoding, שירות מסלולים, cron, תורים, או זיכרון משותף בין בקשות. המיקום מגיע מקובץ רחובות סטטי
-(OSM, חד-פעמי), וסדר העצירות מחושב בתוך האפליקציה (`planRoute`, קו אוויר) _(P4)_.
+(OSM, חד-פעמי), וסדר העצירות מחושב בתוך האפליקציה (`planRoute`, קו אוויר).
 
 ## פריסה
 
@@ -94,8 +94,12 @@ sequenceDiagram
         A->>D: collected, או waiting + lastMiss
         A-->>W: תודה: קישור wa.me, יואל לוחץ "שלח"
     end
-    Note over W,D: מכאן והלאה: עוד לא בקוד
-    Y->>W: "סגור סבב": עצירות שלא סומנו → waiting
+    Y->>W: "סגור סבב"
+    W-->>Y: שאלה, ומעליה "תודות שלא נשלחו"<br/>(נאספו, וקישור התודה לא נפתח)
+    Y->>W: "כן, לסגור את הסבב"
+    W->>A: POST /api/collector/rounds/:id/close
+    A->>D: קודם הסבב → closed (כתיבה מותנית)<br/>אחר כך כל הזמנה בו שעוד pending או confirmed → waiting + lastMiss<br/>notReached (סבב routed) או notConfirmed (סבב confirming, למשל בוטל בגלל גשם)<br/>collected, "לא נמצא" ו-cancelled נשארים כמו שהם
+    A-->>W: הסבב יוצא מהטאב "סבבים"<br/>סגירה שנייה: הצלחה, ועוברת שוב על ההזמנות
 ```
 
 הסטטוסים ומעברי הסטטוס: spec §4. בכל שלב עד `collected` הלקוח יכול לבטל או לשנות מעמוד ההזמנה (כפתורים, POST).
@@ -132,7 +136,7 @@ flowchart TB
 | `MessageSender` | `WaMeLinkSender` (MVP), `CloudApiSender` (אם יואל יבחר אוטומטי) | `FakeSender` | 0003 |
 | `OrdersRepo`, `RoundsRepo` | MongoDB | בזיכרון | 0001 |
 | `AttemptStore` (הגבלת ניסיונות וקצב) | `loginAttempts` ב-Mongo, TTL | בזיכרון | 0004 |
-| `DistanceMatrix` _(P4)_ | haversine (פונקציה טהורה). OSRM אם יידרש. | haversine | 0005 |
+| `DistanceMatrix` | haversine (פונקציה טהורה). OSRM אם יידרש. | haversine | 0005 |
 
 ## אבטחה ופרטיות (תקציר)
 - עמוד הלקוח: רק עם token אקראי וארוך, אישור וביטול ב-POST (ה-preview של WhatsApp שולח GET).
