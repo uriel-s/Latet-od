@@ -1,6 +1,6 @@
 # ארכיטקטורה: BottleRun ("לתת עוד")
 
-> מסכם את `docs/spec.md` ואת `docs/decisions/` (ADRs 0001-0005). איפה שיש סתירה, ה-ADR קובע.
+> מסכם את `docs/spec.md` ואת `docs/decisions/` (ADRs 0001-0006). איפה שיש סתירה, ה-ADR קובע.
 > מצב נוכחי (2026-10-20): P4 בעבודה. קיימים: רשימת הרחובות, הטופס הציבורי, ההתחברות, מסך ההזמנות, הודעות wa.me,
 > תכנון סבב ואישורים, עמוד ההזמנה של הלקוח, ה-function ב-Vercel והגיבוי. מה שמסומן _(P4)_ עוד לא קיים בקוד
 > (בעיקר: המסלול, "אספתי", סגירת סבב וההיסטוריה).
@@ -9,7 +9,7 @@
 
 | רכיב | מה | איפה | החלטה |
 |---|---|---|---|
-| **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). | `apps/web` | ADR-0001 |
+| **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). רק את אפליקציית האוסף אפשר להוסיף למסך הבית (PWA): `manifest.webmanifest`, `icon.svg` (המקור) והאייקונים ב-PNG נמצאים ב-`apps/web/public`, ו-`pwaHead.tsx` מוסיף את התגיות ל-head רק ב-`/login` וב-`/app/*`. בלי service worker. `viewport-fit=cover` ב-`index.html`, וריווח `safe-area` ב-`styles.css`. | `apps/web` | ADR-0001, 0006 |
 | **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB, הגדרות ההתחברות וה-WhatsApp). יש שתי נקודות כניסה דקות, ושתיהן בונות את התלויות האמיתיות עם `depsFromEnv` (`envDeps.ts`: `createMongoDeps` + `authDepsFromEnv` + `messagingDepsFromEnv`): `server.ts` (מקומי / hosting רגיל), ו-`apps/api/src/vercelEntry.ts`, ה-function של Vercel (דרך `createVercelHandler`, שבונה את האפליקציה בבקשה הראשונה). Vercel לא אורז קבצי TS של הריפו, ולכן `npm run build:api` (esbuild) אורז אותו, יחד עם קוד ה-api ו-`packages/shared`, ל-`api/index.js` שנשמר ב-git. רק `express` ו-`mongodb` נשארים חיצוניים. `checks.sh build` נכשל אם החבילה לא מעודכנת. בבדיקות: `createFakeDeps()`. | `apps/api`, `api/index.js` (נוצר) | ADR-0001, 0002 |
 | **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק _(P4)_), ורשימת הרחובות עם אזור ונקודה (`data/streets.json`, `searchStreets`, `findStreet`). | `packages/shared` | ADR-0001, 0005 |
 | **סקריפט רחובות** | חד-פעמי, לא חלק מהאפליקציה: מוריד את הרשימה מ-data.gov.il (`--refresh-list`) וממלא נקודה ואזור לכל רחוב דרך Nominatim, בקשה בשנייה. אזור לפי `REGION_DIVIDER`. התוצאה נשמרת ב-git. | `scripts/geocode-streets.ts` | ADR-0005 |
@@ -49,7 +49,7 @@ flowchart LR
 ```
 
 - `vercel.json`: `/api/*` עובר ב-rewrite ל-function (`api/index.js`), וכל השאר ל-`index.html`. קובץ שקיים ב-build
-  (`/assets/*`, `/og-image.jpg`) מוגש לפני ה-rewrites. `/o/*` מקבל `X-Robots-Tag: noindex`.
+  (`/assets/*`, `/og-image.jpg`, `/manifest.webmanifest`, האייקונים) מוגש לפני ה-rewrites. `/o/*` מקבל `X-Robots-Tag: noindex`.
   בגלל ה-origin האחד: בלי CORS, ו-cookie עם `SameSite=Lax`.
 - **region:** ה-function ב-`iad1`, ליד Atlas ב-us-east-1. הטופס הסטטי מגיע מה-CDN, ורק קריאות ל-api חוצות את האוקיינוס.
 - **warm-up:** הטופס שולח `GET /api/health` כשהוא נטען. עד שהלקוח מסיים למלא, ה-function כבר חם.
