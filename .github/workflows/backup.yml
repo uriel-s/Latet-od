@@ -1,0 +1,84 @@
+# Weekly backup of the production database (ADR-0002, "גיבוי"): a mongodump of the `bottlerun`
+# database, kept as a workflow artifact for 90 days in this private repo.
+#
+# Why here and not in the app: the api is a Vercel function with no background jobs and no cron
+# (CLAUDE.md, "Serverless"). This runs outside it, on GitHub's runners, so a failed backup never
+# touches the app: the app keeps working either way.
+#
+# Secret (repo Settings > Secrets and variables > Actions): MONGODB_BACKUP_URI, the connection
+# string of a separate Atlas database user that has only the built-in role `read` on `bottlerun`
+# (never the app's read-write user). Its path names the database, so mongodump dumps just that one:
+#   mongodb+srv://<backup-user>:<password>@<cluster>.mongodb.net/bottlerun
+# Atlas network access is already 0.0.0.0/0 for Vercel (ADR-0002), so GitHub's runners reach it.
+#
+# When it runs: every Monday (the cron below) and by hand (Actions > backup > Run workflow).
+# GitHub runs schedules only from the default branch, so the weekly run starts once this file is
+# on main. GitHub emails a failed run to whoever last edited the cron line (the one developer), so
+# there is no Slack or mail step here. In a public repo GitHub would also switch the schedule off
+# after 60 days without commits; this repo is private, so it keeps running.
+#
+# Restore: docs/deploy.md (download the artifact, then mongorestore).
+name: backup
+
+on:
+  schedule:
+    # Mondays 02:17 UTC (04:17 in winter, 05:17 in summer in Israel): after Sunday's pickups (the
+    # flyer: message on Saturday night, pickup on Sunday), so the dump has Sunday's "collected"
+    # statuses. Not on the hour: GitHub's queue is busiest at :00, where schedules start latest or
+    # get dropped. GitHub may start it late anyway; a backup an hour late does not matter.
+    - cron: '17 2 * * 1'
+  workflow_dispatch:
+
+# It reads nothing from the repo (no checkout) and writes nothing to it. The artifact upload
+# uses the runner's own token, not these permissions.
+permissions:
+  contents: read
+
+# A manual run while the weekly one is going waits for it instead of cancelling it.
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  mongodump:
+    runs-on: ubuntu-24.04
+    # A dump of a few hundred orders takes seconds; a hung connection must not burn the minutes.
+    timeout-minutes: 15
+    steps:
+      - name: Dump the database
+        env:
+          MONGODB_BACKUP_URI: ${{ secrets.MONGODB_BACKUP_URI }}
+        run: |
+          set -euo pipefail
+
+          # A missing secret arrives as an empty string; mongodump would then try localhost and
+          # fail with a message that hides the real cause.
+          if [ -z "${MONGODB_BACKUP_URI:-}" ]; then
+            echo "::error::The secret MONGODB_BACKUP_URI is empty or missing. Add it under Settings > Secrets and variables > Actions (see the comment at the top of backup.yml)."
+            exit 1
+          fi
+
+          # The artifact is named by the UTC date of the run, so the artifact list reads as a calendar.
+          echo "BACKUP_DATE=$(date -u +%F)" >> "$GITHUB_ENV"
+          mkdir -p backup
+
+          # mongodump from the official mongo image: it ships the MongoDB Database Tools, which the
+          # runner image does not reliably have. Pinned to the 8.0 line, like Atlas M0.
+          # The URI goes in by env NAME (-e MONGODB_BACKUP_URI, no value), so it never appears in
+          # the docker command line or the log; GitHub also masks the secret in the log.
+          docker run --rm -e MONGODB_BACKUP_URI -v "$PWD/backup:/backup" mongo:8.0 \
+            sh -c 'mongodump --uri="$MONGODB_BACKUP_URI" --gzip --archive=/backup/bottlerun.archive.gz'
+
+          # The size, so a suspiciously small dump shows in the log.
+          ls -l backup
+
+      - name: Keep the dump for 90 days
+        uses: actions/upload-artifact@v4
+        with:
+          name: mongodump-${{ env.BACKUP_DATE }}
+          path: backup/bottlerun.archive.gz
+          retention-days: 90
+          # No file means the dump did not happen: fail the run (and so the email) instead of a green run.
+          if-no-files-found: error
+          # The archive is already gzip; zipping it again costs time and saves nothing.
+          compression-level: 0

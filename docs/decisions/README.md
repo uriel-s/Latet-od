@@ -7,7 +7,7 @@
 | # | נושא | החלטה | עלות לחודש | סוגר ב-spec |
 |---|---|---|---|---|
 | [0001](0001-stack.md) | Stack | TS מקצה לקצה: React+Vite, Express, MongoDB Atlas Free, npm workspaces. driver רשמי + zod, בלי Mongoose. | 0 | §1, §5 |
-| [0002](0002-hosting.md) | Hosting | פרויקט Vercel Hobby אחד: Vite ב-CDN + Express כ-function ב-`fra1`. תת-דומיין `vercel.app`. גיבוי שבועי ב-GitHub Actions. | 0 | §7, ש4, ש5 |
+| [0002](0002-hosting.md) | Hosting | פרויקט Vercel Hobby אחד: Vite ב-CDN + Express כ-function ב-`iad1` (ליד Atlas ב-us-east-1). תת-דומיין `vercel.app`. גיבוי שבועי ב-GitHub Actions. | 0 | §7, ש4, ש5 |
 | [0003](0003-whatsapp.md) | WhatsApp | מתחילים ב-wa.me (יואל לוחץ "שלח"). `MessageSender` מוכן ל-Cloud API ישירות. בלי "קיבלנו". **ממתין ליואל.** | 0 (אוטומטי: כ-17-20) | §6.1, ש1, ש2, ש7 |
 | [0004](0004-collector-auth.md) | התחברות | סיסמה אחת (scrypt hash ב-env), cookie חתום ל-90 יום שמתחדש, הגבלת ניסיונות ב-Mongo. בלי `users`. | 0 | §3.4, §7 |
 | [0005](0005-location-routing-settings.md) | מיקום, מסלול, הגדרות | נקודה לכל רחוב מ-OSM (חד-פעמי, קובץ סטטי), כל הסדרים בקו אוויר. הגדרות בקוד וב-env, בלי מסך. | 0 | §3.6, §3.8, §6.2, §6.3, ש3, ש6 |
@@ -39,6 +39,7 @@
 | 11 | חלוקת רחובות לאזורים: אוטומטית לפי המפה. יואל משנה אזור בהזמנה כשצריך. |
 
 ## לבדוק לפני P3 (לא החלטות)
-- ב-UI של Atlas: איזה אזור אירופי זמין לקלאסטר Free (Frankfurt?). לבחור את אזור ה-function ב-Vercel הכי קרוב אליו.
+- ~~ב-UI של Atlas: איזה אזור אירופי זמין לקלאסטר Free (Frankfurt?). לבחור את אזור ה-function ב-Vercel הכי קרוב אליו.~~
+  **הוחלט (2026-10-20):** הקלאסטר ב-AWS us-east-1 ונשאר שם, וה-function ב-`iad1` (ADR-0002).
 - בטלפון של יואל: קישור Waze עם עברית ב-`q`, וקישור wa.me עם עברית (כבר ב-`docs/setup-checklist.md`).
-- אחרי ה-deploy הראשון: כמה זמן לוקחת שליחת הטופס אחרי לילה בלי תנועה.
+- אחרי ה-deploy הראשון: כמה זמן לוקחת שליחת הטופס אחרי לילה בלי תנועה. הבדיקה וטבלת התוצאות: `docs/deploy.md`.
