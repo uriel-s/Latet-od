@@ -1,18 +1,26 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { CUSTOMER_ORDER_MESSAGES, type CustomerOrder } from '@bottlerun/shared';
+import {
+  CUSTOMER_ORDER_MESSAGES,
+  customerOrderSchema,
+  type CustomerOrder,
+  type CustomerUpdateOrderRequest,
+} from '@bottlerun/shared';
 import {
   NETWORK_ERROR_MESSAGE,
   type CustomerOrderOutcome,
   type CustomerOrderWriteOutcome,
 } from '../api.ts';
+import { SAVE_FAILED_MESSAGE, UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
 import {
   CANCELLED_TEXT,
   COLLECTED_TEXT,
+  LEFT_ROUND_MESSAGE,
   ORDER_LOAD_FAILED_MESSAGE,
   OrderPage,
+  PHONE_NOT_CHANGED_TEXT,
   SAVED_MESSAGES,
   WAITING_TEXT,
 } from './OrderPage.tsx';
@@ -51,6 +59,14 @@ function confirmedOrder(): CustomerOrder {
   return makeOrder({ status: 'confirmed', round: ROUND });
 }
 
+/**
+ * The order as the api answers a change that keeps it where it is: the request's address and
+ * bottles in place of the stored ones. Parsed, so a request the page built wrong fails here.
+ */
+function withChange(order: CustomerOrder, request: CustomerUpdateOrderRequest): CustomerOrder {
+  return customerOrderSchema.parse({ ...order, ...request });
+}
+
 /** A promise the test settles by hand, to look at the page while its request is on its way. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve: (value: T) => void = () => undefined;
@@ -82,6 +98,8 @@ interface RenderOptions {
   decline?: Answer<CustomerOrderWriteOutcome>;
   /** The answer of cancelOrder. Default: saved, cancelled with no round. */
   cancel?: Answer<CustomerOrderWriteOutcome>;
+  /** The answer of updateOrder. Default: saved, the order with the change applied. */
+  update?: Answer<CustomerOrderWriteOutcome>;
   strict?: boolean;
 }
 
@@ -91,16 +109,23 @@ interface Calls {
   confirms: string[];
   declines: string[];
   cancels: string[];
+  updates: { token: string; request: CustomerUpdateOrderRequest }[];
   unmount: () => void;
 }
 
 /** Opens the page of `order` at /o/<token>, with fakes that record every call. */
 function renderPage(
   order: CustomerOrder = makeOrder(),
-  { load, confirm, decline, cancel, strict = false }: RenderOptions = {},
+  { load, confirm, decline, cancel, update, strict = false }: RenderOptions = {},
 ): Calls {
   window.history.replaceState(null, '', `/o/${TOKEN}`);
-  const calls: Omit<Calls, 'unmount'> = { loads: [], confirms: [], declines: [], cancels: [] };
+  const calls: Omit<Calls, 'unmount'> = {
+    loads: [],
+    confirms: [],
+    declines: [],
+    cancels: [],
+    updates: [],
+  };
   const nextLoad = answersInTurn(load ?? [{ kind: 'loaded', order }]);
   // The order without its round, as the api answers once it left the round or was cancelled.
   const outOfRound = { ...order };
@@ -129,6 +154,10 @@ function renderPage(
         return Promise.resolve(
           cancel ?? { kind: 'saved', order: { ...outOfRound, status: 'cancelled' } },
         );
+      }}
+      updateOrder={(token, request) => {
+        calls.updates.push({ token, request });
+        return Promise.resolve(update ?? { kind: 'saved', order: withChange(order, request) });
       }}
     />
   );
@@ -168,6 +197,45 @@ function button(name: string): HTMLElement {
 
 function click(name: string): void {
   fireEvent.click(button(name));
+}
+
+/** The input labelled `label`. */
+function input(label: string): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>(label);
+}
+
+/** Types `value` into the input labelled `label`. */
+function fillIn(label: string, value: string): void {
+  fireEvent.change(input(label), { target: { value } });
+}
+
+/** The text of everything `element` is described by (aria-describedby): its hint and error. */
+function descriptionOf(element: HTMLElement): string {
+  return (element.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter((id) => id !== '')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ');
+}
+
+/** The warning that a new address takes the order out of its round of 12/11. */
+const LEAVE_ROUND_WARNING = 'שינוי הכתובת יוציא את ההזמנה מהסבב ב-12/11, ונחזור אליך עם מועד חדש.';
+
+/** The leave-round warning, or null when the page shows none. */
+function queryLeaveRoundWarning(): HTMLElement | null {
+  return screen.queryByText((_content, element) =>
+    (element?.textContent ?? '').startsWith('שינוי הכתובת יוציא את ההזמנה מהסבב'),
+  );
+}
+
+/** Renders the page of `order`, waits for it, and opens "שינוי". */
+async function openChange(
+  order: CustomerOrder = makeOrder(),
+  options: RenderOptions = {},
+): Promise<Calls> {
+  const calls = await renderLoaded(order, options);
+  click('שינוי');
+  return calls;
 }
 
 describe('OrderPage', () => {
@@ -560,6 +628,304 @@ describe('OrderPage', () => {
       expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
       expect(screen.getByRole('alert').textContent).toBe(CUSTOMER_ORDER_MESSAGES.orderClosed);
       expect(calls.loads).toEqual([TOKEN, TOKEN]);
+    });
+  });
+
+  describe('changing the order ("שינוי")', () => {
+    it.each([
+      ['waiting', makeOrder()],
+      ['pending', pendingOrder()],
+      ['confirmed', confirmedOrder()],
+    ] as const)('offers "שינוי" on a %s order', async (_status, order) => {
+      await renderLoaded(order);
+
+      expect(button('שינוי')).toBeDefined();
+    });
+
+    it.each(['collected', 'cancelled'] as const)(
+      'offers no "שינוי" on a %s order',
+      async (status) => {
+        await renderLoaded(makeOrder({ status }));
+
+        expect(screen.queryByRole('button', { name: 'שינוי' })).toBeNull();
+      },
+    );
+
+    it("opens a form filled with the order's details, with no name or phone field", async () => {
+      await openChange();
+
+      const heading = screen.getByRole('heading', { level: 2, name: 'שינוי פרטי ההזמנה' });
+      expect(document.activeElement).toBe(heading);
+      expect(screen.getByText(PHONE_NOT_CHANGED_TEXT)).toBeDefined();
+      expect(PHONE_NOT_CHANGED_TEXT).toBe('את מספר הטלפון אי אפשר לשנות כאן.');
+      expect(input('רחוב').value).toBe('דרך רבין יצחק');
+      expect(input('מספר בית').value).toBe('12');
+      expect(input('ליד דלת הדירה').checked).toBe(true);
+      expect(input('קומה ודירה').value).toBe('קומה 3, דירה 12');
+      expect(input('הערה (לא חובה)').value).toBe('ליד העגלה הכחולה');
+      expect(input('כמות בקבוקים').value).toBe('40');
+      expect(screen.queryByLabelText('שם')).toBeNull();
+      expect(screen.queryByLabelText('טלפון נייד')).toBeNull();
+      expect(document.querySelector('input[type="tel"]')).toBeNull();
+      expect(screen.queryByDisplayValue('050-1234567')).toBeNull();
+      expectOneH1();
+    });
+
+    it("shows the form in place of the order's details and buttons", async () => {
+      await openChange(pendingOrder());
+
+      expect(screen.queryByRole('region', { name: 'פרטי ההזמנה' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שינוי' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(button('שמירת השינויים')).toBeDefined();
+      expect(button('בלי לשנות')).toBeDefined();
+      // The status and the round's date stay above the form.
+      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
+      expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
+    });
+
+    it('saves a new note with the address and the bottles, never the contact', async () => {
+      const calls = await openChange();
+
+      fillIn('הערה (לא חובה)', ' קוד 1234 ');
+      click('שמירת השינויים');
+
+      const notice = await screen.findByRole('status');
+      expect(notice.textContent).toBe('השינויים נשמרו.');
+      expect(SAVED_MESSAGES.change).toBe('השינויים נשמרו.');
+      expect(document.activeElement).toBe(notice);
+      expect(calls.updates).toEqual([
+        {
+          token: TOKEN,
+          request: {
+            address: {
+              streetCode: 247,
+              streetName: 'דרך רבין יצחק',
+              houseNumber: '12',
+              bottlesSpot: 'apartmentDoor',
+              floorApt: 'קומה 3, דירה 12',
+              note: 'קוד 1234',
+            },
+            bottlesEstimated: 40,
+          },
+        },
+      ]);
+      expect(calls.updates[0]?.request).not.toHaveProperty('contact');
+      // The form closed, and the page draws the order the api answered with.
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים' })).toBeNull();
+      const details = within(screen.getByRole('region', { name: 'פרטי ההזמנה' }));
+      expect(details.getByText('קוד 1234')).toBeDefined();
+      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
+    });
+
+    it('says "שומר..." while saving, and sends one request for a double tap', async () => {
+      const answer = deferred<CustomerOrderWriteOutcome>();
+      const calls = await openChange(makeOrder(), { update: answer.promise });
+
+      click('שמירת השינויים');
+
+      const busy = button('שומר...');
+      expect(busy.getAttribute('aria-disabled')).toBe('true');
+      expect(button('בלי לשנות').getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(busy);
+      // "בלי לשנות" waits for the answer on its way.
+      click('בלי לשנות');
+      expect(button('שומר...')).toBeDefined();
+      expect(calls.updates).toHaveLength(1);
+
+      answer.resolve({ kind: 'saved', order: makeOrder({ bottlesEstimated: 40 }) });
+
+      expect(await screen.findByText('השינויים נשמרו.')).toBeDefined();
+      expect(calls.updates).toHaveLength(1);
+    });
+
+    it('refuses fewer than 30 bottles next to the field, and sends nothing', async () => {
+      const calls = await openChange();
+
+      fillIn('כמות בקבוקים', '29');
+      click('שמירת השינויים');
+
+      const bottles = input('כמות בקבוקים');
+      expect(bottles.getAttribute('aria-invalid')).toBe('true');
+      expect(descriptionOf(bottles)).toContain('צריך לפחות 30 בקבוקים');
+      expect(document.activeElement).toBe(bottles);
+      expect(calls.updates).toEqual([]);
+    });
+
+    it('warns before saving that a new house number takes a pending order out of its round', async () => {
+      const calls = await openChange(pendingOrder(), {
+        update: {
+          kind: 'saved',
+          order: makeOrder({ address: { ...makeOrder().address, houseNumber: '14' } }),
+        },
+      });
+      expect(queryLeaveRoundWarning()).toBeNull();
+
+      fillIn('מספר בית', '14');
+
+      expect(getByWholeText(LEAVE_ROUND_WARNING)).toBeDefined();
+      expect(screen.getAllByText('12/11').at(-1)?.getAttribute('dir')).toBe('ltr');
+      expect(descriptionOf(button('שמירת השינויים'))).toBe(LEAVE_ROUND_WARNING);
+
+      click('שמירת השינויים');
+
+      const notice = await screen.findByRole('status');
+      expect(notice.textContent).toBe(LEFT_ROUND_MESSAGE);
+      expect(LEFT_ROUND_MESSAGE).toBe('הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.');
+      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
+      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
+      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.getByText('דרך רבין יצחק 14')).toBeDefined();
+      expect(calls.updates[0]?.request.address?.houseNumber).toBe('14');
+    });
+
+    it('takes the warning back when the house number is the stored one again', async () => {
+      await openChange(pendingOrder());
+
+      fillIn('מספר בית', '14');
+      expect(queryLeaveRoundWarning()).not.toBeNull();
+      fillIn('מספר בית', ' 12 ');
+
+      expect(queryLeaveRoundWarning()).toBeNull();
+      expect(button('שמירת השינויים').getAttribute('aria-describedby')).toBeNull();
+    });
+
+    it('warns about a new street of a confirmed order too', async () => {
+      await openChange(confirmedOrder());
+
+      click('הרחוב שלי לא ברשימה');
+      fillIn('שם הרחוב', 'הרימון');
+
+      expect(getByWholeText(LEAVE_ROUND_WARNING)).toBeDefined();
+    });
+
+    it('never warns on a waiting order, which is in no round', async () => {
+      await openChange();
+
+      fillIn('מספר בית', '14');
+
+      expect(queryLeaveRoundWarning()).toBeNull();
+    });
+
+    it('shows no warning when only the note, the spot or the bottles of a pending order change', async () => {
+      const calls = await openChange(pendingOrder());
+
+      fillIn('הערה (לא חובה)', 'קוד 1234');
+      fireEvent.click(input('למטה בכניסה לבניין'));
+      fillIn('כמות בקבוקים', '60');
+
+      expect(queryLeaveRoundWarning()).toBeNull();
+
+      click('שמירת השינויים');
+
+      expect((await screen.findByRole('status')).textContent).toBe('השינויים נשמרו.');
+      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
+      expect(button('מאשר/ת איסוף')).toBeDefined();
+      expect(calls.updates[0]?.request.bottlesEstimated).toBe(60);
+    });
+
+    it('shows a field the api refused next to that field, keeping the form', async () => {
+      const message = 'מספר הבית צריך להתחיל בספרה, למשל 12 או 12א';
+      await openChange(makeOrder(), {
+        update: { kind: 'invalid', errors: { byField: { houseNumber: message } } },
+      });
+
+      click('שמירת השינויים');
+
+      await screen.findByText(message);
+      const houseNumber = input('מספר בית');
+      expect(houseNumber.getAttribute('aria-invalid')).toBe('true');
+      expect(descriptionOf(houseNumber)).toContain(message);
+      expect(document.activeElement).toBe(houseNumber);
+      expect(button('שמירת השינויים')).toBeDefined();
+    });
+
+    it('shows a change refused as a whole above the save button', async () => {
+      await openChange(makeOrder(), {
+        update: { kind: 'invalid', errors: { byField: {}, other: UNKNOWN_FIELD_ERROR } },
+      });
+
+      click('שמירת השינויים');
+
+      expect((await screen.findByRole('alert')).textContent).toBe(UNKNOWN_FIELD_ERROR);
+      expect(button('שמירת השינויים')).toBeDefined();
+    });
+
+    it('keeps the form as typed, with the save-failed message, when the save fails', async () => {
+      await openChange(makeOrder(), { update: { kind: 'failed' } });
+
+      fillIn('הערה (לא חובה)', 'קוד 1234');
+      click('שמירת השינויים');
+
+      expect((await screen.findByRole('alert')).textContent).toBe(SAVE_FAILED_MESSAGE);
+      expect(SAVE_FAILED_MESSAGE).toBe('לא הצלחנו לשמור. נא לבדוק את החיבור לאינטרנט ולנסות שוב.');
+      expect(input('הערה (לא חובה)').value).toBe('קוד 1234');
+      expect(button('שמירת השינויים').getAttribute('aria-disabled')).toBeNull();
+    });
+
+    it('treats a rejected save like a failed one', async () => {
+      render(
+        <OrderPage
+          token={TOKEN}
+          loadOrder={() => Promise.resolve({ kind: 'loaded', order: makeOrder() })}
+          updateOrder={() => Promise.reject(new Error('boom'))}
+        />,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'שינוי' }));
+
+      click('שמירת השינויים');
+
+      expect((await screen.findByRole('alert')).textContent).toBe(SAVE_FAILED_MESSAGE);
+      expect(button('שמירת השינויים')).toBeDefined();
+    });
+
+    it('closes on "בלי לשנות" without a request, with focus back on "שינוי"', async () => {
+      const calls = await openChange();
+      fillIn('הערה (לא חובה)', 'קוד 1234');
+
+      click('בלי לשנות');
+
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים' })).toBeNull();
+      expect(document.activeElement).toBe(button('שינוי'));
+      const details = within(screen.getByRole('region', { name: 'פרטי ההזמנה' }));
+      expect(details.getByText('ליד העגלה הכחולה')).toBeDefined();
+      expect(calls.updates).toEqual([]);
+
+      // Opened again, the form starts from the order, not from what was typed before.
+      click('שינוי');
+      expect(input('הערה (לא חובה)').value).toBe('ליד העגלה הכחולה');
+    });
+
+    it('says the order closed, and loads it again, when it was collected meanwhile', async () => {
+      const calls = await openChange(makeOrder(), {
+        load: [
+          { kind: 'loaded', order: makeOrder() },
+          { kind: 'loaded', order: makeOrder({ status: 'collected' }) },
+        ],
+        update: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed },
+      });
+
+      click('שמירת השינויים');
+
+      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      const alert = screen.getByRole('alert');
+      expect(alert.textContent).toBe(CUSTOMER_ORDER_MESSAGES.orderClosed);
+      expect(document.activeElement).toBe(alert);
+      expect(calls.loads).toEqual([TOKEN, TOKEN]);
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שינוי' })).toBeNull();
+    });
+
+    it('says the order was not found when the save answers so', async () => {
+      await openChange(makeOrder(), { update: { kind: 'notFound' } });
+
+      click('שמירת השינויים');
+
+      expect((await screen.findByRole('alert')).textContent).toBe(
+        CUSTOMER_ORDER_MESSAGES.orderNotFound,
+      );
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים' })).toBeNull();
     });
   });
 

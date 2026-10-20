@@ -10,15 +10,20 @@ import {
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
 import type { CollectorOrderWriteOutcome } from '../api.ts';
-import type { FormErrors, OrderFormValues } from '../orderForm/formValues.ts';
+import {
+  SAVE_FAILED_MESSAGE,
+  type FormErrors,
+  type OrderFormValues,
+} from '../orderForm/formValues.ts';
 import { formValuesFromPrefill } from '../orderForm/savedDetails.ts';
 import type { StreetChoice } from '../streetPicker/streetChoice.ts';
 
 /** The orders list: where a saved add, edit or cancel returns, and where "חזרה להזמנות" leads. */
 export const ORDERS_LIST_PATH = '/app/orders';
 
-/** Shown above the save button when a save got no usable answer (network error, 5xx). */
-export const SAVE_FAILED_MESSAGE = 'לא הצלחנו לשמור. נא לבדוק את החיבור לאינטרנט ולנסות שוב.';
+// Shown above the save button when a save got no usable answer. Defined with the form, which the
+// customer's own "שינוי" shares; exported here too for this screen's tests.
+export { SAVE_FAILED_MESSAGE };
 
 /** Shown in the cancel confirmation when the cancel got no usable answer. */
 export const CANCEL_FAILED_MESSAGE = 'לא הצלחנו לבטל. נא לבדוק את החיבור לאינטרנט ולנסות שוב.';
