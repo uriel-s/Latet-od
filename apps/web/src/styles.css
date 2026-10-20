@@ -729,6 +729,14 @@ html:has(.bottom-nav) {
   margin-block: 0 0.75rem;
 }
 
+/* "סגור אישורים ובנה מסלול" ends step 1, under a decorative line and apart from the cards'
+   "אישר בטלפון", so it is not tapped by mistake. Its question uses .cancel-confirm. */
+.round-build-route {
+  margin-block-start: 2rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 2px solid var(--color-gray);
+}
+
 /* The phone on a round's card dials; a full-size tap target although it reads as a link. */
 .order-card-phone {
   display: inline-flex;
