@@ -2,6 +2,7 @@
 // gives, and that a missing or bad variable stops the startup before any database client exists,
 // with a message that names the variable but never repeats a value. The database factory is a
 // fake, so no MongoClient is ever created; the env is a plain object, process.env is never read.
+import { straightLineDistance } from '@bottlerun/shared';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { hashPassword } from './auth/passwordHash.ts';
 import type { DbDeps } from './deps.ts';
@@ -15,6 +16,8 @@ const URI = `mongodb+srv://bottlerun:${URI_PASSWORD}@cluster0.example.mongodb.ne
 const PASSWORD = 'four long words for yoel';
 const SECRET = 'test-secret-0123456789-abcdefghijklmnop';
 const PUBLIC_BASE_URL = 'https://latet-od.test';
+/** A made-up round-number point near the drop-off, nobody's home. */
+const ROUTE_START = '31.7,35.0';
 
 let passwordHash: string;
 
@@ -31,6 +34,7 @@ function envWith(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     SESSION_SECRET: SECRET,
     PUBLIC_BASE_URL,
     MESSAGE_SENDER: 'wame',
+    ROUTE_START,
     ...overrides,
   };
 }
@@ -74,6 +78,8 @@ describe('depsFromEnv', () => {
     expect(await deps.auth.verifyCredentials(PASSWORD)).toEqual({ sub: 'collector' });
     expect(deps.messaging.sender).toBeInstanceOf(WaMeLinkSender);
     expect(deps.messaging.publicBaseUrl).toBe(PUBLIC_BASE_URL);
+    expect(deps.route.start).toEqual({ lat: 31.7, lng: 35 });
+    expect(deps.route.distance).toBe(straightLineDistance);
   });
 
   describe('refuses to start', () => {
@@ -117,6 +123,9 @@ describe('depsFromEnv', () => {
         /^PUBLIC_BASE_URL is not set/u,
       ],
       ['MESSAGE_SENDER is unknown', { MESSAGE_SENDER: 'sms' }, /^MESSAGE_SENDER is not a known/u],
+      ['ROUTE_START is missing', { ROUTE_START: undefined }, /^ROUTE_START is not set/u],
+      ['ROUTE_START is malformed', { ROUTE_START: '31.7;35.0' }, /^ROUTE_START is not two/u],
+      ['ROUTE_START is swapped', { ROUTE_START: '35.0,31.7' }, /^ROUTE_START is more than/u],
     ])('when %s, without creating the database deps', (_label, overrides, expected) => {
       const createDbDeps = fakeCreateDbDeps();
 
@@ -145,12 +154,19 @@ describe('depsFromEnv', () => {
       startupError(envWith({ SESSION_SECRET: 'short' })),
       startupError(envWith({ COLLECTOR_PASSWORD_HASH: undefined })),
       startupError(envWith({ PUBLIC_BASE_URL: undefined })),
+      startupError(envWith({ ROUTE_START: undefined })),
+      startupError(envWith({ ROUTE_START: '31.7;35.0' })),
+      startupError(envWith({ ROUTE_START: '35.0,31.7' })),
     ];
 
     for (const message of messages) {
       expect(message).not.toContain(URI_PASSWORD);
       expect(message).not.toContain(SECRET);
       expect(message).not.toContain(passwordHash);
+      // ROUTE_START is Yoel's home: neither the valid one nor a bad one is ever repeated.
+      expect(message).not.toContain(ROUTE_START);
+      expect(message).not.toContain('31.7');
+      expect(message).not.toContain('35.0');
     }
   });
 });

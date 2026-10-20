@@ -1,8 +1,9 @@
 // In-memory dependencies for api tests: route tests build their app with
 // `createApp(createFakeDeps())`, and override one piece when they need to see or steer it.
 import { randomBytes } from 'node:crypto';
+import { straightLineDistance, type GeoPoint } from '@bottlerun/shared';
 import { InMemoryAttemptStore } from './attempts/inMemoryAttemptStore.ts';
-import type { AppDeps, AuthDeps, MessagingDeps } from './deps.ts';
+import type { AppDeps, AuthDeps, MessagingDeps, RouteDeps } from './deps.ts';
 import { FakeSender } from './messages/fakeSender.ts';
 import { InMemoryOrdersRepo } from './orders/inMemoryOrdersRepo.ts';
 import { InMemoryRoundsRepo } from './rounds/inMemoryRoundsRepo.ts';
@@ -50,11 +51,27 @@ export function createFakeMessaging(overrides: Partial<MessagingDeps> = {}): Mes
 }
 
 /**
+ * The route's start point in tests: a made-up round-number point a few kilometres from the
+ * drop-off, inside ROUTE_START's limit. It is nobody's home: the real one exists only in env.
+ */
+export const FAKE_ROUTE_START: GeoPoint = { lat: 31.7, lng: 35.0 };
+
+/**
+ * Route settings for tests: {@link FAKE_ROUTE_START} and the real straight-line distances.
+ *
+ * @param overrides E.g. `{ distance: { distance: (from, to) => … } }` for a distance table the
+ *   test controls, so the expected stop order does not depend on real geography.
+ */
+export function createFakeRoute(overrides: Partial<RouteDeps> = {}): RouteDeps {
+  return { start: FAKE_ROUTE_START, distance: straightLineDistance, ...overrides };
+}
+
+/**
  * Fresh, empty fakes for every dependency: an {@link InMemoryOrdersRepo}, an
  * {@link InMemoryRoundsRepo}, an {@link InMemoryAttemptStore} on the real clock, a database whose
- * ping always answers,
- * {@link createFakeAuth}'s login, and {@link createFakeMessaging}'s WhatsApp sender. Each call makes
- * new instances, so tests never share state.
+ * ping always answers, {@link createFakeAuth}'s login, {@link createFakeMessaging}'s WhatsApp
+ * sender and {@link createFakeRoute}'s route settings. Each call makes new instances, so tests
+ * never share state.
  *
  * @param overrides Pieces to use instead, e.g. `{ db: { ping: () => Promise.reject(...) } }` for a
  *   database that is down, or a repo the test keeps a reference to and inspects.
@@ -67,6 +84,7 @@ export function createFakeDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     db: { ping: () => Promise.resolve() },
     auth: createFakeAuth(),
     messaging: createFakeMessaging(),
+    route: createFakeRoute(),
     ...overrides,
   };
 }
