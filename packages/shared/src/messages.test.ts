@@ -217,18 +217,35 @@ describe('toMessageLink', () => {
     });
   });
 
-  it('skips sent and failed entries and entries of the other kind', () => {
+  it('skips entries of the other kind', () => {
     const order = makeOrder([
       manualEntry('confirmRequest', 'https://wa.me/972501234567?text=confirm'),
-      { kind: 'confirmRequest', at: AT, mode: 'sent', providerId: 'wamid.1' },
-      { kind: 'confirmRequest', at: AT, mode: 'failed', reason: 'timeout' },
       manualEntry('thankYou', 'https://wa.me/972501234567?text=thanks'),
+      { kind: 'thankYou', at: AT, mode: 'failed', reason: 'timeout' },
     ]);
     expect(toMessageLink(order, 'confirmRequest')).toMatchObject({
       messageIndex: 0,
       url: 'https://wa.me/972501234567?text=confirm',
     });
-    expect(toMessageLink(order, 'thankYou')).toMatchObject({ messageIndex: 3, kind: 'thankYou' });
+  });
+
+  // An older manual link belongs to an earlier round (another date): sending it would be wrong.
+  it('returns undefined when a newer sent or failed entry of the kind follows a manual one', () => {
+    const thenSent = makeOrder([
+      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old-round'),
+      { kind: 'confirmRequest', at: AT, mode: 'sent', providerId: 'wamid.1' },
+    ]);
+    expect(toMessageLink(thenSent, 'confirmRequest')).toBeUndefined();
+    const thenFailed = makeOrder([
+      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old-round'),
+      { kind: 'confirmRequest', at: AT, mode: 'failed', reason: 'timeout' },
+      manualEntry('thankYou', 'https://wa.me/972501234567?text=thanks'),
+    ]);
+    expect(toMessageLink(thenFailed, 'confirmRequest')).toBeUndefined();
+    expect(toMessageLink(thenFailed, 'thankYou')).toMatchObject({
+      messageIndex: 2,
+      kind: 'thankYou',
+    });
   });
 
   it('returns undefined when the order has no manual entry of the kind', () => {
