@@ -5,6 +5,7 @@ import { createApp } from './app.ts';
 import { authDepsFromEnv } from './auth/authConfig.ts';
 import { createMongoDeps } from './db/mongoDeps.ts';
 import type { AppDeps } from './deps.ts';
+import { messagingDepsFromEnv } from './messages/messagingConfig.ts';
 
 const uri = process.env.MONGODB_URI;
 if (!uri) {
@@ -17,12 +18,13 @@ if (!uri) {
 
 let deps: AppDeps;
 try {
-  // The login's settings first: a missing or bad COLLECTOR_PASSWORD_HASH or SESSION_SECRET stops
-  // the startup before any database client exists.
+  // The settings from env first: a missing or bad COLLECTOR_PASSWORD_HASH, SESSION_SECRET,
+  // MESSAGE_SENDER or PUBLIC_BASE_URL stops the startup before any database client exists.
   const auth = authDepsFromEnv(process.env);
-  deps = { ...createMongoDeps(uri), auth };
+  const messaging = messagingDepsFromEnv(process.env);
+  deps = { ...createMongoDeps(uri), auth, messaging };
 } catch (error) {
-  // Only the message: these errors name the variable that is wrong, never its value (both hold
+  // Only the message: these errors name the variable that is wrong, never its value (some hold
   // secrets), and the stack adds nothing for a configuration mistake.
   console.error(error instanceof Error ? error.message : 'api could not start: invalid env');
   process.exit(1);

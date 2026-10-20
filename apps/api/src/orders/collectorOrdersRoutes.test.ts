@@ -12,13 +12,16 @@ import {
   COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
   ORDER_FORM_ERRORS,
+  ORDER_STATUSES,
   STREETS,
   collectorOrderResponseSchema,
   collectorOrdersResponseSchema,
+  messageOpenedResponseSchema,
   toCollectorOrder,
   type AddOrderRequest,
   type CollectorOrder,
   type CollectorOrdersResponse,
+  type MessageLogEntry,
   type NewOrder,
   type Order,
   type Street,
@@ -73,6 +76,37 @@ const FREE_TEXT_ADDRESS: Order['address'] = {
   streetName: 'הרחוב החדש שלי',
   houseNumber: '12',
   bottlesSpot: 'privateHouse',
+};
+
+// Entries of an order's message log (ADR-0003), for the "opened" route.
+const MESSAGE_AT = new Date('2026-11-01T09:00:00.000Z');
+/** A wa.me link of a confirmation request, not opened yet. */
+const MANUAL_CONFIRM: MessageLogEntry = {
+  kind: 'confirmRequest',
+  at: MESSAGE_AT,
+  mode: 'manual',
+  url: 'https://wa.me/972547654321?text=confirm',
+};
+/** A wa.me link of a thank-you, not opened yet. */
+const MANUAL_THANKS: MessageLogEntry = {
+  kind: 'thankYou',
+  at: MESSAGE_AT,
+  mode: 'manual',
+  url: 'https://wa.me/972547654321?text=thanks',
+};
+/** A message sent automatically: it has no link to open. */
+const SENT_ENTRY: MessageLogEntry = {
+  kind: 'confirmRequest',
+  at: MESSAGE_AT,
+  mode: 'sent',
+  providerId: 'wamid.HBgM',
+};
+/** A message the sender failed on: no link either. */
+const FAILED_ENTRY: MessageLogEntry = {
+  kind: 'confirmRequest',
+  at: MESSAGE_AT,
+  mode: 'failed',
+  reason: 'invalid_phone',
 };
 
 /** A valid "הוספת הזמנה" body, as the web form sends it: a listed street in רמת בית שמש. */
@@ -156,6 +190,14 @@ function patchOrder(id: string, body: object, target: Express = app): request.Te
 function cancelOrder(id: string, target: Express = app): request.Test {
   return request(target)
     .post(`${BASE}/${id}/cancel`)
+    .set(SAME_ORIGIN_HEADERS)
+    .set('Cookie', cookie);
+}
+
+/** Yoel's "שלח" button: marks the entry at `index` of the order's message log as opened. */
+function markOpened(id: string, index: string | number, target: Express = app): request.Test {
+  return request(target)
+    .post(`${BASE}/${id}/messages/${index}/opened`)
     .set(SAME_ORIGIN_HEADERS)
     .set('Cookie', cookie);
 }
@@ -576,6 +618,124 @@ describe('POST /api/collector/orders/:id/cancel', () => {
   });
 });
 
+describe('POST /api/collector/orders/:id/messages/:index/opened', () => {
+  it('sets openedAt of the manual entry to now, changing nothing else, the status included', async () => {
+    const order = await seed({
+      status: 'pending',
+      roundId: 'round-7',
+      messages: [FAILED_ENTRY, MANUAL_CONFIRM],
+    });
+    const before = Date.now();
+
+    const res = await markOpened(order.id, 1);
+
+    const after = Date.now();
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    const { openedAt } = messageOpenedResponseSchema.parse(res.body);
+    expect(openedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(openedAt.getTime()).toBeLessThanOrEqual(after);
+    expect(await stored(order.id)).toStrictEqual({
+      ...order,
+      messages: [FAILED_ENTRY, { ...MANUAL_CONFIRM, openedAt }],
+      updatedAt: openedAt,
+    });
+    // Only the moment: no order, no link, no customer data in the answer.
+    expect(Object.keys(res.body as object)).toEqual(['openedAt']);
+  });
+
+  it.each([...ORDER_STATUSES])(
+    'works on a %s order and leaves its status as it is',
+    async (status) => {
+      // A thank-you is opened after "אספתי", when the order is already collected.
+      const order = await seed({ status, messages: [MANUAL_CONFIRM, MANUAL_THANKS] });
+
+      const res = await markOpened(order.id, 1);
+
+      expect(res.status).toBe(200);
+      const after = await stored(order.id);
+      expect(after.status).toBe(status);
+      expect(after.messages[0]).toStrictEqual(MANUAL_CONFIRM);
+      expect(after.messages[1]).toStrictEqual({
+        ...MANUAL_THANKS,
+        openedAt: messageOpenedResponseSchema.parse(res.body).openedAt,
+      });
+    },
+  );
+
+  it('answers an entry opened before with its first openedAt, writing nothing', async () => {
+    const firstOpenedAt = new Date('2026-11-01T09:05:00.000Z');
+    const order = await seed({ messages: [{ ...MANUAL_CONFIRM, openedAt: firstOpenedAt }] });
+
+    const res = await markOpened(order.id, 0);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toStrictEqual({ openedAt: firstOpenedAt.toISOString() });
+    expect(await stored(order.id)).toStrictEqual(order);
+  });
+
+  it('answers a second tap with the openedAt of the first, writing nothing again', async () => {
+    const order = await seed({ messages: [MANUAL_CONFIRM] });
+    const first = await markOpened(order.id, 0);
+    const afterFirst = await stored(order.id);
+
+    const second = await markOpened(order.id, 0);
+
+    expect(second.status).toBe(200);
+    expect(second.body).toStrictEqual(first.body);
+    expect(await stored(order.id)).toStrictEqual(afterFirst);
+  });
+
+  it.each([
+    { label: 'an unknown id', id: UNKNOWN_ID },
+    { label: 'a malformed id', id: MALFORMED_ID },
+  ])('answers 404 order_not_found for $label', async ({ id }) => {
+    const res = await markOpened(id, 0);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'order_not_found' });
+  });
+
+  it.each([
+    { label: 'an index past the end', index: '3' },
+    { label: 'a negative index', index: '-1' },
+    { label: 'a signed index', index: '+2' },
+    { label: 'a decimal index', index: '1.5' },
+    { label: 'an exponent', index: '2e0' },
+    { label: 'an index that is not a number', index: 'abc' },
+    { label: 'a sent entry, which has no link', index: '0' },
+    { label: 'a failed entry, which has no link', index: '1' },
+  ])('answers 404 message_not_found for $label, changing nothing', async ({ index }) => {
+    const order = await seed({ messages: [SENT_ENTRY, FAILED_ENTRY, MANUAL_CONFIRM] });
+
+    const res = await markOpened(order.id, index);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'message_not_found' });
+    expect(await stored(order.id)).toStrictEqual(order);
+  });
+
+  it('answers 404 message_not_found for an order with no messages', async () => {
+    const order = await seed();
+
+    const res = await markOpened(order.id, 0);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'message_not_found' });
+  });
+
+  it('answers 404 order_not_found when the order is gone by the time it is written', async () => {
+    const vanishing = new InMemoryOrdersRepo();
+    const order = await vanishing.create(makeNewOrder({ messages: [MANUAL_CONFIRM] }));
+    vi.spyOn(vanishing, 'update').mockResolvedValue(null);
+
+    const res = await markOpened(order.id, 0, appWithRepo(vanishing));
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'order_not_found' });
+  });
+});
+
 describe('POST /api/collector/orders: "הוספת הזמנה"', () => {
   it('stores a waiting order from the collector, with the region of its street, and answers 201', async () => {
     const res = await addOrder(addBody());
@@ -675,6 +835,10 @@ describe('/api/collector/orders: the login and the Origin check', () => {
       send: () => request(app).patch(`${BASE}/${UNKNOWN_ID}`).send({ bottlesEstimated: 40 }),
     },
     { label: 'POST /:id/cancel', send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/cancel`) },
+    {
+      label: 'POST /:id/messages/:index/opened',
+      send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/messages/0/opened`),
+    },
     { label: 'POST /', send: () => request(app).post(BASE).send(addBody()) },
   ])('answers $label without a session cookie with 401, changing nothing', async ({ send }) => {
     const order = await seed();
@@ -710,6 +874,20 @@ describe('/api/collector/orders: the login and the Origin check', () => {
     expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
     expect(await stored(order.id)).toStrictEqual(order);
   });
+
+  it('refuses "opened" from another site with 403 forbidden_origin, even with the cookie', async () => {
+    const order = await seed({ messages: [MANUAL_CONFIRM] });
+
+    const res = await request(app)
+      .post(`${BASE}/${order.id}/messages/0/opened`)
+      .set('Host', TEST_HOST)
+      .set('Origin', 'https://evil.example')
+      .set('Cookie', cookie);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
+    expect(await stored(order.id)).toStrictEqual(order);
+  });
 });
 
 describe('/api/collector/orders: logs', () => {
@@ -718,6 +896,7 @@ describe('/api/collector/orders: logs', () => {
       contact: { name: 'משה כהן', phone: PHONE_E164, method: 'whatsapp' },
     });
     const order = await seed({ address: FREE_TEXT_ADDRESS });
+    const messaged = await seed({ messages: [MANUAL_CONFIRM] });
 
     const statuses = [
       (await getList()).status,
@@ -729,9 +908,13 @@ describe('/api/collector/orders: logs', () => {
       (await addOrder(addBody())).status,
       (await cancelOrder(other.id)).status,
       (await cancelOrder(other.id)).status,
+      (await markOpened(messaged.id, 0)).status,
+      (await markOpened(messaged.id, 0)).status,
+      (await markOpened(messaged.id, 1)).status,
+      (await markOpened(UNKNOWN_ID, 0)).status,
     ];
 
-    expect(statuses).toEqual([200, 200, 404, 200, 400, 409, 409, 200, 200]);
+    expect(statuses).toEqual([200, 200, 404, 200, 400, 409, 409, 200, 200, 200, 200, 404, 404]);
     for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();
   });
 
