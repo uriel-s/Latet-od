@@ -1,6 +1,6 @@
 // The production AppDeps that live in the database: the Mongo repos on the database named in
-// MONGODB_URI (ADR-0001); the login's and the WhatsApp messages' settings come from env instead
-// (auth/authConfig.ts, messages/messagingConfig.ts). Both entry points (server.ts and the Vercel
+// MONGODB_URI (ADR-0001); the login's, the WhatsApp messages' and the route's settings come from
+// env instead (auth/authConfig.ts, messages/messagingConfig.ts, route/routeConfig.ts). Both entry points (server.ts and the Vercel
 // function entry vercelEntry.ts) call createMongoDeps once per process, through depsFromEnv
 // (envDeps.ts). Nothing here touches the network; the driver connects on the first operation.
 import type { DbDeps } from '../deps.ts';
@@ -41,9 +41,10 @@ export function databaseNameFromUri(uri: string): string | undefined {
 }
 
 /**
- * The api's real dependencies on the database named in `uri`: every AppDeps piece but `auth` and
- * `messaging`, which come from env, not from the database (authDepsFromEnv, auth/authConfig.ts;
- * messagingDepsFromEnv, messages/messagingConfig.ts); depsFromEnv (envDeps.ts) joins the three.
+ * The api's real dependencies on the database named in `uri`: every AppDeps piece but `auth`,
+ * `messaging` and `route`, which come from env, not from the database (authDepsFromEnv,
+ * auth/authConfig.ts; messagingDepsFromEnv, messages/messagingConfig.ts; routeDepsFromEnv,
+ * route/routeConfig.ts); depsFromEnv (envDeps.ts) joins the four.
  * Call it once per process, next to the client (the repos create their indexes once per instance):
  * server.ts and the Vercel function entry (vercelEntry.ts, via vercelHandler.ts) both do.
  *

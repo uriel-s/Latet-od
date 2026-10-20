@@ -50,6 +50,10 @@
       ובלוג של ה-function יש אירוע `invalid_env` עם שם המשתנה.
       זה לא רק ההתחברות: גם הטופס הציבורי לא יכול לשלוח הזמנה.
       איך מייצרים: סעיף 3 (המינימום כבר 8 תווים).
+- [ ] **`ROUTE_START` חייב להיות מוגדר ב-Vercel (Production) לפני שה-push של השינוי הזה מגיע ל-`main`.**
+      אחרת, אחרי ה-deploy, כל קריאה ל-api עונה 500 (`invalid_env`), גם הטופס הציבורי.
+      שינוי במשתנה נכנס לתוקף רק ב-deploy חדש, ולכן הסדר הוא: קודם מגדירים, ואז push. הפורמט: סעיף 3.
+      גם ב-`apps/api/.env` המקומי צריך אותו, אחרת `npm run dev:api` מסרב לעלות.
 
 ## 3. משתני סביבה ב-Vercel
 
@@ -63,7 +67,7 @@ Settings → Environment Variables, בסביבה **Production**. ההסבר המ
 | `PUBLIC_BASE_URL` | מוגדר | `https://latet-od.vercel.app`, בלי path. כל קישור בהודעות WhatsApp נבנה ממנו. |
 | `MESSAGE_SENDER` | מוגדר | `wame`. |
 | `NODE_ENV` | לא מגדירים | Vercel קובע `production` בעצמו. **אסור `development`:** ה-cookie של ההתחברות יאבד את `Secure`. |
-| `ROUTE_START` | עוד לא | נכנס עם section המסלול. פרטי (הבית של יואל): רק ב-env, אף פעם לא בקוד ולא במסמכים. |
+| `ROUTE_START` | **חסר** | חובה מה-section של המסלול והלאה. `"lat,lng"`, קו רוחב קודם (הפורמט ואיך מוצאים אותו: `apps/api/.env.example`). בלעדיו, או עם ערך לא תקין, `depsFromEnv` מסרב, ו**כל ה-api** עונה 500 `invalid_env` (גם הטופס הציבורי). פרטי (הבית של יואל): רק ב-env, אף פעם לא בקוד ולא במסמכים. |
 
 `PORT` לא צריך ב-Vercel: רק `server.ts` קורא אותו.
 

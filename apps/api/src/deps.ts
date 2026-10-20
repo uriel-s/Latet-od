@@ -1,8 +1,9 @@
 // What the api needs from the world outside its own code, passed to createApp(deps). Production
-// builds the Mongo implementations once per process (db/mongoDeps.ts), and the login's and the
-// WhatsApp messages' settings from env (auth/authConfig.ts, messages/messagingConfig.ts); envDeps.ts
-// joins them for both entry points. Tests pass in-memory fakes (fakeDeps.ts), so no test touches
-// the network or Atlas.
+// builds the Mongo implementations once per process (db/mongoDeps.ts), and the login's, the
+// WhatsApp messages' and the route's settings from env (auth/authConfig.ts,
+// messages/messagingConfig.ts, route/routeConfig.ts); envDeps.ts joins them for both entry points.
+// Tests pass in-memory fakes (fakeDeps.ts), so no test touches the network or Atlas.
+import type { DistanceMatrix, GeoPoint } from '@bottlerun/shared';
 import type { AttemptStore } from './attempts/attemptStore.ts';
 import type { VerifyCredentials } from './auth/credentials.ts';
 import type { MessageSender } from './messages/messageSender.ts';
@@ -23,14 +24,16 @@ export interface AppDeps {
   auth: AuthDeps;
   /** The WhatsApp messages: who sends them, and the origin of the links inside (ADR-0003). */
   messaging: MessagingDeps;
+  /** Where routes start and how far apart two points are, for planning a round (ADR-0005). */
+  route: RouteDeps;
 }
 
 /**
- * The {@link AppDeps} pieces that live in the database: everything but `auth` and `messaging`,
- * which come from env. Production builds them with createMongoDeps (db/mongoDeps.ts), and
- * depsFromEnv (envDeps.ts) joins them with the other two.
+ * The {@link AppDeps} pieces that live in the database: everything but `auth`, `messaging` and
+ * `route`, which come from env. Production builds them with createMongoDeps (db/mongoDeps.ts),
+ * and depsFromEnv (envDeps.ts) joins them with the other three.
  */
-export type DbDeps = Omit<AppDeps, 'auth' | 'messaging'>;
+export type DbDeps = Omit<AppDeps, 'auth' | 'messaging' | 'route'>;
 
 /** Whether the database answers. /api/health uses it, which also opens the connection early (warm-up, ADR-0002). */
 export interface DbHealth {
@@ -65,4 +68,19 @@ export interface MessagingDeps {
    * `https://latet-od.example`. The links in messages are `${publicBaseUrl}/o/<token>`.
    */
   publicBaseUrl: string;
+}
+
+/**
+ * What planning a round's route needs (ADR-0005). Production builds it from env
+ * (routeDepsFromEnv, route/routeConfig.ts); tests use createFakeRoute (fakeDeps.ts). The route's
+ * end, the drop-off point, is not here: it is the fixed DROP_OFF in config.ts.
+ */
+export interface RouteDeps {
+  /**
+   * Where every route starts: ROUTE_START, Yoel's home. Private: it comes from env only, and is
+   * never logged, sent to the browser or written into code or docs.
+   */
+  start: GeoPoint;
+  /** How far apart two points are: straight-line distance today (ADR-0005). */
+  distance: DistanceMatrix;
 }
