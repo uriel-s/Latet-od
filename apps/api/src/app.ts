@@ -14,6 +14,7 @@ import { createCollectorOrdersRouter } from './orders/collectorOrdersRoutes.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
 import { createCustomerOrderRouter } from './orders/customerOrderRoutes.ts';
 import { createCollectorRoundsRouter } from './rounds/collectorRoundsRoutes.ts';
+import { createCollectorStopActionsRouter } from './rounds/collectorStopActionsRoutes.ts';
 import { requireSameOrigin } from './sameOrigin.ts';
 
 /**
@@ -92,6 +93,9 @@ export function createApp(deps: AppDeps): Express {
   // requests, list the open rounds, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול", and
   // moving a stop of the route up or down (rounds/collectorRoundsRoutes.ts).
   app.use('/api/collector/rounds', createCollectorRoundsRouter(deps));
+  // The stop actions on a routed round's route, on the same path: "אספתי" and "לא נמצא"
+  // (rounds/collectorStopActionsRoutes.ts). Their paths never overlap the router above.
+  app.use('/api/collector/rounds', createCollectorStopActionsRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
   // a mistyped customer link holds the token.

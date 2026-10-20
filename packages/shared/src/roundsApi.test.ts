@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { MessageLogEntry, Order } from './order.ts';
+import { MAX_BOTTLES, type MessageLogEntry, type Order } from './order.ts';
 import { formFieldErrors } from './orderApi.ts';
 import { MAX_ROUND_ORDERS, type Round } from './round.ts';
 import {
+  COLLECT_STOP_ERRORS,
   PERSONAL_TEXT_MAX_LENGTH,
   ROUND_GROUP_KEYS,
   ROUND_GROUP_LABELS,
   ROUND_PLAN_ERRORS,
   ROUND_STOP_STATES,
   buildRoundView,
+  collectStopRequestSchema,
   moveStopRequestSchema,
   planRoundRequestSchema,
   roundStopStateOf,
@@ -57,6 +59,17 @@ function confirmLink(orderId: string, openedAt?: Date): MessageLogEntry {
     at: CREATED_AT,
     mode: 'manual',
     url: `https://wa.me/972501234567?text=${orderId}`,
+    ...(openedAt === undefined ? {} : { openedAt }),
+  };
+}
+
+/** A thank-you of an order as a wa.me link, as `sendAndLog` logs it on "אספתי". */
+function thankYouLink(orderId: string, openedAt?: Date): MessageLogEntry {
+  return {
+    kind: 'thankYou',
+    at: OPENED_AT,
+    mode: 'manual',
+    url: `https://wa.me/972501234567?text=thanks-${orderId}`,
     ...(openedAt === undefined ? {} : { openedAt }),
   };
 }
@@ -405,6 +418,87 @@ describe('buildRoundView', () => {
     expect(view.stops[0]?.order).toMatchObject({ id: 'c', hasLocation: false });
     expect(view.stops[0]?.order).not.toHaveProperty('token');
   });
+
+  describe('thankYou of a stop', () => {
+    /** A routed round whose route is the given orders, in that order. */
+    const routedRound = (ids: string[]): Round =>
+      makeRound(ids, {
+        phase: 'routed',
+        stops: ids.map((orderId) => ({ orderId, hasLocation: true })),
+      });
+
+    it('gives a collected stop its newest thankYou wa.me link', () => {
+      const view = buildRoundView(routedRound(['a', 'b']), [
+        makeOrder('a', {
+          status: 'collected',
+          messages: [confirmLink('a', OPENED_AT), thankYouLink('a')],
+        }),
+        // An older thank-you behind the newest one: the newest counts.
+        makeOrder('b', {
+          status: 'collected',
+          messages: [confirmLink('b'), thankYouLink('old'), thankYouLink('b', OPENED_AT)],
+        }),
+      ]);
+      expect(view.stops.map((stop) => stop.thankYou)).toEqual([
+        {
+          orderId: 'a',
+          messageIndex: 1,
+          kind: 'thankYou',
+          name: 'לקוח a',
+          url: 'https://wa.me/972501234567?text=thanks-a',
+        },
+        {
+          orderId: 'b',
+          messageIndex: 2,
+          kind: 'thankYou',
+          name: 'לקוח b',
+          url: 'https://wa.me/972501234567?text=thanks-b',
+          openedAt: OPENED_AT,
+        },
+      ]);
+    });
+
+    it('leaves the key out for a collected stop whose newest thankYou failed or is missing', () => {
+      const view = buildRoundView(routedRound(['a', 'b']), [
+        makeOrder('a', {
+          status: 'collected',
+          messages: [
+            thankYouLink('a'),
+            { kind: 'thankYou', at: OPENED_AT, mode: 'failed', reason: 'timeout' },
+          ],
+        }),
+        makeOrder('b', { status: 'collected' }),
+      ]);
+      expect(view.stops.map((stop) => stop.state)).toEqual(['collected', 'collected']);
+      for (const stop of view.stops) expect(stop).not.toHaveProperty('thankYou');
+    });
+
+    // A thank-you from an earlier round must not offer "שלח תודה" at a stop not collected here.
+    it('never gives one to a stop that is not collected, even with an older thankYou', () => {
+      const messages = [thankYouLink('earlier'), confirmLink('x')];
+      const view = buildRoundView(routedRound(['a', 'b', 'c']), [
+        makeOrder('a', { status: 'confirmed', messages }),
+        makeOrder('b', {
+          status: 'waiting',
+          roundId: undefined,
+          lastMiss: { date: '2026-11-05', reason: 'notFound', roundId: ROUND_ID },
+          messages,
+        }),
+        makeOrder('c', { status: 'cancelled', messages }),
+      ]);
+      expect(view.stops.map((stop) => stop.state)).toEqual(['toCollect', 'notFound', 'cancelled']);
+      for (const stop of view.stops) expect(stop).not.toHaveProperty('thankYou');
+    });
+
+    it('survives the JSON round trip, with openedAt as a Date', () => {
+      const view = buildRoundView(routedRound(['a']), [
+        makeOrder('a', { status: 'collected', messages: [thankYouLink('a', OPENED_AT)] }),
+      ]);
+      const parsed = roundViewSchema.parse(JSON.parse(JSON.stringify(view)));
+      expect(parsed).toEqual(view);
+      expect(parsed.stops[0]?.thankYou?.openedAt).toBeInstanceOf(Date);
+    });
+  });
 });
 
 describe('roundStopStateOf', () => {
@@ -464,6 +558,28 @@ describe('roundStopStateOf', () => {
     expect(roundStopStateOf(round, makeOrder('a', { status: 'waiting', roundId: undefined }))).toBe(
       'left',
     );
+  });
+
+  // "לא נמצא" stores lastMiss { this round, notFound } and unsets roundId.
+  it('is notFound for an order marked not found in this round', () => {
+    const notFoundHere = makeOrder('a', {
+      status: 'waiting',
+      roundId: undefined,
+      lastMiss: { date: '2026-11-05', reason: 'notFound', roundId: ROUND_ID },
+    });
+    expect(roundStopStateOf(round, notFoundHere)).toBe('notFound');
+  });
+
+  // The documented limit: one lastMiss only (spec §4). Still a handled state, never toCollect.
+  it('turns left once another round overwrites the lastMiss', () => {
+    for (const reason of ['notConfirmed', 'askedOtherDate', 'notFound'] as const) {
+      const missedLater = makeOrder('a', {
+        status: 'waiting',
+        roundId: undefined,
+        lastMiss: { date: '2026-11-12', reason, roundId: 'round-3' },
+      });
+      expect(roundStopStateOf(round, missedLater), reason).toBe('left');
+    }
   });
 });
 
@@ -542,5 +658,48 @@ describe('roundViewSchema and roundsResponseSchema', () => {
     expect(roundsResponseSchema.safeParse({ rounds: [], previousPickupBy: '7:30' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('collectStopRequestSchema', () => {
+  /** The `{ field: message }` of a body that must fail, or a failed test if it parses. */
+  function collectErrorsOf(body: unknown): Record<string, string> {
+    const result = collectStopRequestSchema.safeParse(body);
+    if (result.success) throw new Error('expected the body to fail');
+    return formFieldErrors(result.error);
+  }
+
+  it('accepts an empty body, so the api fills in the estimate', () => {
+    expect(collectStopRequestSchema.parse({})).toEqual({});
+  });
+
+  // The 30 minimum is a booking rule: the real count may be lower than the estimate.
+  it('accepts a whole count below the booking minimum, and up to the maximum', () => {
+    for (const bottlesCollected of [12, 1, MAX_BOTTLES]) {
+      expect(collectStopRequestSchema.parse({ bottlesCollected })).toEqual({ bottlesCollected });
+    }
+  });
+
+  it('refuses zero, a negative, a fraction and a string, in Hebrew', () => {
+    for (const bottlesCollected of [0, -1, -3, 2.5, '40', '', null]) {
+      expect(collectErrorsOf({ bottlesCollected }), JSON.stringify(bottlesCollected)).toEqual({
+        bottlesCollected: COLLECT_STOP_ERRORS.bottlesInvalid,
+      });
+    }
+  });
+
+  it(`refuses more than ${MAX_BOTTLES} bottles, in Hebrew`, () => {
+    expect(collectErrorsOf({ bottlesCollected: MAX_BOTTLES + 1 })).toEqual({
+      bottlesCollected: COLLECT_STOP_ERRORS.bottlesTooMany,
+    });
+    expect(COLLECT_STOP_ERRORS.bottlesTooMany).toContain(String(MAX_BOTTLES));
+  });
+
+  // Strict: the status, collectedAt and the like are the api's to set, never the client's.
+  it('refuses an unknown key', () => {
+    expect(collectStopRequestSchema.safeParse({ bottlesCollected: 40, status: 'x' }).success).toBe(
+      false,
+    );
+    expect(collectStopRequestSchema.safeParse({ bottles: 40 }).success).toBe(false);
   });
 });
