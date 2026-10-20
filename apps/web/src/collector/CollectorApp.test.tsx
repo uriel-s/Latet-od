@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { groupWaitingOrders, type CollectorOrdersResponse } from '@bottlerun/shared';
 import type { SessionOutcome } from '../api.ts';
 import { matchRoute, useLocation } from '../router.tsx';
 import { CollectorApp, SESSION_CHECK_FAILED_MESSAGE } from './CollectorApp.tsx';
@@ -8,6 +9,31 @@ import { CollectorApp, SESSION_CHECK_FAILED_MESSAGE } from './CollectorApp.tsx';
 const LOGGED_IN: SessionOutcome = { kind: 'loggedIn', user: { sub: 'collector' } };
 const LOGGED_OUT: SessionOutcome = { kind: 'loggedOut' };
 const FAILED: SessionOutcome = { kind: 'failed' };
+
+/**
+ * The orders tab loads its list with the real fetchWaitingOrders (CollectorShell passes no fake),
+ * so every test here stubs the global fetch: GET /api/collector/orders answers an empty list, and
+ * no test sends a request from jsdom. The session itself is checked by the fake loadSession.
+ */
+function fakeApi(input: string): Promise<Response> {
+  if (input !== '/api/collector/orders')
+    return Promise.resolve(new Response(null, { status: 404 }));
+  const body: CollectorOrdersResponse = { groups: groupWaitingOrders([]) };
+  return Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+}
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', fakeApi);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 /** A promise the test settles by hand, to look at the screen while its request is on its way. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -129,19 +155,23 @@ describe('CollectorApp', () => {
       expect(hrefs).toEqual(['/app/orders', '/app/rounds', '/app/history']);
     });
 
+    // `shows`: a text only that screen has, so the screen itself is on, not just its heading.
     it.each([
-      ['/app', 'הזמנות', 'הזמנות'],
-      ['/app/', 'הזמנות', 'הזמנות'],
-      ['/app/orders', 'הזמנות', 'הזמנות'],
-      ['/app/rounds', 'סבבים', 'סבבים'],
-      ['/app/history', 'היסטוריה', 'היסטוריה'],
-    ])('at %s shows the screen "%s" with the tab "%s" current', async (path, heading, tab) => {
-      renderAt(path, fakeSession(LOGGED_IN).load);
+      ['/app', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
+      ['/app/', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
+      ['/app/orders', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
+      ['/app/rounds', 'סבבים', 'סבבים', 'בקרוב.'],
+      ['/app/history', 'היסטוריה', 'היסטוריה', 'בקרוב.'],
+    ])(
+      'at %s shows the screen "%s" with the tab "%s" current',
+      async (path, heading, tab, shows) => {
+        renderAt(path, fakeSession(LOGGED_IN).load);
 
-      expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeDefined();
-      expect(screen.getByText('בקרוב.')).toBeDefined();
-      expect(currentTabs()).toEqual([tab]);
-    });
+        expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeDefined();
+        expect(screen.getByText(shows)).toBeDefined();
+        expect(currentTabs()).toEqual([tab]);
+      },
+    );
 
     it('shows "page not found" inside the app for an unknown path, with a way to the orders', async () => {
       renderAt('/app/no-such-screen', fakeSession(LOGGED_IN).load);
