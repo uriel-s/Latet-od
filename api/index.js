@@ -20398,6 +20398,19 @@ function pointForAddress(address, lookup = findStreet) {
   return void 0;
 }
 
+// packages/shared/src/route.ts
+var EARTH_RADIUS_METERS = 63710088e-1;
+function toRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+function haversine(from, to) {
+  const deltaLat = toRadians(to.lat - from.lat);
+  const deltaLng = toRadians(to.lng - from.lng);
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(toRadians(from.lat)) * Math.cos(toRadians(to.lat)) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+var straightLineDistance = { distance: haversine };
+
 // packages/shared/src/phone.ts
 var PHONE_ERROR = "\u05DE\u05E1\u05E4\u05E8 \u05E0\u05D9\u05D9\u05D3 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05DC\u05DE\u05E9\u05DC: 050-1234567";
 var PHONE_SEPARATORS = /[-\s\u{2010}-\u{2015}.()\u{200e}\u{200f}\u{202a}-\u{202e}]/gu;
@@ -20837,7 +20850,15 @@ var roundStatusSchema = external_exports.enum(ROUND_STATUSES);
 var ROUND_PHASES = ["confirming", "routed"];
 var roundPhaseSchema = external_exports.enum(ROUND_PHASES);
 var roundStopSchema = external_exports.object({
-  orderId: external_exports.string().min(1)
+  orderId: external_exports.string().min(1),
+  /**
+   * Whether the order had a map point when the route was built. Stops without one were put at
+   * the end by `planRoute` (ADR-0005), and the card shows the "בלי מיקום" tag. Stored, not
+   * re-derived from the order: if Yoel picks a near street later, the stop stays where the route
+   * put it, and the tag still explains why it is there. Required, which is safe: no stored round
+   * has stops yet (they stay empty until the route is built).
+   */
+  hasLocation: external_exports.boolean()
 });
 var roundSchema = external_exports.object({
   id: external_exports.string().min(1),
@@ -20860,7 +20881,10 @@ var roundSchema = external_exports.object({
    * who asked for another date.
    */
   orderIds: external_exports.array(external_exports.string().min(1)),
-  /** The stored route, in driving order. Empty until the route is built (phase `routed`). */
+  /**
+   * The stored route, in driving order: home → these stops → drop-off (the two ends are not
+   * stored here). Empty until the route is built (phase `routed`).
+   */
   stops: external_exports.array(roundStopSchema),
   createdAt: timestampSchema,
   /** Set when Yoel taps "סגור סבב". */
@@ -21342,6 +21366,44 @@ function messagingDepsFromEnv(env) {
   };
 }
 
+// apps/api/src/config.ts
+var DROP_OFF = {
+  address: "\u05E0\u05D7\u05DC \u05E0\u05D7\u05E9\u05D5\u05DF 7, \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9",
+  point: { lat: 31.71402, lng: 34.99325 }
+};
+
+// apps/api/src/route/routeConfig.ts
+var ENV_HINT2 = "Set it in apps/api/.env (see .env.example) or in the hosting env.";
+var ROUTE_START_FORMAT = '"lat,lng" in decimal degrees, latitude first, e.g. "<lat>,<lng>" of a point in Beit Shemesh';
+var MAX_START_DISTANCE_METERS = 3e4;
+var LAT_LNG = /^\s*(?<lat>[+-]?\d+(?:\.\d+)?)\s*,\s*(?<lng>[+-]?\d+(?:\.\d+)?)\s*$/u;
+function parseRouteStart(value) {
+  if (!value) {
+    throw new Error(
+      `ROUTE_START is not set: it is where every route starts (Yoel's home), ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+    );
+  }
+  const groups = LAT_LNG.exec(value)?.groups;
+  if (!groups?.lat || !groups.lng) {
+    throw new Error(`ROUTE_START is not two numbers: use ${ROUTE_START_FORMAT}. ${ENV_HINT2}`);
+  }
+  const point = { lat: Number(groups.lat), lng: Number(groups.lng) };
+  if (Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
+    throw new Error(
+      `ROUTE_START is out of range: the latitude must be within \xB190 and the longitude within \xB1180. Use ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+    );
+  }
+  if (haversine(point, DROP_OFF.point) > MAX_START_DISTANCE_METERS) {
+    throw new Error(
+      `ROUTE_START is more than ${MAX_START_DISTANCE_METERS / 1e3} km from the drop-off point: check that the latitude comes first, ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+    );
+  }
+  return point;
+}
+function routeDepsFromEnv(env) {
+  return { start: parseRouteStart(env.ROUTE_START), distance: straightLineDistance };
+}
+
 // apps/api/src/envDeps.ts
 function depsFromEnv(env, createDbDeps = createMongoDeps) {
   const uri = env.MONGODB_URI;
@@ -21352,7 +21414,8 @@ function depsFromEnv(env, createDbDeps = createMongoDeps) {
   }
   const auth = authDepsFromEnv(env);
   const messaging = messagingDepsFromEnv(env);
-  return { ...createDbDeps(uri), auth, messaging };
+  const route = routeDepsFromEnv(env);
+  return { ...createDbDeps(uri), auth, messaging, route };
 }
 function envErrorMessage(error62) {
   return error62 instanceof Error ? error62.message : "api could not start: invalid env";
