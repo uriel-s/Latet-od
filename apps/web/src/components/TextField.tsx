@@ -35,7 +35,8 @@ export interface TextFieldProps {
   digits?: boolean;
   /**
    * The earliest date a `type="date"` picker offers (`YYYY-MM-DD`): past days are greyed out. A
-   * help for the picker only; typing can still go around it, so the page validates too.
+   * help for the picker only: typing a date by hand goes around it, and nothing else rejects a
+   * past date (the shared schema only checks the shape).
    */
   min?: string;
   /** The `<input>` itself, for a page that moves focus to it or selects its text. */

@@ -1,8 +1,9 @@
-// "ביטול" with a question first, in plain words: a button that opens the question in the page,
-// with "כן, לבטל" and "לא, להשאיר" under it. Shared by Yoel's edit screen (spec §3.5) and the
-// customer's own page (spec §3.3, "שאלת אישור לפני ביטול"). The screen sends the cancel itself and
-// tells this component whether it is on its way and why it failed; this component owns only the
-// question being open and where focus goes.
+// An action with a question first, in plain words: a button that opens the question in the page,
+// with "כן, לבטל" and "לא, להשאיר" under it (other words through `confirmLabel`). Shared by Yoel's
+// edit screen (spec §3.5) and the customer's own page (spec §3.3, "שאלת אישור לפני ביטול"), for
+// "ביטול ההזמנה" and for "לא מתאים הפעם". The screen sends the request itself and tells this
+// component whether it is on its way and why it failed; this component owns only the question
+// being open and where focus goes.
 import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -24,7 +25,7 @@ export interface CancelConfirmProps {
   /** Why the last cancel did not go through, shown inside the question; null for nothing. */
   error: string | null;
   /**
-   * "כן, לבטל" was tapped. Called on every tap, a busy one too: the screen keeps its own guard, so
+   * The confirming answer ("כן, לבטל" or `confirmLabel`) was tapped. Called on every tap, a busy one too: the screen keeps its own guard, so
    * a double tap sends one request.
    */
   onConfirm: () => void;

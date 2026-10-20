@@ -291,7 +291,9 @@ describe('RoundsScreen', () => {
       />,
     );
 
-    expect((await screen.findByText('הסבב נוצר.')).getAttribute('role')).toBe('status');
+    const notice = await screen.findByText('הסבב נוצר.');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(notice);
     expect(window.history.state).toBeNull();
     await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
   });

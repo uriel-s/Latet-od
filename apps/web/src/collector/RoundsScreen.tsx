@@ -23,7 +23,7 @@ import {
   type RoundsOutcome,
 } from '../api.ts';
 import { Link, navigate } from '../router.tsx';
-import { useFlashNotice } from './flashNotice.ts';
+import { FlashNotice } from './FlashNotice.tsx';
 import { bottlesText, ordersText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 import { SendList, type SendListProps } from './SendList.tsx';
@@ -130,8 +130,6 @@ export function RoundsScreen({
   // "אישר בטלפון"): a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // "הסבב נוצר", when the planning screen sent Yoel here.
-  const flash = useFlashNotice();
   // The orders whose "אישר בטלפון" is on its way ("שומר..."), and those whose last one failed.
   // By order id: an order is in one open round at most (spec §4), and only its own round's
   // "עוד לא אישרו" group has the button.
@@ -260,11 +258,7 @@ export function RoundsScreen({
     <>
       <h1>סבבים</h1>
 
-      {flash !== null && (
-        <p className="order-notice" role="status">
-          {flash}
-        </p>
-      )}
+      <FlashNotice />
 
       {notice !== undefined && (
         // tabIndex -1: focusable from code only (the effect above), never a Tab stop.

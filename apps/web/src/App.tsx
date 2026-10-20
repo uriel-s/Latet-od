@@ -14,16 +14,16 @@ import { matchRoute, useLocation, type Route } from './router.tsx';
 /** The whole web app: public form, customer page and collector app, chosen by the URL. */
 export function App() {
   const { pathname } = useLocation();
-  const isFirstRender = useRef(true);
+  const previousPath = useRef(pathname);
 
   // pushState does not do what a page load does: scroll to the top, name the page, tell a screen
-  // reader. So after every path change but the first load, this does it (pageChange.ts).
+  // reader. So after every path change but the first load, this does it (pageChange.ts). The
+  // path is compared, not a "first render" flag: StrictMode runs this effect twice in development
+  // with the refs kept, and a flag would announce the first load the second time.
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    announcePageChange(APP_NAME);
+    if (previousPath.current === pathname) return undefined;
+    previousPath.current = pathname;
+    return announcePageChange(APP_NAME);
   }, [pathname]);
 
   const route = matchRoute(pathname);
