@@ -4,6 +4,7 @@ import {
   groupWaitingOrders,
   type CollectorOrdersResponse,
   type MeResponse,
+  type RoundsResponse,
 } from '@bottlerun/shared';
 import { App } from './App.tsx';
 
@@ -26,20 +27,29 @@ let loggedIn = true;
 /** GET /api/collector/orders: no order is waiting. */
 const NO_WAITING_ORDERS_BODY: CollectorOrdersResponse = { groups: groupWaitingOrders([]) };
 
+/** GET /api/collector/rounds: no round is open, and none was planned before. */
+const NO_OPEN_ROUNDS_BODY: RoundsResponse = { rounds: [] };
+
+/** A 200 whose body is `body` as JSON. */
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
 /**
  * Stands in for the api in every test of this file, so no page sends a real request from jsdom.
- * The collector app's guard calls it (GET /api/auth/me), and so does its orders tab (GET
- * /api/collector/orders); anything else gets a 404.
+ * The collector app's guard calls it (GET /api/auth/me), and so do its orders tab (GET
+ * /api/collector/orders) and its rounds tab (GET /api/collector/rounds); anything else gets a 404.
  */
 function fakeApi(input: string): Promise<Response> {
   requests.push(input);
   if (input === '/api/collector/orders') {
-    return Promise.resolve(
-      new Response(JSON.stringify(NO_WAITING_ORDERS_BODY), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
+    return Promise.resolve(jsonResponse(NO_WAITING_ORDERS_BODY));
+  }
+  if (input === '/api/collector/rounds') {
+    return Promise.resolve(jsonResponse(NO_OPEN_ROUNDS_BODY));
   }
   if (input !== '/api/auth/me') return Promise.resolve(new Response(null, { status: 404 }));
   return Promise.resolve(
@@ -101,7 +111,9 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'סבבים' })).toBeDefined();
     expect(screen.getByRole('navigation', { name: 'ניווט באפליקציה' })).toBeDefined();
-    expect(requests).toEqual(['/api/auth/me']);
+    // The session check, then the rounds tab's own list once it is shown.
+    expect(await screen.findByText('אין סבב פתוח.')).toBeDefined();
+    expect(requests).toEqual(['/api/auth/me', '/api/collector/rounds']);
   });
 
   it('sends a logged-out visitor of /app to the login', async () => {
@@ -121,8 +133,11 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'היסטוריה' })).toBeDefined();
     expect(window.location.pathname).toBe('/app/history');
-    // The session once, and the orders tab's own list once; no tab switch checks the session.
-    await waitFor(() => expect(requests).toEqual(['/api/auth/me', '/api/collector/orders']));
+    // The session once, and each visited tab's own list once (the rounds tab loads its rounds even
+    // though Yoel moved on at once); no tab switch checks the session.
+    await waitFor(() =>
+      expect(requests).toEqual(['/api/auth/me', '/api/collector/orders', '/api/collector/rounds']),
+    );
   });
 
   it('shows "page not found" for an unknown path', () => {
