@@ -205,7 +205,10 @@ export function describeRoundsRepoContract(
         const created = await repo.create(makeNewRound({ orderIds: orderIds() }));
         const patch: RoundPatch = {
           phase: 'routed',
-          stops: [{ orderId: ORDER_B }, { orderId: ORDER_A }],
+          stops: [
+            { orderId: ORDER_B, hasLocation: true },
+            { orderId: ORDER_A, hasLocation: false },
+          ],
         };
 
         const updated = await repo.update(created.id, patch);
@@ -305,7 +308,7 @@ export function describeRoundsRepoContract(
         created.orderIds.push('changed');
         created.createdAt.setTime(0);
         const found = await mustFind(created.id);
-        found.stops.push({ orderId: 'changed' });
+        found.stops.push({ orderId: 'changed', hasLocation: true });
         const [listed] = await repo.list();
         if (listed !== undefined) listed.status = 'closed';
         const latest = await repo.findLatest();
@@ -319,18 +322,18 @@ export function describeRoundsRepoContract(
       it('keeps its own copy of what it was given', async () => {
         const input = makeNewRound({ orderIds: orderIds() });
         const created = await repo.create(input);
-        const stops: RoundStop[] = [{ orderId: ORDER_A }];
+        const stops: RoundStop[] = [{ orderId: ORDER_A, hasLocation: true }];
         const closedAt = minutesLater(60);
         await repo.update(created.id, { stops, closedAt });
 
         input.orderIds.push('changed');
         input.createdAt.setTime(0);
-        stops.push({ orderId: 'changed' });
+        stops.push({ orderId: 'changed', hasLocation: true });
         closedAt.setTime(0);
 
         expect(await mustFind(created.id)).toEqual({
           ...created,
-          stops: [{ orderId: ORDER_A }],
+          stops: [{ orderId: ORDER_A, hasLocation: true }],
           closedAt: minutesLater(60),
         });
       });
