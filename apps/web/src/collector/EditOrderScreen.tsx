@@ -4,7 +4,6 @@
 // and "ביטול ההזמנה" with a confirmation in plain words. The PATCH body is put together in
 // orderEditing.ts; this file is the screen and what happens after each answer.
 import { useEffect, useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import {
   COLLECTOR_ORDER_MESSAGES,
   REGION_LABELS,
@@ -21,6 +20,7 @@ import {
   type CollectorOrderOutcome,
   type CollectorOrderWriteOutcome,
 } from '../api.ts';
+import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { NO_ERRORS, validateOrderDetails } from '../orderForm/formValues.ts';
 import { OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
@@ -49,9 +49,6 @@ export const REGION_HINT = 'רחוב קרוב כבר קובע את האזור. �
 const SAVE_LABEL = 'שמירת השינויים';
 const SAVING_LABEL = 'שומר...';
 const CANCEL_ORDER_LABEL = 'ביטול ההזמנה';
-const CONFIRM_CANCEL_LABEL = 'כן, לבטל';
-const CANCELLING_LABEL = 'מבטל...';
-const KEEP_ORDER_LABEL = 'לא, להשאיר';
 
 /** Props of {@link EditOrderScreen}. */
 export interface EditOrderScreenProps {
@@ -192,7 +189,6 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
   // undefined: the order has no region yet ("בלי אזור"), and Yoel has not picked one.
   const [region, setRegion] = useState<Region | undefined>(order.region);
   const [saving, setSaving] = useState(false);
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   // One request at a time, save or cancel: the states above reach the handlers only after a
@@ -201,11 +197,8 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
   // False once the screen is gone: an answer that comes after Yoel left (the bottom navigation)
   // must not pull him back to the list, or to the login, from the screen he went to.
   const mountedRef = useRef(false);
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-  const confirmQuestionRef = useRef<HTMLParagraphElement>(null);
   const regionGroupName = useId();
   const regionHintId = useId();
-  const confirmQuestionId = useId();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -251,19 +244,6 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
         showErrors(saveErrors(outcome));
         return;
     }
-  }
-
-  /**
-   * Opens or closes the confirmation, and moves focus where the next step is: to the question
-   * when it opens (the button just tapped disappears), back to "ביטול ההזמנה" when it closes.
-   * flushSync renders first, so the element exists, and the focus call stays inside the tap.
-   */
-  function showCancelConfirmation(open: boolean): void {
-    flushSync(() => {
-      setConfirmingCancel(open);
-      setCancelError(null);
-    });
-    (open ? confirmQuestionRef : cancelButtonRef).current?.focus();
   }
 
   async function confirmCancel(): Promise<void> {
@@ -361,57 +341,16 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
         </button>
       </form>
 
-      {/* Outside the form, so Enter in a field never reaches it. A confirmation in the page, not
-          window.confirm: big buttons in Hebrew, and the customer's name in the question. */}
-      <div className="cancel-order">
-        {confirmingCancel ? (
-          <div role="group" aria-labelledby={confirmQuestionId} className="cancel-confirm">
-            <p
-              id={confirmQuestionId}
-              ref={confirmQuestionRef}
-              tabIndex={-1}
-              className="cancel-confirm-question"
-            >
-              לבטל את ההזמנה של {order.contact.name}?
-            </p>
-            {cancelError !== null && (
-              <p className="form-alert" role="alert">
-                {cancelError}
-              </p>
-            )}
-            <div className="cancel-confirm-actions">
-              <button
-                type="button"
-                className="button button-primary"
-                aria-disabled={cancelling ? true : undefined}
-                onClick={() => void confirmCancel()}
-              >
-                {cancelling ? CANCELLING_LABEL : CONFIRM_CANCEL_LABEL}
-              </button>
-              <button
-                type="button"
-                className="button button-secondary"
-                aria-disabled={cancelling ? true : undefined}
-                onClick={() => {
-                  // While the cancel is on its way its answer decides; closing now would hide it.
-                  if (!cancelling) showCancelConfirmation(false);
-                }}
-              >
-                {KEEP_ORDER_LABEL}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            ref={cancelButtonRef}
-            type="button"
-            className="button button-secondary button-block"
-            onClick={() => showCancelConfirmation(true)}
-          >
-            {CANCEL_ORDER_LABEL}
-          </button>
-        )}
-      </div>
+      {/* Outside the form, so Enter in a field never reaches it. The customer's name is in the
+          question, so Yoel sees whose order he is about to cancel. */}
+      <CancelConfirm
+        buttonLabel={CANCEL_ORDER_LABEL}
+        question={`לבטל את ההזמנה של ${order.contact.name}?`}
+        cancelling={cancelling}
+        error={cancelError}
+        onConfirm={() => void confirmCancel()}
+        onOpenChange={() => setCancelError(null)}
+      />
     </>
   );
 }
