@@ -1,11 +1,12 @@
-// The stop actions of Yoel's route screen (spec §3.6 step 2): "אספתי" on one stop of a routed
-// round, which moves its order to `collected` and sends the customer a thank-you (ADR-0003).
+// The stop actions of Yoel's route screen (spec §3.6 step 2) on one stop of a routed round:
+// "אספתי", which moves its order to `collected` and sends the customer a thank-you (ADR-0003), and
+// "לא נמצא", which sends its order back to `waiting` for the next round, with no message.
 // createApp mounts the router built here on /api/collector/rounds, next to the round routes
 // (collectorRoundsRoutes.ts) and like them AFTER requireCollector, so every route needs the login
 // (ADR-0004). The shapes are the shared contract (packages/shared/src/roundsApi.ts); a stop's state
 // is derived from its order (roundStopStateOf), so an action changes only the order, never the
 // round, and the thank-you goes through messages/sendAndLog.ts.
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import {
   buildRoundView,
   canTransition,
@@ -13,11 +14,13 @@ import {
   formFieldErrors,
   roundStopStateOf,
   type CollectStopRequest,
+  type Order,
   type Round,
   type RoundView,
 } from '@bottlerun/shared';
 import type { AppDeps } from '../deps.ts';
 import { orderMessage, sendAndLog } from '../messages/sendAndLog.ts';
+import { leaveRoundPatch } from './leaveRound.ts';
 import {
   sendInvalidCollect,
   sendInvalidTransition,
@@ -55,13 +58,24 @@ import {
  *   (still `pending`, which a routed round does not normally have), or it changed status while the
  *   request was on its way (the customer cancelled at that very moment).
  *
- * The status change goes through `canTransition` and is conditional on `confirmed` (`ifStatus`),
- * so a double tap, or a tap racing the customer's cancel, cannot both win.
+ * POST /:id/stops/:orderId/not-found — "לא נמצא" (spec §3.6 step 2); no body (any body is
+ * ignored). Same 404 / 409 route_not_open checks, in the same order, as "אספתי":
+ * - 200 {@link RoundView}: the order is `waiting` again, with no `roundId` (so it can be planned
+ *   into the next round) and `lastMiss { date: the round's date, reason: 'notFound', roundId }`.
+ *   It stays in the round's `stops`, in state `notFound`, and is in none of the view's groups. No
+ *   message is sent.
+ * - 200 {@link RoundView} again for a stop already not found: nothing is written.
+ * - 409 {@link StopHandledErrorBody}: the stop was collected, cancelled, or it left the round.
+ * - 409 {@link InvalidTransitionErrorBody}: the order changed status while the request was on its
+ *   way (the customer cancelled at that very moment).
+ *
+ * Every status change goes through `canTransition` and is conditional on the status read
+ * (`ifStatus`), so a double tap, or a tap racing the customer's cancel, cannot both win.
  *
  * Known limits:
- * - Nothing is written to the round, so a collect racing "סגור סבב" on another screen is not
- *   atomic with it: the order may end up collected in a round that was just closed. With one
- *   collector on one screen that does not happen.
+ * - Nothing is written to the round, so an action racing "סגור סבב" on another screen is not
+ *   atomic with it: the order may end up collected (or sent back) in a round that was just
+ *   closed. With one collector on one screen that does not happen.
  * - If writing the thank-you's log entry fails after the status was written (a repo error, so a
  *   500), a retry finds the stop collected and answers 200 without a thank-you. It does not try to
  *   "heal" by sending one then on purpose: two racing taps would then both send.
@@ -81,6 +95,40 @@ export function createCollectorStopActionsRouter(
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
 
+  /**
+   * The checks both stop actions make before looking at the stop's state, in this order: the round
+   * exists (404), its route is built and it is open (409), and the order is one of its stops (404).
+   * Answers the refusal itself and returns null then; otherwise the round and the stored order.
+   */
+  async function findRouteStop(
+    roundId: string,
+    orderId: string,
+    res: Response,
+  ): Promise<{ round: Round; order: Order } | null> {
+    // Never validated here: the repo answers null for a malformed id, so it is a 404 too.
+    const round = await rounds.findById(roundId);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return null;
+    }
+    // Only a built route of an open round has stops to act on. Checked before the stop: a
+    // confirming round has no stops yet, and "refresh the screen" is the useful answer then.
+    if (round.status !== 'open' || round.phase !== 'routed') {
+      sendRouteNotOpen(res);
+      return null;
+    }
+    // Only a stop of this route: an order of the round that is no stop (sent back at the build),
+    // another round's order, or a guessed id is not this route's to act on.
+    const order = round.stops.some((stop) => stop.orderId === orderId)
+      ? await orders.findById(orderId)
+      : null;
+    if (order === null) {
+      sendOrderNotFound(res);
+      return null;
+    }
+    return { round, order };
+  }
+
   router.post('/:id/stops/:orderId/collected', async (req, res) => {
     // The body first, like a move: a broken request is a 400 whatever the round. Express 5 leaves
     // `req.body` undefined when no JSON body was sent, which means "the estimate" here (`{}`).
@@ -92,27 +140,9 @@ export function createCollectorStopActionsRouter(
     const request: CollectStopRequest = parsed.data;
     const { id, orderId } = req.params;
 
-    // Never validated here: the repo answers null for a malformed id, so it is a 404 too.
-    const round = await rounds.findById(id);
-    if (round === null) {
-      sendRoundNotFound(res);
-      return;
-    }
-    // Only a built route of an open round has stops to collect. Checked before the stop: a
-    // confirming round has no stops yet, and "refresh the screen" is the useful answer then.
-    if (round.status !== 'open' || round.phase !== 'routed') {
-      sendRouteNotOpen(res);
-      return;
-    }
-    // Only a stop of this route: an order of the round that is no stop (sent back at the build),
-    // another round's order, or a guessed id is not this route's to collect.
-    const order = round.stops.some((stop) => stop.orderId === orderId)
-      ? await orders.findById(orderId)
-      : null;
-    if (order === null) {
-      sendOrderNotFound(res);
-      return;
-    }
+    const found = await findRouteStop(id, orderId, res);
+    if (found === null) return;
+    const { round, order } = found;
 
     const state = roundStopStateOf(round, order);
     if (state === 'collected') {
@@ -166,6 +196,55 @@ export function createCollectorStopActionsRouter(
       orderMessage(collected, 'thankYou', { publicBaseUrl: messaging.publicBaseUrl }),
     );
     // Re-read after the writes, so the collected stop carries the thank-you just logged.
+    sendView(res, await loadRoundView(round));
+  });
+
+  // "לא נמצא" (spec §3.6): nobody and no bottles at the door. The order goes back to `waiting` for
+  // the next round: leaveRoundPatch unsets its `roundId`, which is what makes it plannable again,
+  // and records `lastMiss { this round, notFound }`. The round is not written, so the order stays
+  // in the stored route and its card shows as handled (`notFound`, derived by roundStopStateOf;
+  // the one-lastMiss limit of that is documented there). No message is sent.
+  router.post('/:id/stops/:orderId/not-found', async (req, res) => {
+    // No body: whatever was sent is ignored, like POST /:id/route.
+    const { id, orderId } = req.params;
+    const found = await findRouteStop(id, orderId, res);
+    if (found === null) return;
+    const { round, order } = found;
+
+    const state = roundStopStateOf(round, order);
+    if (state === 'notFound') {
+      // A second tap (or a retry): a success, and nothing is written again.
+      sendView(res, await loadRoundView(round));
+      return;
+    }
+    if (state !== 'toCollect') {
+      // Collected, cancelled, or it left the round: the screen is stale.
+      sendStopHandled(res);
+      return;
+    }
+    // A stop to collect is `confirmed` (or `pending`): both may go back to `waiting` (spec §4).
+    if (!canTransition(order.status, 'waiting')) {
+      sendInvalidTransition(res);
+      return;
+    }
+
+    const left = await orders.update(
+      orderId,
+      leaveRoundPatch(order, round, 'notFound', new Date()),
+      { ifStatus: [order.status] },
+    );
+    if (left === null) {
+      // The order changed between the read and the write. If it is now not found in this round,
+      // this was the double tap that lost the race: answer like a second tap. Anything else (the
+      // customer cancelled) is a refused change.
+      const current = await orders.findById(orderId);
+      if (current !== null && roundStopStateOf(round, current) === 'notFound') {
+        sendView(res, await loadRoundView(round));
+        return;
+      }
+      sendInvalidTransition(res);
+      return;
+    }
     sendView(res, await loadRoundView(round));
   });
 

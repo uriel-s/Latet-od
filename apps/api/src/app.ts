@@ -93,7 +93,7 @@ export function createApp(deps: AppDeps): Express {
   // requests, list the open rounds, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול", and
   // moving a stop of the route up or down (rounds/collectorRoundsRoutes.ts).
   app.use('/api/collector/rounds', createCollectorRoundsRouter(deps));
-  // The stop actions on a routed round's route, on the same path: "אספתי"
+  // The stop actions on a routed round's route, on the same path: "אספתי" and "לא נמצא"
   // (rounds/collectorStopActionsRoutes.ts). Their paths never overlap the router above.
   app.use('/api/collector/rounds', createCollectorStopActionsRouter(deps));
 
