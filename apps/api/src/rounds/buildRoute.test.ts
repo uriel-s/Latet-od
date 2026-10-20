@@ -1,9 +1,16 @@
-// Unit tests of buildRouteStops: fixed streets and a distance table the test controls, so the
-// expected order never depends on the real street list or real geography.
+// Unit tests of buildRouteStops (fixed streets and a distance table the test controls, so the
+// expected order never depends on the real street list or real geography) and of moveStop.
 import { describe, expect, it } from 'vitest';
-import type { DistanceMatrix, GeoPoint, Order, Street, StreetLookup } from '@bottlerun/shared';
+import type {
+  DistanceMatrix,
+  GeoPoint,
+  Order,
+  RoundStop,
+  Street,
+  StreetLookup,
+} from '@bottlerun/shared';
 import { makeNewOrder } from '../orders/makeOrder.ts';
-import { buildRouteStops } from './buildRoute.ts';
+import { buildRouteStops, moveStop } from './buildRoute.ts';
 
 // Made-up points on one line (lng is the position): start at 0, the end at 10.
 const START: GeoPoint = { lat: 31.7, lng: 0 };
@@ -104,5 +111,58 @@ describe('buildRouteStops', () => {
     buildRouteStops(orders, START, END, alongTheLine, lookup);
 
     expect(orders).toStrictEqual(copy);
+  });
+});
+
+describe('moveStop', () => {
+  // A route of four stops; `d` had no location when the route was built.
+  const ROUTE: readonly RoundStop[] = [
+    { orderId: 'a', hasLocation: true },
+    { orderId: 'b', hasLocation: true },
+    { orderId: 'c', hasLocation: true },
+    { orderId: 'd', hasLocation: false },
+  ];
+  const ids = (stops: RoundStop[] | string): string[] | string =>
+    typeof stops === 'string' ? stops : stops.map((stop) => stop.orderId);
+
+  it('swaps a stop moved up with the one before it, leaving the rest in place', () => {
+    expect(ids(moveStop(ROUTE, 'c', 'up'))).toStrictEqual(['a', 'c', 'b', 'd']);
+  });
+
+  it('swaps a stop moved down with the one after it, leaving the rest in place', () => {
+    expect(ids(moveStop(ROUTE, 'b', 'down'))).toStrictEqual(['a', 'c', 'b', 'd']);
+  });
+
+  it('keeps each stop’s stored hasLocation as it moves', () => {
+    expect(moveStop(ROUTE, 'd', 'up')).toStrictEqual([
+      { orderId: 'a', hasLocation: true },
+      { orderId: 'b', hasLocation: true },
+      { orderId: 'd', hasLocation: false },
+      { orderId: 'c', hasLocation: true },
+    ]);
+  });
+
+  it('refuses the first stop moving up and the last moving down with atEdge', () => {
+    expect(moveStop(ROUTE, 'a', 'up')).toBe('atEdge');
+    expect(moveStop(ROUTE, 'd', 'down')).toBe('atEdge');
+  });
+
+  it('refuses both directions for the only stop with atEdge', () => {
+    const single: RoundStop[] = [{ orderId: 'a', hasLocation: true }];
+    expect(moveStop(single, 'a', 'up')).toBe('atEdge');
+    expect(moveStop(single, 'a', 'down')).toBe('atEdge');
+  });
+
+  it('answers notFound for an order that is no stop, also in an empty route', () => {
+    expect(moveStop(ROUTE, 'z', 'up')).toBe('notFound');
+    expect(moveStop([], 'a', 'down')).toBe('notFound');
+  });
+
+  it('never changes the stops it is given', () => {
+    const copy = structuredClone(ROUTE);
+
+    moveStop(ROUTE, 'b', 'up');
+
+    expect(ROUTE).toStrictEqual(copy);
   });
 });

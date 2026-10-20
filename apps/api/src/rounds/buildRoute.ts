@@ -1,13 +1,15 @@
 // The stored route of a round (spec §3.6 "סגור אישורים ובנה מסלול", ADR-0005): the round's
 // confirmed orders, ordered for driving from the start (Yoel's home) to the drop-off, as the
-// `RoundStop`s the round keeps. Pure: collectorRoundsRoutes.ts decides which orders are stops,
-// passes the start, end and distances from its deps, and writes the result once.
+// `RoundStop`s the round keeps; and Yoel's manual move of one stop up or down in it (spec §3.6
+// step 2). Pure: collectorRoundsRoutes.ts decides which orders are stops, passes the start, end
+// and distances from its deps, writes the built route once, and writes each move.
 import {
   findStreet,
   planRoute,
   pointForAddress,
   type DistanceMatrix,
   type GeoPoint,
+  type MoveStopRequest,
   type Order,
   type RoundStop,
   type RouteStopInput,
@@ -48,4 +50,39 @@ export function buildRouteStops(
     orderId: input.order.id,
     hasLocation: input.point !== undefined,
   }));
+}
+
+/** Why {@link moveStop} moved nothing: the order is no stop, or the stop is already at that end. */
+export type MoveStopRefusal = 'notFound' | 'atEdge';
+
+/**
+ * `stops` with the stop of `orderId` swapped with its neighbour: the one before it for `up`, the
+ * one after it for `down` (spec §3.6 step 2: "אפשר להזיז עצירה למעלה או למטה ידנית"). Every other
+ * stop keeps its place, and each stop keeps its stored `hasLocation`: the route is never
+ * recomputed, only Yoel's one change is applied. A new array; `stops` is not changed.
+ *
+ * Any stop may be moved, whatever its state (collected, not found, left the round): the route
+ * screen sorts the handled cards itself (section 6), so the stored order only has to be what Yoel
+ * asked for.
+ *
+ * @returns The moved stops; `'notFound'` when no stop has `orderId`; `'atEdge'` for the first
+ *   stop moving `up` or the last moving `down`.
+ */
+export function moveStop(
+  stops: readonly RoundStop[],
+  orderId: string,
+  direction: MoveStopRequest['direction'],
+): RoundStop[] | MoveStopRefusal {
+  const from = stops.findIndex((stop) => stop.orderId === orderId);
+  if (from === -1) return 'notFound';
+  const to = direction === 'up' ? from - 1 : from + 1;
+  const moving = stops[from];
+  const neighbour = stops[to];
+  // Out of range at either end; `moving` is always there (found above), but the check keeps
+  // noUncheckedIndexedAccess honest.
+  if (moving === undefined || neighbour === undefined) return 'atEdge';
+  const moved = [...stops];
+  moved[to] = moving;
+  moved[from] = neighbour;
+  return moved;
 }

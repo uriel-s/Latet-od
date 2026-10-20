@@ -46,6 +46,7 @@ import type { OrderPatch, OrderUpdateOptions } from '../orders/ordersRepo.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { InMemoryRoundsRepo } from './inMemoryRoundsRepo.ts';
 import { makeNewRound } from './makeRound.ts';
+import type { RoundPatch, RoundUpdateOptions } from './roundsRepo.ts';
 
 const BASE = '/api/collector/rounds';
 /** Shaped like a Mongo ObjectId, but no order or round has it. */
@@ -102,6 +103,28 @@ class RacingOrdersRepo extends InMemoryOrdersRepo {
   }
 }
 
+/**
+ * An in-memory rounds repo where Yoel closes the round at the worst moment: just before a
+ * conditional write (`ifStatus` / `ifPhase`) to an id in {@link closeBeforeConditionalWrite}, the
+ * round is closed ("סגור סבב" from another screen), so the write finds it closed and answers null.
+ */
+class ClosingRoundsRepo extends InMemoryRoundsRepo {
+  /** Ids of the rounds closed just before a conditional write. */
+  readonly closeBeforeConditionalWrite = new Set<string>();
+
+  override async update(
+    id: string,
+    patch: RoundPatch,
+    options?: RoundUpdateOptions,
+  ): Promise<Round | null> {
+    const conditional = options?.ifStatus !== undefined || options?.ifPhase !== undefined;
+    if (conditional && this.closeBeforeConditionalWrite.has(id)) {
+      await super.update(id, { status: 'closed', closedAt: new Date() });
+    }
+    return super.update(id, patch, options);
+  }
+}
+
 let orders: InMemoryOrdersRepo;
 let rounds: InMemoryRoundsRepo;
 /** The FakeSender of the app, unless a test builds its app with another sender. */
@@ -111,13 +134,19 @@ let cookie: string;
 let consoleSpies: MockInstance<typeof console.error>[];
 
 /**
- * Builds the test's app on fresh repos (or on `options.orders`), with its own fake login on the
+ * Builds the test's app on fresh repos (or on `options.orders` / `options.rounds`), with its own fake login on the
  * real clock and a session issued now (valid, and too new to renew). Seed AFTER calling it: it
  * replaces the module's `orders` and `rounds`.
  */
-function buildApp(options: { orders?: InMemoryOrdersRepo; messageSender?: MessageSender } = {}) {
+function buildApp(
+  options: {
+    orders?: InMemoryOrdersRepo;
+    rounds?: InMemoryRoundsRepo;
+    messageSender?: MessageSender;
+  } = {},
+) {
   orders = options.orders ?? new InMemoryOrdersRepo();
-  rounds = new InMemoryRoundsRepo();
+  rounds = options.rounds ?? new InMemoryRoundsRepo();
   sender = new FakeSender();
   const auth = createFakeAuth();
   app = createApp(
@@ -232,6 +261,15 @@ function buildRoute(roundId: string): request.Test {
     .set('Cookie', cookie);
 }
 
+/** Moves the stop of `orderId` in the round's route; `body` left out sends no body at all. */
+function moveStopOf(roundId: string, orderId: string, body?: object): request.Test {
+  const req = request(app)
+    .post(`${BASE}/${roundId}/stops/${orderId}/move`)
+    .set(SAME_ORIGIN_HEADERS)
+    .set('Cookie', cookie);
+  return body === undefined ? req : req.send(body);
+}
+
 /** The customer's "מאשר/ת איסוף" on their own page (no login). */
 function customerConfirm(token: string): request.Test {
   return request(app).post(`/api/o/${token}/confirm`).set(SAME_ORIGIN_HEADERS);
@@ -277,6 +315,12 @@ function expectBetween(date: Date | undefined, before: Date, after: Date): void 
   expect(date?.getTime()).toBeLessThanOrEqual(after.getTime());
 }
 
+/** Expects the 409 of a move on a round with no open route (still confirming, or closed). */
+function expectRouteNotOpen(res: request.Response): void {
+  expect(res.status).toBe(409);
+  expect(res.body).toStrictEqual({ error: 'route_not_open', message: ROUND_MESSAGES.routeNotOpen });
+}
+
 /** Expects the 409 of a plan with ids that cannot be planned, listing exactly `orderIds`. */
 function expectOrdersNotWaiting(res: request.Response, orderIds: string[]): void {
   expect(res.status).toBe(409);
@@ -294,6 +338,68 @@ function expectInvalidTransition(res: request.Response): void {
     error: 'invalid_transition',
     message: COLLECTOR_ORDER_MESSAGES.orderClosed,
   });
+}
+
+// The route tests (building it, moving a stop) seed their rounds with these.
+//
+// Three ramat streets of the real list on the straight line from FAKE_ROUTE_START (31.7, 35.0)
+// to DROP_OFF (נחל נחשון): אהרונסון right by the start, גני שמש halfway, נחל רביבים by the
+// drop-off. So the driving order is that one, whatever order they are planned in.
+const BY_START = 370;
+const HALFWAY = 6502;
+const BY_DROP_OFF = 440;
+
+/** A street of the real list with a point; fails the test if the list no longer has one. */
+function locatedStreet(code: number): Street {
+  const street = findStreet(code);
+  if (street?.lat === undefined) throw new Error('the street has no point in streets.json');
+  return street;
+}
+
+/** An order's address on the listed street `code`. */
+function addressOn(code: number): NewOrder['address'] {
+  const street = locatedStreet(code);
+  return {
+    streetCode: street.code,
+    streetName: street.name,
+    houseNumber: '3',
+    bottlesSpot: 'privateHouse',
+  };
+}
+
+/**
+ * Stores an open, confirming round (unless overridden) and one order in it per entry, in plan
+ * order: `confirmed` or `pending` (with its request sent), on a listed street, or on a
+ * free-text street (no point) when `street` is left out.
+ */
+async function seedRoundWith(
+  entries: { status: 'confirmed' | 'pending'; street?: number }[],
+  roundOverrides: Partial<NewRound> = {},
+): Promise<{ round: Round; inRound: Order[] }> {
+  const round = await seedRound(roundOverrides);
+  const inRound: Order[] = [];
+  for (const { status, street } of entries) {
+    inRound.push(
+      await seed({
+        status,
+        roundId: round.id,
+        messages: [MANUAL_REQUEST],
+        ...(street === undefined ? {} : { address: addressOn(street), region: 'ramat' as const }),
+      }),
+    );
+  }
+  const updated = await rounds.update(round.id, { orderIds: inRound.map((order) => order.id) });
+  if (updated === null) throw new Error('the round just stored is gone');
+  return { round: updated, inRound };
+}
+
+/** A view's stops as stored stops plus their state. */
+function stopsOf(view: RoundView): (RoundStop & { state: string })[] {
+  return view.stops.map((stop) => ({
+    orderId: stop.order.id,
+    hasLocation: stop.hasLocation,
+    state: stop.state,
+  }));
 }
 
 describe('POST /api/collector/rounds: "תכנון סבב" and "שלח בקשות אישור"', () => {
@@ -944,66 +1050,6 @@ describe('POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone: "אי
 });
 
 describe('POST /api/collector/rounds/:id/route: "סגור אישורים ובנה מסלול"', () => {
-  // Three ramat streets of the real list on the straight line from FAKE_ROUTE_START (31.7, 35.0)
-  // to DROP_OFF (נחל נחשון): אהרונסון right by the start, גני שמש halfway, נחל רביבים by the
-  // drop-off. So the driving order is that one, whatever order they are planned in.
-  const BY_START = 370;
-  const HALFWAY = 6502;
-  const BY_DROP_OFF = 440;
-
-  /** A street of the real list with a point; fails the test if the list no longer has one. */
-  function locatedStreet(code: number): Street {
-    const street = findStreet(code);
-    if (street?.lat === undefined) throw new Error('the street has no point in streets.json');
-    return street;
-  }
-
-  /** An order's address on the listed street `code`. */
-  function addressOn(code: number): NewOrder['address'] {
-    const street = locatedStreet(code);
-    return {
-      streetCode: street.code,
-      streetName: street.name,
-      houseNumber: '3',
-      bottlesSpot: 'privateHouse',
-    };
-  }
-
-  /**
-   * Stores an open, confirming round (unless overridden) and one order in it per entry, in plan
-   * order: `confirmed` or `pending` (with its request sent), on a listed street, or on a
-   * free-text street (no point) when `street` is left out.
-   */
-  async function seedRoundWith(
-    entries: { status: 'confirmed' | 'pending'; street?: number }[],
-    roundOverrides: Partial<NewRound> = {},
-  ): Promise<{ round: Round; inRound: Order[] }> {
-    const round = await seedRound(roundOverrides);
-    const inRound: Order[] = [];
-    for (const { status, street } of entries) {
-      inRound.push(
-        await seed({
-          status,
-          roundId: round.id,
-          messages: [MANUAL_REQUEST],
-          ...(street === undefined ? {} : { address: addressOn(street), region: 'ramat' as const }),
-        }),
-      );
-    }
-    const updated = await rounds.update(round.id, { orderIds: inRound.map((order) => order.id) });
-    if (updated === null) throw new Error('the round just stored is gone');
-    return { round: updated, inRound };
-  }
-
-  /** A view's stops as stored stops plus their state. */
-  function stopsOf(view: RoundView): (RoundStop & { state: string })[] {
-    return view.stops.map((stop) => ({
-      orderId: stop.order.id,
-      hasLocation: stop.hasLocation,
-      state: stop.state,
-    }));
-  }
-
   it('sends the unconfirmed back to waiting and stores the confirmed as stops in driving order', async () => {
     // Acceptance: "מי שלא אישר יוצא מהסבב וחוזר לחכות"; the route is home → stops → drop-off.
     const { round, inRound } = await seedRoundWith([
@@ -1287,6 +1333,243 @@ describe('POST /api/collector/rounds/:id/route: "סגור אישורים ובנ�
   });
 });
 
+describe('POST /api/collector/rounds/:id/stops/:orderId/move: moving a stop by hand', () => {
+  /**
+   * A routed round, built through the api: four confirmed stops in driving order (by the start,
+   * halfway, by the drop-off, then a free-text street with no location), and one pending order
+   * that the build sent back as notConfirmed.
+   */
+  async function seedRoutedRound(): Promise<{
+    round: Round;
+    stops: [Order, Order, Order, Order];
+    sentBack: Order;
+  }> {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed' },
+      { status: 'confirmed', street: BY_DROP_OFF },
+      { status: 'pending', street: HALFWAY },
+      { status: 'confirmed', street: HALFWAY },
+      { status: 'confirmed', street: BY_START },
+    ]);
+    const [freeText, byDropOff, sentBack, halfway, byStart] = inRound;
+    if (!freeText || !byDropOff || !sentBack || !halfway || !byStart) throw new Error();
+    expect((await buildRoute(round.id)).status).toBe(200);
+    expect(await storedStopIds(round.id)).toStrictEqual([
+      byStart.id,
+      halfway.id,
+      byDropOff.id,
+      freeText.id,
+    ]);
+    return {
+      round: await storedRound(round.id),
+      stops: [byStart, halfway, byDropOff, freeText],
+      sentBack,
+    };
+  }
+
+  /** The stored stops of the round, as ids. */
+  async function storedStopIds(roundId: string): Promise<string[]> {
+    return (await storedRound(roundId)).stops.map((stop) => stop.orderId);
+  }
+
+  it('moves a stop up: swaps it with the one before it, stores it and answers the view', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const [byStart, halfway, byDropOff, freeText] = stops;
+    const ordersBefore = await orders.list();
+
+    const res = await moveStopOf(round.id, halfway.id, { direction: 'up' });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    const expectedStops: RoundStop[] = [
+      { orderId: halfway.id, hasLocation: true },
+      { orderId: byStart.id, hasLocation: true },
+      { orderId: byDropOff.id, hasLocation: true },
+      { orderId: freeText.id, hasLocation: false },
+    ];
+    // Only the stops changed: still open and routed, and nothing was recomputed.
+    expect(await storedRound(round.id)).toStrictEqual({ ...round, stops: expectedStops });
+    const view = viewOf(res);
+    expect(view.round).toMatchObject({ id: round.id, status: 'open', phase: 'routed' });
+    expect(stopsOf(view)).toStrictEqual(
+      expectedStops.map((stop) => ({ ...stop, state: 'toCollect' })),
+    );
+    // GET /:id answers the same: the move is stored, not only answered.
+    expect((await getRound(round.id)).body).toStrictEqual(res.body);
+    // A move touches no order and sends no message.
+    expect(await orders.list()).toStrictEqual(ordersBefore);
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it('moves a stop down: swaps it with the one after it, each keeping its hasLocation', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const [byStart, halfway, byDropOff, freeText] = stops;
+
+    const res = await moveStopOf(round.id, byDropOff.id, { direction: 'down' });
+
+    expect(res.status).toBe(200);
+    const expectedStops: RoundStop[] = [
+      { orderId: byStart.id, hasLocation: true },
+      { orderId: halfway.id, hasLocation: true },
+      { orderId: freeText.id, hasLocation: false },
+      { orderId: byDropOff.id, hasLocation: true },
+    ];
+    expect((await storedRound(round.id)).stops).toStrictEqual(expectedStops);
+    expect(
+      stopsOf(viewOf(res)).map(({ orderId, hasLocation }) => ({ orderId, hasLocation })),
+    ).toStrictEqual(expectedStops);
+    expect((await getRound(round.id)).body).toStrictEqual(res.body);
+  });
+
+  it('keeps every move: two moves in a row build on each other', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const [byStart, halfway, byDropOff, freeText] = stops;
+
+    expect((await moveStopOf(round.id, freeText.id, { direction: 'up' })).status).toBe(200);
+    expect((await moveStopOf(round.id, freeText.id, { direction: 'up' })).status).toBe(200);
+
+    expect(await storedStopIds(round.id)).toStrictEqual([
+      byStart.id,
+      freeText.id,
+      halfway.id,
+      byDropOff.id,
+    ]);
+  });
+
+  it('moves a stop whatever its state: a collected one too', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const [byStart, halfway] = stops;
+    await orders.update(halfway.id, { status: 'collected', updatedAt: new Date() });
+
+    const res = await moveStopOf(round.id, halfway.id, { direction: 'up' });
+
+    expect(res.status).toBe(200);
+    expect(stopsOf(viewOf(res)).slice(0, 2)).toStrictEqual([
+      { orderId: halfway.id, hasLocation: true, state: 'collected' },
+      { orderId: byStart.id, hasLocation: true, state: 'toCollect' },
+    ]);
+  });
+
+  it.each([
+    { label: 'the first stop up', index: 0, direction: 'up' },
+    { label: 'the last stop down', index: 3, direction: 'down' },
+  ] as const)(
+    'refuses $label with 409 stop_at_edge, changing nothing',
+    async ({ index, direction }) => {
+      const { round, stops } = await seedRoutedRound();
+      const before = await storedState();
+
+      const res = await moveStopOf(round.id, stops[index].id, { direction });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toStrictEqual({ error: 'stop_at_edge', message: ROUND_MESSAGES.stopAtEdge });
+      expect(await storedState()).toStrictEqual(before);
+    },
+  );
+
+  it.each([
+    { label: 'no body', body: undefined },
+    { label: 'an empty object', body: {} },
+    { label: 'another direction', body: { direction: 'left' } },
+    { label: 'a direction in capitals', body: { direction: 'UP' } },
+    { label: 'an unknown key', body: { direction: 'up', to: 0 } },
+    { label: 'an array', body: ['up'] },
+  ])('refuses $label with 400 invalid_move, changing nothing', async ({ body }) => {
+    const { round, stops } = await seedRoutedRound();
+    const before = await storedState();
+
+    const res = await moveStopOf(round.id, stops[1].id, body);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toStrictEqual({ error: 'invalid_move' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('checks the body first: an invalid body is a 400 even for an unknown round', async () => {
+    const res = await moveStopOf(UNKNOWN_ID, UNKNOWN_ID, { direction: 'sideways' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toStrictEqual({ error: 'invalid_move' });
+  });
+
+  it('refuses a round still confirming with 409 route_not_open, changing nothing', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_START },
+      { status: 'confirmed', street: BY_DROP_OFF },
+    ]);
+    const [, second] = inRound;
+    if (!second) throw new Error();
+    const before = await storedState();
+
+    const res = await moveStopOf(round.id, second.id, { direction: 'up' });
+
+    expectRouteNotOpen(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('refuses a closed round with 409 route_not_open, changing nothing', async () => {
+    const { round, stops } = await seedRoutedRound();
+    await rounds.update(round.id, { status: 'closed', closedAt: new Date() });
+    const before = await storedState();
+
+    const res = await moveStopOf(round.id, stops[1].id, { direction: 'up' });
+
+    expectRouteNotOpen(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('refuses with 409 route_not_open when the round was closed between the read and the write', async () => {
+    const closing = new ClosingRoundsRepo();
+    buildApp({ rounds: closing });
+    const { round, stops } = await seedRoutedRound();
+    closing.closeBeforeConditionalWrite.add(round.id);
+
+    const res = await moveStopOf(round.id, stops[1].id, { direction: 'up' });
+
+    expectRouteNotOpen(res);
+    const stored = await storedRound(round.id);
+    expect(stored.status).toBe('closed');
+    // The move did not land on the closed round.
+    expect(stored.stops).toStrictEqual(round.stops);
+  });
+
+  it.each([
+    { label: 'an order sent back at the build as notConfirmed', which: 'sentBack' },
+    { label: 'a stop of another round', which: 'otherRound' },
+    { label: 'an unknown order id', which: 'unknown' },
+  ] as const)('answers $label with 404 order_not_found, changing nothing', async ({ which }) => {
+    const { round, sentBack } = await seedRoutedRound();
+    const other = await seedRoundWith([{ status: 'confirmed', street: BY_START }]);
+    expect((await buildRoute(other.round.id)).status).toBe(200);
+    const orderIds: Record<typeof which, string> = {
+      sentBack: sentBack.id,
+      otherRound: other.inRound[0]?.id ?? '',
+      unknown: UNKNOWN_ID,
+    };
+    const before = await storedState();
+
+    const res = await moveStopOf(round.id, orderIds[which], { direction: 'up' });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'order_not_found' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it.each([
+    { label: 'an unknown id', id: UNKNOWN_ID },
+    { label: 'a malformed id', id: MALFORMED_ID },
+  ])('answers $label with 404 round_not_found, changing nothing', async ({ id }) => {
+    const { stops } = await seedRoutedRound();
+    const before = await storedState();
+
+    const res = await moveStopOf(id, stops[1].id, { direction: 'up' });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'round_not_found' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+});
+
 describe('/api/collector/rounds: the login and the Origin check', () => {
   it.each([
     { label: 'GET /', send: () => request(app).get(BASE) },
@@ -1305,6 +1588,13 @@ describe('/api/collector/rounds: the login and the Origin check', () => {
     {
       label: 'POST /:id/route',
       send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/route`),
+    },
+    {
+      label: 'POST /:id/stops/:orderId/move',
+      send: () =>
+        request(app)
+          .post(`${BASE}/${UNKNOWN_ID}/stops/${UNKNOWN_ID}/move`)
+          .send({ direction: 'up' }),
     },
   ])('answers $label without a session cookie with 401, changing nothing', async ({ send }) => {
     await seed();
@@ -1397,6 +1687,30 @@ describe('/api/collector/rounds: the login and the Origin check', () => {
   });
 });
 
+describe('/api/collector/rounds: the Origin check on a move', () => {
+  it('refuses moving a stop from another site with 403 forbidden_origin, even with the cookie', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_START },
+      { status: 'confirmed', street: BY_DROP_OFF },
+    ]);
+    const [, second] = inRound;
+    if (!second) throw new Error();
+    expect((await buildRoute(round.id)).status).toBe(200);
+    const before = await storedState();
+
+    const res = await request(app)
+      .post(`${BASE}/${round.id}/stops/${second.id}/move`)
+      .set('Host', TEST_HOST)
+      .set('Origin', 'https://evil.example')
+      .set('Cookie', cookie)
+      .send({ direction: 'up' });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+});
+
 describe('/api/collector/rounds: logs', () => {
   it('log nothing, whatever the answer', async () => {
     const customer = await seed({
@@ -1417,13 +1731,21 @@ describe('/api/collector/rounds: logs', () => {
       (await confirmByPhone(round.id, customer.id)).status,
       (await confirmByPhone(round.id, customer.id)).status,
       (await confirmByPhone(round.id, UNKNOWN_ID)).status,
-      // The customer (a free-text street, so no location) is a stop; the other order leaves.
+      (await confirmByPhone(round.id, other.id)).status,
+      // Both are free-text streets (no location), so the stops are in plan order: customer, other.
       (await buildRoute(round.id)).status,
       (await buildRoute(round.id)).status,
       (await buildRoute(UNKNOWN_ID)).status,
+      (await moveStopOf(round.id, other.id, { direction: 'up' })).status,
+      (await moveStopOf(round.id, other.id, { direction: 'up' })).status,
+      (await moveStopOf(round.id, customer.id, { direction: 'left' })).status,
+      (await moveStopOf(round.id, UNKNOWN_ID, { direction: 'up' })).status,
+      (await moveStopOf(UNKNOWN_ID, customer.id, { direction: 'up' })).status,
     ];
 
-    expect(statuses).toStrictEqual([201, 409, 400, 200, 200, 404, 200, 200, 404, 200, 409, 404]);
+    expect(statuses).toStrictEqual([
+      201, 409, 400, 200, 200, 404, 200, 200, 404, 200, 200, 409, 404, 200, 409, 400, 404, 404,
+    ]);
     // The customer's name and phone did go out, in the message to them: it is the log (console)
     // that must never see them, nor anything else from a body.
     expect(sender.sent[0]).toMatchObject({ to: PHONE_E164, vars: { name: NAME } });
