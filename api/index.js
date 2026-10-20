@@ -20996,7 +20996,10 @@ var roundSchema = external_exports.object({
    */
   stops: external_exports.array(roundStopSchema),
   createdAt: timestampSchema,
-  /** Set when Yoel taps "סגור סבב". */
+  /**
+   * Set when Yoel taps "סגור סבב" (POST /api/collector/rounds/:id/close), once: closing a round
+   * already closed keeps its first `closedAt`.
+   */
   closedAt: timestampSchema.optional()
 });
 
@@ -22485,6 +22488,54 @@ function moveStop(stops, orderId, direction) {
   return moved;
 }
 
+// apps/api/src/rounds/closeRound.ts
+var CLOSE_ATTEMPTS = 3;
+var SWEEP_ATTEMPTS = 2;
+async function closeRound(deps, roundId) {
+  const { orders } = deps;
+  const now = /* @__PURE__ */ new Date();
+  const round = await closeRoundRecord(deps, roundId, now);
+  if (round === null) return null;
+  for (const order of await orders.list({ ids: round.orderIds })) {
+    await sendBackUnhandled(deps, round, order, now);
+  }
+  return buildRoundView(round, await orders.list({ ids: round.orderIds }));
+}
+async function closeRoundRecord({ rounds }, roundId, now) {
+  for (let attempt = 0; attempt < CLOSE_ATTEMPTS; attempt += 1) {
+    const round = await rounds.findById(roundId);
+    if (round === null) return null;
+    if (round.status === "closed") return round;
+    const closed = await rounds.update(
+      round.id,
+      { status: "closed", closedAt: new Date(now) },
+      { ifStatus: ["open"], ifPhase: [round.phase] }
+    );
+    if (closed !== null) return closed;
+  }
+  throw new Error("the round kept changing while it was being closed");
+}
+async function sendBackUnhandled({ orders }, round, order, now) {
+  let current = order;
+  for (let attempt = 0; attempt < SWEEP_ATTEMPTS; attempt += 1) {
+    if (current === null || !isUnhandledIn(round, current)) return;
+    if (!canTransition(current.status, "waiting")) return;
+    const left = await orders.update(
+      current.id,
+      leaveRoundPatch(current, round, missReasonAtClose(round, current), now),
+      { ifStatus: [current.status] }
+    );
+    if (left !== null) return;
+    current = await orders.findById(current.id);
+  }
+}
+function isUnhandledIn(round, order) {
+  return order.roundId === round.id && (order.status === "pending" || order.status === "confirmed");
+}
+function missReasonAtClose(round, order) {
+  return round.phase === "routed" && order.status === "confirmed" ? "notReached" : "notConfirmed";
+}
+
 // apps/api/src/rounds/roundResponses.ts
 function sendView(res, view, status = 200) {
   res.status(status).json(view);
@@ -22692,6 +22743,14 @@ function createCollectorRoundsRouter(deps) {
       return;
     }
     sendView(res, await loadRoundView(updated));
+  });
+  router.post("/:id/close", async (req, res) => {
+    const view = await closeRound({ orders, rounds }, req.params.id);
+    if (view === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    sendView(res, view);
   });
   async function sendBackUnconfirmed(order, round, now) {
     if (!canTransition(order.status, "waiting")) return order;
