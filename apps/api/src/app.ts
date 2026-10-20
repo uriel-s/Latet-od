@@ -1,15 +1,16 @@
 // The Express app, built by createApp(deps), with no listen() call: the public booking form, the
 // customer's own order page (/api/o/:token, reached by its token, no login), the collector's
-// login, and Yoel's screens under /api/collector (orders, rounds). Two thin entry points wrap it
-// (ADR-0002): src/server.ts for local runs and plain Node hosting, and the Vercel function entry
-// vercelEntry.ts (at the repo root, through vercelHandler.ts). Both pass the real dependencies, built
-// from env by depsFromEnv (envDeps.ts); tests pass fakes (fakeDeps.ts).
+// login, and Yoel's screens under /api/collector (orders, rounds, the monthly history). Two thin
+// entry points wrap it (ADR-0002): src/server.ts for local runs and plain Node hosting, and the
+// Vercel function entry vercelEntry.ts (at the repo root, through vercelHandler.ts). Both pass the
+// real dependencies, built from env by depsFromEnv (envDeps.ts); tests pass fakes (fakeDeps.ts).
 import express, { type Express } from 'express';
 import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
 import { createAuthRouter } from './auth/authRoutes.ts';
 import { requireCollector } from './auth/requireCollector.ts';
 import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
+import { createCollectorHistoryRouter } from './history/collectorHistoryRoutes.ts';
 import { createCollectorOrdersRouter } from './orders/collectorOrdersRoutes.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
 import { createCustomerOrderRouter } from './orders/customerOrderRoutes.ts';
@@ -96,6 +97,10 @@ export function createApp(deps: AppDeps): Express {
   // The stop actions on a routed round's route, on the same path: "אספתי" and "לא נמצא"
   // (rounds/collectorStopActionsRoutes.ts). Their paths never overlap the router above.
   app.use('/api/collector/rounds', createCollectorStopActionsRouter(deps));
+
+  // The "היסטוריה" screen (spec §3.7): one month in Israel time, its totals (bottles and addresses
+  // collected, their value) and the orders closed in it (history/collectorHistoryRoutes.ts).
+  app.use('/api/collector/history', createCollectorHistoryRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
   // a mistyped customer link holds the token.

@@ -145,6 +145,9 @@ import {
   ObjectId as ObjectId2
 } from "mongodb";
 
+// packages/shared/src/config.ts
+var BOTTLE_VALUE_AGOROT = 20;
+
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -20567,6 +20570,90 @@ function formatDayMonth(value) {
   }
   return `${day}/${month}`;
 }
+var calendarMonthSchema = external_exports.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "expected YYYY-MM");
+var wallClockInAppZone = new Intl.DateTimeFormat("en-GB", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23"
+});
+function wallClockPartsInAppZone(instant) {
+  const parts = wallClockInAppZone.formatToParts(instant);
+  const read = (type) => {
+    const value = parts.find((part) => part.type === type)?.value;
+    if (value === void 0) throw new RangeError(`dates: Intl gave no ${type}`);
+    return Number(value);
+  };
+  return {
+    year: read("year"),
+    month: read("month"),
+    day: read("day"),
+    hour: read("hour"),
+    minute: read("minute"),
+    second: read("second")
+  };
+}
+function utcMillisOf(year, month, day, hour = 0, minute = 0, second = 0) {
+  const date5 = /* @__PURE__ */ new Date(0);
+  date5.setUTCFullYear(year, month - 1, day);
+  date5.setUTCHours(hour, minute, second, 0);
+  return date5.getTime();
+}
+function appZoneOffsetMs(instant) {
+  const wall = wallClockPartsInAppZone(instant);
+  const wallAsUtc = utcMillisOf(
+    wall.year,
+    wall.month,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second
+  );
+  return wallAsUtc - Math.floor(instant.getTime() / 1e3) * 1e3;
+}
+function parseCalendarMonth(month, caller) {
+  if (!calendarMonthSchema.safeParse(month).success) {
+    throw new RangeError(`${caller}: expected a calendar month YYYY-MM`);
+  }
+  return { year: Number(month.slice(0, 4)), month: Number(month.slice(5, 7)) };
+}
+function formatCalendarMonth(year, month) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+}
+function monthRangeInAppZone(month) {
+  const start = parseCalendarMonth(month, "monthRangeInAppZone");
+  const next = parseCalendarMonth(addMonths(month, 1), "monthRangeInAppZone");
+  return {
+    from: appZoneMidnightOnFirst(start.year, start.month),
+    to: appZoneMidnightOnFirst(next.year, next.month)
+  };
+}
+function appZoneMidnightOnFirst(year, month) {
+  const wallMidnight = utcMillisOf(year, month, 1);
+  let instant = wallMidnight - appZoneOffsetMs(new Date(wallMidnight));
+  instant = wallMidnight - appZoneOffsetMs(new Date(instant));
+  const check2 = wallClockPartsInAppZone(new Date(instant));
+  if (check2.year !== year || check2.month !== month || check2.day !== 1 || check2.hour !== 0 || check2.minute !== 0 || check2.second !== 0) {
+    throw new RangeError("monthRangeInAppZone: midnight on the 1st does not exist in the zone");
+  }
+  return new Date(instant);
+}
+function addMonths(month, delta) {
+  const start = parseCalendarMonth(month, "addMonths");
+  if (!Number.isInteger(delta)) {
+    throw new RangeError("addMonths: expected a whole number of months");
+  }
+  const monthIndex = start.year * 12 + (start.month - 1) + delta;
+  const year = Math.floor(monthIndex / 12);
+  if (year < 0 || year > 9999) {
+    throw new RangeError("addMonths: the result is outside the years 0000-9999");
+  }
+  return formatCalendarMonth(year, monthIndex - year * 12 + 1);
+}
 
 // packages/shared/src/orderStatus.ts
 var ORDER_STATUSES = [
@@ -21220,6 +21307,60 @@ var CUSTOMER_ORDER_MESSAGES = {
   orderNotFound: "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05D9\u05D9\u05EA\u05DB\u05DF \u05E9\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05D4\u05D5\u05E2\u05EA\u05E7 \u05E2\u05D3 \u05D4\u05E1\u05D5\u05E3."
 };
 
+// packages/shared/src/historyApi.ts
+var HISTORY_ORDER_STATUSES = ["collected", "cancelled"];
+function closedAtOf(order) {
+  if (order.status === "collected") return order.collectedAt;
+  if (order.status === "cancelled") return order.cancelledAt;
+  return void 0;
+}
+var historyOrderSchema = external_exports.object({
+  id: orderSchema.shape.id,
+  status: external_exports.enum(HISTORY_ORDER_STATUSES),
+  contact: orderSchema.shape.contact.pick({ name: true }),
+  address: addressSchema.pick({ streetName: true, houseNumber: true }),
+  bottlesEstimated: orderSchema.shape.bottlesEstimated,
+  /** What Yoel recorded on "אספתי"; absent on a cancelled order. */
+  bottlesCollected: orderSchema.shape.bottlesCollected,
+  closedAt: timestampSchema
+});
+var historyTotalsSchema = external_exports.object({
+  bottlesCollected: external_exports.int().nonnegative(),
+  addressesCollected: external_exports.int().nonnegative(),
+  valueAgorot: external_exports.int().nonnegative()
+});
+var historyResponseSchema = external_exports.object({
+  month: calendarMonthSchema,
+  totals: historyTotalsSchema,
+  orders: external_exports.array(historyOrderSchema)
+});
+var historyQuerySchema = external_exports.object({
+  month: calendarMonthSchema
+});
+function buildHistory(month, closedOrders) {
+  const closed = closedOrders.flatMap((order) => {
+    const closedAt = closedAtOf(order);
+    return closedAt === void 0 ? [] : [{ order, closedAt }];
+  });
+  const collected = closed.filter(({ order }) => order.status === "collected");
+  const bottlesCollected = collected.reduce(
+    (total, { order }) => total + (order.bottlesCollected ?? 0),
+    0
+  );
+  const newestFirst = [...closed].sort((a, b) => b.closedAt.getTime() - a.closedAt.getTime());
+  return {
+    month,
+    totals: {
+      bottlesCollected,
+      addressesCollected: collected.length,
+      valueAgorot: bottlesCollected * BOTTLE_VALUE_AGOROT
+    },
+    orders: newestFirst.map(
+      ({ order, closedAt }) => historyOrderSchema.parse({ ...order, closedAt })
+    )
+  };
+}
+
 // apps/api/src/db/objectId.ts
 import { ObjectId } from "mongodb";
 var OBJECT_ID_HEX_PATTERN = /^[0-9a-f]{24}$/;
@@ -21345,6 +21486,13 @@ function buildListFilter(filter) {
   if (filter.roundId !== void 0) query.roundId = { $eq: filter.roundId };
   if (filter.ids !== void 0) {
     query._id = { $in: filter.ids.flatMap((id) => parseOrderId(id) ?? []) };
+  }
+  if (filter.closedBetween !== void 0) {
+    const range = { $gte: filter.closedBetween.from, $lt: filter.closedBetween.to };
+    query.$or = [
+      { status: "collected", collectedAt: range },
+      { status: "cancelled", cancelledAt: range }
+    ];
   }
   return query;
 }
@@ -21905,8 +22053,28 @@ function stackFrames(stack) {
   return frames === void 0 || frames.length === 0 ? void 0 : frames.join("\n");
 }
 
-// apps/api/src/orders/collectorOrdersRoutes.ts
+// apps/api/src/history/collectorHistoryRoutes.ts
 import { Router as Router2 } from "express";
+function createCollectorHistoryRouter(deps) {
+  const { orders } = deps;
+  const router = Router2();
+  router.get("/", async (req, res) => {
+    const parsed = historyQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      const body2 = { error: "invalid_month" };
+      res.status(400).json(body2);
+      return;
+    }
+    const { month } = parsed.data;
+    const closed = await orders.list({ closedBetween: monthRangeInAppZone(month) });
+    const body = buildHistory(month, closed);
+    res.json(body);
+  });
+  return router;
+}
+
+// apps/api/src/orders/collectorOrdersRoutes.ts
+import { Router as Router3 } from "express";
 
 // apps/api/src/orders/newOrderFromForm.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
@@ -21982,7 +22150,7 @@ function applyPatch(stored, patch) {
 // apps/api/src/orders/collectorOrdersRoutes.ts
 function createCollectorOrdersRouter(deps) {
   const { orders } = deps;
-  const router = Router2();
+  const router = Router3();
   router.get("/", async (_req, res) => {
     const waiting = await orders.list({ statuses: ["waiting"] });
     const body = {
@@ -22206,7 +22374,7 @@ function isHoneypotFilled(body) {
 }
 
 // apps/api/src/orders/customerOrderRoutes.ts
-import { Router as Router3 } from "express";
+import { Router as Router4 } from "express";
 
 // apps/api/src/rounds/leaveRound.ts
 function leaveRoundPatch(order, round, reason, now) {
@@ -22268,7 +22436,7 @@ var CONFIRMATIONS_CLOSED = {
 };
 function createCustomerOrderRouter(deps) {
   const { orders, rounds } = deps;
-  const router = Router3();
+  const router = Router4();
   router.use((_req, res, next) => {
     res.set("Cache-Control", "no-store");
     next();
@@ -22398,7 +22566,7 @@ function sendNotFound2(res) {
 }
 
 // apps/api/src/rounds/collectorRoundsRoutes.ts
-import { Router as Router4 } from "express";
+import { Router as Router5 } from "express";
 
 // apps/api/src/messages/sendAndLog.ts
 function orderPageUrl(publicBaseUrl, token) {
@@ -22574,7 +22742,7 @@ function sendInvalidCollect(res, fieldErrors) {
 // apps/api/src/rounds/collectorRoundsRoutes.ts
 function createCollectorRoundsRouter(deps) {
   const { orders, rounds, messaging, route } = deps;
-  const router = Router4();
+  const router = Router5();
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
@@ -22819,10 +22987,10 @@ function sendStopAtEdge(res) {
 }
 
 // apps/api/src/rounds/collectorStopActionsRoutes.ts
-import { Router as Router5 } from "express";
+import { Router as Router6 } from "express";
 function createCollectorStopActionsRouter(deps) {
   const { orders, rounds, messaging } = deps;
-  const router = Router5();
+  const router = Router6();
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
@@ -22977,6 +23145,7 @@ function createApp(deps) {
   app.use("/api/collector/orders", createCollectorOrdersRouter(deps));
   app.use("/api/collector/rounds", createCollectorRoundsRouter(deps));
   app.use("/api/collector/rounds", createCollectorStopActionsRouter(deps));
+  app.use("/api/collector/history", createCollectorHistoryRouter(deps));
   app.use("/api", (_req, res) => {
     const body = { error: "not_found" };
     res.status(404).json(body);
