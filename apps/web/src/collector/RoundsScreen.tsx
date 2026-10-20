@@ -2,12 +2,13 @@
 // Step 1 "אישורים" (phase `confirming`): who confirmed, who did not yet, and who asked for another
 // date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בטלפון"
 // for a customer who confirmed in a call or in a WhatsApp reply; and "סגור אישורים ובנה מסלול",
-// asked as a question first. Step 2 "מסלול" (phase `routed`): the route's stops (RouteScreen.tsx).
-// GET /api/collector/rounds sends the rounds already grouped and routed (the shared
-// buildRoundView), so this screen only shows them, and after each action it swaps in the round as
-// the api answers it.
+// asked as a question first (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
+// stops (RouteScreen.tsx). In both steps the round ends with "סגור סבב" (CloseRoundConfirm.tsx),
+// after which it leaves the tab. GET /api/collector/rounds sends the open rounds already grouped
+// and routed (the shared buildRoundView), so this screen only shows them, and after each action it
+// swaps in the round as the api answers it. The question components own only their open state and
+// focus; this screen sends every request and keeps its double-tap guards.
 import { useEffect, useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import {
   REGION_LABELS,
   ROUND_GROUP_KEYS,
@@ -22,13 +23,21 @@ import {
 } from '@bottlerun/shared';
 import {
   buildRoute as apiBuildRoute,
+  closeRound as apiCloseRound,
   confirmOrderByPhone,
   fetchRounds,
   type BuildRouteOutcome,
+  type CloseRoundOutcome,
   type ConfirmByPhoneOutcome,
   type RoundsOutcome,
 } from '../api.ts';
 import { Link, navigate } from '../router.tsx';
+import {
+  BuildRouteConfirm,
+  buildRouteQuestion,
+  type BuildRouteControl,
+} from './BuildRouteConfirm.tsx';
+import { CloseRoundConfirm, type CloseRoundConfirmProps } from './CloseRoundConfirm.tsx';
 import { bottlesText, ordersText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 import { RouteScreen, type RouteScreenProps } from './RouteScreen.tsx';
@@ -58,30 +67,11 @@ export const ORDER_LEFT_ROUND_MESSAGE = 'ההזמנה כבר לא בסבב.';
 const CONFIRM_LABEL = 'אישר בטלפון';
 const CONFIRMING_LABEL = 'שומר...';
 
-/** The button at the end of a round in step 1 (spec §3.6). */
-export const BUILD_ROUTE_LABEL = 'סגור אישורים ובנה מסלול';
-const BUILD_ROUTE_YES_LABEL = 'כן, לבנות מסלול';
-const BUILD_ROUTE_NO_LABEL = 'לא, עוד לא';
-const BUILDING_ROUTE_LABEL = 'בונה מסלול...';
-
-/** Inside the question when the build got no usable answer; "כן" can be tapped again. */
-export const BUILD_ROUTE_FAILED_MESSAGE = 'לא הצלחנו לבנות את המסלול. נא לנסות שוב.';
-
 /**
- * The question "סגור אישורים ובנה מסלול" asks first, in plain words: building the route closes the
- * confirmations, and whoever has not confirmed leaves the round and waits for the next one (spec
- * §3.6, ת5), so Yoel hears how many that is before he decides. `pendingCount` is the size of the
- * "עוד לא אישרו" group.
- *
- * With none pending it says no one goes back to waiting: true also for a round whose customers
- * all asked for another date (rare, and building it is harmless: an empty route).
+ * Under the heading once "סגור סבב" answered: the round left the tab (only open rounds are listed),
+ * so the section Yoel tapped is gone and the focus comes here.
  */
-export function buildRouteQuestion(pendingCount: number): string {
-  const question = 'לסגור את האישורים ולבנות מסלול?';
-  if (pendingCount === 0) return `אף לקוח לא יחזור לחכות. ${question}`;
-  if (pendingCount === 1) return `לקוח אחד שעוד לא אישר יחזור לחכות לסבב הבא. ${question}`;
-  return `${pendingCount} לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. ${question}`;
-}
+export const ROUND_CLOSED_MESSAGE = 'הסבב נסגר.';
 
 /** Where "תכנון סבב" leads when no round is open (PlanRoundScreen.tsx). */
 const PLAN_ROUND_PATH = '/app/orders/plan';
@@ -127,6 +117,8 @@ export interface RoundsScreenProps {
    * "סגור אישורים ובנה מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
    */
   buildRoute?: (roundId: string) => Promise<BuildRouteOutcome>;
+  /** "סגור סבב", in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
+  closeRound?: (roundId: string) => Promise<CloseRoundOutcome>;
   /** A route's arrows; undefined keeps RouteScreen's own default (the api). */
   moveStop?: RouteScreenProps['moveStop'];
   /** A stop's "אספתי"; undefined keeps RouteScreen's own default (the api). */
@@ -173,6 +165,12 @@ interface Notice {
  * out-of-date screen as above: a notice and a reload. Each stop action of the route is sent by
  * RouteScreen; this screen swaps in its answer, or shows its notice and reloads.
  *
+ * "סגור סבב" takes the closed round off the screen and says {@link ROUND_CLOSED_MESSAGE} under the
+ * heading, with the focus there, since the section Yoel tapped is gone. No reload: the answer is
+ * the truth already, and a closed round is never listed again. A reload that set out before the
+ * close answered may still list the round, so every loaded answer leaves out the rounds closed
+ * here. With none left, "אין סבב פתוח." and the planning link show, as after any load.
+ *
  * The reload on coming back is skipped while a quantity field of "אספתי" is open: a reload must
  * never wipe what Yoel types (a failed load replaces the rounds, and a stop handled elsewhere
  * closes its field). The usual trip away mid-route is to Waze or the dialler; once the field is
@@ -182,6 +180,7 @@ export function RoundsScreen({
   loadRounds = fetchRounds,
   confirmByPhone = confirmOrderByPhone,
   buildRoute = apiBuildRoute,
+  closeRound = apiCloseRound,
   moveStop,
   collectStop,
   markStopNotFound,
@@ -205,6 +204,14 @@ export function RoundsScreen({
   const [buildingIds, setBuildingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [buildFailedIds, setBuildFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const buildingIdsRef = useRef(new Set<string>());
+  // The same three for "סגור סבב", by round id.
+  const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [closeFailedIds, setCloseFailedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const closingIdsRef = useRef(new Set<string>());
+  // The rounds closed on this screen. A load answer is filtered through it: a reload that started
+  // before the close answered still lists the round, and must not bring it back. A closed round
+  // never opens again, so the set only grows while the screen is shown.
+  const closedRoundIdsRef = useRef(new Set<string>());
   // The routed rounds with a quantity field open (RouteScreen's onTypingChange). A ref, not state:
   // only the reload-on-return callback reads it, and a change must not re-render the screen.
   const typingRoundIdsRef = useRef(new Set<string>());
@@ -230,7 +237,10 @@ export function RoundsScreen({
       if (!current) return;
       switch (outcome.kind) {
         case 'loaded':
-          setState({ kind: 'loaded', rounds: outcome.rounds });
+          setState({
+            kind: 'loaded',
+            rounds: outcome.rounds.filter((view) => !closedRoundIdsRef.current.has(view.round.id)),
+          });
           return;
         case 'loggedOut':
           // Replace, not push: "back" from the login must not land on a screen that needs it.
@@ -296,6 +306,16 @@ export function RoundsScreen({
               shown.round.id === view.round.id ? view : shown,
             ),
           }
+        : previous,
+    );
+  }
+
+  /** Takes round `roundId` off the screen, now and from every later load (closedRoundIdsRef). */
+  function removeRound(roundId: string): void {
+    closedRoundIdsRef.current.add(roundId);
+    setState((previous) =>
+      previous.kind === 'loaded'
+        ? { kind: 'loaded', rounds: previous.rounds.filter((shown) => shown.round.id !== roundId) }
         : previous,
     );
   }
@@ -385,6 +405,44 @@ export function RoundsScreen({
     }
   }
 
+  /** Yoel's "כן, לסגור את הסבב" for round `roundId`, in either phase (spec §3.6, "סגור סבב"). */
+  async function closeRoundOf(roundId: string): Promise<void> {
+    if (closingIdsRef.current.has(roundId)) return;
+    closingIdsRef.current.add(roundId);
+    setClosingIds((previous) => withId(previous, roundId, true));
+    setCloseFailedIds((previous) => withId(previous, roundId, false));
+    setNotice(undefined);
+
+    let outcome: CloseRoundOutcome;
+    try {
+      outcome = await closeRound(roundId);
+    } catch {
+      // closeRound never rejects, but a rejection must not leave the question on "סוגר סבב...".
+      outcome = { kind: 'failed' };
+    }
+    closingIdsRef.current.delete(roundId);
+    if (!mountedRef.current) return;
+    setClosingIds((previous) => withId(previous, roundId, false));
+
+    switch (outcome.kind) {
+      case 'closed':
+        // Off the tab, which lists open rounds only; the notice takes the focus of the section.
+        removeRound(roundId);
+        setNotice({ message: ROUND_CLOSED_MESSAGE });
+        return;
+      case 'notFound':
+        showStale(ROUND_MESSAGES.roundNotFound);
+        return;
+      case 'loggedOut':
+        navigate('/login', { replace: true });
+        return;
+      case 'failed':
+        // Nothing to reload: the request may not have arrived. The question stays open for "כן".
+        setCloseFailedIds((previous) => withId(previous, roundId, true));
+        return;
+    }
+  }
+
   return (
     <>
       <h1>סבבים</h1>
@@ -437,6 +495,13 @@ export function RoundsScreen({
               onOpenChange: () =>
                 setBuildFailedIds((previous) => withId(previous, view.round.id, false)),
             }}
+            closeRound={{
+              closing: closingIds.has(view.round.id),
+              failed: closeFailedIds.has(view.round.id),
+              onClose: () => void closeRoundOf(view.round.id),
+              onOpenChange: () =>
+                setCloseFailedIds((previous) => withId(previous, view.round.id, false)),
+            }}
             route={{
               // A saved stop action: its answer replaces the round, and an old notice has served.
               onView: (next) => {
@@ -456,17 +521,11 @@ export function RoundsScreen({
   );
 }
 
-/** What a step-1 section needs for "סגור אישורים ובנה מסלול"; the screen sends the request. */
-interface SectionBuildRoute {
-  /** True while the build is on its way ("בונה מסלול..."). */
-  building: boolean;
-  /** True when the last build got no usable answer. */
-  failed: boolean;
-  /** "כן, לבנות מסלול". Called on every tap, a busy one too: the screen keeps its own guard. */
-  onBuild: () => void;
-  /** The question opened or closed; the screen clears an old error here. */
-  onOpenChange: () => void;
-}
+/**
+ * What a section needs for "סגור סבב", in either phase: everything of {@link CloseRoundConfirm}
+ * but the view and markOpened, which the section has already. The screen sends the request.
+ */
+type SectionCloseRound = Omit<CloseRoundConfirmProps, 'view' | 'markOpened'>;
 
 /** What a step-2 section passes to its {@link RouteScreen}: everything but the view. */
 type SectionRoute = Omit<RouteScreenProps, 'view'>;
@@ -481,9 +540,11 @@ interface RoundSectionProps {
   failedIds: ReadonlySet<string>;
   onConfirm: (orderId: string) => void;
   /** Step 1's last button. */
-  buildRoute: SectionBuildRoute;
+  buildRoute: BuildRouteControl;
   /** Step 2's route. */
   route: SectionRoute;
+  /** "סגור סבב", the last button of either step. */
+  closeRound: SectionCloseRound;
 }
 
 /**
@@ -500,9 +561,15 @@ interface RoundSectionProps {
  * counts (one live summary per round, not two), and the groups and the "שלח" list are gone:
  * whoever did not confirm left the round when it was built.
  *
+ * Both steps end with "סגור סבב" (CloseRoundConfirm.tsx), after the step's own last part (the
+ * build question, or the route), so the quieter way out of the round comes after the way on. It
+ * is rendered outside the step's branch, at one place in the section, so an open question (and the
+ * thank-you rows Yoel tapped in it) stays mounted across every swapped view, a build included.
+ *
  * When a build swaps step 1 for step 2, the question Yoel answered is gone, so the focus goes to
  * the round's heading, at the top of its route. Only when the focus was lost that way (on the page
- * itself, or still in this section): a notice the screen focused meanwhile keeps it.
+ * itself, or still in this section): a notice the screen focused meanwhile keeps it, and so does
+ * an open "סגור סבב" question, which stays where it was.
  */
 function RoundSection({
   view,
@@ -512,10 +579,12 @@ function RoundSection({
   onConfirm,
   buildRoute,
   route,
+  closeRound,
 }: RoundSectionProps) {
   const headingId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const closeRef = useRef<HTMLDivElement>(null);
   const { round, groups, sendList } = view;
   const routed = round.phase === 'routed';
   const wasRoutedRef = useRef(routed);
@@ -526,7 +595,10 @@ function RoundSection({
     if (!becameRouted) return;
     const active = document.activeElement;
     const focusLost =
-      active === null || active === document.body || sectionRef.current?.contains(active) === true;
+      active === null ||
+      active === document.body ||
+      (sectionRef.current?.contains(active) === true &&
+        closeRef.current?.contains(active) !== true);
     if (focusLost) headingRef.current?.focus();
   }, [routed]);
 
@@ -581,95 +653,13 @@ function RoundSection({
           />
         </>
       )}
+
+      {/* Outside the branch above, so it stays mounted when the build swaps the step. The wrapper
+          lets the effect above tell focus in this question from focus lost. */}
+      <div ref={closeRef}>
+        <CloseRoundConfirm view={view} markOpened={markOpened} {...closeRound} />
+      </div>
     </section>
-  );
-}
-
-/** Props of {@link BuildRouteConfirm}. */
-interface BuildRouteConfirmProps extends SectionBuildRoute {
-  /** From {@link buildRouteQuestion}; it also names the group of the two answers. */
-  question: string;
-}
-
-/**
- * "סגור אישורים ובנה מסלול" and, once tapped, its question in its place, with
- * "כן, לבנות מסלול" and "לא, עוד לא" under it. Built like components/CancelConfirm.tsx, whose
- * words are the cancel's: a question in the page, not `window.confirm`, and the focus where the
- * next step is (to the question when it opens, back to the button on "לא, עוד לא"). The question
- * stays open after a failed build, with the error inside it, for another "כן".
- */
-function BuildRouteConfirm({
-  question,
-  building,
-  failed,
-  onBuild,
-  onOpenChange,
-}: BuildRouteConfirmProps) {
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const questionRef = useRef<HTMLParagraphElement>(null);
-  const questionId = useId();
-
-  /**
-   * Opens or closes the question. flushSync renders first, so the element to focus exists, and
-   * the focus call stays inside the tap.
-   */
-  function showQuestion(next: boolean): void {
-    flushSync(() => {
-      setOpen(next);
-      onOpenChange();
-    });
-    (next ? questionRef : buttonRef).current?.focus();
-  }
-
-  return (
-    <div className="round-build-route">
-      {open ? (
-        <div role="group" aria-labelledby={questionId} className="cancel-confirm">
-          {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}
-          <p id={questionId} ref={questionRef} tabIndex={-1} className="cancel-confirm-question">
-            {question}
-          </p>
-          {failed && (
-            <p className="form-alert" role="alert">
-              {BUILD_ROUTE_FAILED_MESSAGE}
-            </p>
-          )}
-          <div className="cancel-confirm-actions">
-            {/* aria-disabled, not disabled, while building: the button keeps focus and is
-                announced as unavailable; the screen's guard ignores the extra taps. */}
-            <button
-              type="button"
-              className="button button-primary"
-              aria-disabled={building ? true : undefined}
-              onClick={onBuild}
-            >
-              {building ? BUILDING_ROUTE_LABEL : BUILD_ROUTE_YES_LABEL}
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              aria-disabled={building ? true : undefined}
-              onClick={() => {
-                // While the build is on its way its answer decides; closing now would hide it.
-                if (!building) showQuestion(false);
-              }}
-            >
-              {BUILD_ROUTE_NO_LABEL}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          ref={buttonRef}
-          type="button"
-          className="button button-primary button-block"
-          onClick={() => showQuestion(true)}
-        >
-          {BUILD_ROUTE_LABEL}
-        </button>
-      )}
-    </div>
   );
 }
 

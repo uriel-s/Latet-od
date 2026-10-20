@@ -11,21 +11,28 @@ import {
 } from '@bottlerun/shared';
 import type {
   BuildRouteOutcome,
+  CloseRoundOutcome,
   ConfirmByPhoneOutcome,
   MarkMessageOpenedOutcome,
   RoundsOutcome,
   StopActionOutcome,
 } from '../api.ts';
+import { BUILD_ROUTE_FAILED_MESSAGE, BUILD_ROUTE_LABEL } from './BuildRouteConfirm.tsx';
 import {
-  BUILD_ROUTE_FAILED_MESSAGE,
-  BUILD_ROUTE_LABEL,
+  CLOSE_ROUND_FAILED_MESSAGE,
+  CLOSE_ROUND_LABEL,
+  CLOSE_ROUND_YES_LABEL,
+  CLOSING_ROUND_LABEL,
+  UNSENT_THANK_YOUS_TITLE,
+} from './CloseRoundConfirm.tsx';
+import {
   CONFIRM_FAILED_MESSAGE,
   NO_OPEN_ROUND_TEXT,
   ORDER_LEFT_ROUND_MESSAGE,
   ROUNDS_LOAD_FAILED_MESSAGE,
+  ROUND_CLOSED_MESSAGE,
   RoundsScreen,
   SEND_LIST_HINT,
-  buildRouteQuestion,
   confirmationSummary,
   type RoundsScreenProps,
 } from './RoundsScreen.tsx';
@@ -266,6 +273,27 @@ function fakeBuildRoute(...answers: Answer<BuildRouteOutcome>[]): {
   return { buildRoute, calls };
 }
 
+/** `view` as "סגור סבב" answers it: the round closed, its view otherwise as it was. */
+function closedView(view: RoundView): RoundView {
+  return {
+    ...view,
+    round: { ...view.round, status: 'closed', closedAt: new Date('2026-11-19T15:00:00Z') },
+  };
+}
+
+/** A fake `closeRound` that records its calls (answers round r1 closed, from {@link VIEW}). */
+function fakeCloseRound(...answers: Answer<CloseRoundOutcome>[]): {
+  closeRound: NonNullable<RoundsScreenProps['closeRound']>;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const closeRound = (roundId: string) => {
+    calls.push(roundId);
+    return answerOf(answers, calls.length - 1, { kind: 'closed' as const, view: closedView(VIEW) });
+  };
+  return { closeRound, calls };
+}
+
 /** One call of a stop action fake. */
 interface StopCall {
   action: 'move' | 'collect' | 'notFound';
@@ -319,6 +347,7 @@ function renderScreen(
       loadRounds={props.loadRounds ?? fakeLoad().load}
       confirmByPhone={props.confirmByPhone ?? fakeConfirm().confirmByPhone}
       buildRoute={props.buildRoute ?? fakeBuildRoute().buildRoute}
+      closeRound={props.closeRound ?? fakeCloseRound().closeRound}
       moveStop={props.moveStop ?? stopActions.moveStop}
       collectStop={props.collectStop ?? stopActions.collectStop}
       markStopNotFound={props.markStopNotFound ?? stopActions.markStopNotFound}
@@ -385,24 +414,6 @@ describe('confirmationSummary', () => {
       { key: 'confirmed' as const, orders: [DANA, YOSSI] },
     ];
     expect(confirmationSummary(groups)).toBe('אישרו: 2 · עוד לא אישרו: 1 · ביקשו מועד אחר: 0');
-  });
-});
-
-describe('buildRouteQuestion', () => {
-  it('says how many customers who did not confirm go back to waiting', () => {
-    expect(buildRouteQuestion(3)).toBe(
-      '3 לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. לסגור את האישורים ולבנות מסלול?',
-    );
-  });
-
-  it('says it of one customer in the singular', () => {
-    expect(buildRouteQuestion(1)).toBe(
-      'לקוח אחד שעוד לא אישר יחזור לחכות לסבב הבא. לסגור את האישורים ולבנות מסלול?',
-    );
-  });
-
-  it('says no one goes back to waiting when no one is pending', () => {
-    expect(buildRouteQuestion(0)).toBe('אף לקוח לא יחזור לחכות. לסגור את האישורים ולבנות מסלול?');
   });
 });
 
@@ -1026,6 +1037,240 @@ describe('RoundsScreen', () => {
       await settle();
 
       expect(rounds.calls()).toBe(2);
+    });
+  });
+
+  describe('"סגור סבב"', () => {
+    const LOADED_ROUTED: RoundsOutcome = { kind: 'loaded', rounds: [ROUTED] };
+    /** Round r2, in the other half of the city, still confirming. */
+    const SECOND = makeView({
+      round: { id: 'r2', date: '2026-11-26', region: 'old' },
+      pending: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
+    });
+
+    /** Taps "סגור סבב" in round r1 and returns the question that opens in its place. */
+    function openCloseQuestion(): HTMLElement {
+      fireEvent.click(within(roundRegion()).getByRole('button', { name: CLOSE_ROUND_LABEL }));
+      return screen.getByRole('group', { name: /לסגור את הסבב\?$/ });
+    }
+
+    /** True when `later` comes after `earlier` in the page. */
+    function follows(earlier: Node, later: Node): boolean {
+      return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    }
+
+    it('ends a round in step 1, after "סגור אישורים ובנה מסלול"', async () => {
+      const round = await renderLoaded();
+
+      const close = within(round).getByRole('button', { name: 'סגור סבב' });
+      expect(follows(within(round).getByRole('button', { name: BUILD_ROUTE_LABEL }), close)).toBe(
+        true,
+      );
+    });
+
+    it('ends a routed round, after its route', async () => {
+      const round = await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
+
+      const close = within(round).getByRole('button', { name: CLOSE_ROUND_LABEL });
+      expect(follows(within(round).getByRole('list', { name: 'עצירות המסלול' }), close)).toBe(true);
+    });
+
+    it('asks first, and closes once for a double tap, "סוגר סבב..." meanwhile', async () => {
+      const answer = deferred<CloseRoundOutcome>();
+      const { closeRound, calls } = fakeCloseRound(answer.promise);
+      await renderLoaded({ closeRound });
+
+      const question = openCloseQuestion();
+      expect(within(question).getByText('3 לקוחות יחזרו לחכות לסבב הבא. לסגור את הסבב?')).toBe(
+        document.activeElement,
+      );
+      expect(calls).toEqual([]);
+
+      fireEvent.click(within(question).getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+      const busy = within(question).getByRole('button', { name: CLOSING_ROUND_LABEL });
+      expect(busy.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(busy);
+
+      expect(calls).toEqual(['r1']);
+      answer.resolve({ kind: 'closed', view: closedView(VIEW) });
+      await waitFor(() => expect(screen.queryByRole('region')).toBeNull());
+      expect(calls).toEqual(['r1']);
+    });
+
+    it('takes the closed round off the tab, says so with the focus there, and does not reload', async () => {
+      const rounds = fakeLoad({ kind: 'loaded', rounds: [VIEW, SECOND] });
+      const { closeRound } = fakeCloseRound();
+      renderScreen({ loadRounds: rounds.load, closeRound });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+      openCloseQuestion();
+
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+
+      const notice = await screen.findByRole('alert');
+      expect(notice.textContent).toBe(ROUND_CLOSED_MESSAGE);
+      expect(ROUND_CLOSED_MESSAGE).toBe('הסבב נסגר.');
+      expect(document.activeElement).toBe(notice);
+      expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
+      // The other round stays as it was.
+      const other = screen.getByRole('region', { name: 'בית שמש · 26/11' });
+      expect(within(other).getByRole('button', { name: 'אישר בטלפון, שרה גולן' })).toBeDefined();
+      expect(screen.queryByText(NO_OPEN_ROUND_TEXT)).toBeNull();
+      await settle();
+      expect(rounds.calls()).toBe(1);
+    });
+
+    it('says no round is open, with the planning link, when the last one closed', async () => {
+      await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
+      openCloseQuestion();
+
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+
+      expect(await screen.findByText(NO_OPEN_ROUND_TEXT)).toBeDefined();
+      expect(screen.getByRole('alert').textContent).toBe(ROUND_CLOSED_MESSAGE);
+      expect(screen.getByRole('link', { name: 'תכנון סבב' })).toBeDefined();
+      expect(screen.queryByRole('region')).toBeNull();
+    });
+
+    it('does not bring the round back when a reload that set out before the close answers', async () => {
+      const reload = deferred<RoundsOutcome>();
+      const rounds = fakeLoad({ kind: 'loaded', rounds: [VIEW, SECOND] }, reload.promise);
+      renderScreen({ loadRounds: rounds.load, closeRound: fakeCloseRound().closeRound });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+      returnToApp();
+      expect(rounds.calls()).toBe(2);
+      openCloseQuestion();
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+      await screen.findByText(ROUND_CLOSED_MESSAGE);
+
+      // Its answer was read before the close: round r1 is still in it.
+      reload.resolve({ kind: 'loaded', rounds: [VIEW, SECOND] });
+      await settle();
+
+      expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
+      expect(screen.getByRole('region', { name: 'בית שמש · 26/11' })).toBeDefined();
+      // Nor does the next reload.
+      returnToApp();
+      await settle();
+      expect(rounds.calls()).toBe(3);
+      expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
+    });
+
+    it('says the close failed inside the question, which stays open for another "כן"', async () => {
+      const { closeRound, calls } = fakeCloseRound({ kind: 'failed' }, 'rejects', {
+        kind: 'closed',
+        view: closedView(VIEW),
+      });
+      const rounds = fakeLoad(LOADED);
+      await renderLoaded({ loadRounds: rounds.load, closeRound });
+      const question = openCloseQuestion();
+
+      fireEvent.click(within(question).getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+
+      expect((await within(question).findByRole('alert')).textContent).toBe(
+        CLOSE_ROUND_FAILED_MESSAGE,
+      );
+      const yes = within(question).getByRole('button', { name: CLOSE_ROUND_YES_LABEL });
+      expect(yes.getAttribute('aria-disabled')).toBeNull();
+      expect(roundRegion()).toBeDefined();
+      expect(rounds.calls()).toBe(1);
+
+      // A rejection is a failed close like any other.
+      fireEvent.click(yes);
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }).getAttribute('aria-disabled'),
+        ).toBeNull(),
+      );
+      expect(within(screen.getByRole('group')).getByRole('alert').textContent).toBe(
+        CLOSE_ROUND_FAILED_MESSAGE,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+
+      expect(await screen.findByText(NO_OPEN_ROUND_TEXT)).toBeDefined();
+      expect(calls).toEqual(['r1', 'r1', 'r1']);
+    });
+
+    it('says the round is gone and loads the rounds again', async () => {
+      const rounds = fakeLoad(LOADED, NO_ROUNDS);
+      await renderLoaded({
+        loadRounds: rounds.load,
+        closeRound: fakeCloseRound({ kind: 'notFound' }).closeRound,
+      });
+      openCloseQuestion();
+
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+
+      const notice = await screen.findByRole('alert');
+      expect(notice.textContent).toBe(ROUND_MESSAGES.roundNotFound);
+      expect(document.activeElement).toBe(notice);
+      expect(await screen.findByText(NO_OPEN_ROUND_TEXT)).toBeDefined();
+      expect(rounds.calls()).toBe(2);
+    });
+
+    it('goes to the login, replacing the screen, when the session ended', async () => {
+      await renderLoaded({ closeRound: fakeCloseRound(LOGGED_OUT).closeRound });
+      const historyLength = window.history.length;
+      openCloseQuestion();
+
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+
+      await waitFor(() => expect(window.location.pathname).toBe('/login'));
+      expect(window.history.length).toBe(historyLength);
+    });
+
+    it('stays where Yoel went when the answer comes after he left the tab', async () => {
+      const answer = deferred<CloseRoundOutcome>();
+      const { unmount } = renderScreen({
+        loadRounds: fakeLoad(LOADED).load,
+        closeRound: fakeCloseRound(answer.promise).closeRound,
+      });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+      openCloseQuestion();
+      fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL }));
+      unmount();
+      window.history.replaceState(null, '', '/app/orders');
+
+      answer.resolve(LOGGED_OUT);
+      await settle();
+
+      expect(window.location.pathname).toBe('/app/orders');
+    });
+
+    it('lists the unsent thank-yous of a routed round above its question', async () => {
+      const view = routedView([collected(stopOf(DANA)), stopOf(MOSHE)]);
+      await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
+
+      const question = openCloseQuestion();
+
+      const title = within(question).getByRole('heading', { name: UNSENT_THANK_YOUS_TITLE });
+      expect(document.activeElement).toBe(title);
+      expect(
+        within(question).getByRole('link', { name: 'שלח לדנה כהן' }).getAttribute('href'),
+      ).toBe('https://wa.me/972501234567?text=thanks');
+      expect(
+        within(question).getByText(
+          'לקוח אחד שעוד לא אספנו ממנו יחזור לחכות לסבב הבא. לסגור את הסבב?',
+        ),
+      ).toBeDefined();
+    });
+
+    it('keeps an open question, and its focus, when a reload shows the round routed', async () => {
+      const reload = deferred<RoundsOutcome>();
+      await renderLoaded({ loadRounds: fakeLoad(LOADED, reload.promise).load });
+      openCloseQuestion();
+      returnToApp();
+
+      // The route was built on another phone meanwhile.
+      reload.resolve(LOADED_ROUTED);
+
+      await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
+      const question = screen.getByRole('group', { name: /לסגור את הסבב\?$/ });
+      // The question now counts the route's stops, and keeps the focus Yoel left there.
+      const text = within(question).getByText(
+        '2 לקוחות שעוד לא אספנו מהם יחזרו לחכות לסבב הבא. לסגור את הסבב?',
+      );
+      expect(document.activeElement).toBe(text);
     });
   });
 
