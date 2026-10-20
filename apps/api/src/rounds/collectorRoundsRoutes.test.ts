@@ -1,4 +1,4 @@
-// Acceptance tests of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 step 1 "אישורים")
+// Acceptance tests of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 "אישורים" and building the route)
 // through supertest against createApp(fakes): no listen(), no port, no database, no network. Each
 // test keeps the in-memory repos and the FakeSender it passes in, seeds them with makeNewOrder /
 // makeNewRound, and reads back what the routes stored and sent. Requests carry a valid session
@@ -10,11 +10,14 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import {
   COLLECTOR_ORDER_MESSAGES,
+  CUSTOMER_ORDER_MESSAGES,
   MAX_ROUND_ORDERS,
   ROUND_MESSAGES,
   ROUND_PLAN_ERRORS,
+  findStreet,
   roundViewSchema,
   roundsResponseSchema,
+  toCollectorOrder,
   type MessageLogEntry,
   type NewOrder,
   type NewRound,
@@ -22,7 +25,9 @@ import {
   type PlanRoundRequest,
   type Round,
   type RoundGroupKey,
+  type RoundStop,
   type RoundView,
+  type Street,
 } from '@bottlerun/shared';
 import { createApp } from '../app.ts';
 import { loggedInCookie } from '../auth/testSession.ts';
@@ -68,23 +73,30 @@ const MANUAL_REQUEST: MessageLogEntry = {
 };
 
 /**
- * An in-memory orders repo where the customer cancels an order at the worst moment: just before a
- * route's conditional write (`ifStatus`) to an id in {@link cancelBeforeConditionalWrite}, the
- * order is cancelled, so the write finds another status and answers null. Unconditional writes
- * (the message log) go through as usual.
+ * An in-memory orders repo where the customer acts at the worst moment: just before a route's
+ * conditional write (`ifStatus`) to an id in {@link cancelBeforeConditionalWrite}, the order is
+ * cancelled; to an id in {@link confirmBeforeConditionalWrite}, it is confirmed (the customer's
+ * "מאשר/ת איסוף"). Either way the write finds another status and answers null. Unconditional
+ * writes (the message log) go through as usual.
  */
 class RacingOrdersRepo extends InMemoryOrdersRepo {
   /** Ids of the orders cancelled just before a conditional write. */
   readonly cancelBeforeConditionalWrite = new Set<string>();
+  /** Ids of the orders confirmed just before a conditional write. */
+  readonly confirmBeforeConditionalWrite = new Set<string>();
 
   override async update(
     id: string,
     patch: OrderPatch,
     options?: OrderUpdateOptions,
   ): Promise<Order | null> {
-    if (options?.ifStatus !== undefined && this.cancelBeforeConditionalWrite.has(id)) {
+    if (options?.ifStatus !== undefined) {
       const now = new Date();
-      await super.update(id, { status: 'cancelled', cancelledAt: now, updatedAt: now });
+      if (this.cancelBeforeConditionalWrite.has(id)) {
+        await super.update(id, { status: 'cancelled', cancelledAt: now, updatedAt: now });
+      } else if (this.confirmBeforeConditionalWrite.has(id)) {
+        await super.update(id, { status: 'confirmed', updatedAt: now });
+      }
     }
     return super.update(id, patch, options);
   }
@@ -210,6 +222,28 @@ function confirmByPhone(roundId: string, orderId: string): request.Test {
     .post(`${BASE}/${roundId}/orders/${orderId}/confirm-by-phone`)
     .set(SAME_ORIGIN_HEADERS)
     .set('Cookie', cookie);
+}
+
+/** "סגור אישורים ובנה מסלול": no body. */
+function buildRoute(roundId: string): request.Test {
+  return request(app)
+    .post(`${BASE}/${roundId}/route`)
+    .set(SAME_ORIGIN_HEADERS)
+    .set('Cookie', cookie);
+}
+
+/** The customer's "מאשר/ת איסוף" on their own page (no login). */
+function customerConfirm(token: string): request.Test {
+  return request(app).post(`/api/o/${token}/confirm`).set(SAME_ORIGIN_HEADERS);
+}
+
+/** Expects the 409 of a round whose confirmations are closed (routed or closed). */
+function expectConfirmationsClosed(res: request.Response): void {
+  expect(res.status).toBe(409);
+  expect(res.body).toStrictEqual({
+    error: 'confirmations_closed',
+    message: ROUND_MESSAGES.confirmationsClosed,
+  });
 }
 
 /** The round's view in a 200/201 body, checked against the shared contract the web app parses. */
@@ -909,6 +943,350 @@ describe('POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone: "אי
   });
 });
 
+describe('POST /api/collector/rounds/:id/route: "סגור אישורים ובנה מסלול"', () => {
+  // Three ramat streets of the real list on the straight line from FAKE_ROUTE_START (31.7, 35.0)
+  // to DROP_OFF (נחל נחשון): אהרונסון right by the start, גני שמש halfway, נחל רביבים by the
+  // drop-off. So the driving order is that one, whatever order they are planned in.
+  const BY_START = 370;
+  const HALFWAY = 6502;
+  const BY_DROP_OFF = 440;
+
+  /** A street of the real list with a point; fails the test if the list no longer has one. */
+  function locatedStreet(code: number): Street {
+    const street = findStreet(code);
+    if (street?.lat === undefined) throw new Error('the street has no point in streets.json');
+    return street;
+  }
+
+  /** An order's address on the listed street `code`. */
+  function addressOn(code: number): NewOrder['address'] {
+    const street = locatedStreet(code);
+    return {
+      streetCode: street.code,
+      streetName: street.name,
+      houseNumber: '3',
+      bottlesSpot: 'privateHouse',
+    };
+  }
+
+  /**
+   * Stores an open, confirming round (unless overridden) and one order in it per entry, in plan
+   * order: `confirmed` or `pending` (with its request sent), on a listed street, or on a
+   * free-text street (no point) when `street` is left out.
+   */
+  async function seedRoundWith(
+    entries: { status: 'confirmed' | 'pending'; street?: number }[],
+    roundOverrides: Partial<NewRound> = {},
+  ): Promise<{ round: Round; inRound: Order[] }> {
+    const round = await seedRound(roundOverrides);
+    const inRound: Order[] = [];
+    for (const { status, street } of entries) {
+      inRound.push(
+        await seed({
+          status,
+          roundId: round.id,
+          messages: [MANUAL_REQUEST],
+          ...(street === undefined ? {} : { address: addressOn(street), region: 'ramat' as const }),
+        }),
+      );
+    }
+    const updated = await rounds.update(round.id, { orderIds: inRound.map((order) => order.id) });
+    if (updated === null) throw new Error('the round just stored is gone');
+    return { round: updated, inRound };
+  }
+
+  /** A view's stops as stored stops plus their state. */
+  function stopsOf(view: RoundView): (RoundStop & { state: string })[] {
+    return view.stops.map((stop) => ({
+      orderId: stop.order.id,
+      hasLocation: stop.hasLocation,
+      state: stop.state,
+    }));
+  }
+
+  it('sends the unconfirmed back to waiting and stores the confirmed as stops in driving order', async () => {
+    // Acceptance: "מי שלא אישר יוצא מהסבב וחוזר לחכות"; the route is home → stops → drop-off.
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_DROP_OFF },
+      { status: 'pending', street: HALFWAY },
+      { status: 'confirmed', street: BY_START },
+      { status: 'confirmed', street: HALFWAY },
+      { status: 'pending' },
+    ]);
+    const [byDropOff, pendingA, byStart, halfway, pendingB] = inRound;
+    if (!byDropOff || !pendingA || !byStart || !halfway || !pendingB) throw new Error();
+    // Someone who asked for another date earlier: out of the round already, and left as it is.
+    const askedOther = await seed({
+      lastMiss: { date: round.date, reason: 'askedOtherDate', roundId: round.id },
+    });
+    await rounds.update(round.id, { orderIds: [...round.orderIds, askedOther.id] });
+    const before = new Date();
+
+    // Any body is ignored.
+    const res = await buildRoute(round.id).send({ stops: [] });
+
+    const after = new Date();
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+
+    const expectedStops: RoundStop[] = [
+      { orderId: byStart.id, hasLocation: true },
+      { orderId: halfway.id, hasLocation: true },
+      { orderId: byDropOff.id, hasLocation: true },
+    ];
+    const stored = await storedRound(round.id);
+    expect(stored).toMatchObject({ status: 'open', phase: 'routed', stops: expectedStops });
+    expect(stored.orderIds).toStrictEqual([...round.orderIds, askedOther.id]);
+
+    const view = viewOf(res);
+    expect(view.round).toMatchObject({ id: round.id, status: 'open', phase: 'routed' });
+    expect(stopsOf(view)).toStrictEqual(
+      expectedStops.map((stop) => ({ ...stop, state: 'toCollect' })),
+    );
+    // Each stop carries its order as Yoel's screens get it.
+    expect(view.stops[0]?.order).toStrictEqual(toCollectorOrder(byStart));
+    // The unconfirmed are in no group now; the confirmed stay in "אישרו", in plan order.
+    expect(groupsOf(view)).toStrictEqual({
+      confirmed: [byDropOff.id, byStart.id, halfway.id],
+      pending: [],
+      otherDate: [askedOther.id],
+    });
+    expect(view.sendList).toStrictEqual([]);
+
+    for (const pending of [pendingA, pendingB]) {
+      const left = await storedOrder(pending.id);
+      expect(left.status).toBe('waiting');
+      expect(left).not.toHaveProperty('roundId');
+      expect(left.lastMiss).toStrictEqual({
+        date: round.date,
+        reason: 'notConfirmed',
+        roundId: round.id,
+      });
+      expectBetween(left.updatedAt, before, after);
+    }
+    for (const untouched of [byDropOff, byStart, halfway, askedOther]) {
+      expect(await storedOrder(untouched.id)).toStrictEqual(untouched);
+    }
+    // Building the route sends no message.
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it('puts a confirmed order with no location last, with hasLocation false', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed' },
+      { status: 'confirmed', street: BY_DROP_OFF },
+      { status: 'confirmed', street: BY_START },
+    ]);
+    const [freeText, byDropOff, byStart] = inRound;
+    if (!freeText || !byDropOff || !byStart) throw new Error();
+
+    const res = await buildRoute(round.id);
+
+    expect(res.status).toBe(200);
+    const expectedStops: RoundStop[] = [
+      { orderId: byStart.id, hasLocation: true },
+      { orderId: byDropOff.id, hasLocation: true },
+      { orderId: freeText.id, hasLocation: false },
+    ];
+    expect((await storedRound(round.id)).stops).toStrictEqual(expectedStops);
+    expect(stopsOf(viewOf(res))).toStrictEqual(
+      expectedStops.map((stop) => ({ ...stop, state: 'toCollect' })),
+    );
+  });
+
+  it('refuses a second build with 409 confirmations_closed and recomputes nothing', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_START },
+      { status: 'confirmed', street: BY_DROP_OFF },
+    ]);
+    const [first, second] = inRound;
+    if (!first || !second) throw new Error();
+    expect((await buildRoute(round.id)).status).toBe(200);
+    // Yoel moved a stop by hand: a second build must not undo it.
+    const moved: RoundStop[] = [
+      { orderId: second.id, hasLocation: true },
+      { orderId: first.id, hasLocation: true },
+    ];
+    await rounds.update(round.id, { stops: moved });
+    const before = await storedState();
+
+    const res = await buildRoute(round.id);
+
+    expectConfirmationsClosed(res);
+    expect(await storedState()).toStrictEqual(before);
+    expect((await storedRound(round.id)).stops).toStrictEqual(moved);
+  });
+
+  it('refuses a closed round with 409 confirmations_closed, changing nothing', async () => {
+    const { round } = await seedRoundWith([{ status: 'pending', street: BY_START }], {
+      status: 'closed',
+      closedAt: new Date('2026-11-12T15:00:00.000Z'),
+    });
+    const before = await storedState();
+
+    const res = await buildRoute(round.id);
+
+    expectConfirmationsClosed(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it.each([
+    { label: 'an unknown id', id: UNKNOWN_ID },
+    { label: 'a malformed id', id: MALFORMED_ID },
+  ])('answers $label with 404 round_not_found, changing nothing', async ({ id }) => {
+    await seedRoundWith([{ status: 'pending', street: BY_START }]);
+    const before = await storedState();
+
+    const res = await buildRoute(id);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'round_not_found' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('closes confirmations for the customer: a confirm after the build gets 409 "האישור נסגר"', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_START },
+      { status: 'pending', street: HALFWAY },
+    ]);
+    const [, latecomer] = inRound;
+    if (!latecomer) throw new Error();
+    expect((await buildRoute(round.id)).status).toBe(200);
+    const afterBuild = await storedOrder(latecomer.id);
+
+    const res = await customerConfirm(latecomer.token);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toStrictEqual({
+      error: 'confirmations_closed',
+      message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed,
+    });
+    expect(await storedOrder(latecomer.id)).toStrictEqual(afterBuild);
+  });
+
+  it('refuses "אישר בטלפון" after the build with 409 confirmations_closed', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_START },
+      { status: 'pending', street: HALFWAY },
+    ]);
+    const [stop] = inRound;
+    if (!stop) throw new Error();
+    expect((await buildRoute(round.id)).status).toBe(200);
+    const before = await storedState();
+
+    // The stop is still in the round, so it is the closed confirmations that answer, not a 404.
+    const res = await confirmByPhone(round.id, stop.id);
+
+    expectConfirmationsClosed(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('keeps as a stop a pending order the customer confirmed between the read and the write', async () => {
+    const racing = new RacingOrdersRepo();
+    buildApp({ orders: racing });
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_DROP_OFF },
+      { status: 'pending', street: BY_START },
+      { status: 'pending', street: HALFWAY },
+    ]);
+    const [byDropOff, lastMinute, unconfirmed] = inRound;
+    if (!byDropOff || !lastMinute || !unconfirmed) throw new Error();
+    racing.confirmBeforeConditionalWrite.add(lastMinute.id);
+
+    const res = await buildRoute(round.id);
+
+    expect(res.status).toBe(200);
+    const expectedStops: RoundStop[] = [
+      { orderId: lastMinute.id, hasLocation: true },
+      { orderId: byDropOff.id, hasLocation: true },
+    ];
+    expect((await storedRound(round.id)).stops).toStrictEqual(expectedStops);
+    expect(stopsOf(viewOf(res)).map((stop) => stop.orderId)).toStrictEqual([
+      lastMinute.id,
+      byDropOff.id,
+    ]);
+    expect(await storedOrder(lastMinute.id)).toMatchObject({
+      status: 'confirmed',
+      roundId: round.id,
+    });
+    expect((await storedOrder(unconfirmed.id)).status).toBe('waiting');
+  });
+
+  it('leaves out a pending order the customer cancelled between the read and the write', async () => {
+    const racing = new RacingOrdersRepo();
+    buildApp({ orders: racing });
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed', street: BY_START },
+      { status: 'pending', street: HALFWAY },
+    ]);
+    const [stop, cancelled] = inRound;
+    if (!stop || !cancelled) throw new Error();
+    racing.cancelBeforeConditionalWrite.add(cancelled.id);
+
+    const res = await buildRoute(round.id);
+
+    expect(res.status).toBe(200);
+    expect((await storedRound(round.id)).stops).toStrictEqual([
+      { orderId: stop.id, hasLocation: true },
+    ]);
+    expect((await storedOrder(cancelled.id)).status).toBe('cancelled');
+  });
+
+  it('routes a round where nobody confirmed, with no stops', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'pending', street: BY_START },
+      { status: 'pending' },
+    ]);
+
+    const res = await buildRoute(round.id);
+
+    expect(res.status).toBe(200);
+    expect(await storedRound(round.id)).toMatchObject({
+      status: 'open',
+      phase: 'routed',
+      stops: [],
+    });
+    const view = viewOf(res);
+    expect(view.stops).toStrictEqual([]);
+    expect(groupsOf(view)).toStrictEqual({ confirmed: [], pending: [], otherDate: [] });
+    for (const order of inRound) expect((await storedOrder(order.id)).status).toBe('waiting');
+  });
+
+  it('then answers GET /:id with the stops in their stored order, with details, location and state', async () => {
+    const { round, inRound } = await seedRoundWith([
+      { status: 'confirmed' },
+      { status: 'confirmed', street: BY_START },
+      { status: 'confirmed', street: BY_DROP_OFF },
+    ]);
+    const [freeText, byStart, byDropOff] = inRound;
+    if (!freeText || !byStart || !byDropOff) throw new Error();
+    const built = await buildRoute(round.id);
+    expect(built.status).toBe(200);
+
+    const res = await getRound(round.id);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toStrictEqual(built.body);
+    const view = viewOf(res);
+    expect(stopsOf(view)).toStrictEqual([
+      { orderId: byStart.id, hasLocation: true, state: 'toCollect' },
+      { orderId: byDropOff.id, hasLocation: true, state: 'toCollect' },
+      { orderId: freeText.id, hasLocation: false, state: 'toCollect' },
+    ]);
+    expect(view.stops.map((stop) => stop.order)).toStrictEqual(
+      [byStart, byDropOff, freeText].map(toCollectorOrder),
+    );
+
+    // The STORED order is what is answered: a stop Yoel moved by hand stays where he put it.
+    const reversed = [...(await storedRound(round.id)).stops].reverse();
+    await rounds.update(round.id, { stops: reversed });
+    const again = viewOf(await getRound(round.id));
+    expect(again.stops.map((stop) => stop.order.id)).toStrictEqual(
+      reversed.map((stop) => stop.orderId),
+    );
+  });
+});
+
 describe('/api/collector/rounds: the login and the Origin check', () => {
   it.each([
     { label: 'GET /', send: () => request(app).get(BASE) },
@@ -923,6 +1301,10 @@ describe('/api/collector/rounds: the login and the Origin check', () => {
     {
       label: 'POST /:id/orders/:orderId/confirm-by-phone',
       send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/orders/${UNKNOWN_ID}/confirm-by-phone`),
+    },
+    {
+      label: 'POST /:id/route',
+      send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/route`),
     },
   ])('answers $label without a session cookie with 401, changing nothing', async ({ send }) => {
     await seed();
@@ -996,6 +1378,23 @@ describe('/api/collector/rounds: the login and the Origin check', () => {
     expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
     expect(await storedState()).toStrictEqual(before);
   });
+
+  it('refuses building a route from another site with 403 forbidden_origin, even with the cookie', async () => {
+    const order = await seed();
+    expect((await plan(planBody([order.id]))).status).toBe(201);
+    const round = await onlyRound();
+    const before = await storedState();
+
+    const res = await request(app)
+      .post(`${BASE}/${round.id}/route`)
+      .set('Host', TEST_HOST)
+      .set('Origin', 'https://evil.example')
+      .set('Cookie', cookie);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
+    expect(await storedState()).toStrictEqual(before);
+  });
 });
 
 describe('/api/collector/rounds: logs', () => {
@@ -1018,9 +1417,13 @@ describe('/api/collector/rounds: logs', () => {
       (await confirmByPhone(round.id, customer.id)).status,
       (await confirmByPhone(round.id, customer.id)).status,
       (await confirmByPhone(round.id, UNKNOWN_ID)).status,
+      // The customer (a free-text street, so no location) is a stop; the other order leaves.
+      (await buildRoute(round.id)).status,
+      (await buildRoute(round.id)).status,
+      (await buildRoute(UNKNOWN_ID)).status,
     ];
 
-    expect(statuses).toStrictEqual([201, 409, 400, 200, 200, 404, 200, 200, 404]);
+    expect(statuses).toStrictEqual([201, 409, 400, 200, 200, 404, 200, 200, 404, 200, 409, 404]);
     // The customer's name and phone did go out, in the message to them: it is the log (console)
     // that must never see them, nor anything else from a body.
     expect(sender.sent[0]).toMatchObject({ to: PHONE_E164, vars: { name: NAME } });

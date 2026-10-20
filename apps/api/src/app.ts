@@ -88,8 +88,9 @@ export function createApp(deps: AppDeps): Express {
   // an order, and mark an order's WhatsApp "שלח" link as opened (orders/collectorOrdersRoutes.ts).
   app.use('/api/collector/orders', createCollectorOrdersRouter(deps));
 
-  // The round screens (spec §3.5 "תכנון סבב", §3.6 step 1): plan a round and send its confirmation
-  // requests, list the open rounds, one round, and "אישר בטלפון" (rounds/collectorRoundsRoutes.ts).
+  // The round screens (spec §3.5 "תכנון סבב", §3.6): plan a round and send its confirmation
+  // requests, list the open rounds, one round, "אישר בטלפון", and "סגור אישורים ובנה מסלול"
+  // (rounds/collectorRoundsRoutes.ts).
   app.use('/api/collector/rounds', createCollectorRoundsRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
