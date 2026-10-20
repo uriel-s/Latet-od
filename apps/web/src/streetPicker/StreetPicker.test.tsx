@@ -243,3 +243,28 @@ describe('StreetPicker error', () => {
     expect(input.getAttribute('aria-describedby')).toBeNull();
   });
 });
+
+describe('StreetPicker hint', () => {
+  /** The text of everything `element` is described by (aria-describedby), in order. */
+  function descriptions(element: HTMLElement): string[] {
+    return (element.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .filter((id) => id !== '')
+      .map((id) => document.getElementById(id)?.textContent ?? '');
+  }
+
+  it('shows the hint and links it to the input', () => {
+    renderPicker({ label: 'רחוב קרוב', allowFreeText: false, hint: 'רחוב קרוב קובע את האזור.' });
+
+    expect(screen.getByText('רחוב קרוב קובע את האזור.')).toBeDefined();
+    expect(descriptions(screen.getByLabelText('רחוב קרוב'))).toEqual(['רחוב קרוב קובע את האזור.']);
+  });
+
+  it('links both the hint and the error, the hint first', () => {
+    renderPicker({ hint: 'למשל: הרצל', error: 'נא לבחור רחוב או לכתוב אותו' });
+
+    const input = screen.getByLabelText('רחוב');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(descriptions(input)).toEqual(['למשל: הרצל', 'נא לבחור רחוב או לכתוב אותו']);
+  });
+});

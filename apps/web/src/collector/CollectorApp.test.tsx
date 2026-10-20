@@ -1,30 +1,61 @@
 import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { groupWaitingOrders, type CollectorOrdersResponse } from '@bottlerun/shared';
+import {
+  groupWaitingOrders,
+  type CollectorOrder,
+  type CollectorOrderResponse,
+  type CollectorOrdersResponse,
+} from '@bottlerun/shared';
 import type { SessionOutcome } from '../api.ts';
-import { matchRoute, useLocation } from '../router.tsx';
+import { matchRoute, navigate, useLocation } from '../router.tsx';
 import { CollectorApp, SESSION_CHECK_FAILED_MESSAGE } from './CollectorApp.tsx';
 
 const LOGGED_IN: SessionOutcome = { kind: 'loggedIn', user: { sub: 'collector' } };
 const LOGGED_OUT: SessionOutcome = { kind: 'loggedOut' };
 const FAILED: SessionOutcome = { kind: 'failed' };
 
-/**
- * The orders tab loads its list with the real fetchWaitingOrders (CollectorShell passes no fake),
- * so every test here stubs the global fetch: GET /api/collector/orders answers an empty list, and
- * no test sends a request from jsdom. The session itself is checked by the fake loadSession.
- */
-function fakeApi(input: string): Promise<Response> {
-  if (input !== '/api/collector/orders')
-    return Promise.resolve(new Response(null, { status: 404 }));
-  const body: CollectorOrdersResponse = { groups: groupWaitingOrders([]) };
+/** A waiting order with a street written by hand, named `name`, for the edit screen to load. */
+function makeOrder(id: string, name: string): CollectorOrder {
+  return {
+    id,
+    contact: { name, phone: '+972501234567' },
+    address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'privateHouse' },
+    bottlesEstimated: 40,
+    status: 'waiting',
+    source: 'form',
+    createdAt: new Date('2026-10-01T08:00:00Z'),
+    hasLocation: false,
+  };
+}
+
+/** The orders GET /api/collector/orders/<id> answers with; any other id answers 404. */
+const ORDERS_BY_ID: readonly CollectorOrder[] = [
+  makeOrder('o1', 'דנה כהן'),
+  makeOrder('o2', 'משה לוי'),
+];
+
+/** A 200 with `body` as JSON. */
+function jsonResponse(body: CollectorOrdersResponse | CollectorOrderResponse): Promise<Response> {
   return Promise.resolve(
     new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }),
   );
+}
+
+/**
+ * The orders screens call the real api functions (CollectorShell passes no fake), so every test
+ * here stubs the global fetch: GET /api/collector/orders answers an empty list, GET
+ * /api/collector/orders/<id> one of {@link ORDERS_BY_ID}, and no test sends a request from jsdom.
+ * The session itself is checked by the fake loadSession.
+ */
+function fakeApi(input: string): Promise<Response> {
+  if (input === '/api/collector/orders') return jsonResponse({ groups: groupWaitingOrders([]) });
+  const order = ORDERS_BY_ID.find(({ id }) => input === `/api/collector/orders/${id}`);
+  if (order !== undefined) return jsonResponse({ order });
+  return Promise.resolve(new Response(null, { status: 404 }));
 }
 
 beforeEach(() => {
@@ -160,6 +191,9 @@ describe('CollectorApp', () => {
       ['/app', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
       ['/app/', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
       ['/app/orders', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
+      ['/app/orders/new', 'הוספת הזמנה', 'הזמנות', 'שמירת ההזמנה'],
+      ['/app/orders/o1', 'עריכת הזמנה', 'הזמנות', 'שמירת השינויים'],
+      ['/app/orders/no-such-order', 'עריכת הזמנה', 'הזמנות', 'ההזמנה לא נמצאה.'],
       ['/app/rounds', 'סבבים', 'סבבים', 'בקרוב.'],
       ['/app/history', 'היסטוריה', 'היסטוריה', 'בקרוב.'],
     ])(
@@ -168,10 +202,33 @@ describe('CollectorApp', () => {
         renderAt(path, fakeSession(LOGGED_IN).load);
 
         expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeDefined();
-        expect(screen.getByText(shows)).toBeDefined();
+        expect(await screen.findByText(shows)).toBeDefined();
         expect(currentTabs()).toEqual([tab]);
       },
     );
+
+    it.each(['/app/orders/a/b', '/app/orders/new/x', '/app/orders/%E0%A4%A'])(
+      'shows "page not found" at %s, with no tab current',
+      async (path) => {
+        renderAt(path, fakeSession(LOGGED_IN).load);
+
+        expect(
+          await screen.findByRole('heading', { level: 1, name: 'העמוד לא נמצא' }),
+        ).toBeDefined();
+        expect(currentTabs()).toEqual([]);
+      },
+    );
+
+    it("opens the edit screen anew for another order, filled with that order's details", async () => {
+      renderAt('/app/orders/o1', fakeSession(LOGGED_IN).load);
+      expect(await screen.findByDisplayValue('דנה כהן')).toBeDefined();
+
+      act(() => navigate('/app/orders/o2'));
+
+      expect(await screen.findByDisplayValue('משה לוי')).toBeDefined();
+      expect(screen.getByLabelText<HTMLInputElement>('שם').value).toBe('משה לוי');
+      expect(currentTabs()).toEqual(['הזמנות']);
+    });
 
     it('shows "page not found" inside the app for an unknown path, with a way to the orders', async () => {
       renderAt('/app/no-such-screen', fakeSession(LOGGED_IN).load);

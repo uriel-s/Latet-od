@@ -6,7 +6,7 @@
 // Built for elderly customers: one big input, the matches as big buttons right under it (an
 // ordinary list of buttons, not an ARIA combobox, which screen readers handle unevenly), and a
 // short line in plain words that says what to do next.
-import { useId, useRef, useState, type JSX } from 'react';
+import { useId, useRef, useState, type JSX, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { FORM_TEXT_MAX_LENGTH, STREETS, searchStreets, type Street } from '@bottlerun/shared';
 import type { StreetChoice } from './streetChoice.ts';
@@ -32,6 +32,11 @@ export interface StreetPickerProps {
   allowFreeText?: boolean;
   /** Plain-Hebrew error shown next to the field (the form passes its message for `street`). */
   error?: string;
+  /**
+   * A short line between the label and the input that says what the field is for (Yoel's "רחוב
+   * קרוב" explains what picking one does). Read with the input, like TextField's hint.
+   */
+  hint?: ReactNode;
   /** Streets to search; defaults to the shared STREETS (tests may pass a short list). */
   streets?: readonly Street[];
 }
@@ -80,6 +85,7 @@ export function StreetPicker({
   onChange,
   allowFreeText = true,
   error,
+  hint,
   streets = STREETS,
 }: StreetPickerProps): JSX.Element {
   const [mode, setMode] = useState<Mode>(
@@ -89,7 +95,14 @@ export function StreetPicker({
   const [text, setText] = useState(value?.name ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
+  const hintId = useId();
   const errorId = useId();
+  const hasHint = hint !== undefined;
+  // The hint and the error, space-separated, so a screen reader reads both with the input.
+  const describedBy =
+    [hasHint ? hintId : undefined, error ? errorId : undefined]
+      .filter((id) => id !== undefined)
+      .join(' ') || undefined;
 
   // A street just chosen (or prefilled) is already in the input: its list has done its job.
   const showsChosenStreet = value?.kind === 'listed' && value.name === text;
@@ -142,6 +155,11 @@ export function StreetPicker({
       <label htmlFor={inputId} className="field-label">
         {mode === 'search' ? label : FREE_TEXT_LABEL}
       </label>
+      {hasHint && (
+        <p id={hintId} className="field-hint">
+          {hint}
+        </p>
+      )}
       {/* One input for both modes; only its label and meaning change. */}
       <input
         ref={inputRef}
@@ -154,7 +172,7 @@ export function StreetPicker({
         // The limit the api enforces on a hand-written name; also longer than any listed name.
         maxLength={FORM_TEXT_MAX_LENGTH.streetName}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
       />
       {error && (
         <p id={errorId} className="field-error">
