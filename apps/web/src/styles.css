@@ -462,6 +462,80 @@ html:has(.bottom-nav) {
   scroll-padding-block-end: calc(var(--tap-target) + 2px + env(safe-area-inset-bottom));
 }
 
+/* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */
+
+/* "הוספת הזמנה" right under the heading, with room before the first group. */
+.orders-add {
+  margin-block-end: 0.5rem;
+}
+
+/* The count and bottle total under a group's title: bold, so it reads as the group's header. */
+.order-group-summary {
+  font-weight: 700;
+}
+
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * One waiting order. White on the page's blue sets the card apart; the gray edge is decoration
+ * only (it fails AA as an edge, see --color-gray), and nothing to tap depends on it.
+ */
+.order-card {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-gray);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.order-card p {
+  margin-block: 0 0.25rem;
+}
+
+/* The customer's name heads the card; smaller than the group's <h2>, still above body text. */
+.order-card-name {
+  margin-block: 0 0.25rem;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.order-card-bottles {
+  font-weight: 700;
+}
+
+/* The tags of a card, side by side, wrapping onto a second line on a narrow phone. */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/*
+ * A tag ("לא אישר בזמן · 12/11", "בלי מיקום"): --color-text on --color-accent (6.5:1, AA) inside
+ * a --color-text outline, so it reads as a badge by its shape, and its words say what it means.
+ */
+.tag {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border: 2px solid var(--color-text);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* "עריכה" at the end of the card; .button keeps it at least 48px tall, min-width as wide. */
+.order-card-edit {
+  min-width: var(--tap-target);
+  margin-block-start: 0.5rem;
+}
+
 /* --- Messages and helpers -------------------------------------------------------- */
 
 /* A message about the whole form (rate limit, network error), above or next to its button. */
