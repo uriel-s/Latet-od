@@ -21059,7 +21059,16 @@ var routeStopViewSchema = external_exports.object({
    */
   hasLocation: roundStopSchema.shape.hasLocation,
   /** Derived from the order, never stored; see {@link roundStopStateOf}. */
-  state: roundStopStateSchema
+  state: roundStopStateSchema,
+  /**
+   * The stop's "שלח תודה" row: the NEWEST `thankYou` entry of the order as a wa.me link
+   * (`toMessageLink(order, 'thankYou')`). Set only while `state` is `collected`, and left out
+   * (not set to undefined) otherwise, or when that newest entry is not a `manual` link (it failed,
+   * or was sent automatically). This is how the "אספתי" response returns the wa.me link, and how
+   * the route screen and "סגור סבב" find it again after a refresh: an unsent thank-you is a
+   * collected stop whose `thankYou` has no `openedAt`.
+   */
+  thankYou: messageLinkSchema.optional()
 });
 var roundViewSchema = external_exports.object({
   round: collectorRoundSchema,
@@ -21123,11 +21132,15 @@ function buildRoundView(round, orders) {
     stops: round.stops.flatMap((stop) => {
       const order = ordersById.get(stop.orderId);
       if (order === void 0) return [];
+      const state = roundStopStateOf(round, order);
+      const thankYou = state === "collected" ? toMessageLink(order, "thankYou") : void 0;
       return [
         {
           order: toCollectorOrder(order),
           hasLocation: stop.hasLocation,
-          state: roundStopStateOf(round, order)
+          state,
+          // Left out rather than set to undefined, like toMessageLink's `openedAt`.
+          ...thankYou === void 0 ? {} : { thankYou }
         }
       ];
     })
@@ -21136,6 +21149,13 @@ function buildRoundView(round, orders) {
 var STOP_MOVE_DIRECTIONS = ["up", "down"];
 var moveStopRequestSchema = external_exports.strictObject({
   direction: external_exports.enum(STOP_MOVE_DIRECTIONS)
+});
+var COLLECT_STOP_ERRORS = {
+  bottlesInvalid: "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DB\u05DE\u05D4 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E0\u05D0\u05E1\u05E4\u05D5, \u05DE\u05E1\u05E4\u05E8 \u05E9\u05DC\u05DD \u05DE-1 \u05D5\u05DE\u05E2\u05DC\u05D4",
+  bottlesTooMany: `\u05D0\u05E4\u05E9\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E2\u05D3 ${MAX_BOTTLES} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD`
+};
+var collectStopRequestSchema = external_exports.strictObject({
+  bottlesCollected: external_exports.int({ error: COLLECT_STOP_ERRORS.bottlesInvalid }).min(1, COLLECT_STOP_ERRORS.bottlesInvalid).max(MAX_BOTTLES, COLLECT_STOP_ERRORS.bottlesTooMany).optional()
 });
 var ROUND_MESSAGES = {
   /** Some marked order was meanwhile cancelled, edited away or put in another round. */
@@ -21152,7 +21172,12 @@ var ROUND_MESSAGES = {
    */
   routeNotOpen: "\u05D0\u05D9\u05DF \u05DE\u05E1\u05DC\u05D5\u05DC \u05E4\u05EA\u05D5\u05D7 \u05D1\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05DE\u05E1\u05DA.",
   /** Moving the first stop up, or the last one down. */
-  stopAtEdge: "\u05D4\u05E2\u05E6\u05D9\u05E8\u05D4 \u05DB\u05D1\u05E8 \u05D1\u05E7\u05E6\u05D4 \u05D4\u05DE\u05E1\u05DC\u05D5\u05DC."
+  stopAtEdge: "\u05D4\u05E2\u05E6\u05D9\u05E8\u05D4 \u05DB\u05D1\u05E8 \u05D1\u05E7\u05E6\u05D4 \u05D4\u05DE\u05E1\u05DC\u05D5\u05DC.",
+  /**
+   * A stop action on a stop already handled another way ("אספתי" on one not found, "לא נמצא" on
+   * one collected, ...): the screen is stale, so refreshing shows what happened there.
+   */
+  stopHandled: "\u05D4\u05E2\u05E6\u05D9\u05E8\u05D4 \u05D4\u05D6\u05D0\u05EA \u05DB\u05D1\u05E8 \u05D8\u05D5\u05E4\u05DC\u05D4. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05DE\u05E1\u05DA."
 };
 
 // packages/shared/src/customerOrderApi.ts
