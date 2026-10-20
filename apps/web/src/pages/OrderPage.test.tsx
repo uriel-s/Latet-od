@@ -394,9 +394,10 @@ describe('OrderPage', () => {
 
       const busy = button('שולח...');
       expect(busy.getAttribute('aria-disabled')).toBe('true');
-      expect(button('לא מתאים הפעם').getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(busy);
+      // "לא מתאים הפעם" only opens its question; even its "כן" sends nothing while one is on its way.
       click('לא מתאים הפעם');
+      click('כן, לא מתאים');
       expect(calls.confirms).toEqual([TOKEN]);
       expect(calls.declines).toEqual([]);
 
@@ -410,6 +411,7 @@ describe('OrderPage', () => {
       const calls = await renderLoaded(pendingOrder());
 
       click('לא מתאים הפעם');
+      click('כן, לא מתאים');
 
       expect((await screen.findByRole('status')).textContent).toBe(
         'קיבלנו. נחזור אליך עם מועד חדש.',
@@ -420,6 +422,36 @@ describe('OrderPage', () => {
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(calls.declines).toEqual([TOKEN]);
       expect(calls.confirms).toEqual([]);
+    });
+
+    it('asks first on "לא מתאים הפעם", and sends nothing on "לא, להשאיר"', async () => {
+      const calls = await renderLoaded(pendingOrder());
+
+      click('לא מתאים הפעם');
+
+      const question = screen.getByText('לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.');
+      expect(document.activeElement).toBe(question);
+      expect(calls.declines).toEqual([]);
+
+      click('לא, להשאיר');
+
+      expect(screen.queryByText('לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.')).toBeNull();
+      expect(document.activeElement).toBe(button('לא מתאים הפעם'));
+      expect(calls.declines).toEqual([]);
+      expect(button('מאשר/ת איסוף')).toBeDefined();
+    });
+
+    it('keeps the question open with the network message when "לא מתאים הפעם" fails', async () => {
+      await renderLoaded(pendingOrder(), { decline: { kind: 'failed' } });
+      click('לא מתאים הפעם');
+
+      click('כן, לא מתאים');
+
+      const question = screen.getByRole('group', {
+        name: 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.',
+      });
+      expect((await within(question).findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
+      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
     });
 
     it('says the confirmations closed, and loads the order again keeping the message', async () => {

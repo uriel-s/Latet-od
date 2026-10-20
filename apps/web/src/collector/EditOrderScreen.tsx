@@ -27,6 +27,7 @@ import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import type { StreetChoice } from '../streetPicker/streetChoice.ts';
+import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import {
   ORDERS_LIST_PATH,
   cancelErrorMessage,
@@ -235,7 +236,10 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
     switch (outcome.kind) {
       case 'saved':
         // Replace, not push: "back" from the list must not reopen the form as it was before.
-        navigate(ORDERS_LIST_PATH, { replace: true });
+        navigate(ORDERS_LIST_PATH, {
+          replace: true,
+          state: flashNoticeState(FLASH_NOTICES.orderSaved),
+        });
         return;
       case 'loggedOut':
         navigate('/login', { replace: true });
@@ -264,7 +268,10 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
     switch (outcome.kind) {
       case 'saved':
         // The order left the waiting list; replace, so "back" does not reopen its form.
-        navigate(ORDERS_LIST_PATH, { replace: true });
+        navigate(ORDERS_LIST_PATH, {
+          replace: true,
+          state: flashNoticeState(FLASH_NOTICES.orderCancelled),
+        });
         return;
       case 'loggedOut':
         navigate('/login', { replace: true });

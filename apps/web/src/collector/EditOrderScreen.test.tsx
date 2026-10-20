@@ -304,6 +304,7 @@ describe('EditOrderScreen', () => {
       await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
       // Replaced, not pushed: "back" from the list does not reopen the form as it was.
       expect(window.history.length).toBe(historyLength);
+      expect(window.history.state).toEqual({ notice: 'השינויים נשמרו.' });
       const request = onlyRequest(calls);
       expect(request).toEqual({
         contact: { name: 'רחל אברהם', phone: '+972541112233' },
@@ -475,6 +476,7 @@ describe('EditOrderScreen', () => {
 
       await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
       expect(window.history.length).toBe(historyLength);
+      expect(window.history.state).toEqual({ notice: 'ההזמנה בוטלה.' });
       expect(calls.cancels).toEqual(['o1']);
       expect(calls.updates).toEqual([]);
     });

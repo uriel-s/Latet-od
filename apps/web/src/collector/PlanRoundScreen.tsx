@@ -6,6 +6,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
+  APP_TIME_ZONE,
   PERSONAL_TEXT_MAX_LENGTH,
   REGION_LABELS,
   formFieldErrors,
@@ -28,6 +29,7 @@ import {
 import { TextField } from '../components/TextField.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { Link, navigate } from '../router.tsx';
+import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { ORDERS_LIST_PATH } from './orderEditing.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE, bottlesText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
@@ -104,6 +106,15 @@ function ordersOfRegion(
 ): CollectorOrder[] {
   if (region === undefined) return [];
   return groups.find((group) => group.key === region)?.orders ?? [];
+}
+
+/**
+ * Today as `YYYY-MM-DD` in Israel's time zone (the 'en-CA' format is that shape): the earliest
+ * date the round's picker offers. Not the phone's own zone, so a round is never planned for
+ * yesterday by Israel's calendar.
+ */
+function todayInIsrael(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIME_ZONE }).format(new Date());
 }
 
 /** "מסומנות: 3 מתוך 4": how many of the region's orders go into the round. */
@@ -395,7 +406,10 @@ function PlanRoundForm({
       case 'planned':
         // Replace, not push: "back" from the rounds returns to the orders, not to this form,
         // whose orders are no longer waiting (a second send would only be refused).
-        navigate(ROUNDS_PATH, { replace: true });
+        navigate(ROUNDS_PATH, {
+          replace: true,
+          state: flashNoticeState(FLASH_NOTICES.roundPlanned),
+        });
         return;
       case 'loggedOut':
         navigate('/login', { replace: true });
@@ -441,6 +455,7 @@ function PlanRoundForm({
       <TextField
         label="תאריך הסבב"
         type="date"
+        min={todayInIsrael()}
         value={date}
         onChange={(nextDate) => {
           setDate(nextDate);

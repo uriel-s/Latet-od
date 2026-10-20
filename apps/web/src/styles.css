@@ -94,6 +94,11 @@ svg {
   outline-offset: 2px;
 }
 
+/* A heading focused from code after a page change (pageChange.ts) is not a control: no ring. */
+h1[tabindex='-1']:focus {
+  outline: none;
+}
+
 /* --- Layout (Layout.tsx) --------------------------------------------------- */
 
 .layout {
@@ -265,6 +270,12 @@ textarea {
   accent-color: var(--color-text);
 }
 
+/* The keyboard ring goes around the whole row (the tap target), not only the small native dot. */
+.choice:has(input:focus-visible) {
+  outline: 3px solid var(--color-text);
+  outline-offset: 2px;
+}
+
 /* The chosen row stands out by its background too, not only by the dot. */
 .choice:has(input:checked) {
   background: var(--color-accent);
@@ -302,6 +313,11 @@ button[aria-disabled='true'] {
   font-weight: 700;
   text-align: center;
   text-decoration: none;
+}
+
+/* A tap shows: the button darkens a little while it is pressed, so a finger knows it was felt. */
+.button:active {
+  filter: brightness(0.9);
 }
 
 /* The page's main action, such as "send": white on --color-text (10.4:1). */
@@ -440,6 +456,11 @@ button[aria-disabled='true'] {
   text-decoration: none;
 }
 
+/* The tabs touch each other and the screen edge, so the ring goes inside the tab, not around it. */
+.bottom-nav-link:focus-visible {
+  outline-offset: -5px;
+}
+
 /* The current tab: a bar, a background (--color-text on it is 6.5:1) and an underline, so it is
    told apart by shape, not by colour alone. */
 .bottom-nav-link[aria-current='page'] {
@@ -468,7 +489,7 @@ html:has(.bottom-nav) {
    the first group. */
 .orders-add,
 .orders-plan {
-  margin-block-end: 0.5rem;
+  margin-block-end: 0.75rem;
 }
 
 /* The count and bottle total under a group's title: bold, so it reads as the group's header. */
@@ -558,6 +579,13 @@ html:has(.bottom-nav) {
 }
 
 /* The confirmation in place of the cancel button: a white box outlined like a form control. */
+/* The same question among other buttons (CancelConfirm `inline`): no gap and no line above it. */
+.cancel-order-inline {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: none;
+}
+
 .cancel-confirm {
   padding: 1rem;
   border: 2px solid var(--color-text);
