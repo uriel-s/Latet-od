@@ -17,6 +17,7 @@ import {
   fetchWaitingOrders,
   login,
   logout,
+  markMessageOpened,
   updateCollectorOrder,
   warmUp,
   type CollectorOrderWriteOutcome,
@@ -873,3 +874,95 @@ describe.each(WRITES.filter(({ name }) => name !== 'addCollectorOrder'))(
     });
   },
 );
+
+// ---------------------------------------------------------------------------------------------
+// The "שלח" list: POST /api/collector/orders/:id/messages/:index/opened
+// ---------------------------------------------------------------------------------------------
+
+/** The first time the link was opened, as the api stores it (JSON.stringify sends it as ISO). */
+const OPENED_AT = new Date('2026-10-20T07:15:00.000Z');
+
+describe('markMessageOpened', () => {
+  it('posts to /api/collector/orders/:id/messages/:index/opened with the id encoded and no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: { openedAt: OPENED_AT } });
+
+    await markMessageOpened(ODD_ID, 3, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/orders/${ODD_ID_IN_PATH}/messages/3/opened`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.init?.headers).toBeUndefined();
+  });
+
+  it('answers marked with openedAt parsed into a Date on 200', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: { openedAt: OPENED_AT } });
+
+    const outcome = await markMessageOpened(ORDER.id, 0, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'marked', openedAt: OPENED_AT });
+    if (outcome.kind !== 'marked') throw new Error('expected marked');
+    expect(outcome.openedAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not an openedAt', async () => {
+    for (const answer of [
+      { status: 200, body: { openedAt: 'yesterday' } },
+      { status: 200, body: { openedAt: null } },
+      { status: 200, body: {} },
+      { status: 200, text: '<html>ok</html>' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await markMessageOpened(ORDER.id, 0, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await markMessageOpened(ORDER.id, 0, fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers notFound on a 404, for a missing order and a missing message alike', async () => {
+    for (const answer of [
+      { status: 404, body: { error: 'order_not_found' } },
+      { status: 404, body: { error: 'message_not_found' } },
+      { status: 404, text: 'Not Found' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await markMessageOpened(ORDER.id, 7, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'notFound',
+      });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [201, 400, 403, 409, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'x' } },
+        { status: 200, body: { openedAt: OPENED_AT } },
+      );
+      expect(await markMessageOpened(ORDER.id, 0, fetchFn), String(status)).toEqual({
+        kind: 'failed',
+      });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, {
+        status: 200,
+        body: { openedAt: OPENED_AT },
+      });
+      expect(await markMessageOpened(ORDER.id, 0, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
