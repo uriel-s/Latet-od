@@ -12,7 +12,8 @@ const appPattern = (app) => ({
 });
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/coverage/**', 'docs/**'] },
+  // api/index.js is the generated Vercel function bundle (npm run build:api), not source.
+  { ignores: ['**/dist/**', '**/coverage/**', 'docs/**', 'api/index.js'] },
 
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -73,15 +74,6 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
     rules: {
       'no-restricted-imports': ['error', { patterns: [appPattern('api'), appPattern('web')] }],
-    },
-  },
-  {
-    // The Vercel function entry (api/index.ts, ADR-0002) is a thin wrapper around apps/api: it may
-    // import the api's code, never the web app's.
-    files: ['api/**'],
-    languageOptions: { globals: globals.node },
-    rules: {
-      'no-restricted-imports': ['error', { patterns: [appPattern('web')] }],
     },
   },
 );

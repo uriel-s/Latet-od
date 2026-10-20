@@ -10,7 +10,7 @@
 | רכיב | מה | איפה | החלטה |
 |---|---|---|---|
 | **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). | `apps/web` | ADR-0001 |
-| **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB, הגדרות ההתחברות וה-WhatsApp). יש שתי נקודות כניסה דקות, ושתיהן בונות את התלויות האמיתיות עם `depsFromEnv` (`envDeps.ts`: `createMongoDeps` + `authDepsFromEnv` + `messagingDepsFromEnv`): `server.ts` (מקומי / hosting רגיל), ו-`api/index.ts` בשורש הריפו, ה-function של Vercel (דרך `createVercelHandler`, שבונה את האפליקציה בבקשה הראשונה). בבדיקות: `createFakeDeps()`. | `apps/api`, `api/index.ts` | ADR-0001, 0002 |
+| **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB, הגדרות ההתחברות וה-WhatsApp). יש שתי נקודות כניסה דקות, ושתיהן בונות את התלויות האמיתיות עם `depsFromEnv` (`envDeps.ts`: `createMongoDeps` + `authDepsFromEnv` + `messagingDepsFromEnv`): `server.ts` (מקומי / hosting רגיל), ו-`apps/api/src/vercelEntry.ts`, ה-function של Vercel (דרך `createVercelHandler`, שבונה את האפליקציה בבקשה הראשונה). Vercel לא אורז קבצי TS של הריפו, ולכן `npm run build:api` (esbuild) אורז אותו, יחד עם קוד ה-api ו-`packages/shared`, ל-`api/index.js` שנשמר ב-git. רק `express` ו-`mongodb` נשארים חיצוניים. `checks.sh build` נכשל אם החבילה לא מעודכנת. בבדיקות: `createFakeDeps()`. | `apps/api`, `api/index.js` (נוצר) | ADR-0001, 0002 |
 | **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק _(P4)_), ורשימת הרחובות עם אזור ונקודה (`data/streets.json`, `searchStreets`, `findStreet`). | `packages/shared` | ADR-0001, 0005 |
 | **סקריפט רחובות** | חד-פעמי, לא חלק מהאפליקציה: מוריד את הרשימה מ-data.gov.il (`--refresh-list`) וממלא נקודה ואזור לכל רחוב דרך Nominatim, בקשה בשנייה. אזור לפי `REGION_DIVIDER`. התוצאה נשמרת ב-git. | `scripts/geocode-streets.ts` | ADR-0005 |
 | **MongoDB Atlas Free** | אוספים `orders`, `rounds`, `loginAttempts` (TTL). driver רשמי, בלי Mongoose. | AWS us-east-1 | ADR-0001, 0002 |
@@ -31,7 +31,7 @@ flowchart LR
     Y["יואל<br/>(אפליקציית האוסף)"]
     subgraph V["Vercel: origin אחד"]
         CDN["CDN<br/>apps/web build"]
-        F["Function iad1<br/>api/index.ts → apps/api (Express)"]
+        F["Function iad1<br/>api/index.js → apps/api (Express)"]
     end
     M[("MongoDB Atlas Free, us-east-1<br/>orders · rounds · loginAttempts")]
     WA["WhatsApp<br/>(wa.me, מהטלפון של יואל)"]
@@ -48,7 +48,7 @@ flowchart LR
     GH -->|"mongodump, read-only"| M
 ```
 
-- `vercel.json`: `/api/*` עובר ב-rewrite ל-function (`api/index.ts`), וכל השאר ל-`index.html`. קובץ שקיים ב-build
+- `vercel.json`: `/api/*` עובר ב-rewrite ל-function (`api/index.js`), וכל השאר ל-`index.html`. קובץ שקיים ב-build
   (`/assets/*`, `/og-image.jpg`) מוגש לפני ה-rewrites. `/o/*` מקבל `X-Robots-Tag: noindex`.
   בגלל ה-origin האחד: בלי CORS, ו-cookie עם `SameSite=Lax`.
 - **region:** ה-function ב-`iad1`, ליד Atlas ב-us-east-1. הטופס הסטטי מגיע מה-CDN, ורק קריאות ל-api חוצות את האוקיינוס.

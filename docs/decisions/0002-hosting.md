@@ -32,7 +32,7 @@
 **אפשרות ג': פרויקט Vercel Hobby אחד.**
 - `apps/web` נבנה עם Vite ומוגש סטטית מה-CDN. **הטופס נטען מיד**, בלי קשר למצב השרת.
 - `apps/api` הוא אפליקציית Express רגילה (`app.ts` מייצא את `createApp(deps)`). יש לה שתי נקודות כניסה דקות,
-  ושתיהן בונות את התלויות מה-env עם `depsFromEnv` (`envDeps.ts`): `api/index.ts` בשורש הריפו ל-Vercel
+  ושתיהן בונות את התלויות מה-env עם `depsFromEnv` (`envDeps.ts`): `apps/api/src/vercelEntry.ts` ל-Vercel (נארז מראש ל-`api/index.js` ב-git, כי Vercel לא אורז קבצי TS של הריפו)
   (דרך `createVercelHandler`), ו-`server.ts` להרצה מקומית ול-hosting רגיל. **כך המעבר ל-Render או ל-Fly הוא שינוי config, לא קוד.**
 - rewrite ב-`vercel.json`: `/api/*` הולך ל-function, וכל השאר ל-`index.html` (SPA). origin אחד, ולכן `SameSite=Lax` ובלי CORS.
 - **region של ה-function:** `iad1` (Washington, D.C.; ב-Hobby אפשר לבחור region אחד [9]), ליד קלאסטר ה-Atlas ב-AWS us-east-1.
