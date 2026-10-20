@@ -169,6 +169,27 @@ describe('buildListFilter', () => {
       roundId: { $eq: 'round-1' },
     });
   });
+
+  it('filters by ids with $in on their ObjectIds', () => {
+    const otherId = 'fedcba9876543210fedcba98';
+
+    expect(buildListFilter({ ids: [HEX_ID, otherId] })).toEqual({
+      _id: {
+        $in: [ObjectId.createFromHexString(HEX_ID), ObjectId.createFromHexString(otherId)],
+      },
+    });
+  });
+
+  it('drops malformed ids, which no order can have', () => {
+    expect(buildListFilter({ ids: ['nope', HEX_ID, HEX_ID.toUpperCase()] })).toEqual({
+      _id: { $in: [ObjectId.createFromHexString(HEX_ID)] },
+    });
+  });
+
+  it('keeps an empty $in when every id is malformed or the list is empty, matching nothing', () => {
+    expect(buildListFilter({ ids: ['nope', ''] })).toEqual({ _id: { $in: [] } });
+    expect(buildListFilter({ ids: [] })).toEqual({ _id: { $in: [] } });
+  });
 });
 
 describe('buildUpdate', () => {
