@@ -3,7 +3,7 @@
 // one-open-order-per-phone rule and the unique token (the Mongo indexes), `$set`/`$unset`
 // patches, undefined fields left out, and a copy for every order handed out.
 import { randomBytes } from 'node:crypto';
-import { isOpenStatus, type NewOrder, type Order } from '@bottlerun/shared';
+import { closedAtOf, isOpenStatus, type NewOrder, type Order } from '@bottlerun/shared';
 import { withoutUndefined } from '../db/patchUpdate.ts';
 import {
   DuplicateOpenOrderError,
@@ -43,13 +43,14 @@ export class InMemoryOrdersRepo implements OrdersRepo {
   }
 
   list(filter: OrderListFilter = {}): Promise<Order[]> {
-    const { statuses, roundId, ids } = filter;
+    const { statuses, roundId, ids, closedBetween } = filter;
     const matching = [...this.orders.values()].filter(
       (order) =>
         (statuses === undefined || statuses.includes(order.status)) &&
         (roundId === undefined || order.roundId === roundId) &&
         // An unknown or malformed id is simply not any order's id, so it matches nothing.
-        (ids === undefined || ids.includes(order.id)),
+        (ids === undefined || ids.includes(order.id)) &&
+        (closedBetween === undefined || closedIn(order, closedBetween)),
     );
     // Array sort is stable, so orders created at the same moment keep their creation order.
     matching.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -125,6 +126,19 @@ export class InMemoryOrdersRepo implements OrdersRepo {
     } while (this.orders.has(id));
     return id;
   }
+}
+
+/**
+ * Whether `order` closed in [from, to). `closedAtOf` picks the timestamp of its status
+ * (`collectedAt` or `cancelledAt`) and is undefined for an open order, which never matches.
+ */
+function closedIn(order: Order, { from, to }: { from: Date; to: Date }): boolean {
+  const closedAt = closedAtOf(order);
+  return (
+    closedAt !== undefined &&
+    closedAt.getTime() >= from.getTime() &&
+    closedAt.getTime() < to.getTime()
+  );
 }
 
 /** The caller's own copy of a stored order, or null. */

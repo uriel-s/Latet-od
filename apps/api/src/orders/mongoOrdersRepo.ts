@@ -42,9 +42,10 @@ export const TOKEN_UNIQUE_INDEX = 'token_unique';
  *   when two submissions race. `$in` in a partial filter needs MongoDB 6.0 or later; Atlas Free
  *   runs 8.x. `findOpenByPhone` uses this index too.
  *
- * No index for `list()` (by status, sorted by date): with about 1.5 orders a day the collection
- * holds hundreds of documents a year, and scanning and sorting them costs less than keeping one
- * more index. Add `{ status: 1, createdAt: 1 }` if that ever changes.
+ * No index for `list()` (by status, by close time for the monthly history, sorted by date): with
+ * about 1.5 orders a day the collection holds hundreds of documents a year, and scanning and
+ * sorting them costs less than keeping one more index. Add `{ status: 1, createdAt: 1 }` (and
+ * `collectedAt` / `cancelledAt` ones for `closedBetween`) if that ever changes.
  */
 export const ORDER_INDEXES: readonly IndexDescription[] = [
   { key: { token: 1 }, name: TOKEN_UNIQUE_INDEX, unique: true },
@@ -196,6 +197,17 @@ export function buildListFilter(filter: OrderListFilter): Filter<OrderDocument> 
     // Malformed ids are dropped: no order can have one. If none is left, `$in: []` matches
     // nothing, which is what the contract says for an empty list or a list of unknown ids.
     query._id = { $in: filter.ids.flatMap((id) => parseOrderId(id) ?? []) };
+  }
+  if (filter.closedBetween !== undefined) {
+    // closedAtOf from shared, as a query: each status is paired with its own timestamp, so a
+    // collected order is never matched by a stray `cancelledAt` (or the other way round), and an
+    // open order matches neither branch. `$or` sits beside a `statuses` filter's top-level
+    // `status` and is ANDed with it; a second `$or` would need `$and` instead.
+    const range = { $gte: filter.closedBetween.from, $lt: filter.closedBetween.to };
+    query.$or = [
+      { status: 'collected', collectedAt: range },
+      { status: 'cancelled', cancelledAt: range },
+    ];
   }
   return query;
 }

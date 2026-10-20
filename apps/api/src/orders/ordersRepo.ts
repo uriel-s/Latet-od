@@ -46,6 +46,16 @@ export interface OrderListFilter {
    * repo's oldest-first order, not the order of this list.
    */
   ids?: readonly string[];
+  /**
+   * Orders that closed at an instant in the half-open range [`from`, `to`): `collected` with
+   * `collectedAt` in range, or `cancelled` with `cancelledAt` in range. This is `closedAtOf` from
+   * shared (historyApi.ts), so the monthly history (spec §3.7) gets exactly the orders of its
+   * month, from `monthRangeInAppZone`. Half-open, so consecutive months never share an order.
+   * Open orders never match, nor does a closed order without its own timestamp (a collected
+   * order is not matched by a stray `cancelledAt`, nor the other way round). `updatedAt` plays no
+   * part: a later write must not move an order to another month.
+   */
+  closedBetween?: { from: Date; to: Date };
 }
 
 /** Conditions on `update()`. */

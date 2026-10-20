@@ -284,6 +284,84 @@ export function describeOrdersRepoContract(
 
         expect(ids(result)).toEqual([pending.id]);
       });
+
+      describe('closedBetween', () => {
+        // A one-hour window, starting 60 minutes after the made orders' createdAt.
+        const range = { from: minutesLater(60), to: minutesLater(120) };
+
+        /** A collected order, collected at `collectedAt`. */
+        function collectedAt(collectedAt: Date, overrides: Partial<NewOrder> = {}): NewOrder {
+          return makeNewOrder({
+            status: 'collected',
+            collectedAt,
+            bottlesCollected: 50,
+            ...overrides,
+          });
+        }
+
+        /** A cancelled order, cancelled at `cancelledAt`. */
+        function cancelledAt(cancelledAt: Date, overrides: Partial<NewOrder> = {}): NewOrder {
+          return makeNewOrder({ status: 'cancelled', cancelledAt, ...overrides });
+        }
+
+        it('returns collected and cancelled orders closed in the range, oldest first', async () => {
+          const cancelled = await repo.create(
+            cancelledAt(minutesLater(70), { createdAt: minutesLater(0) }),
+          );
+          const collected = await repo.create(
+            collectedAt(minutesLater(90), { createdAt: minutesLater(-10) }),
+          );
+          await repo.create(collectedAt(minutesLater(30)));
+          await repo.create(cancelledAt(minutesLater(150)));
+
+          const result = await repo.list({ closedBetween: range });
+
+          expect(ids(result)).toEqual([collected.id, cancelled.id]);
+        });
+
+        it('leaves out open orders, even with a close timestamp in the range', async () => {
+          await repo.create(makeNewOrder({ status: 'waiting' }));
+          await repo.create(makeNewOrder({ status: 'pending', collectedAt: minutesLater(90) }));
+          await repo.create(makeNewOrder({ status: 'confirmed', cancelledAt: minutesLater(90) }));
+
+          expect(await repo.list({ closedBetween: range })).toEqual([]);
+        });
+
+        it('includes an order closed exactly at from and excludes one closed exactly at to', async () => {
+          const atFrom = await repo.create(collectedAt(range.from));
+          await repo.create(collectedAt(range.to));
+          const cancelledAtFrom = await repo.create(cancelledAt(range.from));
+          await repo.create(cancelledAt(range.to));
+
+          const result = await repo.list({ closedBetween: range });
+
+          expect(ids(result)).toEqual([atFrom.id, cancelledAtFrom.id]);
+        });
+
+        it("goes by each status's own timestamp, not the other one", async () => {
+          // Collected outside the range: a cancelledAt in range (from an earlier cancel and
+          // reopen, say) does not bring it in. Likewise for a cancelled order's collectedAt.
+          await repo.create(collectedAt(minutesLater(30), { cancelledAt: minutesLater(90) }));
+          await repo.create(cancelledAt(minutesLater(30), { collectedAt: minutesLater(90) }));
+          // A closed order without its own timestamp has no close time, so no range has it.
+          await repo.create(makeNewOrder({ status: 'collected', cancelledAt: minutesLater(90) }));
+          const inRange = await repo.create(
+            collectedAt(minutesLater(90), { cancelledAt: minutesLater(30) }),
+          );
+
+          expect(ids(await repo.list({ closedBetween: range }))).toEqual([inRange.id]);
+        });
+
+        it('applies closedBetween and statuses together', async () => {
+          const collected = await repo.create(collectedAt(minutesLater(80)));
+          await repo.create(cancelledAt(minutesLater(80)));
+          await repo.create(collectedAt(minutesLater(10)));
+
+          const result = await repo.list({ statuses: ['collected'], closedBetween: range });
+
+          expect(ids(result)).toEqual([collected.id]);
+        });
+      });
     });
 
     describe('update', () => {
