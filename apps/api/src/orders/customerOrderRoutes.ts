@@ -1,19 +1,24 @@
-// /api/o/:token: the api of the customer's own page `/o/<token>` (spec §3.3): read the order, and
-// the page's three buttons: "מאשר/ת איסוף" (confirm), "לא מתאים הפעם" (decline) and "ביטול"
-// (cancel). Public: no login, and the order is reached by its long random token only, never by its
-// id. createApp mounts the router built here before the /api 404 and NOT behind requireCollector.
-// The shapes are the shared contract (packages/shared/src/customerOrderApi.ts); orders and rounds
-// are read and written through OrdersRepo and RoundsRepo, and leaving a round is
-// rounds/leaveRound.ts.
+// /api/o/:token: the api of the customer's own page `/o/<token>` (spec §3.3): read the order, the
+// page's three buttons: "מאשר/ת איסוף" (confirm), "לא מתאים הפעם" (decline) and "ביטול" (cancel),
+// and "שינוי" (PATCH: address, quantity, note; never the phone). Public: no login, and the order is
+// reached by its long random token only, never by its id. createApp mounts the router built here
+// before the /api 404 and NOT behind requireCollector. The shapes are the shared contract
+// (packages/shared/src/customerOrderApi.ts); orders and rounds are read and written through
+// OrdersRepo and RoundsRepo, leaving a round is rounds/leaveRound.ts, and the rules of "שינוי" are
+// customerOrderPatch.ts.
 import { Router, type Response } from 'express';
 import {
   CUSTOMER_ORDER_MESSAGES,
   canTransition,
+  customerUpdateOrderRequestSchema,
+  formFieldErrors,
   isOpenStatus,
   orderTokenSchema,
   toCustomerOrder,
   type ConfirmationsClosedErrorBody,
   type CustomerOrderResponse,
+  type CustomerUpdateOrder,
+  type InvalidOrderErrorBody,
   type InvalidTransitionErrorBody,
   type Order,
   type OrderNotFoundErrorBody,
@@ -22,6 +27,7 @@ import {
 } from '@bottlerun/shared';
 import type { AppDeps } from '../deps.ts';
 import { leaveRoundPatch } from '../rounds/leaveRound.ts';
+import { buildCustomerOrderPatch } from './customerOrderPatch.ts';
 import type { OrderPatch } from './ordersRepo.ts';
 
 /** An order found by its token, with the round it is in (null when it is in none). */
@@ -31,7 +37,8 @@ interface FoundOrder {
 }
 
 /**
- * What a button does to the order as it is now, decided by one of the `decide…` functions below:
+ * What a button (or "שינוי") does to the order as it is now, decided by one of the `decide…`
+ * functions below:
  * - `noop`: nothing to write, answer 200 with the order as it is (a repeated tap).
  * - `write`: apply `patch` if the stored status is still one of `ifStatus`, then answer 200.
  * - `refuse`: answer 409 with `body`, writing nothing.
@@ -70,8 +77,8 @@ const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
 
 /**
  * The router of /api/o. Mount it with `app.use('/api/o', createCustomerOrderRouter(deps))`, after
- * the Origin check (which refuses every POST from another site with 403) and the JSON body parser,
- * before the /api 404, and without `requireCollector`: the customer has no login.
+ * the Origin check (which refuses every POST and PATCH from another site with 403) and the JSON
+ * body parser, before the /api 404, and without `requireCollector`: the customer has no login.
  *
  * Every answer has `Cache-Control: no-store`: the page shows a name, a phone and an address behind
  * a secret link, which must never sit in a shared cache. Every 200 is a
@@ -81,7 +88,8 @@ const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
  *
  * Every route answers 404 {@link OrderNotFoundErrorBody} (`order_not_found`) when no order has the
  * token, and the very same status and body when the token is not one at all (malformed, forged):
- * an answer never tells a guess anything. A malformed token never reaches the database.
+ * an answer never tells a guess anything. A malformed token never reaches the database. (PATCH
+ * checks its body first: an invalid body is a 400 for every token, a valid one then gets the 404.)
  *
  * GET /:token — the page:
  * - 200, the order as it is. Writes NOTHING, whatever the status: WhatsApp's link preview sends a
@@ -114,9 +122,25 @@ const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
  * order out of every group (buildRoundView); and the roundId records which round it was cancelled
  * in.
  *
- * Races: every write is a targeted patch of the status and its dates (never `messages`, which
- * sendAndLog rewrites as a whole) and is conditional on the status it was decided on (`ifStatus`).
- * When that write loses a race, the order is read and decided once more ({@link DECIDE_ATTEMPTS}).
+ * PATCH /:token — "שינוי"; body `customerUpdateOrderRequestSchema` (address, bottlesEstimated):
+ * - 200: the change is stored (rules: buildCustomerOrderPatch, customerOrderPatch.ts) and the
+ *   order answered as it is now. A change of the street or the house number of a `pending` or
+ *   `confirmed` order takes it out of its round (spec §3.3): back to `waiting`, `lastMiss` reason
+ *   `addressChanged`, so the answer has no `round`, and Yoel's round view lists it in no group (it
+ *   did not ask for another date). Any other change keeps the order where it is.
+ * - 400 {@link InvalidOrderErrorBody}: the body did not validate, with the booking form's plain
+ *   messages per field. Also a `contact` key (the phone, or the name, never changes here), a
+ *   `status` or any other unknown key, an empty body and no body: then `fieldErrors` is `{}`.
+ *   The body is checked BEFORE the token, so an invalid body gets the same 400 whatever the
+ *   token, and tells a guess nothing.
+ * - 409 {@link InvalidTransitionErrorBody}: collected or cancelled.
+ * A closed order is never reopened and the phone never changes, so a PATCH can never give a
+ * phone a second open order (no DuplicateOpenOrderError here).
+ *
+ * Races: every write is a targeted patch (never `messages`, which sendAndLog rewrites as a whole)
+ * and is conditional on the status it was decided on (`ifStatus`), so a PATCH racing a cancel never
+ * lands on the cancelled order. When that write loses a race, the order is read and decided once
+ * more ({@link DECIDE_ATTEMPTS}).
  *
  * Logs nothing: no body, phone, address or token reaches the log (CLAUDE.md, privacy). An
  * unexpected error goes to the app's error handler, which logs the route's pattern, never the URL
@@ -201,6 +225,20 @@ export function createCustomerOrderRouter(deps: Pick<AppDeps, 'orders' | 'rounds
     await press(res, req.params.token, decideCancel);
   });
 
+  router.patch('/:token', async (req, res) => {
+    // The body first, before the token is even looked at (see the JSDoc above). Express 5 leaves
+    // `req.body` undefined when no JSON body was sent; safeParse turns that into a 400 too.
+    const parsed = customerUpdateOrderRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendInvalidOrder(res, formFieldErrors(parsed.error));
+      return;
+    }
+    const update = parsed.data;
+    await press(res, req.params.token, (order, round, now) =>
+      decideUpdate(order, round, update, now),
+    );
+  });
+
   return router;
 }
 
@@ -255,6 +293,26 @@ function decideCancel(order: Order, _round: Round | null, now: Date): Decision {
 }
 
 /**
+ * "שינוי": `update` applied to an open order (waiting, pending, confirmed), following
+ * buildCustomerOrderPatch (which may also take it out of its round). A collected or cancelled
+ * order is history: the statistics count it as it was, so nothing on it changes. Every change is
+ * written, even one that sends the stored values again, so `updatedAt` says the customer saved.
+ */
+function decideUpdate(
+  order: Order,
+  round: Round | null,
+  update: CustomerUpdateOrder,
+  now: Date,
+): Decision {
+  if (!isOpenStatus(order.status)) return { kind: 'refuse', body: ORDER_CLOSED };
+  return {
+    kind: 'write',
+    patch: buildCustomerOrderPatch(order, update, round, now).patch,
+    ifStatus: [order.status],
+  };
+}
+
+/**
  * Whether `order` is in a round whose confirmations are open: the round it points at was found,
  * is open, and its phase is still `confirming` (Yoel's "סגור אישורים ובנה מסלול" makes it `routed`).
  */
@@ -279,6 +337,16 @@ function sendRefusal(
   body: ConfirmationsClosedErrorBody | InvalidTransitionErrorBody,
 ): void {
   res.status(409).json(body);
+}
+
+/**
+ * 400 with `formFieldErrors`: the first plain-Hebrew message of each invalid field, never the
+ * values sent. A body refused as a whole (a `contact` or other unknown key, nothing to change, not
+ * an object) has no field to show it on, so its `fieldErrors` is `{}`.
+ */
+function sendInvalidOrder(res: Response, fieldErrors: Record<string, string>): void {
+  const body: InvalidOrderErrorBody = { error: 'invalid_order', fieldErrors };
+  res.status(400).json(body);
 }
 
 /** 404, the same body for an unknown and a malformed token. */
