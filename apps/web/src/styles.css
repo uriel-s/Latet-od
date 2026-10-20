@@ -536,6 +536,48 @@ html:has(.bottom-nav) {
   margin-block-start: 0.5rem;
 }
 
+/* --- Add and edit order screens (collector/AddOrderScreen.tsx, EditOrderScreen.tsx) -- */
+
+/* "חזרה להזמנות" under the heading: a plain link, still a full-size tap target. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target);
+  margin-block-end: 1rem;
+}
+
+/* "ביטול ההזמנה" sits apart from the form, under a decorative line, so it is not tapped for
+   "save". */
+.cancel-order {
+  margin-block-start: 2rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 2px solid var(--color-gray);
+}
+
+/* The confirmation in place of the cancel button: a white box outlined like a form control. */
+.cancel-confirm {
+  padding: 1rem;
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.cancel-confirm-question {
+  font-weight: 700;
+}
+
+/* "כן, לבטל" and "לא, להשאיר" side by side, each at least 8rem; one under the other when the
+   phone is too narrow for both. */
+.cancel-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.cancel-confirm-actions .button {
+  flex: 1 1 8rem;
+}
+
 /* --- Messages and helpers -------------------------------------------------------- */
 
 /* A message about the whole form (rate limit, network error), above or next to its button. */

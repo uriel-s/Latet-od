@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLLECTOR_TABS, tabForPath } from './tabs.ts';
+import { COLLECTOR_TABS, ordersView, tabForPath } from './tabs.ts';
 
 describe('COLLECTOR_TABS', () => {
   it('lists הזמנות, סבבים, היסטוריה in this order, each with its own path', () => {
@@ -18,13 +18,60 @@ describe('tabForPath', () => {
 
   it.each([
     ['orders', 'orders'],
+    ['orders/new', 'orders'],
+    ['orders/64f0c0ffee0000000000abcd', 'orders'],
+    ['orders/a%2Fb', 'orders'],
     ['rounds', 'rounds'],
     ['history', 'history'],
   ])('maps %s to the %s tab', (path, tab) => {
     expect(tabForPath(path)).toBe(tab);
   });
 
-  it.each(['settings', 'rounds/abc', 'Orders', 'orders/'])('has no tab for %s', (path) => {
+  it.each([
+    'settings',
+    'rounds/abc',
+    'Orders',
+    'orders/',
+    'orders/a/b',
+    'orders/new/edit',
+    'orders/%E0%A4%A',
+    'history/orders',
+  ])('has no tab for %s', (path) => {
     expect(tabForPath(path)).toBeNull();
+  });
+});
+
+describe('ordersView', () => {
+  it.each(['', 'orders'])('shows the list at "%s"', (path) => {
+    expect(ordersView(path)).toEqual({ view: 'list' });
+  });
+
+  it('shows the add screen at orders/new', () => {
+    expect(ordersView('orders/new')).toEqual({ view: 'new' });
+  });
+
+  it('shows the edit screen of the order in the path', () => {
+    expect(ordersView('orders/64f0c0ffee0000000000abcd')).toEqual({
+      view: 'edit',
+      id: '64f0c0ffee0000000000abcd',
+    });
+  });
+
+  it('decodes the id the list encoded into the link', () => {
+    expect(ordersView('orders/a%2Fb%3Fc')).toEqual({ view: 'edit', id: 'a/b?c' });
+  });
+
+  it.each([
+    'orders/',
+    'orders/a/b',
+    'orders/new/x',
+    'orders/%E0%A4%A',
+    'rounds',
+    'history',
+    'Orders',
+    'orders//x',
+    'settings/orders',
+  ])('has no orders screen at %s', (path) => {
+    expect(ordersView(path)).toBeNull();
   });
 });
