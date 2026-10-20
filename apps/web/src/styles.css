@@ -464,8 +464,10 @@ html:has(.bottom-nav) {
 
 /* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */
 
-/* "הוספת הזמנה" right under the heading, with room before the first group. */
-.orders-add {
+/* "הוספת הזמנה" and "תכנון סבב" right under the heading, one under the other, with room before
+   the first group. */
+.orders-add,
+.orders-plan {
   margin-block-end: 0.5rem;
 }
 
@@ -638,6 +640,34 @@ html:has(.bottom-nav) {
   flex-basis: 100%;
   margin: 0;
   color: var(--color-error);
+  font-weight: 700;
+}
+
+/* --- Planning screen (collector/PlanRoundScreen.tsx) ------------------------------- */
+
+/*
+ * One order row of the plan: the checkbox, then the order's details one under the other. The
+ * whole row is the .choice tap target; the checkbox stays at the top when the details wrap.
+ */
+.plan-order {
+  align-items: flex-start;
+}
+
+/* The name, then the address, bottles and tags (.plan-order-more), each on its own line. */
+.plan-order-details,
+.plan-order-more {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/* The tags under the bottles, with a little room above. */
+.plan-order-more .tag-list {
+  margin-block-start: 0.25rem;
+}
+
+.plan-order-name {
   font-weight: 700;
 }
 

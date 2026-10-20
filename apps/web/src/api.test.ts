@@ -6,18 +6,24 @@ import type {
   CreateOrderResponse,
   MeResponse,
   OrderGroup,
+  PlanRoundRequest,
+  RoundView,
+  RoundsResponse,
   UpdateOrderRequest,
 } from '@bottlerun/shared';
 import {
   addCollectorOrder,
   cancelCollectorOrder,
+  confirmOrderByPhone,
   createOrder,
   fetchCollectorOrder,
+  fetchRounds,
   fetchSession,
   fetchWaitingOrders,
   login,
   logout,
   markMessageOpened,
+  planRound,
   updateCollectorOrder,
   warmUp,
   type CollectorOrderWriteOutcome,
@@ -962,6 +968,405 @@ describe('markMessageOpened', () => {
         body: { openedAt: OPENED_AT },
       });
       expect(await markMessageOpened(ORDER.id, 0, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The collector's rounds: /api/collector/rounds
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A planned round with one pending order and its "שלח" row, as the api answers it. JSON.stringify
+ * writes the Dates as ISO strings, so a parsed answer equal to this one has turned them back.
+ */
+const ROUND_VIEW: RoundView = {
+  round: {
+    id: '6710f3a2c4b5d6e7f8a9b0d2',
+    date: '2026-11-12',
+    region: 'ramat',
+    status: 'open',
+    phase: 'confirming',
+    personalText: 'תודה רבה!',
+    pickupBy: '08:00',
+    createdAt: new Date('2026-10-20T07:00:00.000Z'),
+  },
+  groups: [
+    { key: 'confirmed', orders: [] },
+    { key: 'pending', orders: [{ ...ORDER, status: 'pending' }] },
+    { key: 'otherDate', orders: [] },
+  ],
+  sendList: [
+    {
+      orderId: ORDER.id,
+      messageIndex: 0,
+      kind: 'confirmRequest',
+      name: 'משה כהן',
+      url: 'https://wa.me/972501234567?text=%D7%A9%D7%9C%D7%95%D7%9D',
+    },
+  ],
+};
+
+/** The same round once its customer confirmed: no "שלח" row left. */
+const CONFIRMED_VIEW: RoundView = {
+  ...ROUND_VIEW,
+  groups: [
+    { key: 'confirmed', orders: [{ ...ORDER, status: 'confirmed' }] },
+    { key: 'pending', orders: [] },
+    { key: 'otherDate', orders: [] },
+  ],
+  sendList: [],
+};
+
+/** Bodies of a success that are not a `RoundView`: each must answer `failed`. */
+const NOT_A_ROUND_VIEW: ({ body: unknown } | { text: string })[] = [
+  { body: { ...ROUND_VIEW, round: { ...ROUND_VIEW.round, status: 'archived' } } },
+  { body: { ...ROUND_VIEW, round: { ...ROUND_VIEW.round, date: '12/11' } } },
+  { body: { ...ROUND_VIEW, groups: [{ key: 'maybe', orders: [] }] } },
+  {
+    body: { ...ROUND_VIEW, sendList: [{ ...ROUND_VIEW.sendList[0], url: 'javascript:alert(1)' }] },
+  },
+  { body: { round: ROUND_VIEW.round } },
+  { body: { view: ROUND_VIEW } },
+  { text: '<html>ok</html>' },
+];
+
+describe('fetchRounds', () => {
+  const ROUNDS: RoundsResponse = { rounds: [ROUND_VIEW], previousPickupBy: '08:30' };
+
+  it('asks GET /api/collector/rounds, past the browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ROUNDS });
+
+    await fetchRounds(fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/rounds');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  it('answers loaded with the rounds and the previous pickup time on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ROUNDS });
+
+    const outcome = await fetchRounds(fetchFn);
+
+    expect(outcome).toEqual({ kind: 'loaded', rounds: [ROUND_VIEW], previousPickupBy: '08:30' });
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.rounds[0]?.round.createdAt).toBeInstanceOf(Date);
+    expect(outcome.rounds[0]?.groups[1]?.orders[0]?.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers loaded without a pickup time when the api has none, and with no rounds', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: { rounds: [] } });
+
+    const outcome = await fetchRounds(fetchFn);
+
+    expect(outcome).toEqual({ kind: 'loaded', rounds: [] });
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.previousPickupBy).toBeUndefined();
+  });
+
+  it('answers failed on a 200 whose body is not the rounds', async () => {
+    for (const answer of [
+      { status: 200, body: { rounds: [ROUND_VIEW], previousPickupBy: '8:30' } },
+      {
+        status: 200,
+        body: { rounds: [{ ...ROUND_VIEW, round: { ...ROUND_VIEW.round, id: '' } }] },
+      },
+      { status: 200, body: [ROUND_VIEW] },
+      { status: 200, body: {} },
+      { status: 200, text: '<html>ok</html>' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchRounds(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchRounds(fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [201, 403, 404, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: ROUNDS });
+      expect(await fetchRounds(fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ROUNDS });
+      expect(await fetchRounds(fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe('planRound', () => {
+  /** What the planning screen sends: a pickup time, and its personal text as typed. */
+  const PLAN: PlanRoundRequest = {
+    date: '2026-11-12',
+    region: 'ramat',
+    orderIds: [ORDER.id, '6710f3a2c4b5d6e7f8a9b0c9'],
+    pickupBy: '08:00',
+    personalText: 'תודה רבה!',
+  };
+
+  it('posts the request as JSON to /api/collector/rounds', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 201, body: ROUND_VIEW });
+
+    await planRound(PLAN, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/rounds');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(jsonBodyOf(calls[0])).toEqual(PLAN);
+  });
+
+  it('answers planned with the round view on 201, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 201, body: ROUND_VIEW });
+
+    const outcome = await planRound(PLAN, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'planned', view: ROUND_VIEW });
+    if (outcome.kind !== 'planned') throw new Error('expected planned');
+    expect(outcome.view.round.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 201 whose body is not a round view', async () => {
+    for (const answer of NOT_A_ROUND_VIEW) {
+      const { fetchFn } = makeFakeFetch({ status: 201, ...answer });
+      expect(await planRound(PLAN, fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers failed on a 200: only 201 means planned', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ROUND_VIEW });
+
+    expect(await planRound(PLAN, fetchFn)).toEqual({ kind: 'failed' });
+  });
+
+  it('answers invalid with the field errors of a 400 invalid_round', async () => {
+    const fieldErrors = { date: 'נא לבחור תאריך', orderIds: 'אפשר לסמן עד 25 הזמנות בסבב' };
+    const { fetchFn } = makeFakeFetch({
+      status: 400,
+      body: { error: 'invalid_round', fieldErrors },
+    });
+
+    expect(await planRound(PLAN, fetchFn)).toEqual({ kind: 'invalid', fieldErrors });
+  });
+
+  it('answers invalid with no field errors on a 400 without usable ones', async () => {
+    for (const answer of [
+      { status: 400, body: { error: 'invalid_round', fieldErrors: { date: 7 } } },
+      { status: 400, body: { error: 'invalid_round', fieldErrors: ['date'] } },
+      { status: 400, body: { error: 'invalid_json' } },
+      { status: 400, text: 'Bad Request' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await planRound(PLAN, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'invalid',
+        fieldErrors: {},
+      });
+    }
+  });
+
+  it('answers ordersNotWaiting with the shared message and the ids on a 409 orders_not_waiting', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'orders_not_waiting', message: 'anything', orderIds: [ORDER.id] },
+    });
+
+    expect(await planRound(PLAN, fetchFn)).toEqual({
+      kind: 'ordersNotWaiting',
+      message: 'חלק מההזמנות כבר לא ממתינות לסבב. נא לרענן את הרשימה ולנסות שוב.',
+      orderIds: [ORDER.id],
+    });
+  });
+
+  it('answers ordersNotWaiting with no ids when the 409 lists none the app can read', async () => {
+    for (const orderIds of [undefined, 'o1', [ORDER.id, 7], { 0: ORDER.id }]) {
+      const { fetchFn } = makeFakeFetch({
+        status: 409,
+        body: { error: 'orders_not_waiting', message: 'x', orderIds },
+      });
+      expect(await planRound(PLAN, fetchFn), JSON.stringify(orderIds)).toEqual({
+        kind: 'ordersNotWaiting',
+        message: 'חלק מההזמנות כבר לא ממתינות לסבב. נא לרענן את הרשימה ולנסות שוב.',
+        orderIds: [],
+      });
+    }
+  });
+
+  it('answers failed on a 409 whose body has no known error code', async () => {
+    for (const answer of [
+      { status: 409, body: { error: 'duplicate_open_order', message: 'x' } },
+      { status: 409, body: { message: 'x', orderIds: [ORDER.id] } },
+      { status: 409, body: ['orders_not_waiting'] },
+      { status: 409, text: 'Conflict' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await planRound(PLAN, fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await planRound(PLAN, fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [403, 404, 413, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
+      expect(await planRound(PLAN, fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 201, body: ROUND_VIEW });
+      expect(await planRound(PLAN, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe('confirmOrderByPhone', () => {
+  it('posts to /api/collector/rounds/:id/orders/:orderId/confirm-by-phone, both ids encoded, no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: CONFIRMED_VIEW });
+
+    await confirmOrderByPhone(ODD_ID, 'e/f?g', fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(
+      `/api/collector/rounds/${ODD_ID_IN_PATH}/orders/e%2Ff%3Fg/confirm-by-phone`,
+    );
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.init?.headers).toBeUndefined();
+  });
+
+  it('answers confirmed with the round view on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: CONFIRMED_VIEW });
+
+    const outcome = await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'confirmed', view: CONFIRMED_VIEW });
+    if (outcome.kind !== 'confirmed') throw new Error('expected confirmed');
+    expect(outcome.view.groups[0]?.orders[0]?.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not a round view', async () => {
+    for (const answer of NOT_A_ROUND_VIEW) {
+      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
+      expect(
+        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
+        JSON.stringify(answer),
+      ).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers closed with the shared message on a 409 confirmations_closed', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'confirmations_closed', message: 'anything' },
+    });
+
+    expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
+      kind: 'closed',
+      message: 'האישורים לסבב הזה כבר נסגרו.',
+    });
+  });
+
+  it('answers closed with the order message on a 409 invalid_transition', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'invalid_transition', message: 'anything' },
+    });
+
+    expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
+      kind: 'closed',
+      message: 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
+    });
+  });
+
+  it('answers failed on a 409 whose body has no known error code', async () => {
+    for (const answer of [
+      { status: 409, body: { error: 'orders_not_waiting', message: 'x', orderIds: [] } },
+      { status: 409, body: { message: 'x' } },
+      { status: 409, body: ['confirmations_closed'] },
+      { status: 409, text: 'Conflict' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(
+        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
+        JSON.stringify(answer),
+      ).toEqual({ kind: 'failed' });
+    }
+  });
+
+  it('answers notFound on a 404, for a missing round and a missing order alike', async () => {
+    for (const answer of [
+      { status: 404, body: { error: 'round_not_found' } },
+      { status: 404, body: { error: 'order_not_found' } },
+      { status: 404, text: 'Not Found' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(
+        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
+        JSON.stringify(answer),
+      ).toEqual({ kind: 'notFound' });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
+        kind: 'loggedOut',
+      });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [201, 400, 403, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'x' } },
+        { status: 200, body: CONFIRMED_VIEW },
+      );
+      expect(
+        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
+        String(status),
+      ).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: CONFIRMED_VIEW });
+      expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn), answer).toEqual({
+        kind: 'failed',
+      });
       expect(calls, answer).toHaveLength(1);
     }
   });
