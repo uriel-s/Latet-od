@@ -1,8 +1,9 @@
-// The contract of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 step 1 "אישורים"): planning a
-// round, the round's view with its orders in three groups and its "שלח" list, "אישר בטלפון", and
-// the error bodies with their plain-Hebrew messages. Every route is behind requireCollector
-// (ADR-0004). apps/api implements the routes with it and apps/web's screens call them, so the two
-// sides agree on one definition.
+// The contract of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 step 1 "אישורים" and step 2
+// "מסלול"): planning a round, the round's view with its orders in three groups, its "שלח" list and
+// its route's stops, "אישר בטלפון", building the route ("סגור אישורים ובנה מסלול"), moving a stop
+// up or down, and the error bodies with their plain-Hebrew messages. Every route is behind
+// requireCollector (ADR-0004). apps/api implements the routes with it and apps/web's screens call
+// them, so the two sides agree on one definition.
 import { z } from 'zod';
 import {
   collectorOrderSchema,
@@ -12,7 +13,7 @@ import {
 } from './collectorOrdersApi.ts';
 import { messageLinkSchema, pickupTimeSchema, toMessageLink } from './messages.ts';
 import type { Order } from './order.ts';
-import { MAX_ROUND_ORDERS, roundSchema, type Round } from './round.ts';
+import { MAX_ROUND_ORDERS, roundSchema, roundStopSchema, type Round } from './round.ts';
 import { regionSchema } from './streets.ts';
 
 // ---------------------------------------------------------------------------------------------
@@ -122,8 +123,9 @@ export const ROUND_GROUP_LABELS: Readonly<Record<RoundGroupKey, string>> = {
 
 /**
  * A round as Yoel's screens get it: the stored round without `orderIds` and `stops`. The orders
- * come in the view's groups instead, and the route has its own screen. Built from the stored
- * round's schema, so the ISO dates of the api's JSON parse back into `Date`s on the web.
+ * come in the view instead: in its groups (step 1) and, with their details, in its `stops`
+ * (step 2). Built from the stored round's schema, so the ISO dates of the api's JSON parse back
+ * into `Date`s on the web.
  */
 export const collectorRoundSchema = roundSchema.pick({
   id: true,
@@ -146,9 +148,51 @@ export const roundOrderGroupSchema = z.object({
 export type RoundOrderGroup = z.infer<typeof roundOrderGroupSchema>;
 
 /**
+ * Where one stop of the route is (spec §3.6 step 2, §4). A stop stores no state of its own: it is
+ * derived from its order by {@link roundStopStateOf}, so "אספתי", "לא נמצא" and a customer's
+ * cancel change only the order, and the route can never disagree with it.
+ * - `toCollect`: still in this round, confirmed (or pending): Yoel has yet to stop there.
+ * - `collected`: "אספתי" was tapped. Final.
+ * - `notFound`: "לא נמצא": the order went back to `waiting`, but stays in the route, shown as
+ *   handled, so Yoel sees what happened at that stop.
+ * - `cancelled`: the customer or Yoel cancelled it while it was in the round. Final.
+ * - `left`: it left the round another way (changed its address, or asked for another date), so
+ *   there is nothing to do at that stop any more.
+ */
+export const ROUND_STOP_STATES = [
+  'toCollect',
+  'collected',
+  'notFound',
+  'cancelled',
+  'left',
+] as const;
+/** One of {@link ROUND_STOP_STATES}. */
+export const roundStopStateSchema = z.enum(ROUND_STOP_STATES);
+/** Where one stop of the route is; see {@link ROUND_STOP_STATES}. */
+export type RoundStopState = z.infer<typeof roundStopStateSchema>;
+
+/**
+ * One stop of a routed round, as the route screen shows it: the order with its details, in the
+ * route's driving order.
+ */
+export const routeStopViewSchema = z.object({
+  order: collectorOrderSchema,
+  /**
+   * The STORED stop's `hasLocation`, from when the route was built, not the order's current one
+   * (`order.hasLocation`). If Yoel picks a near street later, the stop stays where `planRoute` put
+   * it (at the end), and the "בלי מיקום" tag still explains why it is there (round.ts).
+   */
+  hasLocation: roundStopSchema.shape.hasLocation,
+  /** Derived from the order, never stored; see {@link roundStopStateOf}. */
+  state: roundStopStateSchema,
+});
+export type RouteStopView = z.infer<typeof routeStopViewSchema>;
+
+/**
  * One round with its orders, as the round screen shows it; see {@link buildRoundView}. Body of a
- * 201 from POST /api/collector/rounds, and of a 200 from GET /api/collector/rounds/:id and from
- * POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone.
+ * 201 from POST /api/collector/rounds, and of a 200 from GET /api/collector/rounds/:id, from
+ * POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone, from
+ * POST /api/collector/rounds/:id/route and from POST /api/collector/rounds/:id/stops/:orderId/move.
  */
 export const roundViewSchema = z.object({
   round: collectorRoundSchema,
@@ -156,6 +200,11 @@ export const roundViewSchema = z.object({
   groups: z.array(roundOrderGroupSchema),
   /** The "שלח" rows of the confirmation requests, one per customer who has not confirmed yet. */
   sendList: z.array(messageLinkSchema),
+  /**
+   * The route's stops in driving order. Always present: empty until the route is built (phase
+   * `confirming`); a closed round that was routed keeps its stops.
+   */
+  stops: z.array(routeStopViewSchema),
 });
 export type RoundView = z.infer<typeof roundViewSchema>;
 
@@ -194,8 +243,34 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
 }
 
 /**
- * A round and its orders as the round screen shows them (spec §3.6, step 1). Pure, and here
- * rather than in the api, so it is tested once without a database.
+ * The state of `order`'s stop in `round`'s route (see {@link ROUND_STOP_STATES}), derived from
+ * the order alone:
+ * - still in this round (`roundId`): `collected` and `cancelled` as its status says, and
+ *   `toCollect` while it is `confirmed` (or `pending`, which a routed round does not normally
+ *   have: building the route sends whoever did not confirm back to `waiting`).
+ * - out of this round, and its `lastMiss` is this round with reason `notFound`: `notFound`.
+ * - anything else: `left`.
+ *
+ * `collected` and `cancelled` count only while `roundId` is this round. Both keep the order's
+ * `roundId` (collectorOrdersRoutes.ts), so a stop collected or cancelled here is found by it; an
+ * order that was not found here and was collected or cancelled LATER, in another round or while
+ * waiting, stays `notFound` in this round's route, which is what happened at this stop.
+ */
+export function roundStopStateOf(round: Round, order: Order): RoundStopState {
+  if (order.roundId === round.id) {
+    if (order.status === 'collected') return 'collected';
+    if (order.status === 'cancelled') return 'cancelled';
+    if (order.status === 'confirmed' || order.status === 'pending') return 'toCollect';
+  }
+  const notFoundHere = order.lastMiss?.roundId === round.id && order.lastMiss.reason === 'notFound';
+  return notFoundHere ? 'notFound' : 'left';
+}
+
+/**
+ * A round and its orders as the round screen shows them (spec §3.6, steps 1 and 2). Pure, and
+ * here rather than in the api, so it is tested once without a database. The api passes the
+ * orders of `orders.list({ ids: round.orderIds })`: the stops' ids are always a subset of
+ * `orderIds` (the route is built from the round's own orders), so that list has them all.
  *
  * - Walks `round.orderIds` in plan order and looks each up in `orders`; an id with no order given
  *   is skipped, and so is an order given whose id is not in the round.
@@ -206,6 +281,9 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
  * - `sendList`: the latest confirmation request ({@link toMessageLink}) of each `pending` order,
  *   in the same order. A confirmed customer needs no request, so the list shrinks as people
  *   confirm; an order whose newest request is not a wa.me link has no row.
+ * - `stops`: walks `round.stops` in their STORED driving order (not plan order), skipping a stop
+ *   whose order is not given. Each has the order ({@link toCollectorOrder}), the stored
+ *   `hasLocation`, and the state from {@link roundStopStateOf}. Empty until the route is built.
  * - `round` without `orderIds` and `stops` ({@link collectorRoundSchema}).
  */
 export function buildRoundView(round: Round, orders: readonly Order[]): RoundView {
@@ -230,8 +308,39 @@ export function buildRoundView(round: Round, orders: readonly Order[]): RoundVie
     sendList: ordersByGroup.pending
       .map((order) => toMessageLink(order, 'confirmRequest'))
       .filter((link) => link !== undefined),
+    stops: round.stops.flatMap((stop) => {
+      const order = ordersById.get(stop.orderId);
+      if (order === undefined) return [];
+      return [
+        {
+          order: toCollectorOrder(order),
+          hasLocation: stop.hasLocation,
+          state: roundStopStateOf(round, order),
+        },
+      ];
+    }),
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Request: POST /api/collector/rounds/:id/stops/:orderId/move
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Which way Yoel moves a stop in the stored route (spec §3.6 step 2): `up` is one place earlier
+ * in the route, `down` one place later. One place per tap keeps the route screen simple; the rest
+ * of the route stays as `planRoute` built it.
+ */
+export const STOP_MOVE_DIRECTIONS = ['up', 'down'] as const;
+
+/**
+ * Body of POST /api/collector/rounds/:id/stops/:orderId/move. Strict: anything but
+ * `{ direction: 'up' | 'down' }` is refused with 400 `invalid_move`.
+ */
+export const moveStopRequestSchema = z.strictObject({
+  direction: z.enum(STOP_MOVE_DIRECTIONS),
+});
+export type MoveStopRequest = z.infer<typeof moveStopRequestSchema>;
 
 // ---------------------------------------------------------------------------------------------
 // Errors
@@ -242,8 +351,18 @@ export const ROUND_MESSAGES = {
   /** Some marked order was meanwhile cancelled, edited away or put in another round. */
   ordersNotWaiting: 'חלק מההזמנות כבר לא ממתינות לסבב. נא לרענן את הרשימה ולנסות שוב.',
   roundNotFound: 'הסבב לא נמצא.',
-  /** "אישר בטלפון" after the round was routed or closed. */
+  /**
+   * "אישר בטלפון" after the round was routed or closed; also "סגור אישורים ובנה מסלול" on a round
+   * that is already routed or closed (a second tap, or another tab).
+   */
   confirmationsClosed: 'האישורים לסבב הזה כבר נסגרו.',
+  /**
+   * A stop action or a move on a round whose route is not built yet (phase `confirming`), or that
+   * is closed: the screen is stale, so refreshing shows the round as it is.
+   */
+  routeNotOpen: 'אין מסלול פתוח בסבב הזה. נא לרענן את המסך.',
+  /** Moving the first stop up, or the last one down. */
+  stopAtEdge: 'העצירה כבר בקצה המסלול.',
 } as const;
 
 // The bodies below follow ApiErrorBody (index.ts): a stable `error` code, plus a Hebrew `message`
@@ -280,9 +399,11 @@ export interface RoundNotFoundErrorBody {
 }
 
 /**
- * 409 from "אישר בטלפון": the round is closed, or its confirmations are closed (phase `routed`).
- * `message` is {@link ROUND_MESSAGES}.confirmationsClosed. The customer's own confirm
- * (customerOrderApi.ts) answers the same body, with the customer's message.
+ * 409 from "אישר בטלפון" and from "סגור אישורים ובנה מסלול" (POST /api/collector/rounds/:id/route):
+ * the round is closed, or its confirmations are closed (phase `routed`), so neither a phone
+ * confirmation nor a second route build may change it. `message` is
+ * {@link ROUND_MESSAGES}.confirmationsClosed. The customer's own confirm (customerOrderApi.ts)
+ * answers the same body, with the customer's message.
  */
 export interface ConfirmationsClosedErrorBody {
   error: 'confirmations_closed';
@@ -290,15 +411,47 @@ export interface ConfirmationsClosedErrorBody {
 }
 
 /**
+ * 409 from a stop's action or move (e.g. POST /api/collector/rounds/:id/stops/:orderId/move): the
+ * round has no open route, because it is still `confirming` or it is closed. `message` is
+ * {@link ROUND_MESSAGES}.routeNotOpen.
+ */
+export interface RouteNotOpenErrorBody {
+  error: 'route_not_open';
+  message: string;
+}
+
+/**
+ * 409 from a move: the stop is already first (moving `up`) or last (moving `down`), so nothing
+ * changed. `message` is {@link ROUND_MESSAGES}.stopAtEdge.
+ */
+export interface StopAtEdgeErrorBody {
+  error: 'stop_at_edge';
+  message: string;
+}
+
+/**
+ * 400 from a move: the body is not `{ direction: 'up' | 'down' }` ({@link moveStopRequestSchema}).
+ * No message: only a broken client sends it, Yoel's screen never does.
+ */
+export interface InvalidMoveErrorBody {
+  error: 'invalid_move';
+}
+
+/**
  * Every error body /api/collector/rounds adds to the ones every route may answer (ApiErrorBody).
- * "אישר בטלפון" also answers `order_not_found` (404) for an order that is not in the round, and
- * `invalid_transition` (409) for one that can no longer be confirmed. A 401 comes from the login
- * guard: authApi.ts's `UnauthenticatedErrorBody`.
+ * Also, from other files' contracts:
+ * - `order_not_found` (404): "אישר בטלפון" for an order that is not in the round, and a move for
+ *   an order that is not a stop of the round's route.
+ * - `invalid_transition` (409): "אישר בטלפון" for an order that can no longer be confirmed.
+ * A 401 comes from the login guard: authApi.ts's `UnauthenticatedErrorBody`.
  */
 export type CollectorRoundErrorBody =
   | InvalidRoundErrorBody
   | OrdersNotWaitingErrorBody
   | RoundNotFoundErrorBody
   | ConfirmationsClosedErrorBody
+  | RouteNotOpenErrorBody
+  | StopAtEdgeErrorBody
+  | InvalidMoveErrorBody
   | OrderNotFoundErrorBody
   | InvalidTransitionErrorBody;
