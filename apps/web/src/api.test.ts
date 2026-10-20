@@ -18,6 +18,7 @@ import {
   buildRoute,
   cancelCollectorOrder,
   cancelCustomerOrder,
+  closeRound,
   collectStop,
   confirmCustomerOrder,
   confirmOrderByPhone,
@@ -1780,6 +1781,108 @@ describe('markStopNotFound', () => {
     expect(await markStopNotFound(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
       kind: 'failed',
     });
+  });
+});
+
+/**
+ * The routed round once Yoel tapped "סגור סבב": closed, with `closedAt`. Its second stop was not
+ * reached, so that order is back in `waiting` and the stop shows `left`.
+ */
+const CLOSED_VIEW: RoundView = {
+  ...ROUTED_VIEW,
+  round: {
+    ...ROUTED_VIEW.round,
+    status: 'closed',
+    closedAt: new Date('2026-11-12T15:30:00.000Z'),
+  },
+  stops: [
+    ROUTED_VIEW.stops[0]!,
+    {
+      order: {
+        ...SECOND_ORDER,
+        status: 'waiting',
+        lastMiss: { date: '2026-11-12', reason: 'notReached', roundId: ROUND_VIEW.round.id },
+      },
+      hasLocation: false,
+      state: 'left',
+    },
+  ],
+};
+
+describe('closeRound', () => {
+  it('posts to /api/collector/rounds/:id/close, the id encoded, no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: CLOSED_VIEW });
+
+    await closeRound(ODD_ID, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/rounds/${ODD_ID_IN_PATH}/close`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.init?.headers).toBeUndefined();
+  });
+
+  it('answers closed with the closed view on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: CLOSED_VIEW });
+
+    const outcome = await closeRound(ROUND_VIEW.round.id, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'closed', view: CLOSED_VIEW });
+    if (outcome.kind !== 'closed') throw new Error('expected closed');
+    expect(outcome.view.round.closedAt).toBeInstanceOf(Date);
+    expect(outcome.view.stops[1]?.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not a round view', async () => {
+    for (const answer of NOT_A_ROUTED_VIEW) {
+      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers notFound on a 404', async () => {
+    for (const answer of [
+      { status: 404, body: { error: 'round_not_found' } },
+      { status: 404, text: 'Not Found' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'notFound',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, a 409 too, without a retry', async () => {
+    for (const status of [201, 400, 403, 409, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'confirmations_closed' } },
+        { status: 200, body: CLOSED_VIEW },
+      );
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), String(status)).toEqual({
+        kind: 'failed',
+      });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: CLOSED_VIEW });
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
   });
 });
 

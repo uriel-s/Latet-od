@@ -29,7 +29,10 @@ export type RoundStatus = z.infer<typeof roundStatusSchema>;
  * Where an open round is (spec §3.6):
  * - `confirming`: the confirmation requests went out, and the customers are confirming (step 1).
  * - `routed`: Yoel tapped "סגור אישורים ובנה מסלול"; whoever did not confirm left the round and
- *   the route is built and stored (step 2, a later section).
+ *   the route is built and stored (step 2).
+ * "סגור סבב" does not change the phase: a closed round keeps the one it was closed in, which
+ * records whether its route was ever built (and why its orders left: `notConfirmed` or
+ * `notReached`).
  */
 export const ROUND_PHASES = ['confirming', 'routed'] as const;
 export const roundPhaseSchema = z.enum(ROUND_PHASES);
@@ -90,7 +93,10 @@ export const roundSchema = z.object({
    */
   stops: z.array(roundStopSchema),
   createdAt: timestampSchema,
-  /** Set when Yoel taps "סגור סבב". */
+  /**
+   * Set when Yoel taps "סגור סבב" (POST /api/collector/rounds/:id/close), once: closing a round
+   * already closed keeps its first `closedAt`.
+   */
   closedAt: timestampSchema.optional(),
 });
 export type Round = z.infer<typeof roundSchema>;

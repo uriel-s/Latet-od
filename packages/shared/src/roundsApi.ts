@@ -2,7 +2,8 @@
 // "מסלול"): planning a round, the round's view with its orders in three groups, its "שלח" list and
 // its route's stops, "אישר בטלפון", building the route ("סגור אישורים ובנה מסלול"), moving a stop
 // up or down, the two stop actions "אספתי" (collected, with its "שלח תודה" row) and "לא נמצא"
-// (not found), and the error bodies with their plain-Hebrew messages. Every route is behind
+// (not found), closing the round ("סגור סבב", no body: its answer is the round's view), and the
+// error bodies with their plain-Hebrew messages. Every route is behind
 // requireCollector (ADR-0004). apps/api implements the routes with it and apps/web's screens call
 // them, so the two sides agree on one definition.
 import { z } from 'zod';
@@ -203,8 +204,9 @@ export type RouteStopView = z.infer<typeof routeStopViewSchema>;
  * 201 from POST /api/collector/rounds, and of a 200 from GET /api/collector/rounds/:id, from
  * POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone, from
  * POST /api/collector/rounds/:id/route, from POST /api/collector/rounds/:id/stops/:orderId/move,
- * and from the two stop actions POST /api/collector/rounds/:id/stops/:orderId/collected and
- * .../not-found.
+ * from the two stop actions POST /api/collector/rounds/:id/stops/:orderId/collected and
+ * .../not-found, and from "סגור סבב" POST /api/collector/rounds/:id/close (the round `closed`,
+ * with `closedAt`, in the phase it was closed in; its unhandled orders sent back to `waiting`).
  */
 export const roundViewSchema = z.object({
   round: collectorRoundSchema,
