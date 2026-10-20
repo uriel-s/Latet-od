@@ -22767,6 +22767,23 @@ function createCollectorStopActionsRouter(deps) {
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
+  async function findRouteStop(roundId, orderId, res) {
+    const round = await rounds.findById(roundId);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return null;
+    }
+    if (round.status !== "open" || round.phase !== "routed") {
+      sendRouteNotOpen(res);
+      return null;
+    }
+    const order = round.stops.some((stop) => stop.orderId === orderId) ? await orders.findById(orderId) : null;
+    if (order === null) {
+      sendOrderNotFound(res);
+      return null;
+    }
+    return { round, order };
+  }
   router.post("/:id/stops/:orderId/collected", async (req, res) => {
     const parsed = collectStopRequestSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
@@ -22775,20 +22792,9 @@ function createCollectorStopActionsRouter(deps) {
     }
     const request = parsed.data;
     const { id, orderId } = req.params;
-    const round = await rounds.findById(id);
-    if (round === null) {
-      sendRoundNotFound(res);
-      return;
-    }
-    if (round.status !== "open" || round.phase !== "routed") {
-      sendRouteNotOpen(res);
-      return;
-    }
-    const order = round.stops.some((stop) => stop.orderId === orderId) ? await orders.findById(orderId) : null;
-    if (order === null) {
-      sendOrderNotFound(res);
-      return;
-    }
+    const found = await findRouteStop(id, orderId, res);
+    if (found === null) return;
+    const { round, order } = found;
     const state = roundStopStateOf(round, order);
     if (state === "collected") {
       sendView(res, await loadRoundView(round));
@@ -22828,6 +22834,40 @@ function createCollectorStopActionsRouter(deps) {
       collected,
       orderMessage(collected, "thankYou", { publicBaseUrl: messaging.publicBaseUrl })
     );
+    sendView(res, await loadRoundView(round));
+  });
+  router.post("/:id/stops/:orderId/not-found", async (req, res) => {
+    const { id, orderId } = req.params;
+    const found = await findRouteStop(id, orderId, res);
+    if (found === null) return;
+    const { round, order } = found;
+    const state = roundStopStateOf(round, order);
+    if (state === "notFound") {
+      sendView(res, await loadRoundView(round));
+      return;
+    }
+    if (state !== "toCollect") {
+      sendStopHandled(res);
+      return;
+    }
+    if (!canTransition(order.status, "waiting")) {
+      sendInvalidTransition2(res);
+      return;
+    }
+    const left = await orders.update(
+      orderId,
+      leaveRoundPatch(order, round, "notFound", /* @__PURE__ */ new Date()),
+      { ifStatus: [order.status] }
+    );
+    if (left === null) {
+      const current = await orders.findById(orderId);
+      if (current !== null && roundStopStateOf(round, current) === "notFound") {
+        sendView(res, await loadRoundView(round));
+        return;
+      }
+      sendInvalidTransition2(res);
+      return;
+    }
     sendView(res, await loadRoundView(round));
   });
   return router;

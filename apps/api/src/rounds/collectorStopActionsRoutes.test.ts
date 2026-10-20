@@ -1,4 +1,5 @@
-// Acceptance tests of the stop actions under /api/collector/rounds (spec §3.6 step 2: "אספתי")
+// Acceptance tests of the stop actions under /api/collector/rounds (spec §3.6 step 2: "אספתי" and
+// "לא נמצא")
 // through supertest against createApp(fakes): no listen(), no port, no database, no network. Each
 // test keeps the in-memory repos and the FakeSender it passes in, seeds a routed round directly
 // (makeNewRound with its stops, and confirmed orders in it), and reads back what the route stored
@@ -58,12 +59,15 @@ const MANUAL_REQUEST: MessageLogEntry = {
 /**
  * An in-memory orders repo where something happens to the order at the worst moment: just before
  * a conditional write (`ifStatus`) to an id in {@link collectBeforeConditionalWrite}, the order is
- * collected (the other tap of a double tap won); to an id in {@link cancelBeforeConditionalWrite},
- * it is cancelled (the customer's cancel). Either way the write finds another status and answers
- * null. Unconditional writes (the message log) go through as usual.
+ * collected (the other tap of a double tap won); to an id in {@link notFoundBeforeConditionalWrite},
+ * it is marked not found in the mapped round (the other tap of a "לא נמצא" double tap won); to an
+ * id in {@link cancelBeforeConditionalWrite}, it is cancelled (the customer's cancel). Either way
+ * the write finds another status and answers null. Unconditional writes (the message log) go
+ * through as usual.
  */
 class RacingOrdersRepo extends InMemoryOrdersRepo {
   readonly collectBeforeConditionalWrite = new Set<string>();
+  readonly notFoundBeforeConditionalWrite = new Map<string, Round>();
   readonly cancelBeforeConditionalWrite = new Set<string>();
 
   override async update(
@@ -73,11 +77,19 @@ class RacingOrdersRepo extends InMemoryOrdersRepo {
   ): Promise<Order | null> {
     if (options?.ifStatus !== undefined) {
       const now = new Date();
+      const notFoundIn = this.notFoundBeforeConditionalWrite.get(id);
       if (this.collectBeforeConditionalWrite.has(id)) {
         await super.update(id, {
           status: 'collected',
           bottlesCollected: 33,
           collectedAt: now,
+          updatedAt: now,
+        });
+      } else if (notFoundIn !== undefined) {
+        await super.update(id, {
+          status: 'waiting',
+          roundId: undefined,
+          lastMiss: { date: notFoundIn.date, reason: 'notFound', roundId: notFoundIn.id },
           updatedAt: now,
         });
       } else if (this.cancelBeforeConditionalWrite.has(id)) {
@@ -186,6 +198,15 @@ async function storedState(): Promise<{ orders: Order[]; rounds: Round[]; sent: 
 function collect(roundId: string, orderId: string, body?: unknown): request.Test {
   const req = request(app)
     .post(`${BASE}/${roundId}/stops/${orderId}/collected`)
+    .set(SAME_ORIGIN_HEADERS)
+    .set('Cookie', cookie);
+  return body === undefined ? req : req.send(body as object);
+}
+
+/** "לא נמצא" on the stop of `orderId`; `body` left out sends no body at all. */
+function notFound(roundId: string, orderId: string, body?: unknown): request.Test {
+  const req = request(app)
+    .post(`${BASE}/${roundId}/stops/${orderId}/not-found`)
     .set(SAME_ORIGIN_HEADERS)
     .set('Cookie', cookie);
   return body === undefined ? req : req.send(body as object);
@@ -657,6 +678,316 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/collected: logs', () => 
     // The customer's name and phone did go out, in the thank-you to them: it is the log (console)
     // that must never see them, nor anything else from a body.
     expect(sender.sent[0]).toMatchObject({ to: PHONE_E164, vars: { name: NAME } });
+    for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצא"', () => {
+  it('sends the order back to waiting, keeps the stop in the route as notFound, and sends nothing', async () => {
+    const { round, stops } = await seedRoutedRound([{}, {}]);
+    const [stop, other] = stops;
+    if (!stop || !other) throw new Error();
+
+    const before = new Date();
+    const res = await notFound(round.id, stop.id);
+    const after = new Date();
+
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    const stored = await storedOrder(stop.id);
+    expect(stored.status).toBe('waiting');
+    expect(stored.roundId).toBeUndefined();
+    expect(stored.lastMiss).toStrictEqual({
+      date: round.date,
+      reason: 'notFound',
+      roundId: round.id,
+    });
+    expectBetween(stored.updatedAt, before, after);
+    // Nothing else of the order changes: its message log is the confirmation request alone.
+    expect(stored.messages).toStrictEqual([MANUAL_REQUEST]);
+    expect(stored.bottlesCollected).toBeUndefined();
+    // No message: "לא נמצא" sends nothing to the customer.
+    expect(sender.sent).toHaveLength(0);
+
+    const view = viewOf(res);
+    expect(view.round).toMatchObject({ id: round.id, status: 'open', phase: 'routed' });
+    // The stop stays in the route, in its place, shown as handled.
+    expect(view.stops.map((s) => s.order.id)).toStrictEqual([stop.id, other.id]);
+    expect(stopOf(view, stop.id).state).toBe('notFound');
+    expect(stopOf(view, stop.id)).not.toHaveProperty('thankYou');
+    expect(stopOf(view, other.id).state).toBe('toCollect');
+    // It is in none of the confirmation step's groups.
+    for (const group of view.groups) {
+      expect(group.orders.map((o) => o.id)).not.toContain(stop.id);
+    }
+    expect(await storedOrder(other.id)).toStrictEqual(other);
+    // The round itself is not written: it still holds the order and its stop.
+    expect(await rounds.findById(round.id)).toStrictEqual(round);
+    // GET /:id answers the same: the change is stored, not only answered.
+    expect((await getRound(round.id)).body).toStrictEqual(res.body);
+  });
+
+  it('answers a second tap with 200 and writes nothing', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const stop = first(stops);
+    const firstTap = await notFound(round.id, stop.id);
+    expect(firstTap.status).toBe(200);
+    const before = await storedState();
+
+    const res = await notFound(round.id, stop.id);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toStrictEqual(firstTap.body);
+    // Deep-equal state includes every order's updatedAt: the second tap wrote nothing.
+    expect(await storedState()).toStrictEqual(before);
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it('sends a pending stop back to waiting as well', async () => {
+    const { round, stops } = await seedRoutedRound([{ status: 'pending' }]);
+    const stop = first(stops);
+
+    const res = await notFound(round.id, stop.id);
+
+    expect(res.status).toBe(200);
+    const stored = await storedOrder(stop.id);
+    expect(stored.status).toBe('waiting');
+    expect(stored.roundId).toBeUndefined();
+    expect(stored.lastMiss).toStrictEqual({
+      date: round.date,
+      reason: 'notFound',
+      roundId: round.id,
+    });
+    expect(stopOf(viewOf(res), stop.id).state).toBe('notFound');
+  });
+
+  it('ignores a body', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const stop = first(stops);
+
+    const res = await notFound(round.id, stop.id, { bottlesCollected: 0 });
+
+    expect(res.status).toBe(200);
+    expect(stopOf(viewOf(res), stop.id).state).toBe('notFound');
+  });
+
+  it.each([
+    {
+      label: 'a collected stop',
+      overrides: {
+        status: 'collected',
+        bottlesCollected: 40,
+        collectedAt: new Date('2026-11-12T07:00:00.000Z'),
+      },
+    },
+    {
+      label: 'a cancelled stop',
+      overrides: { status: 'cancelled', cancelledAt: new Date('2026-11-12T07:00:00.000Z') },
+    },
+  ] satisfies { label: string; overrides: Partial<NewOrder> }[])(
+    'refuses $label with 409 stop_handled, changing nothing',
+    async ({ overrides }) => {
+      const { round, stops } = await seedRoutedRound([overrides]);
+      const before = await storedState();
+
+      const res = await notFound(round.id, first(stops).id);
+
+      expectStopHandled(res);
+      expect(await storedState()).toStrictEqual(before);
+    },
+  );
+
+  it('refuses a stop that left the round with 409 stop_handled, changing nothing', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const stop = first(stops);
+    await orders.update(stop.id, {
+      status: 'waiting',
+      roundId: undefined,
+      lastMiss: { date: round.date, reason: 'addressChanged', roundId: round.id },
+      updatedAt: new Date(),
+    });
+    const before = await storedState();
+
+    const res = await notFound(round.id, stop.id);
+
+    expectStopHandled(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it.each([
+    { label: 'an order of the round that is no stop', which: 'notAStop' },
+    { label: 'a stop of another round', which: 'otherRound' },
+    { label: 'an unknown order id', which: 'unknown' },
+    { label: 'a malformed order id', which: 'malformed' },
+  ] as const)('answers $label with 404 order_not_found, changing nothing', async ({ which }) => {
+    const { round, notAStop } = await seedRoutedRound([{}], { notAStop: [{ status: 'pending' }] });
+    const other = await seedRoutedRound();
+    const orderIds: Record<typeof which, string> = {
+      notAStop: first(notAStop).id,
+      otherRound: first(other.stops).id,
+      unknown: UNKNOWN_ID,
+      malformed: MALFORMED_ID,
+    };
+    const before = await storedState();
+
+    const res = await notFound(round.id, orderIds[which]);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'order_not_found' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it.each([
+    { label: 'an unknown id', id: UNKNOWN_ID },
+    { label: 'a malformed id', id: MALFORMED_ID },
+  ])('answers $label with 404 round_not_found, changing nothing', async ({ id }) => {
+    const { stops } = await seedRoutedRound();
+    const before = await storedState();
+
+    const res = await notFound(id, first(stops).id);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'round_not_found' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('refuses a round still confirming with 409 route_not_open, changing nothing', async () => {
+    const { round, stops } = await seedRoutedRound([{}], { round: { phase: 'confirming' } });
+    const before = await storedState();
+
+    const res = await notFound(round.id, first(stops).id);
+
+    expectRouteNotOpen(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('refuses a closed round with 409 route_not_open, changing nothing', async () => {
+    const { round, stops } = await seedRoutedRound();
+    await rounds.update(round.id, { status: 'closed', closedAt: new Date() });
+    const before = await storedState();
+
+    const res = await notFound(round.id, first(stops).id);
+
+    expectRouteNotOpen(res);
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it('answers the double tap that lost the race with 200', async () => {
+    const racing = new RacingOrdersRepo();
+    buildApp({ orders: racing });
+    const { round, stops } = await seedRoutedRound();
+    const stop = first(stops);
+    racing.notFoundBeforeConditionalWrite.set(stop.id, round);
+
+    const res = await notFound(round.id, stop.id);
+
+    expect(res.status).toBe(200);
+    expect(stopOf(viewOf(res), stop.id).state).toBe('notFound');
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it('refuses with 409 invalid_transition when the customer cancelled between the read and the write', async () => {
+    const racing = new RacingOrdersRepo();
+    buildApp({ orders: racing });
+    const { round, stops } = await seedRoutedRound();
+    const stop = first(stops);
+    racing.cancelBeforeConditionalWrite.add(stop.id);
+
+    const res = await notFound(round.id, stop.id);
+
+    expectInvalidTransition(res);
+    const stored = await storedOrder(stop.id);
+    expect(stored.status).toBe('cancelled');
+    expect(stored.roundId).toBe(round.id);
+    expect(stored.lastMiss).toBeUndefined();
+    expect(sender.sent).toHaveLength(0);
+  });
+
+  it('leaves the order plannable into a new round, and the old route still shows it not found', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const stop = first(stops);
+    expect((await notFound(round.id, stop.id)).status).toBe(200);
+
+    const planned = await request(app)
+      .post(BASE)
+      .set(SAME_ORIGIN_HEADERS)
+      .set('Cookie', cookie)
+      .send({ date: '2026-11-19', region: 'ramat', orderIds: [stop.id] });
+
+    expect(planned.status).toBe(201);
+    const newRoundId = viewOf(planned).round.id;
+    expect(await storedOrder(stop.id)).toMatchObject({ status: 'pending', roundId: newRoundId });
+    // The old round's route still records what happened at its stop.
+    const oldView = await getRound(round.id);
+    expect(oldView.status).toBe(200);
+    expect(stopOf(viewOf(oldView), stop.id).state).toBe('notFound');
+  });
+});
+
+describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: the login and the Origin check', () => {
+  it('answers without a session cookie with 401, changing nothing', async () => {
+    const { round, stops } = await seedRoutedRound();
+    const before = await storedState();
+
+    // From the site itself, so it is the login guard answering, not the Origin check.
+    const res = await request(app)
+      .post(`${BASE}/${round.id}/stops/${first(stops).id}/not-found`)
+      .set(SAME_ORIGIN_HEADERS);
+
+    expect(res.status).toBe(401);
+    expect(res.body).toStrictEqual({ error: 'unauthenticated' });
+    expect(await storedState()).toStrictEqual(before);
+  });
+
+  it.each([
+    { label: 'from another site', origin: 'https://evil.example' },
+    { label: 'with no Origin header', origin: undefined },
+  ])(
+    'refuses a not-found $label with 403 forbidden_origin, even with the cookie',
+    async ({ origin }) => {
+      const { round, stops } = await seedRoutedRound();
+      const before = await storedState();
+
+      const req = request(app)
+        .post(`${BASE}/${round.id}/stops/${first(stops).id}/not-found`)
+        .set('Host', TEST_HOST)
+        .set('Cookie', cookie);
+      const res = await (origin === undefined ? req : req.set('Origin', origin));
+
+      expect(res.status).toBe(403);
+      expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
+      expect(await storedState()).toStrictEqual(before);
+    },
+  );
+});
+
+describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: logs', () => {
+  it('logs nothing, whatever the answer', async () => {
+    const { round, stops } = await seedRoutedRound([
+      {
+        contact: { name: NAME, phone: PHONE_E164, method: 'whatsapp' },
+        address: {
+          streetName: 'הרחוב שלי',
+          houseNumber: HOUSE_NUMBER,
+          bottlesSpot: 'privateHouse',
+        },
+      },
+      { status: 'cancelled', cancelledAt: new Date() },
+    ]);
+    const [customer, cancelled] = stops;
+    if (!customer || !cancelled) throw new Error();
+
+    const statuses = [
+      // A body holding a phone is ignored, and never logged.
+      (await notFound(round.id, customer.id, { phone: PHONE_E164 })).status,
+      (await notFound(round.id, customer.id)).status,
+      (await notFound(round.id, cancelled.id)).status,
+      (await notFound(round.id, UNKNOWN_ID)).status,
+      (await notFound(UNKNOWN_ID, customer.id)).status,
+    ];
+
+    expect(statuses).toStrictEqual([200, 200, 409, 404, 404]);
+    expect(sender.sent).toHaveLength(0);
     for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();
   });
 });
