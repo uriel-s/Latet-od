@@ -6,6 +6,7 @@ import type {
   CreateOrderResponse,
   CustomerOrder,
   CustomerUpdateOrderRequest,
+  HistoryResponse,
   MeResponse,
   OrderGroup,
   PlanRoundRequest,
@@ -26,6 +27,7 @@ import {
   declineCustomerOrder,
   fetchCollectorOrder,
   fetchCustomerOrder,
+  fetchHistory,
   fetchRounds,
   fetchSession,
   fetchWaitingOrders,
@@ -1881,6 +1883,125 @@ describe('closeRound', () => {
     for (const answer of ['networkError', 'throws'] as const) {
       const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: CLOSED_VIEW });
       expect(await closeRound(ROUND_VIEW.round.id, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The collector's history: GET /api/collector/history?month=
+// ---------------------------------------------------------------------------------------------
+
+/** October 2026: one collected order and one cancelled one, newest first. */
+const HISTORY: HistoryResponse = {
+  month: '2026-10',
+  totals: { bottlesCollected: 45, addressesCollected: 1, valueAgorot: 900 },
+  orders: [
+    {
+      id: 'o2',
+      status: 'cancelled',
+      contact: { name: 'משה לוי' },
+      address: { streetName: 'הרצל', houseNumber: '5' },
+      bottlesEstimated: 40,
+      closedAt: new Date('2026-10-20T09:00:00.000Z'),
+    },
+    {
+      id: 'o1',
+      status: 'collected',
+      contact: { name: 'דנה כהן' },
+      address: { streetName: 'שד נהר הדן', houseNumber: '12' },
+      bottlesEstimated: 40,
+      bottlesCollected: 45,
+      closedAt: new Date('2026-10-12T07:30:00.000Z'),
+    },
+  ],
+};
+
+describe('fetchHistory', () => {
+  it('asks GET /api/collector/history with the month, past the browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: HISTORY });
+
+    await fetchHistory('2026-10', fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/history?month=2026-10');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  it('encodes the month, so it stays one query value', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 400, body: { error: 'invalid_month' } });
+
+    await fetchHistory('2026-10&month=2026-11', fetchFn);
+
+    expect(calls[0]?.input).toBe('/api/collector/history?month=2026-10%26month%3D2026-11');
+  });
+
+  it('answers loaded with the totals and the closed orders on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: HISTORY });
+
+    const outcome = await fetchHistory('2026-10', fetchFn);
+
+    expect(outcome).toEqual({ kind: 'loaded', history: HISTORY });
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.history.orders[0]?.closedAt).toBeInstanceOf(Date);
+  });
+
+  it('answers loaded for a month with nothing closed', async () => {
+    const empty: HistoryResponse = {
+      month: '2026-09',
+      totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
+      orders: [],
+    };
+    const { fetchFn } = makeFakeFetch({ status: 200, body: empty });
+
+    expect(await fetchHistory('2026-09', fetchFn)).toEqual({ kind: 'loaded', history: empty });
+  });
+
+  it('answers failed on a 200 whose body is not a history', async () => {
+    const [firstOrder] = HISTORY.orders;
+    for (const answer of [
+      { status: 200, body: { ...HISTORY, month: '2026-13' } },
+      { status: 200, body: { ...HISTORY, totals: { ...HISTORY.totals, valueAgorot: -1 } } },
+      { status: 200, body: { ...HISTORY, orders: [{ ...firstOrder, status: 'waiting' }] } },
+      { status: 200, body: { ...HISTORY, orders: [{ ...firstOrder, closedAt: 'yesterday' }] } },
+      { status: 200, body: { totals: HISTORY.totals, orders: [] } },
+      { status: 200, body: [] },
+      { status: 200, text: '<html>ok</html>' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchHistory('2026-10', fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchHistory('2026-10', fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, a 400 too, without a retry', async () => {
+    for (const status of [201, 400, 403, 404, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'invalid_month' } },
+        { status: 200, body: HISTORY },
+      );
+      expect(await fetchHistory('2026-10', fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: HISTORY });
+      expect(await fetchHistory('2026-10', fetchFn), answer).toEqual({ kind: 'failed' });
       expect(calls, answer).toHaveLength(1);
     }
   });
