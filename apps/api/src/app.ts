@@ -8,6 +8,7 @@ import { createAuthRouter } from './auth/authRoutes.ts';
 import { requireCollector } from './auth/requireCollector.ts';
 import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
+import { createCollectorOrdersRouter } from './orders/collectorOrdersRoutes.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
 import { requireSameOrigin } from './sameOrigin.ts';
 
@@ -68,9 +69,13 @@ export function createApp(deps: AppDeps): Express {
 
   // Everything under /api/collector is Yoel's alone: without a valid session cookie it answers 401
   // (auth/requireCollector.ts), and an old session is renewed on the way through. Every collector
-  // route (sections 6+) is added under /api/collector, AFTER this line, and is therefore protected.
-  // With a valid cookie, a path no route serves falls through to the 404 below.
+  // route is mounted under /api/collector, AFTER this line, and is therefore protected. With a
+  // valid cookie, a path no route serves falls through to the 404 below.
   app.use('/api/collector', requireCollector(deps.auth));
+
+  // The "הזמנות" screen (spec §3.5): list the waiting orders by region, get, edit, cancel and add
+  // an order (orders/collectorOrdersRoutes.ts).
+  app.use('/api/collector/orders', createCollectorOrdersRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
   // a mistyped customer link holds the token.

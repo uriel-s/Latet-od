@@ -3,12 +3,14 @@
 // האוסף"). Switching tabs only changes `path`; this component and its guard stay mounted.
 import { useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../router.tsx';
+import { AddOrderScreen } from './AddOrderScreen.tsx';
 import { BottomNav } from './BottomNav.tsx';
 import { CollectorNotFound } from './CollectorNotFound.tsx';
+import { EditOrderScreen } from './EditOrderScreen.tsx';
 import { HistoryScreen } from './HistoryScreen.tsx';
 import { OrdersScreen } from './OrdersScreen.tsx';
 import { RoundsScreen } from './RoundsScreen.tsx';
-import { tabForPath, type CollectorTab } from './tabs.ts';
+import { ordersView, tabForPath, type CollectorTab, type OrdersView } from './tabs.ts';
 
 const LOGOUT_LABEL = 'יציאה';
 const LOGGING_OUT_LABEL = 'יוצא...';
@@ -64,23 +66,45 @@ export function CollectorShell({ path, logOut }: CollectorShellProps) {
         </button>
       </div>
 
-      {screenFor(tab)}
+      {screenFor(tab, path)}
 
       <BottomNav activeTab={tab} />
     </>
   );
 }
 
-/** The screen of a tab; null is a path no screen has. Sections 6 and 8 replace the screens. */
-function screenFor(tab: CollectorTab | null): ReactNode {
+/**
+ * The screen of a tab at `path`; a null tab is a path no screen has. The orders tab has three
+ * screens (the list, add and edit), all under the one tab "הזמנות". Section 8 replaces the rounds
+ * and history screens.
+ */
+function screenFor(tab: CollectorTab | null, path: string): ReactNode {
   switch (tab) {
     case 'orders':
-      return <OrdersScreen />;
+      return ordersScreenFor(ordersView(path));
     case 'rounds':
       return <RoundsScreen />;
     case 'history':
       return <HistoryScreen />;
     case null:
       return <CollectorNotFound />;
+  }
+}
+
+/** The screen of the orders tab (spec §3.5). */
+function ordersScreenFor(view: OrdersView | null): ReactNode {
+  // tabForPath gives the orders tab only to paths ordersView knows, so null does not happen here;
+  // it is handled anyway rather than asserted away.
+  if (view === null) return <CollectorNotFound />;
+  switch (view.view) {
+    case 'list':
+      return <OrdersScreen />;
+    case 'new':
+      return <AddOrderScreen />;
+    case 'edit':
+      // The key mounts the screen anew for another order (from one edit link to another): it
+      // loads that order, and its street pickers, which read their value only when they mount,
+      // show that order's streets.
+      return <EditOrderScreen key={view.id} id={view.id} />;
   }
 }

@@ -1,28 +1,20 @@
 // The public booking form at `/` (spec §3.1) and, once the order is in, the thank-you screen in
-// its place (spec §3.2). The rules live in the shared schema (formValues.ts), the request in
-// api.ts and the returning customer's prefill in savedDetails.ts: this file is the screen itself,
-// its state, and where focus goes after each answer.
+// its place (spec §3.2). The rules live in the shared schema (formValues.ts), the fields in
+// OrderFields.tsx and their state in useOrderForm.ts (both shared with Yoel's add and edit
+// screens), the request in api.ts and the returning customer's prefill in savedDetails.ts: this
+// file is the screen itself, the parts only the public form has (the honeypot, the privacy line),
+// and what happens after each answer.
 import { useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
-import {
-  BOTTLES_SPOT_LABELS,
-  FORM_TEXT_MAX_LENGTH,
-  MIN_BOTTLES,
-  ORDER_HONEYPOT_FIELD,
-  bottlesSpotSchema,
-  type CreateOrderRequest,
-} from '@bottlerun/shared';
+import { ORDER_HONEYPOT_FIELD, type CreateOrderRequest } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE, createOrder, type CreateOrderOutcome } from '../api.ts';
-import { TextField } from '../components/TextField.tsx';
 import { navigate, useLocation } from '../router.tsx';
-import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import {
+  NO_ERRORS,
   emptyOrderFormValues,
   validateOrderForm,
-  type FormErrors,
-  type OrderFormField,
   type OrderFormValues,
 } from './formValues.ts';
+import { OrderFields } from './OrderFields.tsx';
 import {
   formValuesFromPrefill,
   loadSavedDetails,
@@ -30,12 +22,10 @@ import {
   saveDetails,
 } from './savedDetails.ts';
 import { ThankYou } from './ThankYou.tsx';
+import { useOrderForm } from './useOrderForm.ts';
 
 const SUBMIT_LABEL = 'שליחת הזמנה';
 const SENDING_LABEL = 'שולח...';
-
-/** No error anywhere: the form as it opens, and while a request is on its way. */
-const NO_ERRORS: FormErrors = { byField: {} };
 
 /**
  * The values the form opens with. Section 9's "הזמנה חדשה עם אותם פרטים" (the details passed in
@@ -68,40 +58,18 @@ export interface OrderFormPageProps {
  */
 export function OrderFormPage({ submitOrder = createOrder }: OrderFormPageProps) {
   const { state: navigationState } = useLocation();
-  const [values, setValues] = useState(() => initialFormValues(navigationState));
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const { values, setValues, errors, setErrors, setField, formRef, showErrors } = useOrderForm(() =>
+    initialFormValues(navigationState),
+  );
   const [sending, setSending] = useState(false);
   // Set by a successful order: the thank-you screen replaces the form.
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
   // Enter that comes before it.
   const sendingRef = useRef(false);
-  const formRef = useRef<HTMLFormElement>(null);
-  const spotGroupName = useId();
-  const spotErrorId = useId();
   const honeypotId = useId();
 
   if (createdToken !== null) return <ThankYou token={createdToken} />;
-
-  /** Changes one field and clears that field's error (only that one: the rest still hold). */
-  function setField<F extends OrderFormField>(field: F, value: OrderFormValues[F]): void {
-    setValues((previous) => ({ ...previous, [field]: value }));
-    setErrors((previous) =>
-      previous.byField[field] === undefined
-        ? previous
-        : { ...previous, byField: { ...previous.byField, [field]: undefined } },
-    );
-  }
-
-  /** Shows `nextErrors`, then moves focus to the first field that has one, in form order. */
-  function showErrors(nextErrors: FormErrors): void {
-    // Rendered first, so the field is focused (and announced) together with its message, and
-    // the focus call stays inside the tap's handler, which is what lets iOS open the keyboard.
-    flushSync(() => setErrors(nextErrors));
-    // Every field with an error carries aria-invalid, the street picker's input too: the first
-    // one in the document is the first wrong field of the form.
-    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-  }
 
   async function send(): Promise<void> {
     if (sendingRef.current) return;
@@ -149,8 +117,6 @@ export function OrderFormPage({ submitOrder = createOrder }: OrderFormPageProps)
     }
   }
 
-  const spotError = errors.byField.bottlesSpot;
-
   return (
     <>
       <h1>הזמנת איסוף בקבוקים</h1>
@@ -166,108 +132,7 @@ export function OrderFormPage({ submitOrder = createOrder }: OrderFormPageProps)
           void send();
         }}
       >
-        <TextField
-          label="שם"
-          value={values.name}
-          onChange={(name) => setField('name', name)}
-          error={errors.byField.name}
-          autoComplete="name"
-          maxLength={FORM_TEXT_MAX_LENGTH.name}
-        />
-
-        <TextField
-          label="טלפון נייד"
-          type="tel"
-          digits
-          value={values.phone}
-          onChange={(phone) => setField('phone', phone)}
-          error={errors.byField.phone}
-          hint={
-            <>
-              למשל <bdi dir="ltr">050-1234567</bdi>
-            </>
-          }
-          autoComplete="tel"
-        />
-
-        {/* The picker reads `value` once, when it mounts. The prefill exists before the first
-            render, so the saved street shows without a remount `key`. */}
-        <StreetPicker
-          label="רחוב"
-          value={values.street}
-          onChange={(street) => setField('street', street)}
-          error={errors.byField.street}
-        />
-
-        <TextField
-          // Not numeric: a house number may carry a letter ("12א").
-          label="מספר בית"
-          value={values.houseNumber}
-          onChange={(houseNumber) => setField('houseNumber', houseNumber)}
-          error={errors.byField.houseNumber}
-          // The street is a custom picker the browser cannot fill, so its address autofill would
-          // put a whole "street and number" line here, which the house number then rejects.
-          autoComplete="off"
-          maxLength={FORM_TEXT_MAX_LENGTH.houseNumber}
-        />
-
-        <fieldset className="field" aria-describedby={spotError ? spotErrorId : undefined}>
-          <legend className="field-label">איפה הבקבוקים</legend>
-          <div className="choice-list">
-            {bottlesSpotSchema.options.map((spot) => (
-              <label key={spot} className="choice">
-                <input
-                  type="radio"
-                  name={spotGroupName}
-                  value={spot}
-                  checked={values.bottlesSpot === spot}
-                  onChange={() => setField('bottlesSpot', spot)}
-                  aria-invalid={spotError ? true : undefined}
-                />
-                {BOTTLES_SPOT_LABELS[spot]}
-              </label>
-            ))}
-          </div>
-          {spotError && (
-            <p id={spotErrorId} className="field-error">
-              {spotError}
-            </p>
-          )}
-        </fieldset>
-
-        {/* Only the apartment door needs a floor and apartment (Yoel goes up). When hidden, the
-            value stays in state but is not sent (validateOrderForm). */}
-        {values.bottlesSpot === 'apartmentDoor' && (
-          <TextField
-            label="קומה ודירה"
-            value={values.floorApt}
-            onChange={(floorApt) => setField('floorApt', floorApt)}
-            error={errors.byField.floorApt}
-            hint="למשל: כניסה ב', קומה 3, דירה 12"
-            autoComplete="off"
-            maxLength={FORM_TEXT_MAX_LENGTH.floorApt}
-          />
-        )}
-
-        <TextField
-          label="הערה (לא חובה)"
-          value={values.note}
-          onChange={(note) => setField('note', note)}
-          error={errors.byField.note}
-          hint="למשל: ליד השער, קוד לבניין"
-          autoComplete="off"
-          maxLength={FORM_TEXT_MAX_LENGTH.note}
-        />
-
-        <TextField
-          label="כמות בקבוקים"
-          digits
-          value={values.bottlesEstimated}
-          onChange={(bottlesEstimated) => setField('bottlesEstimated', bottlesEstimated)}
-          error={errors.byField.bottlesEstimated}
-          hint={`לפחות ${MIN_BOTTLES} בקבוקים`}
-          autoComplete="off"
-        />
+        <OrderFields values={values} errors={errors.byField} onFieldChange={setField} />
 
         {/* The spam trap (spec §7): off-screen and hidden from screen readers, so only a bot
             fills it, and the api then answers with a fake success and stores nothing. So it must
