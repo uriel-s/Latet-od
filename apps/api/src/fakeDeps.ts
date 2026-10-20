@@ -2,7 +2,8 @@
 // `createApp(createFakeDeps())`, and override one piece when they need to see or steer it.
 import { randomBytes } from 'node:crypto';
 import { InMemoryAttemptStore } from './attempts/inMemoryAttemptStore.ts';
-import type { AppDeps, AuthDeps } from './deps.ts';
+import type { AppDeps, AuthDeps, MessagingDeps } from './deps.ts';
+import { FakeSender } from './messages/fakeSender.ts';
 import { InMemoryOrdersRepo } from './orders/inMemoryOrdersRepo.ts';
 
 /**
@@ -31,9 +32,27 @@ export function createFakeAuth(overrides: Partial<AuthDeps> = {}): AuthDeps {
 }
 
 /**
+ * The origin {@link createFakeMessaging} puts in front of every link: a reserved `.test` domain,
+ * so a link in a test can never reach a real site.
+ */
+export const FAKE_PUBLIC_BASE_URL = 'https://latet-od.test';
+
+/**
+ * WhatsApp settings for tests: a fresh {@link FakeSender} (records every message, answers with a
+ * `manual` https url) and {@link FAKE_PUBLIC_BASE_URL}.
+ *
+ * @param overrides E.g. `{ sender: new FakeSender(() => ({ mode: 'failed', reason: 'x' })) }` for
+ *   a sender that fails. A test that inspects what was sent keeps its own FakeSender and passes it.
+ */
+export function createFakeMessaging(overrides: Partial<MessagingDeps> = {}): MessagingDeps {
+  return { sender: new FakeSender(), publicBaseUrl: FAKE_PUBLIC_BASE_URL, ...overrides };
+}
+
+/**
  * Fresh, empty fakes for every dependency: an {@link InMemoryOrdersRepo}, an
- * {@link InMemoryAttemptStore} on the real clock, a database whose ping always answers, and
- * {@link createFakeAuth}'s login. Each call makes new instances, so tests never share state.
+ * {@link InMemoryAttemptStore} on the real clock, a database whose ping always answers,
+ * {@link createFakeAuth}'s login, and {@link createFakeMessaging}'s WhatsApp sender. Each call makes
+ * new instances, so tests never share state.
  *
  * @param overrides Pieces to use instead, e.g. `{ db: { ping: () => Promise.reject(...) } }` for a
  *   database that is down, or a repo the test keeps a reference to and inspects.
@@ -44,6 +63,7 @@ export function createFakeDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     attempts: new InMemoryAttemptStore(),
     db: { ping: () => Promise.resolve() },
     auth: createFakeAuth(),
+    messaging: createFakeMessaging(),
     ...overrides,
   };
 }
