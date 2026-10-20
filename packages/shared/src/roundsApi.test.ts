@@ -234,8 +234,27 @@ describe('buildRoundView', () => {
     expect(view.groups.map((group) => group.key)).toEqual([...ROUND_GROUP_KEYS]);
     expect(idsIn(view, 'confirmed')).toEqual(['a', 'c', 'e', 'h']);
     expect(idsIn(view, 'pending')).toEqual(['b', 'f']);
-    // Any reason counts: the card's lastMiss tag shows the real one.
-    expect(idsIn(view, 'otherDate')).toEqual(['d', 'g']);
+    // Only who asked for another date: 'g' left because it did not confirm, so it is in none.
+    expect(idsIn(view, 'otherDate')).toEqual(['d']);
+    expect(view.groups.flatMap((group) => group.orders.map((order) => order.id))).not.toContain(
+      'g',
+    );
+  });
+
+  it('puts an order that left the round for another reason in no group', () => {
+    const round = makeRound(['a', 'b', 'c']);
+    const leftFor = (id: string, reason: 'addressChanged' | 'notFound' | 'notReached'): Order =>
+      makeOrder(id, {
+        status: 'waiting',
+        roundId: undefined,
+        lastMiss: { date: '2026-11-05', reason, roundId: ROUND_ID },
+      });
+    const view = buildRoundView(round, [
+      leftFor('a', 'addressChanged'),
+      leftFor('b', 'notFound'),
+      leftFor('c', 'notReached'),
+    ]);
+    expect(view.groups.flatMap((group) => group.orders)).toEqual([]);
   });
 
   it('finds an order that left the round by lastMiss, even once it is in another round', () => {
