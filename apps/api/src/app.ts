@@ -1,7 +1,8 @@
 // The Express app, built by createApp(deps), with no listen() call: the public booking form, the
-// collector's login, and Yoel's screens under /api/collector (orders, rounds). Two thin entry
-// points wrap it (ADR-0002): src/server.ts for local runs and plain Node hosting, and (section 10)
-// a Vercel function entry. Both pass the real dependencies (db/mongoDeps.ts, auth/authConfig.ts,
+// customer's own order page (/api/o/:token, reached by its token, no login), the collector's
+// login, and Yoel's screens under /api/collector (orders, rounds). Two thin entry points wrap it
+// (ADR-0002): src/server.ts for local runs and plain Node hosting, and (section 10) a Vercel
+// function entry. Both pass the real dependencies (db/mongoDeps.ts, auth/authConfig.ts,
 // messages/messagingConfig.ts); tests pass fakes (fakeDeps.ts).
 import express, { type Express } from 'express';
 import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
@@ -11,6 +12,7 @@ import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
 import { createCollectorOrdersRouter } from './orders/collectorOrdersRoutes.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
+import { createCustomerOrderRouter } from './orders/customerOrderRoutes.ts';
 import { createCollectorRoundsRouter } from './rounds/collectorRoundsRoutes.ts';
 import { requireSameOrigin } from './sameOrigin.ts';
 
@@ -64,6 +66,12 @@ export function createApp(deps: AppDeps): Express {
 
   // The public booking form (spec §3.1): the per-IP rate limit, then the route (createOrderRoute.ts).
   app.post('/api/orders', ...createOrderHandlers(deps));
+
+  // The customer's own page /o/<token> (spec §3.3): GET the order, and POST confirm / decline /
+  // cancel (orders/customerOrderRoutes.ts). Public, so NOT behind requireCollector: the long
+  // random token in the path is the only key, and an unknown or malformed one is a 404. The POSTs
+  // still go through the Origin check above. Every answer is `Cache-Control: no-store`.
+  app.use('/api/o', createCustomerOrderRouter(deps));
 
   // The collector's login (ADR-0004): POST /api/auth/login, POST /api/auth/logout and
   // GET /api/auth/me (auth/authRoutes.ts).
