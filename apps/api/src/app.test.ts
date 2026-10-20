@@ -68,7 +68,8 @@ describe('GET /api/health', () => {
 
 describe('unknown api paths', () => {
   it('answer 404 with a JSON error that does not echo the path', async () => {
-    const res = await request(createApp(createFakeDeps())).get('/api/o/some-secret-token');
+    // A mistyped customer link: under /api/o, but no route of the customer's page serves it.
+    const res = await request(createApp(createFakeDeps())).get('/api/o/some-secret-token/typo');
 
     expect(res.status).toBe(404);
     expect(res.headers['content-type']).toMatch(/^application\/json/u);

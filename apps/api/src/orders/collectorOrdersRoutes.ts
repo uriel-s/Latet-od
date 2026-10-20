@@ -194,7 +194,11 @@ export function createCollectorOrdersRouter(deps: Pick<AppDeps, 'orders'>): Rout
     }
 
     const now = new Date();
-    // `roundId` stays as it is: leaving a round is the rounds' business (section 8).
+    // A cancelled order KEEPS its `roundId` (the customer's own cancel, customerOrderRoutes.ts,
+    // does the same): cancelled is final, so it can never be planned into a round again anyway;
+    // the round's view leaves a cancelled order out of every group (buildRoundView); and the
+    // roundId records which round it was cancelled in. Only an order that goes back to `waiting`
+    // leaves its round (rounds/leaveRound.ts).
     const cancelled = await orders.update(
       id,
       { status: 'cancelled', cancelledAt: now, updatedAt: new Date(now) },
