@@ -123,6 +123,44 @@ h1[tabindex='-1']:focus {
   padding-block: 0.75rem;
 }
 
+/* The name and slogan, and (booking form only) "כניסת מנהל" opposite them; the button drops under
+   the slogan when the phone is too narrow for both. */
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.header-login {
+  flex: none;
+}
+
+/* The flyer's garland of flags (components/Bunting.tsx), hanging from the header's lower edge onto
+   the page. Decoration only: the flags carry no meaning and no text. */
+.bunting {
+  display: block;
+  width: 100%;
+  height: 26px;
+  pointer-events: none;
+}
+
+.bunting-flag-light {
+  fill: var(--color-accent);
+}
+
+.bunting-flag-white {
+  fill: var(--color-white);
+}
+
+.bunting-flag-light,
+.bunting-flag-white {
+  stroke: var(--color-text);
+  stroke-opacity: 0.2;
+  stroke-width: 1;
+}
+
 /* The app name is plain text, not a heading: each page has its own <h1> (see Layout.tsx). */
 .app-name {
   margin: 0;
@@ -138,7 +176,7 @@ h1[tabindex='-1']:focus {
 
 .site-main {
   flex: 1;
-  padding-block-end: 2rem;
+  padding-block: 0.5rem 2rem;
 }
 
 /* A quiet footer: a thin accent line like the header's, and very small centred text (about 12px,

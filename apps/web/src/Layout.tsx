@@ -1,9 +1,10 @@
 // The frame around every page: the brand at the top (spec §3.1, colours in styles.css from
-// spec §7), the page itself in <main>, and a quiet footer: the OpenStreetMap credit (ADR-0005: the
-// street points come from OSM under ODbL, so the credit is on every page) and, on the public
-// booking form, the way in for Yoel.
+// spec §7) with the flyer's garland of flags under it and, on the public booking form, the
+// collector's way in; the page itself in <main>; and a quiet footer with the OpenStreetMap credit
+// (ADR-0005: the street points come from OSM under ODbL, so the credit is on every page).
 import type { ReactNode } from 'react';
 import { APP_NAME, APP_SLOGAN, STREETS_ATTRIBUTION } from '@bottlerun/shared';
+import { Bunting } from './components/Bunting.tsx';
 import { Link } from './router.tsx';
 
 // OSM's attribution guideline: the credit links to the copyright page, which states the ODbL.
@@ -13,9 +14,9 @@ const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 export interface LayoutProps {
   children: ReactNode;
   /**
-   * Adds "כניסת מנהל" to the footer: a small link to /login, for the public booking form only.
-   * The customer's own page and Yoel's app do not need it, and an extra link there would only
-   * confuse an elderly customer.
+   * Adds the "כניסת מנהל" button to the header: a link to /login, for the public booking form
+   * only. The customer's own page and Yoel's app do not need it, and an extra button there would
+   * only confuse an elderly customer.
    */
   collectorLink?: boolean;
 }
@@ -32,11 +33,19 @@ export function Layout({ children, collectorLink = false }: LayoutProps) {
   return (
     <div className="layout">
       <header className="site-header">
-        <div className="column">
-          <p className="app-name">{APP_NAME}</p>
-          <p className="app-slogan">{APP_SLOGAN}</p>
+        <div className="column site-header-inner">
+          <div>
+            <p className="app-name">{APP_NAME}</p>
+            <p className="app-slogan">{APP_SLOGAN}</p>
+          </div>
+          {collectorLink && (
+            <Link to="/login" className="button button-secondary header-login">
+              כניסת מנהל
+            </Link>
+          )}
         </div>
       </header>
+      <Bunting />
 
       <main className="column site-main">{children}</main>
 
@@ -56,13 +65,6 @@ export function Layout({ children, collectorLink = false }: LayoutProps) {
               {STREETS_ATTRIBUTION}
             </a>
           </p>
-          {collectorLink && (
-            <p>
-              <Link to="/login" className="footer-link">
-                כניסת מנהל
-              </Link>
-            </p>
-          )}
         </div>
       </footer>
     </div>
