@@ -146,26 +146,28 @@ export const messageLinkSchema = z.object({
 export type MessageLink = z.infer<typeof messageLinkSchema>;
 
 /**
- * The "שלח" row of an order for one kind of message: its LATEST `manual` entry of that kind, so a
- * round planned again shows the new link, not the one of a round the order left. `undefined` when
- * the order has none (no message yet, or only `sent` / `failed` ones). Pure.
+ * The "שלח" row of an order for one kind of message, from the NEWEST entry of that kind in its
+ * log: a row when that entry is a `manual` (wa.me) link, `undefined` otherwise (no message of the
+ * kind yet, or the newest one was `sent` automatically or `failed`). Entries of the other kind are
+ * ignored. Pure.
+ *
+ * Only the newest entry counts, never an older `manual` one behind it: an order planned into a
+ * second round must not get the first round's link, with its old date. If the newest request
+ * failed, there is no row to send rather than a stale one.
  */
 export function toMessageLink(order: Order, kind: MessageKind): MessageLink | undefined {
-  for (let index = order.messages.length - 1; index >= 0; index--) {
-    const entry = order.messages[index];
-    if (entry?.mode === 'manual' && entry.kind === kind) {
-      return {
-        orderId: order.id,
-        messageIndex: index,
-        kind,
-        name: order.contact.name,
-        url: entry.url,
-        // Left out rather than set to undefined when the link was never opened.
-        ...(entry.openedAt === undefined ? {} : { openedAt: entry.openedAt }),
-      };
-    }
-  }
-  return undefined;
+  const index = order.messages.findLastIndex((entry) => entry.kind === kind);
+  const entry = order.messages[index];
+  if (entry?.mode !== 'manual') return undefined;
+  return {
+    orderId: order.id,
+    messageIndex: index,
+    kind,
+    name: order.contact.name,
+    url: entry.url,
+    // Left out rather than set to undefined when the link was never opened.
+    ...(entry.openedAt === undefined ? {} : { openedAt: entry.openedAt }),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------

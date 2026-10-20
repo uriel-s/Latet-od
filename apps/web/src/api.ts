@@ -5,17 +5,22 @@ import {
   COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
   LOGIN_MESSAGES,
+  ROUND_MESSAGES,
   collectorOrderResponseSchema,
   collectorOrdersResponseSchema,
   createOrderResponseSchema,
   meResponseSchema,
   messageOpenedResponseSchema,
+  roundViewSchema,
+  roundsResponseSchema,
   type AddOrderRequest,
   type CollectorOrder,
   type CreateOrderRequest,
   type CreateOrderResponse,
   type LoginRequest,
   type OrderGroup,
+  type PlanRoundRequest,
+  type RoundView,
   type SessionUser,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
@@ -29,7 +34,10 @@ export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 // `fetch` itself around as a parameter or property can turn into.
 const globalFetch: FetchFn = (input, init) => fetch(input, init);
 
-/** Shown on the form when the order could not be sent, or its answer was not understood. */
+/**
+ * Shown on a form when what it sent got no usable answer (the booking form's order, the planning
+ * screen's round), or its answer was not understood.
+ */
 export const NETWORK_ERROR_MESSAGE = 'לא הצלחנו לשלוח. נא לבדוק את החיבור לאינטרנט ולנסות שוב.';
 
 /**
@@ -536,4 +544,193 @@ export async function markMessageOpened(
     default:
       return { kind: 'failed' };
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The collector's rounds: /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 "סבב")
+//
+// Behind the login like the routes above, with the same rules: a 401 is `loggedOut`, nothing is
+// retried (a plan that reached the api but lost its answer is stored, and sending it again would
+// only answer `ordersNotWaiting`), every message is a shared constant, never the body's text, and
+// every success body is parsed with the shared schema.
+// ---------------------------------------------------------------------------------------------
+
+const COLLECTOR_ROUNDS_PATH = '/api/collector/rounds';
+
+/** How GET /api/collector/rounds ended, as the "סבבים" tab and the planning screen use it. */
+export type RoundsOutcome =
+  /**
+   * 200: the OPEN rounds, by date, each with its orders in groups and its "שלח" list; and the
+   * `pickupBy` of the round created last, which the planning screen pre-fills (ADR-0003). Absent
+   * when that round had none, or there was no round yet.
+   */
+  | { kind: 'loaded'; rounds: RoundView[]; previousPickupBy?: string }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 5xx, or a 200 the app cannot read. */
+  | { kind: 'failed' };
+
+/** Loads the open rounds from `GET /api/collector/rounds`, past the browser cache. */
+export async function fetchRounds(fetchFn: FetchFn = globalFetch): Promise<RoundsOutcome> {
+  const response = await fetchOrNull(fetchFn, COLLECTOR_ROUNDS_PATH, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const parsed = roundsResponseSchema.safeParse(await readJson(response));
+      return parsed.success
+        ? {
+            kind: 'loaded',
+            rounds: parsed.data.rounds,
+            previousPickupBy: parsed.data.previousPickupBy,
+          }
+        : { kind: 'failed' };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How POST /api/collector/rounds ("שלח בקשות אישור") ended, as the planning screen shows it. */
+export type PlanRoundOutcome =
+  /** 201: the round is planned and its orders are `pending`; `view` is the round as stored. */
+  | { kind: 'planned'; view: RoundView }
+  /**
+   * 400: the plan did not validate (normally caught by the same check before sending).
+   * `fieldErrors` maps a field (`date`, `region`, `orderIds`, `pickupBy`, `personalText`) to its
+   * plain-Hebrew message; empty when the body had none the app can read.
+   */
+  | { kind: 'invalid'; fieldErrors: Record<string, string> }
+  /**
+   * 409 `orders_not_waiting`: some marked order was meanwhile cancelled, edited away or planned
+   * into another round, so nothing was planned. `orderIds` lists them (empty when the body did
+   * not); the screen reloads its list.
+   */
+  | { kind: 'ordersNotWaiting'; message: string; orderIds: string[] }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403 or 5xx, another 409, or a body it cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Plans a round (spec §3.5 "תכנון סבב") with `POST /api/collector/rounds`: the api stores it,
+ * moves the orders to `pending` and writes each one's confirmation request.
+ */
+export async function planRound(
+  request: PlanRoundRequest,
+  fetchFn: FetchFn = globalFetch,
+): Promise<PlanRoundOutcome> {
+  const response = await fetchOrNull(fetchFn, COLLECTOR_ROUNDS_PATH, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 201: {
+      const view = await roundViewOf(response);
+      return view === null ? { kind: 'failed' } : { kind: 'planned', view };
+    }
+    case 400: {
+      // `fieldErrors` only when it is an object of strings, as the route sends it
+      // (`invalid_round`); any other 400 still tells Yoel to check the form.
+      const body = await readJson(response);
+      const fieldErrors = isObject(body) ? body.fieldErrors : undefined;
+      return { kind: 'invalid', fieldErrors: isStringRecord(fieldErrors) ? fieldErrors : {} };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 409: {
+      // Told apart by the body's code, like the orders' 409s: a conflict this screen does not
+      // know is `failed` rather than a guess.
+      const body = await readJson(response);
+      if (!isObject(body) || body.error !== 'orders_not_waiting') return { kind: 'failed' };
+      return {
+        kind: 'ordersNotWaiting',
+        message: ROUND_MESSAGES.ordersNotWaiting,
+        orderIds: isStringArray(body.orderIds) ? body.orderIds : [],
+      };
+    }
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How "אישר בטלפון" ended, as the round screen shows it. */
+export type ConfirmByPhoneOutcome =
+  /** 200: the order is confirmed (also when it already was); `view` is the round as it is now. */
+  | { kind: 'confirmed'; view: RoundView }
+  /**
+   * 409: the round's confirmations are closed (`confirmations_closed`), or the order can no longer
+   * be confirmed, because it was cancelled or collected (`invalid_transition`).
+   */
+  | { kind: 'closed'; message: string }
+  /** 404: the round is gone, or the order is not in it (any more). */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403 or 5xx, another 409, or a body it cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Yoel's "אישר בטלפון" (spec §3.6): marks order `orderId` of round `roundId` confirmed, with
+ * `POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone` (no body). Both ids are
+ * encoded into the path. An order already confirmed answers `confirmed` too, so a second tap is
+ * harmless.
+ */
+export async function confirmOrderByPhone(
+  roundId: string,
+  orderId: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<ConfirmByPhoneOutcome> {
+  const path =
+    `${COLLECTOR_ROUNDS_PATH}/${encodeURIComponent(roundId)}` +
+    `/orders/${encodeURIComponent(orderId)}/confirm-by-phone`;
+  const response = await fetchOrNull(fetchFn, path, { method: 'POST' });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const view = await roundViewOf(response);
+      return view === null ? { kind: 'failed' } : { kind: 'confirmed', view };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    case 409:
+      return confirmConflictOutcome(await readJson(response));
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/**
+ * A 409 of "אישר בטלפון", told apart by the body's `error` code: both are `closed`, each with its
+ * own words. A body without a known code is `failed`: guessing could tell Yoel the wrong thing.
+ */
+function confirmConflictOutcome(body: unknown): ConfirmByPhoneOutcome {
+  const code = isObject(body) ? body.error : undefined;
+  switch (code) {
+    case 'confirmations_closed':
+      return { kind: 'closed', message: ROUND_MESSAGES.confirmationsClosed };
+    case 'invalid_transition':
+      return { kind: 'closed', message: COLLECTOR_ORDER_MESSAGES.orderClosed };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** The round of a success body, or null when the body is not a `RoundView`. */
+async function roundViewOf(response: Response): Promise<RoundView | null> {
+  const parsed = roundViewSchema.safeParse(await readJson(response));
+  return parsed.success ? parsed.data : null;
+}
+
+/** A JSON array whose every item is a string, like the 409 body's `orderIds`. */
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }

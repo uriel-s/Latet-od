@@ -128,13 +128,16 @@ describe('groupSummary', () => {
 
 describe('OrdersScreen', () => {
   describe('while the orders load', () => {
-    it('shows the heading, the add link and a loading status', () => {
+    it('shows the heading, the add and plan links and a loading status', () => {
       renderScreen(() => deferred<WaitingOrdersOutcome>().promise);
 
       expectOneH1();
       expect(screen.getByRole('status').textContent).toBe('טוען...');
       expect(screen.getByRole('link', { name: 'הוספת הזמנה' }).getAttribute('href')).toBe(
         '/app/orders/new',
+      );
+      expect(screen.getByRole('link', { name: 'תכנון סבב' }).getAttribute('href')).toBe(
+        '/app/orders/plan',
       );
       expect(screen.queryByRole('region')).toBeNull();
     });
@@ -286,6 +289,19 @@ describe('OrdersScreen', () => {
 
       expect(window.location.pathname).toBe('/app/orders/new');
     });
+
+    it('links "תכנון סבב" to the planning screen, right after "הוספת הזמנה"', async () => {
+      await renderLoaded();
+
+      const links = screen.getAllByRole('link').map((link) => link.textContent);
+      expect(links.slice(0, 2)).toEqual(['הוספת הזמנה', 'תכנון סבב']);
+      const plan = screen.getByRole('link', { name: 'תכנון סבב' });
+      expect(plan.getAttribute('href')).toBe('/app/orders/plan');
+
+      fireEvent.click(plan);
+
+      expect(window.location.pathname).toBe('/app/orders/plan');
+    });
   });
 
   describe('logged out', () => {
@@ -322,6 +338,7 @@ describe('OrdersScreen', () => {
       expectOneH1();
       expect(screen.getByRole('button', { name: 'לנסות שוב' })).toBeDefined();
       expect(screen.getByRole('link', { name: 'הוספת הזמנה' })).toBeDefined();
+      expect(screen.getByRole('link', { name: 'תכנון סבב' })).toBeDefined();
       expect(screen.queryByRole('region')).toBeNull();
       expect(window.location.pathname).toBe('/app/orders');
     });

@@ -243,6 +243,47 @@ export function describeOrdersRepoContract(
 
         expect(ids(result)).toEqual([confirmed.id]);
       });
+
+      it('filters by ids, oldest first whatever the order of the list', async () => {
+        const older = await repo.create(makeNewOrder({ createdAt: minutesLater(0) }));
+        await repo.create(makeNewOrder({ createdAt: minutesLater(5) }));
+        const newer = await repo.create(makeNewOrder({ createdAt: minutesLater(10) }));
+
+        const result = await repo.list({ ids: [newer.id, older.id] });
+
+        expect(ids(result)).toEqual([older.id, newer.id]);
+      });
+
+      it('skips unknown and malformed ids in the ids filter', async () => {
+        const created = await repo.create(makeNewOrder());
+
+        const result = await repo.list({ ids: [UNKNOWN_ID, ...MALFORMED_IDS, created.id] });
+
+        expect(ids(result)).toEqual([created.id]);
+      });
+
+      it('returns nothing when no id in the ids filter is known', async () => {
+        await repo.create(makeNewOrder());
+
+        expect(await repo.list({ ids: [UNKNOWN_ID] })).toEqual([]);
+        expect(await repo.list({ ids: MALFORMED_IDS })).toEqual([]);
+      });
+
+      it('returns nothing for an empty ids list', async () => {
+        await repo.create(makeNewOrder());
+
+        expect(await repo.list({ ids: [] })).toEqual([]);
+      });
+
+      it('applies ids and status together', async () => {
+        const pending = await repo.create(makeNewOrder({ status: 'pending' }));
+        const cancelled = await repo.create(makeNewOrder({ status: 'cancelled' }));
+        await repo.create(makeNewOrder({ status: 'pending' }));
+
+        const result = await repo.list({ ids: [pending.id, cancelled.id], statuses: ['pending'] });
+
+        expect(ids(result)).toEqual([pending.id]);
+      });
     });
 
     describe('update', () => {

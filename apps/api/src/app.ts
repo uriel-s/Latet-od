@@ -1,7 +1,8 @@
-// The Express app, built by createApp(deps), with no listen() call. Two thin entry points wrap it
-// (ADR-0002): src/server.ts for local runs and plain Node hosting, and (section 10) a Vercel
-// function entry. Both pass the real dependencies (db/mongoDeps.ts, auth/authConfig.ts); tests
-// pass fakes (fakeDeps.ts).
+// The Express app, built by createApp(deps), with no listen() call: the public booking form, the
+// collector's login, and Yoel's screens under /api/collector (orders, rounds). Two thin entry
+// points wrap it (ADR-0002): src/server.ts for local runs and plain Node hosting, and (section 10)
+// a Vercel function entry. Both pass the real dependencies (db/mongoDeps.ts, auth/authConfig.ts,
+// messages/messagingConfig.ts); tests pass fakes (fakeDeps.ts).
 import express, { type Express } from 'express';
 import type { ApiErrorBody, HealthResponse } from '@bottlerun/shared';
 import { createAuthRouter } from './auth/authRoutes.ts';
@@ -10,6 +11,7 @@ import type { AppDeps } from './deps.ts';
 import { errorHandler, logError } from './errors.ts';
 import { createCollectorOrdersRouter } from './orders/collectorOrdersRoutes.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
+import { createCollectorRoundsRouter } from './rounds/collectorRoundsRoutes.ts';
 import { requireSameOrigin } from './sameOrigin.ts';
 
 /**
@@ -76,6 +78,10 @@ export function createApp(deps: AppDeps): Express {
   // The "הזמנות" screen (spec §3.5): list the waiting orders by region, get, edit, cancel and add
   // an order, and mark an order's WhatsApp "שלח" link as opened (orders/collectorOrdersRoutes.ts).
   app.use('/api/collector/orders', createCollectorOrdersRouter(deps));
+
+  // The round screens (spec §3.5 "תכנון סבב", §3.6 step 1): plan a round and send its confirmation
+  // requests, list the open rounds, one round, and "אישר בטלפון" (rounds/collectorRoundsRoutes.ts).
+  app.use('/api/collector/rounds', createCollectorRoundsRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
   // a mistyped customer link holds the token.

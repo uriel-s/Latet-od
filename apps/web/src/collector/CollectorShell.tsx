@@ -9,6 +9,7 @@ import { CollectorNotFound } from './CollectorNotFound.tsx';
 import { EditOrderScreen } from './EditOrderScreen.tsx';
 import { HistoryScreen } from './HistoryScreen.tsx';
 import { OrdersScreen } from './OrdersScreen.tsx';
+import { PlanRoundScreen } from './PlanRoundScreen.tsx';
 import { RoundsScreen } from './RoundsScreen.tsx';
 import { ordersView, tabForPath, type CollectorTab, type OrdersView } from './tabs.ts';
 
@@ -74,9 +75,9 @@ export function CollectorShell({ path, logOut }: CollectorShellProps) {
 }
 
 /**
- * The screen of a tab at `path`; a null tab is a path no screen has. The orders tab has three
- * screens (the list, add and edit), all under the one tab "הזמנות". Section 8 replaces the rounds
- * and history screens.
+ * The screen of a tab at `path`; a null tab is a path no screen has. The orders tab has four
+ * screens (the list, add, plan and edit), all under the one tab "הזמנות". The rounds tab shows the
+ * open rounds and their confirmations; the history screen stays a placeholder until its section.
  */
 function screenFor(tab: CollectorTab | null, path: string): ReactNode {
   switch (tab) {
@@ -101,6 +102,8 @@ function ordersScreenFor(view: OrdersView | null): ReactNode {
       return <OrdersScreen />;
     case 'new':
       return <AddOrderScreen />;
+    case 'plan':
+      return <PlanRoundScreen />;
     case 'edit':
       // The key mounts the screen anew for another order (from one edit link to another): it
       // loads that order, and its street pickers, which read their value only when they mount,

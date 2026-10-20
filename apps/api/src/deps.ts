@@ -6,11 +6,14 @@ import type { AttemptStore } from './attempts/attemptStore.ts';
 import type { VerifyCredentials } from './auth/credentials.ts';
 import type { MessageSender } from './messages/messageSender.ts';
 import type { OrdersRepo } from './orders/ordersRepo.ts';
+import type { RoundsRepo } from './rounds/roundsRepo.ts';
 
 /** Everything the app talks to outside itself; tests pass fakes (CLAUDE.md: every external call behind an interface). */
 export interface AppDeps {
   /** Stored orders (collection `orders`). */
   orders: OrdersRepo;
+  /** Stored rounds (collection `rounds`). */
+  rounds: RoundsRepo;
   /** Attempt counts for login limits and the form's rate limit (ADR-0004). */
   attempts: AttemptStore;
   /** Whether the database answers, for /api/health. */

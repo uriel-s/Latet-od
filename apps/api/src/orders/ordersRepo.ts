@@ -40,6 +40,12 @@ export interface OrderListFilter {
   statuses?: readonly OrderStatus[];
   /** Orders in this round. */
   roundId?: string;
+  /**
+   * Orders whose id is in this list, e.g. a round's `orderIds` for its view. Ids that are unknown
+   * or malformed simply match nothing; an empty list matches no order. The result keeps the
+   * repo's oldest-first order, not the order of this list.
+   */
+  ids?: readonly string[];
 }
 
 /** Conditions on `update()`. */

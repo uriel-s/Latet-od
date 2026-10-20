@@ -6,6 +6,7 @@ import {
   type CollectorOrder,
   type CollectorOrderResponse,
   type CollectorOrdersResponse,
+  type RoundsResponse,
 } from '@bottlerun/shared';
 import type { SessionOutcome } from '../api.ts';
 import { matchRoute, navigate, useLocation } from '../router.tsx';
@@ -36,7 +37,9 @@ const ORDERS_BY_ID: readonly CollectorOrder[] = [
 ];
 
 /** A 200 with `body` as JSON. */
-function jsonResponse(body: CollectorOrdersResponse | CollectorOrderResponse): Promise<Response> {
+function jsonResponse(
+  body: CollectorOrdersResponse | CollectorOrderResponse | RoundsResponse,
+): Promise<Response> {
   return Promise.resolve(
     new Response(JSON.stringify(body), {
       status: 200,
@@ -48,11 +51,13 @@ function jsonResponse(body: CollectorOrdersResponse | CollectorOrderResponse): P
 /**
  * The orders screens call the real api functions (CollectorShell passes no fake), so every test
  * here stubs the global fetch: GET /api/collector/orders answers an empty list, GET
- * /api/collector/orders/<id> one of {@link ORDERS_BY_ID}, and no test sends a request from jsdom.
+ * /api/collector/orders/<id> one of {@link ORDERS_BY_ID}, GET /api/collector/rounds no rounds,
+ * and no test sends a request from jsdom.
  * The session itself is checked by the fake loadSession.
  */
 function fakeApi(input: string): Promise<Response> {
   if (input === '/api/collector/orders') return jsonResponse({ groups: groupWaitingOrders([]) });
+  if (input === '/api/collector/rounds') return jsonResponse({ rounds: [] });
   const order = ORDERS_BY_ID.find(({ id }) => input === `/api/collector/orders/${id}`);
   if (order !== undefined) return jsonResponse({ order });
   return Promise.resolve(new Response(null, { status: 404 }));
@@ -170,6 +175,8 @@ describe('CollectorApp', () => {
 
       expect(await screen.findByRole('heading', { level: 1, name: 'סבבים' })).toBeDefined();
       expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      // The rounds tab loads its own list (no round open in the stub); then nothing is loading.
+      expect(await screen.findByText('אין סבב פתוח.')).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
       expect(screen.getByRole('button', { name: 'יציאה' })).toBeDefined();
       expect(tabNames()).toEqual(['הזמנות', 'סבבים', 'היסטוריה']);
@@ -192,9 +199,10 @@ describe('CollectorApp', () => {
       ['/app/', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
       ['/app/orders', 'הזמנות', 'הזמנות', 'הוספת הזמנה'],
       ['/app/orders/new', 'הוספת הזמנה', 'הזמנות', 'שמירת ההזמנה'],
+      ['/app/orders/plan', 'תכנון סבב', 'הזמנות', 'שלח בקשות אישור'],
       ['/app/orders/o1', 'עריכת הזמנה', 'הזמנות', 'שמירת השינויים'],
       ['/app/orders/no-such-order', 'עריכת הזמנה', 'הזמנות', 'ההזמנה לא נמצאה.'],
-      ['/app/rounds', 'סבבים', 'סבבים', 'בקרוב.'],
+      ['/app/rounds', 'סבבים', 'סבבים', 'אין סבב פתוח.'],
       ['/app/history', 'היסטוריה', 'היסטוריה', 'בקרוב.'],
     ])(
       'at %s shows the screen "%s" with the tab "%s" current',
@@ -207,7 +215,7 @@ describe('CollectorApp', () => {
       },
     );
 
-    it.each(['/app/orders/a/b', '/app/orders/new/x', '/app/orders/%E0%A4%A'])(
+    it.each(['/app/orders/a/b', '/app/orders/new/x', '/app/orders/plan/x', '/app/orders/%E0%A4%A'])(
       'shows "page not found" at %s, with no tab current',
       async (path) => {
         renderAt(path, fakeSession(LOGGED_IN).load);
@@ -257,6 +265,10 @@ describe('CollectorApp', () => {
       fireEvent.click(within(bottomNav()).getByRole('link', { name: 'סבבים' }));
 
       expect(screen.getByRole('heading', { level: 1, name: 'סבבים' })).toBeDefined();
+      // A new session check would replace the app with its own heading and no navigation.
+      expect(currentTabs()).toEqual(['סבבים']);
+      // The rounds tab loads its own list; once it is there, nothing is loading.
+      expect(await screen.findByText('אין סבב פתוח.')).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
       // Let any check that was (wrongly) started settle before counting.
       await new Promise((settle) => setTimeout(settle, 0));

@@ -1,6 +1,7 @@
 // One labelled text input with its hint and its error next to it: the building block of every
-// form in the app (the booking form, the collector's login). Styled by the `.field*` classes in
-// styles.css; the page owns the value and the error, this component only shows them.
+// form in the app (the booking form, the collector's login, the planning screen's date and time).
+// Styled by the `.field*` classes in styles.css; the page owns the value and the error, this
+// component only shows them.
 import { useId, type ReactNode, type Ref } from 'react';
 
 /** The ids for `aria-describedby`, space-separated; undefined when there is none. */
@@ -22,9 +23,11 @@ export interface TextFieldProps {
   maxLength?: number;
   /**
    * 'tel' for the phone: phones offer their own number. 'password' for the login: the text is
-   * hidden, and the phone's keyboard stops suggesting and capitalizing words.
+   * hidden, and the phone's keyboard stops suggesting and capitalizing words. 'date' and 'time'
+   * open the phone's own picker; their value is `YYYY-MM-DD` and `HH:MM` ('' when empty), and they
+   * read left to right like digits.
    */
-  type?: 'text' | 'tel' | 'password';
+  type?: 'text' | 'tel' | 'password' | 'date' | 'time';
   /**
    * Digits (phone, number of bottles): the phone opens its numeric keyboard, and the digits read
    * left to right inside the right-to-left page (CLAUDE.md).
@@ -55,6 +58,9 @@ export function TextField({
   const hintId = useId();
   const errorId = useId();
   const hasHint = hint !== undefined;
+  // A date or a time is digits too (12/11, 08:00), but its picker is the phone's own: no numeric
+  // keyboard is asked for, only the left-to-right reading.
+  const leftToRight = digits || type === 'date' || type === 'time';
 
   return (
     <div className="field">
@@ -75,8 +81,8 @@ export function TextField({
         autoComplete={autoComplete}
         maxLength={maxLength}
         inputMode={digits ? 'numeric' : undefined}
-        dir={digits ? 'ltr' : undefined}
-        className={digits ? 'ltr' : undefined}
+        dir={leftToRight ? 'ltr' : undefined}
+        className={leftToRight ? 'ltr' : undefined}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(hasHint ? hintId : undefined, error ? errorId : undefined)}
       />

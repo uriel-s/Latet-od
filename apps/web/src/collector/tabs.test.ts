@@ -19,6 +19,7 @@ describe('tabForPath', () => {
   it.each([
     ['orders', 'orders'],
     ['orders/new', 'orders'],
+    ['orders/plan', 'orders'],
     ['orders/64f0c0ffee0000000000abcd', 'orders'],
     ['orders/a%2Fb', 'orders'],
     ['rounds', 'rounds'],
@@ -34,6 +35,7 @@ describe('tabForPath', () => {
     'orders/',
     'orders/a/b',
     'orders/new/edit',
+    'orders/plan/x',
     'orders/%E0%A4%A',
     'history/orders',
   ])('has no tab for %s', (path) => {
@@ -48,6 +50,10 @@ describe('ordersView', () => {
 
   it('shows the add screen at orders/new', () => {
     expect(ordersView('orders/new')).toEqual({ view: 'new' });
+  });
+
+  it('shows the planning screen at orders/plan, not the edit screen of an order called plan', () => {
+    expect(ordersView('orders/plan')).toEqual({ view: 'plan' });
   });
 
   it('shows the edit screen of the order in the path', () => {
@@ -65,6 +71,7 @@ describe('ordersView', () => {
     'orders/',
     'orders/a/b',
     'orders/new/x',
+    'orders/plan/x',
     'orders/%E0%A4%A',
     'rounds',
     'history',

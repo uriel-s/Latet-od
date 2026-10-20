@@ -14,6 +14,8 @@ import {
 } from 'mongodb';
 import { OPEN_ORDER_STATUSES, orderSchema, type NewOrder, type Order } from '@bottlerun/shared';
 import { indexesOnce } from '../db/indexes.ts';
+import { parseObjectId } from '../db/objectId.ts';
+import { buildPatchUpdate, withoutUndefined, type PatchUpdate } from '../db/patchUpdate.ts';
 import {
   DuplicateOpenOrderError,
   type OrderListFilter,
@@ -56,13 +58,6 @@ export const ORDER_INDEXES: readonly IndexDescription[] = [
 
 /** Server error code of a write that breaks a unique index (E11000 duplicate key). */
 const DUPLICATE_KEY_CODE = 11000;
-
-/**
- * The id the repo hands out is the `_id`'s hex string: exactly 24 lowercase hex characters.
- * Stricter than `ObjectId.isValid`, which also accepts any 12-character string; and lowercase only,
- * so a different spelling of an id is unknown here exactly as in the in-memory fake.
- */
-const ORDER_ID_PATTERN = /^[0-9a-f]{24}$/;
 
 /**
  * {@link OrdersRepo} on the `orders` collection of `db`.
@@ -166,12 +161,12 @@ export class MongoOrdersRepo implements OrdersRepo {
 }
 
 /**
- * The ObjectId behind an order id, or null when `id` cannot be one the repo handed out (see
- * {@link ORDER_ID_PATTERN}). Methods turn null into "not found": a malformed id from a URL is a
- * miss, never an error.
+ * The ObjectId behind an order id, or null when `id` cannot be one the repo handed out (24
+ * lowercase hex characters, see {@link parseObjectId}). Methods turn null into "not found": a
+ * malformed id from a URL is a miss, never an error.
  */
 export function parseOrderId(id: string): ObjectId | null {
-  return ORDER_ID_PATTERN.test(id) ? ObjectId.createFromHexString(id) : null;
+  return parseObjectId(id);
 }
 
 /**
@@ -197,14 +192,16 @@ export function buildListFilter(filter: OrderListFilter): Filter<OrderDocument> 
   // An empty list stays `$in: []`, which matches nothing, as the contract says.
   if (filter.statuses !== undefined) query.status = { $in: [...filter.statuses] };
   if (filter.roundId !== undefined) query.roundId = { $eq: filter.roundId };
+  if (filter.ids !== undefined) {
+    // Malformed ids are dropped: no order can have one. If none is left, `$in: []` matches
+    // nothing, which is what the contract says for an empty list or a list of unknown ids.
+    query._id = { $in: filter.ids.flatMap((id) => parseOrderId(id) ?? []) };
+  }
   return query;
 }
 
 /** The update document {@link buildUpdate} makes from a patch. */
-export interface OrderUpdate {
-  $set?: OrderPatch;
-  $unset?: Partial<Record<keyof OrderPatch, ''>>;
-}
+export type OrderUpdate = PatchUpdate<OrderPatch>;
 
 /**
  * The Mongo update for `patch` (see {@link OrderPatch}): a key with a value replaces the field as a
@@ -212,18 +209,7 @@ export interface OrderUpdate {
  * nested `undefined` fields are left out. Null for an empty patch: Mongo refuses an empty update.
  */
 export function buildUpdate(patch: OrderPatch): OrderUpdate | null {
-  const $set: Record<string, unknown> = {};
-  const $unset: Record<string, ''> = {};
-  for (const [field, value] of Object.entries(patch)) {
-    if (value === undefined) $unset[field] = '';
-    else $set[field] = withoutUndefined(value);
-  }
-
-  const update: OrderUpdate = {};
-  // Its keys come from `patch`, so `$set` holds OrderPatch fields only.
-  if (Object.keys($set).length > 0) update.$set = $set;
-  if (Object.keys($unset).length > 0) update.$unset = $unset;
-  return update.$set === undefined && update.$unset === undefined ? null : update;
+  return buildPatchUpdate(patch);
 }
 
 /**
@@ -255,20 +241,4 @@ function violatesIndex(error: MongoServerError, indexName: string, field: string
   const keyPattern: unknown = error.keyPattern;
   if (typeof keyPattern === 'object' && keyPattern !== null) return field in keyPattern;
   return error.message.includes(`index: ${indexName} `);
-}
-
-/**
- * A deep copy of `value` without object keys whose value is `undefined` (at any depth), like the
- * driver with `ignoreUndefined`, so the repo is right even on a client without that option. Dates
- * are copied too, so the stored document and the returned order share nothing with the caller.
- */
-function withoutUndefined(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutUndefined);
-  if (value instanceof Date) return new Date(value);
-  if (value === null || typeof value !== 'object') return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, field]) => field !== undefined)
-      .map(([key, field]) => [key, withoutUndefined(field)]),
-  );
 }
