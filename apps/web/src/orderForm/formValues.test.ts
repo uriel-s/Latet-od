@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ORDER_FORM_ERRORS, orderFormSchema } from '@bottlerun/shared';
+import {
+  ORDER_FORM_ERRORS,
+  customerUpdateOrderRequestSchema,
+  orderFormSchema,
+} from '@bottlerun/shared';
 import {
   UNKNOWN_FIELD_ERROR,
+  addressPlaceOf,
   emptyOrderFormValues,
   mapFieldErrors,
+  validateCustomerChange,
   validateOrderDetails,
   validateOrderForm,
   type OrderFormValues,
@@ -212,6 +218,112 @@ describe('validateOrderDetails', () => {
       expect(details.ok, JSON.stringify(values)).toBe(false);
       expect(details, JSON.stringify(values)).toEqual(validateOrderForm(values));
     }
+  });
+});
+
+describe('validateCustomerChange', () => {
+  /** The request of a change that must validate; fails the test otherwise. */
+  function changeOf(values: OrderFormValues) {
+    const result = validateCustomerChange(values);
+    if (!result.ok) {
+      throw new Error(`expected a valid change, got ${JSON.stringify(result.errors)}`);
+    }
+    return result.request;
+  }
+
+  /** The errors of a change that must not validate; fails the test otherwise. */
+  function changeErrorsOf(values: OrderFormValues) {
+    const result = validateCustomerChange(values);
+    if (result.ok) throw new Error('expected an invalid change');
+    return result.errors;
+  }
+
+  it('builds the address and the number of bottles, and no contact', () => {
+    const values = makeValues({ houseNumber: ' 14 ', note: ' קוד 1234 ' });
+
+    expect(validateCustomerChange(values)).toEqual({
+      ok: true,
+      request: {
+        address: {
+          streetCode: 247,
+          streetName: 'דרך רבין יצחק',
+          houseNumber: '14',
+          bottlesSpot: 'privateHouse',
+          note: 'קוד 1234',
+        },
+        bottlesEstimated: 45,
+      },
+    });
+  });
+
+  it('never sends the contact, whatever the name and phone values hold', () => {
+    expect(changeOf(makeValues({ name: '', phone: 'לא טלפון' }))).not.toHaveProperty('contact');
+  });
+
+  it('builds a request that the shared schema accepts again unchanged', () => {
+    const request = changeOf(
+      makeValues({
+        street: { kind: 'freeText', name: ' הרימון ' },
+        bottlesSpot: 'apartmentDoor',
+        floorApt: 'קומה 3',
+      }),
+    );
+
+    expect(request.address?.streetName).toBe('הרימון');
+    expect(request.address).not.toHaveProperty('streetCode');
+    expect(customerUpdateOrderRequestSchema.parse(request)).toEqual(request);
+  });
+
+  it("rejects fewer than 30 bottles next to the bottles field, in the booking form's words", () => {
+    expect(changeErrorsOf(makeValues({ bottlesEstimated: '29' }))).toEqual({
+      byField: { bottlesEstimated: 'צריך לפחות 30 בקבוקים' },
+    });
+  });
+
+  it('asks for the floor and apartment when the bottles wait at the apartment door', () => {
+    expect(changeErrorsOf(makeValues({ bottlesSpot: 'apartmentDoor', floorApt: '' }))).toEqual({
+      byField: { floorApt: 'נא לכתוב קומה ודירה' },
+    });
+  });
+
+  it('does not send floor and apartment text left over when another spot is chosen', () => {
+    const request = changeOf(makeValues({ bottlesSpot: 'buildingEntrance', floorApt: 'קומה 3' }));
+
+    expect(request.address).not.toHaveProperty('floorApt');
+  });
+
+  it('gives the address errors of the booking form, each next to its field', () => {
+    expect(changeErrorsOf(makeValues({ street: null, houseNumber: '', bottlesSpot: '' }))).toEqual({
+      byField: {
+        street: ORDER_FORM_ERRORS.streetRequired,
+        houseNumber: ORDER_FORM_ERRORS.houseNumberRequired,
+        bottlesSpot: ORDER_FORM_ERRORS.bottlesSpotRequired,
+      },
+    });
+  });
+});
+
+describe('addressPlaceOf', () => {
+  it('gives a listed street as its code and name, with the house number trimmed', () => {
+    expect(addressPlaceOf(makeValues({ houseNumber: ' 12א ' }))).toEqual({
+      streetCode: 247,
+      streetName: 'דרך רבין יצחק',
+      houseNumber: '12א',
+    });
+  });
+
+  it('gives a street written by hand as its trimmed name, with no code', () => {
+    expect(addressPlaceOf(makeValues({ street: { kind: 'freeText', name: ' הרימון ' } }))).toEqual({
+      streetName: 'הרימון',
+      houseNumber: '12',
+    });
+  });
+
+  it('gives no street chosen yet as an empty name', () => {
+    expect(addressPlaceOf(makeValues({ street: null }))).toEqual({
+      streetName: '',
+      houseNumber: '12',
+    });
   });
 });
 

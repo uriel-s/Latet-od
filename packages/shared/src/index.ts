@@ -35,6 +35,8 @@ export * from './messages.ts';
 export * from './round.ts';
 // The /api/collector/rounds contract: planning a round, its view in three groups, errors (spec §3.6).
 export * from './roundsApi.ts';
+// The /api/o/:token contract: the customer's own page, its change request and errors (spec §3.3).
+export * from './customerOrderApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and

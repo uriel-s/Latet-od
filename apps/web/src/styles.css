@@ -548,8 +548,9 @@ html:has(.bottom-nav) {
   margin-block-end: 1rem;
 }
 
-/* "ביטול ההזמנה" sits apart from the form, under a decorative line, so it is not tapped for
-   "save". */
+/* "ביטול ההזמנה" (components/CancelConfirm.tsx, also on the customer's page) sits apart from the
+   form and the other buttons, under a decorative line, so it is not tapped for "save" or
+   "confirm". */
 .cancel-order {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
@@ -712,6 +713,78 @@ html:has(.bottom-nav) {
 .order-card-confirm {
   min-width: var(--tap-target);
   margin-block: 0.5rem 0.25rem;
+}
+
+/* --- Customer order page (pages/OrderPage.tsx) ------------------------------------ */
+
+/* "מצב ההזמנה: ממתינה לאישור": a little larger than body text, the first thing to read. */
+.order-status {
+  font-size: 1.15rem;
+}
+
+/* "מאשר/ת איסוף" over "לא מתאים הפעם", with room between them against a wrong tap. */
+.order-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-block: 0 1.5rem;
+}
+
+/* The page's one big action (spec §3.3, "כפתור גדול"): taller and larger than any other. */
+.button-large {
+  min-height: max(64px, 4rem);
+  font-size: 1.3rem;
+}
+
+/*
+ * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --color-text on
+ * white (10.4:1) instead of the error red, so it reads as news, not as a mistake. The change
+ * form's warning that a new address leaves the round looks the same: news before saving.
+ */
+.order-notice,
+.order-change-warning {
+  margin-block: 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-text);
+  border-inline-start-width: 6px;
+  border-radius: var(--radius);
+  background: var(--color-white);
+  font-weight: 700;
+}
+
+/* The order's details: a white card like .order-card (the gray edge is decoration only). */
+.order-details {
+  margin-block: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-gray);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.order-details h2 {
+  margin-block-start: 0;
+}
+
+.order-details dl {
+  margin: 0;
+}
+
+/* Each detail: its name in bold, the value under it. */
+.order-details dt {
+  font-weight: 700;
+}
+
+.order-details dd {
+  margin: 0 0 0.75rem;
+}
+
+.order-details dd:last-child {
+  margin-block-end: 0;
+}
+
+/* "שינוי" right under the details card, apart from it. */
+.order-change-button {
+  margin-block-start: 1.5rem;
 }
 
 /* --- Messages and helpers -------------------------------------------------------- */

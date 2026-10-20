@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CUSTOMER_ORDER_MESSAGES,
   groupWaitingOrders,
   type CollectorOrdersResponse,
+  type CustomerOrderResponse,
   type MeResponse,
   type RoundsResponse,
 } from '@bottlerun/shared';
@@ -11,7 +13,8 @@ import { App } from './App.tsx';
 /** One path for each route, with the heading its page settles on, for the checks every page must pass. */
 const ONE_PATH_PER_ROUTE: [path: string, heading: string][] = [
   ['/', 'הזמנת איסוף בקבוקים'],
-  ['/o/abc', 'עמוד ההזמנה'],
+  // No order has the token "abc": the page settles on "not found", under its own heading.
+  ['/o/abc', 'ההזמנה שלך'],
   ['/login', 'כניסה'],
   ['/app/rounds', 'סבבים'],
   ['/no-such-page', 'העמוד לא נמצא'],
@@ -30,6 +33,19 @@ const NO_WAITING_ORDERS_BODY: CollectorOrdersResponse = { groups: groupWaitingOr
 /** GET /api/collector/rounds: no round is open, and none was planned before. */
 const NO_OPEN_ROUNDS_BODY: RoundsResponse = { rounds: [] };
 
+/** The token of the one order the fake api knows: 43 base64url characters, like a real one. */
+const CANCELLED_ORDER_TOKEN = 'c'.repeat(43);
+
+/** GET /api/o/<CANCELLED_ORDER_TOKEN>: a cancelled order, as its customer's page gets it. */
+const CANCELLED_ORDER_BODY: CustomerOrderResponse = {
+  order: {
+    contact: { name: 'רחל כהן', phone: '+972501234567' },
+    address: { streetName: 'הרימון', houseNumber: '7', bottlesSpot: 'privateHouse' },
+    bottlesEstimated: 45,
+    status: 'cancelled',
+  },
+};
+
 /** A 200 whose body is `body` as JSON. */
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -41,7 +57,9 @@ function jsonResponse(body: unknown): Response {
 /**
  * Stands in for the api in every test of this file, so no page sends a real request from jsdom.
  * The collector app's guard calls it (GET /api/auth/me), and so do its orders tab (GET
- * /api/collector/orders) and its rounds tab (GET /api/collector/rounds); anything else gets a 404.
+ * /api/collector/orders) and its rounds tab (GET /api/collector/rounds); the customer's page asks
+ * for its order (GET /api/o/:token), which only CANCELLED_ORDER_TOKEN finds. Anything else gets a
+ * 404.
  */
 function fakeApi(input: string): Promise<Response> {
   requests.push(input);
@@ -50,6 +68,9 @@ function fakeApi(input: string): Promise<Response> {
   }
   if (input === '/api/collector/rounds') {
     return Promise.resolve(jsonResponse(NO_OPEN_ROUNDS_BODY));
+  }
+  if (input === `/api/o/${CANCELLED_ORDER_TOKEN}`) {
+    return Promise.resolve(jsonResponse(CANCELLED_ORDER_BODY));
   }
   if (input !== '/api/auth/me') return Promise.resolve(new Response(null, { status: 404 }));
   return Promise.resolve(
@@ -79,12 +100,15 @@ function renderAt(path: string): void {
 }
 
 /**
- * Renders the app at `path` and waits for its page's `<h1>`: the collector app shows it only
- * after its session check, which the per-route checks below must not race.
+ * Renders the app at `path`, waits for its page's `<h1>` (the collector app shows it only after its
+ * session check), then for the page's own load to finish (the customer's page and the rounds tab
+ * show "טוען..." until their answer comes). The per-route checks below must not race either: an
+ * answer drawn after a test ended is an update outside act().
  */
 async function renderSettledAt(path: string, heading: string): Promise<void> {
   renderAt(path);
   await screen.findByRole('heading', { level: 1, name: heading });
+  await waitFor(() => expect(screen.queryByText('טוען...')).toBeNull());
 }
 
 describe('App', () => {
@@ -94,10 +118,29 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
   });
 
-  it('shows the order page at /o/<token>', () => {
+  it('shows the order page at /o/<token>, asking the api for that token', async () => {
     renderAt('/o/abc');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'עמוד ההזמנה' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'ההזמנה שלך' })).toBeDefined();
+    // The fake api knows no order "abc".
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      CUSTOMER_ORDER_MESSAGES.orderNotFound,
+    );
+    expect(requests).toEqual(['/api/o/abc']);
+  });
+
+  it('opens the booking form filled in from "הזמנה חדשה עם אותם פרטים" on the order page', async () => {
+    renderAt(`/o/${CANCELLED_ORDER_TOKEN}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' }));
+
+    expect(window.location.pathname).toBe('/');
+    expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
+    expect(screen.getByLabelText<HTMLInputElement>('שם').value).toBe('רחל כהן');
+    expect(screen.getByLabelText<HTMLInputElement>('טלפון נייד').value).toBe('050-1234567');
+    expect(screen.getByLabelText<HTMLInputElement>('מספר בית').value).toBe('7');
+    // Never the bottles: they differ from one order to the next.
+    expect(screen.getByLabelText<HTMLInputElement>('כמות בקבוקים').value).toBe('');
   });
 
   it('shows the login page at /login', () => {

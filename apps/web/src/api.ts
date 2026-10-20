@@ -4,11 +4,13 @@
 import {
   COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
+  CUSTOMER_ORDER_MESSAGES,
   LOGIN_MESSAGES,
   ROUND_MESSAGES,
   collectorOrderResponseSchema,
   collectorOrdersResponseSchema,
   createOrderResponseSchema,
+  customerOrderResponseSchema,
   meResponseSchema,
   messageOpenedResponseSchema,
   roundViewSchema,
@@ -17,6 +19,8 @@ import {
   type CollectorOrder,
   type CreateOrderRequest,
   type CreateOrderResponse,
+  type CustomerOrder,
+  type CustomerUpdateOrderRequest,
   type LoginRequest,
   type OrderGroup,
   type PlanRoundRequest,
@@ -36,7 +40,7 @@ const globalFetch: FetchFn = (input, init) => fetch(input, init);
 
 /**
  * Shown on a form when what it sent got no usable answer (the booking form's order, the planning
- * screen's round), or its answer was not understood.
+ * screen's round, a button of the customer's page), or its answer was not understood.
  */
 export const NETWORK_ERROR_MESSAGE = 'לא הצלחנו לשלוח. נא לבדוק את החיבור לאינטרנט ולנסות שוב.';
 
@@ -733,4 +737,178 @@ async function roundViewOf(response: Response): Promise<RoundView | null> {
 /** A JSON array whose every item is a string, like the 409 body's `orderIds`. */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The customer's own page: /api/o/:token (spec §3.3, the page `/o/<token>`)
+//
+// Public: no login, so no `loggedOut` here; the order is reached by its random token alone, which
+// goes into the path encoded. The same rules as the collector's routes otherwise: every message is
+// a shared constant, never the body's text, and every success body is parsed with the shared
+// schema. Nothing is retried, not even after a network error: every write is idempotent (a second
+// confirm, decline or cancel answers `saved` with the order as it is), so the customer just taps
+// again, and an answer lost on the way is put right by that tap.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The path of the order with `token`. Encoded although a real token is base64url (nothing to
+ * encode): the page takes it from its own URL, and whatever is there must stay one path segment.
+ */
+function customerOrderPath(token: string): string {
+  return `/api/o/${encodeURIComponent(token)}`;
+}
+
+/** How GET /api/o/:token ended, as the customer's page shows it. */
+export type CustomerOrderOutcome =
+  /** 200: the order as it is stored now, with its round's date while it is pending or confirmed. */
+  | { kind: 'loaded'; order: CustomerOrder }
+  /** 404: no order has this token, or the token is not one at all (the same answer for both). */
+  | { kind: 'notFound' }
+  /** No usable answer: a network error, a 5xx, or a 200 the app cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Loads the customer's order from `GET /api/o/:token`. `cache: 'no-store'`, so the page never
+ * shows a status the browser kept from before a confirm or a cancel.
+ */
+export async function fetchCustomerOrder(
+  token: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CustomerOrderOutcome> {
+  const response = await fetchOrNull(fetchFn, customerOrderPath(token), {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const order = await customerOrderOf(response);
+      return order === null ? { kind: 'failed' } : { kind: 'loaded', order };
+    }
+    case 404:
+      return { kind: 'notFound' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How a button of the customer's page (or its "שינוי") ended. */
+export type CustomerOrderWriteOutcome =
+  /** 200: the order as stored now, which the page draws instead of what it sent. */
+  | { kind: 'saved'; order: CustomerOrder }
+  /**
+   * 409: the confirmations of its round are closed (`confirmations_closed`, confirm only), or the
+   * order was collected or cancelled meanwhile (`invalid_transition`). `message` says which.
+   */
+  | { kind: 'closed'; message: string }
+  /** 400 (PATCH only): a field was refused; placed next to its field like the booking form's. */
+  | { kind: 'invalid'; errors: FormErrors }
+  /** 404: no order has this token (any more), or the token is not one at all. */
+  | { kind: 'notFound' }
+  /** No usable answer: a network error, a 403 or 5xx, another 409, or a body it cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * "מאשר/ת איסוף" with `POST /api/o/:token/confirm` (no body): pending → confirmed. An order
+ * already confirmed answers `saved` too; a round no longer taking confirmations answers `closed`.
+ */
+export async function confirmCustomerOrder(
+  token: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CustomerOrderWriteOutcome> {
+  return customerWriteOutcomeOf(
+    await fetchOrNull(fetchFn, `${customerOrderPath(token)}/confirm`, { method: 'POST' }),
+  );
+}
+
+/**
+ * "לא מתאים הפעם" with `POST /api/o/:token/decline` (no body): the order leaves its round, back
+ * to waiting, and Yoel sees that the customer asked for another date. An order already waiting
+ * answers `saved` as it is.
+ */
+export async function declineCustomerOrder(
+  token: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CustomerOrderWriteOutcome> {
+  return customerWriteOutcomeOf(
+    await fetchOrNull(fetchFn, `${customerOrderPath(token)}/decline`, { method: 'POST' }),
+  );
+}
+
+/**
+ * "ביטול" with `POST /api/o/:token/cancel` (no body). An order already cancelled answers `saved`
+ * too; a collected one answers `closed`.
+ */
+export async function cancelCustomerOrder(
+  token: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CustomerOrderWriteOutcome> {
+  return customerWriteOutcomeOf(
+    await fetchOrNull(fetchFn, `${customerOrderPath(token)}/cancel`, { method: 'POST' }),
+  );
+}
+
+/**
+ * "שינוי" with `PATCH /api/o/:token`: the address (with its note) and the number of bottles, never
+ * the phone. A change of street or house number takes an order out of its round; see
+ * `customerUpdateOrderRequestSchema`.
+ */
+export async function updateCustomerOrder(
+  token: string,
+  request: CustomerUpdateOrderRequest,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CustomerOrderWriteOutcome> {
+  return customerWriteOutcomeOf(
+    await fetchOrNull(fetchFn, customerOrderPath(token), {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(request),
+    }),
+  );
+}
+
+/** The outcome of a customer write's answer (null: none arrived). Every route's success is 200. */
+async function customerWriteOutcomeOf(
+  response: Response | null,
+): Promise<CustomerOrderWriteOutcome> {
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const order = await customerOrderOf(response);
+      return order === null ? { kind: 'failed' } : { kind: 'saved', order };
+    }
+    case 400:
+      // The booking form's mapping: `fieldErrors: {}` (a body refused as a whole) becomes the
+      // message above the form instead of nothing.
+      return { kind: 'invalid', errors: invalidOrderErrors(await readJson(response)) };
+    case 404:
+      return { kind: 'notFound' };
+    case 409:
+      return customerConflictOutcome(await readJson(response));
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/**
+ * A 409 of the customer's page, told apart by the body's `error` code: both are `closed`, each
+ * with its own words. A body without a known code is `failed`: guessing could tell the customer
+ * the wrong thing.
+ */
+function customerConflictOutcome(body: unknown): CustomerOrderWriteOutcome {
+  const code = isObject(body) ? body.error : undefined;
+  switch (code) {
+    case 'confirmations_closed':
+      return { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed };
+    case 'invalid_transition':
+      return { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** The order of a 200 body, or null when the body is not a `CustomerOrderResponse`. */
+async function customerOrderOf(response: Response): Promise<CustomerOrder | null> {
+  const parsed = customerOrderResponseSchema.safeParse(await readJson(response));
+  return parsed.success ? parsed.data.order : null;
 }
