@@ -1,19 +1,10 @@
 // Tests for useReloadOnReturn: it calls the reload callback when the page becomes visible again,
-// and at no other time. jsdom's document.visibilityState is fixed, so each test overrides it.
+// and at no other time. jsdom's document.visibilityState is fixed, so each test overrides it
+// (visibilityTestHelper.ts; testSetup.ts drops the override after each test).
 import { renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
-
-/** Sets `document.visibilityState` and fires `visibilitychange`, as the browser does. */
-function changeVisibility(state: DocumentVisibilityState): void {
-  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
-  document.dispatchEvent(new Event('visibilitychange'));
-}
-
-afterEach(() => {
-  // Drop the override, so jsdom's own getter on Document.prototype answers again.
-  Reflect.deleteProperty(document, 'visibilityState');
-});
+import { changeVisibility } from './visibilityTestHelper.ts';
 
 describe('useReloadOnReturn', () => {
   it('reloads when the page becomes visible again', () => {
