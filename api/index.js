@@ -20410,6 +20410,115 @@ function haversine(from, to) {
   return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 var straightLineDistance = { distance: haversine };
+var MAX_EXHAUSTIVE_STOPS = 8;
+var EPSILON = 1e-9;
+function planRoute(start, stops, end, distance = straightLineDistance) {
+  const located = [];
+  const unlocated = [];
+  for (const stop of stops) {
+    if (stop.point === void 0) unlocated.push(stop);
+    else located.push({ stop, point: stop.point });
+  }
+  if (located.length <= 1) return [...located.map(({ stop }) => stop), ...unlocated];
+  const points = [start, ...located.map(({ point }) => point), end];
+  const size = points.length;
+  const matrix = new Float64Array(size * size);
+  points.forEach((from, fromIndex) => {
+    points.forEach((to, toIndex) => {
+      if (fromIndex !== toIndex) matrix[fromIndex * size + toIndex] = distance.distance(from, to);
+    });
+  });
+  const cost = (from, to) => matrix[from * size + to] ?? Infinity;
+  const stopCount = located.length;
+  const order = stopCount <= MAX_EXHAUSTIVE_STOPS ? bestOrderExhaustive(stopCount, cost) : bestOrderHeuristic(stopCount, cost);
+  const ordered = order.flatMap((index) => located[index - 1]?.stop ?? []);
+  return [...ordered, ...unlocated];
+}
+function bestOrderExhaustive(stopCount, cost) {
+  const endIndex = stopCount + 1;
+  const visited = new Array(stopCount + 1).fill(false);
+  const current = [];
+  let best = [];
+  let bestCost = Infinity;
+  const visit2 = (last, partialCost) => {
+    if (partialCost >= bestCost - EPSILON) return;
+    if (current.length === stopCount) {
+      const total = partialCost + cost(last, endIndex);
+      if (total < bestCost - EPSILON) {
+        bestCost = total;
+        best = [...current];
+      }
+      return;
+    }
+    for (let next = 1; next <= stopCount; next++) {
+      if (visited[next]) continue;
+      visited[next] = true;
+      current.push(next);
+      visit2(next, partialCost + cost(last, next));
+      current.pop();
+      visited[next] = false;
+    }
+  };
+  visit2(0, 0);
+  return best;
+}
+function bestOrderHeuristic(stopCount, cost) {
+  return improveByTwoOpt(nearestNeighborOrder(stopCount, cost), cost);
+}
+function nearestNeighborOrder(stopCount, cost) {
+  const remaining = new Set(Array.from({ length: stopCount }, (_, offset) => offset + 1));
+  const order = [];
+  let last = 0;
+  while (remaining.size > 0) {
+    let nearest = -1;
+    let nearestCost = Infinity;
+    for (const candidate of remaining) {
+      const candidateCost = cost(last, candidate);
+      if (nearest === -1 || candidateCost < nearestCost - EPSILON) {
+        nearest = candidate;
+        nearestCost = candidateCost;
+      }
+    }
+    order.push(nearest);
+    remaining.delete(nearest);
+    last = nearest;
+  }
+  return order;
+}
+function improveByTwoOpt(initialOrder, cost) {
+  const endIndex = initialOrder.length + 1;
+  let order = [...initialOrder];
+  let orderCost = routeCost(order, endIndex, cost);
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let first = 0; first < order.length - 1; first++) {
+      for (let last = first + 1; last < order.length; last++) {
+        const candidate = [
+          ...order.slice(0, first),
+          ...order.slice(first, last + 1).reverse(),
+          ...order.slice(last + 1)
+        ];
+        const candidateCost = routeCost(candidate, endIndex, cost);
+        if (candidateCost < orderCost - EPSILON) {
+          order = candidate;
+          orderCost = candidateCost;
+          improved = true;
+        }
+      }
+    }
+  }
+  return order;
+}
+function routeCost(order, endIndex, cost) {
+  let total = 0;
+  let last = 0;
+  for (const index of order) {
+    total += cost(last, index);
+    last = index;
+  }
+  return total + cost(last, endIndex);
+}
 
 // packages/shared/src/phone.ts
 var PHONE_ERROR = "\u05DE\u05E1\u05E4\u05E8 \u05E0\u05D9\u05D9\u05D3 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05DC\u05DE\u05E9\u05DC: 050-1234567";
@@ -20933,12 +21042,36 @@ var roundOrderGroupSchema = external_exports.object({
   key: external_exports.enum(ROUND_GROUP_KEYS),
   orders: external_exports.array(collectorOrderSchema)
 });
+var ROUND_STOP_STATES = [
+  "toCollect",
+  "collected",
+  "notFound",
+  "cancelled",
+  "left"
+];
+var roundStopStateSchema = external_exports.enum(ROUND_STOP_STATES);
+var routeStopViewSchema = external_exports.object({
+  order: collectorOrderSchema,
+  /**
+   * The STORED stop's `hasLocation`, from when the route was built, not the order's current one
+   * (`order.hasLocation`). If Yoel picks a near street later, the stop stays where `planRoute` put
+   * it (at the end), and the "בלי מיקום" tag still explains why it is there (round.ts).
+   */
+  hasLocation: roundStopSchema.shape.hasLocation,
+  /** Derived from the order, never stored; see {@link roundStopStateOf}. */
+  state: roundStopStateSchema
+});
 var roundViewSchema = external_exports.object({
   round: collectorRoundSchema,
   /** Always the three groups in {@link ROUND_GROUP_KEYS} order, empty ones too. */
   groups: external_exports.array(roundOrderGroupSchema),
   /** The "שלח" rows of the confirmation requests, one per customer who has not confirmed yet. */
-  sendList: external_exports.array(messageLinkSchema)
+  sendList: external_exports.array(messageLinkSchema),
+  /**
+   * The route's stops in driving order. Always present: empty until the route is built (phase
+   * `confirming`); a closed round that was routed keeps its stops.
+   */
+  stops: external_exports.array(routeStopViewSchema)
 });
 var roundsResponseSchema = external_exports.object({
   /** The OPEN rounds, by date, then by when they were created. */
@@ -20957,6 +21090,15 @@ function roundGroupOf(round, order) {
   }
   const askedOtherDate = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "askedOtherDate";
   return askedOtherDate ? "otherDate" : void 0;
+}
+function roundStopStateOf(round, order) {
+  if (order.roundId === round.id) {
+    if (order.status === "collected") return "collected";
+    if (order.status === "cancelled") return "cancelled";
+    if (order.status === "confirmed" || order.status === "pending") return "toCollect";
+  }
+  const notFoundHere = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "notFound";
+  return notFoundHere ? "notFound" : "left";
 }
 function buildRoundView(round, orders) {
   const ordersById = new Map(orders.map((order) => [order.id, order]));
@@ -20977,15 +21119,40 @@ function buildRoundView(round, orders) {
       key,
       orders: ordersByGroup[key].map(toCollectorOrder)
     })),
-    sendList: ordersByGroup.pending.map((order) => toMessageLink(order, "confirmRequest")).filter((link) => link !== void 0)
+    sendList: ordersByGroup.pending.map((order) => toMessageLink(order, "confirmRequest")).filter((link) => link !== void 0),
+    stops: round.stops.flatMap((stop) => {
+      const order = ordersById.get(stop.orderId);
+      if (order === void 0) return [];
+      return [
+        {
+          order: toCollectorOrder(order),
+          hasLocation: stop.hasLocation,
+          state: roundStopStateOf(round, order)
+        }
+      ];
+    })
   };
 }
+var STOP_MOVE_DIRECTIONS = ["up", "down"];
+var moveStopRequestSchema = external_exports.strictObject({
+  direction: external_exports.enum(STOP_MOVE_DIRECTIONS)
+});
 var ROUND_MESSAGES = {
   /** Some marked order was meanwhile cancelled, edited away or put in another round. */
   ordersNotWaiting: "\u05D7\u05DC\u05E7 \u05DE\u05D4\u05D4\u05D6\u05DE\u05E0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05DC\u05D0 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D5\u05EA \u05DC\u05E1\u05D1\u05D1. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05E8\u05E9\u05D9\u05DE\u05D4 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
   roundNotFound: "\u05D4\u05E1\u05D1\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0.",
-  /** "אישר בטלפון" after the round was routed or closed. */
-  confirmationsClosed: "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8\u05D9\u05DD \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D5."
+  /**
+   * "אישר בטלפון" after the round was routed or closed; also "סגור אישורים ובנה מסלול" on a round
+   * that is already routed or closed (a second tap, or another tab).
+   */
+  confirmationsClosed: "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8\u05D9\u05DD \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D5.",
+  /**
+   * A stop action or a move on a round whose route is not built yet (phase `confirming`), or that
+   * is closed: the screen is stale, so refreshing shows the round as it is.
+   */
+  routeNotOpen: "\u05D0\u05D9\u05DF \u05DE\u05E1\u05DC\u05D5\u05DC \u05E4\u05EA\u05D5\u05D7 \u05D1\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05DE\u05E1\u05DA.",
+  /** Moving the first stop up, or the last one down. */
+  stopAtEdge: "\u05D4\u05E2\u05E6\u05D9\u05E8\u05D4 \u05DB\u05D1\u05E8 \u05D1\u05E7\u05E6\u05D4 \u05D4\u05DE\u05E1\u05DC\u05D5\u05DC."
 };
 
 // packages/shared/src/customerOrderApi.ts
@@ -21200,8 +21367,7 @@ var MongoRoundsRepo = class {
   async update(id, patch, options = {}) {
     const _id = parseObjectId(id);
     if (_id === null) return null;
-    const filter = { _id };
-    if (options.ifStatus !== void 0) filter.status = { $in: [...options.ifStatus] };
+    const filter = buildRoundUpdateFilter(_id, options);
     const update = buildRoundUpdate(patch);
     if (update === null) return this.findOne(filter);
     const doc = await this.rounds.findOneAndUpdate(filter, update, { returnDocument: "after" });
@@ -21223,6 +21389,12 @@ function buildRoundListFilter(filter) {
   const query = {};
   if (filter.statuses !== void 0) query.status = { $in: [...filter.statuses] };
   return query;
+}
+function buildRoundUpdateFilter(_id, options) {
+  const filter = { _id };
+  if (options.ifStatus !== void 0) filter.status = { $in: [...options.ifStatus] };
+  if (options.ifPhase !== void 0) filter.phase = { $in: [...options.ifPhase] };
+  return filter;
 }
 function buildRoundUpdate(patch) {
   return buildPatchUpdate(patch);
@@ -22264,9 +22436,33 @@ function logEntryFor(kind, at, result) {
   return parsed.success ? parsed.data : void 0;
 }
 
+// apps/api/src/rounds/buildRoute.ts
+function buildRouteStops(stopOrders, start, end, distance, lookup = findStreet) {
+  const inputs = stopOrders.map((order) => {
+    const point = pointForAddress(order.address, lookup);
+    return point === void 0 ? { order } : { order, point };
+  });
+  return planRoute(start, inputs, end, distance).map((input2) => ({
+    orderId: input2.order.id,
+    hasLocation: input2.point !== void 0
+  }));
+}
+function moveStop(stops, orderId, direction) {
+  const from = stops.findIndex((stop) => stop.orderId === orderId);
+  if (from === -1) return "notFound";
+  const to = direction === "up" ? from - 1 : from + 1;
+  const moving = stops[from];
+  const neighbour = stops[to];
+  if (moving === void 0 || neighbour === void 0) return "atEdge";
+  const moved = [...stops];
+  moved[to] = moving;
+  moved[from] = neighbour;
+  return moved;
+}
+
 // apps/api/src/rounds/collectorRoundsRoutes.ts
 function createCollectorRoundsRouter(deps) {
-  const { orders, rounds, messaging } = deps;
+  const { orders, rounds, messaging, route } = deps;
   const router = Router4();
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
@@ -22370,6 +22566,80 @@ function createCollectorRoundsRouter(deps) {
     }
     sendView(res, await loadRoundView(round));
   });
+  router.post("/:id/route", async (req, res) => {
+    const round = await rounds.findById(req.params.id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    if (round.status !== "open" || round.phase !== "confirming") {
+      sendConfirmationsClosed(res);
+      return;
+    }
+    const now = /* @__PURE__ */ new Date();
+    const found = new Map((await orders.list({ ids: round.orderIds })).map((o) => [o.id, o]));
+    const stopOrders = [];
+    for (const orderId of round.orderIds) {
+      const order = found.get(orderId);
+      if (order?.roundId !== round.id) continue;
+      const settled = order.status === "pending" ? await sendBackUnconfirmed(order, round, now) : order;
+      if (settled?.roundId === round.id && settled.status === "confirmed") stopOrders.push(settled);
+    }
+    const stops = buildRouteStops(stopOrders, route.start, DROP_OFF.point, route.distance);
+    const routed = await rounds.update(
+      round.id,
+      { phase: "routed", stops },
+      { ifStatus: ["open"], ifPhase: ["confirming"] }
+    );
+    if (routed === null) {
+      sendConfirmationsClosed(res);
+      return;
+    }
+    sendView(res, await loadRoundView(routed));
+  });
+  router.post("/:id/stops/:orderId/move", async (req, res) => {
+    const parsed = moveStopRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendInvalidMove(res);
+      return;
+    }
+    const { id, orderId } = req.params;
+    const round = await rounds.findById(id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    if (round.status !== "open" || round.phase !== "routed") {
+      sendRouteNotOpen(res);
+      return;
+    }
+    const moved = moveStop(round.stops, orderId, parsed.data.direction);
+    if (moved === "notFound") {
+      sendOrderNotFound(res);
+      return;
+    }
+    if (moved === "atEdge") {
+      sendStopAtEdge(res);
+      return;
+    }
+    const updated = await rounds.update(
+      round.id,
+      { stops: moved },
+      { ifStatus: ["open"], ifPhase: ["routed"] }
+    );
+    if (updated === null) {
+      sendRouteNotOpen(res);
+      return;
+    }
+    sendView(res, await loadRoundView(updated));
+  });
+  async function sendBackUnconfirmed(order, round, now) {
+    if (!canTransition(order.status, "waiting")) return order;
+    const left = await orders.update(order.id, leaveRoundPatch(order, round, "notConfirmed", now), {
+      ifStatus: [order.status]
+    });
+    return left ?? await orders.findById(order.id);
+  }
   return router;
 }
 function isPlannable(order) {
@@ -22429,6 +22699,21 @@ function sendConfirmationsClosed(res) {
     error: "confirmations_closed",
     message: ROUND_MESSAGES.confirmationsClosed
   };
+  res.status(409).json(body);
+}
+function sendInvalidMove(res) {
+  const body = { error: "invalid_move" };
+  res.status(400).json(body);
+}
+function sendRouteNotOpen(res) {
+  const body = {
+    error: "route_not_open",
+    message: ROUND_MESSAGES.routeNotOpen
+  };
+  res.status(409).json(body);
+}
+function sendStopAtEdge(res) {
+  const body = { error: "stop_at_edge", message: ROUND_MESSAGES.stopAtEdge };
   res.status(409).json(body);
 }
 function sendInvalidTransition2(res) {

@@ -89,8 +89,8 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/collector/orders', createCollectorOrdersRouter(deps));
 
   // The round screens (spec §3.5 "תכנון סבב", §3.6): plan a round and send its confirmation
-  // requests, list the open rounds, one round, "אישר בטלפון", and "סגור אישורים ובנה מסלול"
-  // (rounds/collectorRoundsRoutes.ts).
+  // requests, list the open rounds, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול", and
+  // moving a stop of the route up or down (rounds/collectorRoundsRoutes.ts).
   app.use('/api/collector/rounds', createCollectorRoundsRouter(deps));
 
   // Any other /api path. Express's default 404 is an HTML page that echoes the path, which for
