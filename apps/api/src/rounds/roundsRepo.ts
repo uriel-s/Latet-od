@@ -4,7 +4,7 @@
 // "an order is in at most one open round", spec §4, lives on the order's `roundId`), so unlike
 // OrdersRepo it throws no domain error. The same contract suite (roundsRepo.contract.ts) runs
 // against every implementation.
-import type { NewRound, Round, RoundStatus } from '@bottlerun/shared';
+import type { NewRound, Round, RoundPhase, RoundStatus } from '@bottlerun/shared';
 
 /** Fields an update may change. `id` and `createdAt` are fixed once the round exists. */
 type PatchableRound = Omit<Round, 'id' | 'createdAt'>;
@@ -25,14 +25,23 @@ export interface RoundListFilter {
   statuses?: readonly RoundStatus[];
 }
 
-/** Conditions on `update()`. */
+/** Conditions on `update()`. Every given condition must match (AND); none means no condition. */
 export interface RoundUpdateOptions {
   /**
    * Apply the patch only if the stored status is one of these. The check and the write are one
    * atomic step, so two taps racing on the same round (or a request from an old screen after the
-   * round was closed) cannot both change it: the loser gets null.
+   * round was closed) cannot both change it: the loser gets null. An empty list matches no round
+   * (like Mongo `$in: []`).
    */
   ifStatus?: readonly RoundStatus[];
+
+  /**
+   * Apply the patch only if the stored phase is one of these. Like `ifStatus`, the check and the
+   * write are one atomic step: of two racing "סגור אישורים ובנה מסלול" taps (`ifPhase:
+   * ['confirming']`, patch `{ phase: 'routed', stops }`), only the first wins and the second gets
+   * null. Given with `ifStatus`, both must match. An empty list matches no round (like `$in: []`).
+   */
+  ifPhase?: readonly RoundPhase[];
 }
 
 /** Stored rounds (collection `rounds`). Every round returned is the caller's own copy. */
@@ -61,8 +70,9 @@ export interface RoundsRepo {
 
   /**
    * Applies `patch` (see {@link RoundPatch}) and returns the updated round. Returns null, and
-   * changes nothing, when the id is unknown or malformed, or when `options.ifStatus` does not
-   * match the stored status. An empty patch returns the round as it is.
+   * changes nothing, when the id is unknown or malformed, or when `options.ifStatus` or
+   * `options.ifPhase` does not match the stored round. An empty patch returns the round as it is
+   * (still null on such a mismatch).
    */
   update(id: string, patch: RoundPatch, options?: RoundUpdateOptions): Promise<Round | null>;
 }

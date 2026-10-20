@@ -123,6 +123,7 @@ function makeView({
       { key: 'otherDate', orders: otherDate },
     ],
     sendList,
+    stops: [],
   };
 }
 

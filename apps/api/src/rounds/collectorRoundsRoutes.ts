@@ -1,9 +1,13 @@
 // /api/collector/rounds: the api of Yoel's round screens (spec §3.5 "תכנון סבב", §3.6 step 1
 // "אישורים"): planning a round and sending its confirmation requests (ADR-0003), the open rounds
-// of the "סבבים" tab, one round, and "אישר בטלפון". createApp mounts the router built here AFTER
-// requireCollector, so every route needs the login (ADR-0004). The shapes are the shared contract
-// (packages/shared/src/roundsApi.ts); rounds and orders are read and written through RoundsRepo
-// and OrdersRepo, and each confirmation request goes through messages/sendAndLog.ts.
+// of the "סבבים" tab, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול" (spec §3.6: whoever
+// did not confirm leaves the round, and the confirmed orders are ordered into the stored route),
+// and moving one stop of that route up or down by hand (spec §3.6 step 2).
+// createApp mounts the router built here AFTER requireCollector, so every route needs the login
+// (ADR-0004). The shapes are the shared contract (packages/shared/src/roundsApi.ts); rounds and
+// orders are read and written through RoundsRepo and OrdersRepo, each confirmation request goes
+// through messages/sendAndLog.ts, and the route's order (and each manual move) comes from
+// buildRoute.ts (planRoute, moveStop).
 import { Router, type Response } from 'express';
 import {
   COLLECTOR_ORDER_MESSAGES,
@@ -11,8 +15,10 @@ import {
   buildRoundView,
   canTransition,
   formFieldErrors,
+  moveStopRequestSchema,
   planRoundRequestSchema,
   type ConfirmationsClosedErrorBody,
+  type InvalidMoveErrorBody,
   type InvalidRoundErrorBody,
   type InvalidTransitionErrorBody,
   type NewRound,
@@ -24,9 +30,14 @@ import {
   type RoundNotFoundErrorBody,
   type RoundView,
   type RoundsResponse,
+  type RouteNotOpenErrorBody,
+  type StopAtEdgeErrorBody,
 } from '@bottlerun/shared';
+import { DROP_OFF } from '../config.ts';
 import type { AppDeps } from '../deps.ts';
 import { orderMessage, sendAndLog, type OrderMessageOptions } from '../messages/sendAndLog.ts';
+import { buildRouteStops, moveStop } from './buildRoute.ts';
+import { leaveRoundPatch } from './leaveRound.ts';
 
 /**
  * The router of /api/collector/rounds. Mount it with
@@ -60,6 +71,33 @@ import { orderMessage, sendAndLog, type OrderMessageOptions } from '../messages/
  * - 409 {@link InvalidTransitionErrorBody}: the order cannot be confirmed (cancelled, collected),
  *   or it changed status while the request was on its way.
  *
+ * POST /:id/route — "סגור אישורים ובנה מסלול" (spec §3.6, ADR-0005); no body (any body is ignored):
+ * - 200 {@link RoundView}: the round now in phase `routed`, its `stops` the stored route in driving
+ *   order (home → stops → DROP_OFF), each with its order, `hasLocation` and state. Every order that
+ *   had not confirmed (`pending`) left the round: it is `waiting` again, with `lastMiss` reason
+ *   `notConfirmed`, so it is in none of the view's groups. A round where nobody confirmed still
+ *   becomes routed, with no stops: Yoel then closes it ("סגור סבב", section 7).
+ * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
+ * - 409 {@link ConfirmationsClosedErrorBody}: the round is closed, or already routed. The route is
+ *   computed once (spec §3.6: its order must not change in the middle of the drive), so a second
+ *   build is refused and recomputes nothing; Yoel moves a stop by hand instead.
+ *
+ * POST /:id/stops/:orderId/move — move one stop up or down by hand (spec §3.6 step 2: "אפשר להזיז
+ * עצירה למעלה או למטה ידנית"); body `moveStopRequestSchema` (`{ direction: 'up' | 'down' }`):
+ * - 200 {@link RoundView}: the stop swapped with the one before it (`up`) or after it (`down`) in
+ *   the stored `stops`; every other stop keeps its place. The route is never recomputed. Any stop
+ *   may be moved, whatever its state (collected, not found, left): the route screen sorts the
+ *   handled cards itself (section 6).
+ * - 400 {@link InvalidMoveErrorBody}: no body, an unknown key, or another direction. Checked first.
+ * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
+ * - 409 {@link RouteNotOpenErrorBody}: the round is closed, or its route is not built yet (phase
+ *   `confirming`); also when it was closed while the move was on its way.
+ * - 404 {@link OrderNotFoundErrorBody}: the order is not one of the route's stops (another round's,
+ *   or one that left at the build as `notConfirmed`).
+ * - 409 {@link StopAtEdgeErrorBody}: the first stop moved up, or the last one down. Nothing is
+ *   written.
+ * Two moves racing on one round: the later write wins (each is one swap of the stops it read).
+ *
  * Every order status change goes through `canTransition` and is conditional on the status it was
  * decided on (`ifStatus`), so two screens (or the customer's own page) racing on one order cannot
  * both win.
@@ -69,9 +107,9 @@ import { orderMessage, sendAndLog, type OrderMessageOptions } from '../messages/
  * clock (`new Date()`), like the orders routes; tests check them against a window around the call.
  */
 export function createCollectorRoundsRouter(
-  deps: Pick<AppDeps, 'orders' | 'rounds' | 'messaging'>,
+  deps: Pick<AppDeps, 'orders' | 'rounds' | 'messaging' | 'route'>,
 ): Router {
-  const { orders, rounds, messaging } = deps;
+  const { orders, rounds, messaging, route } = deps;
   const router = Router();
 
   /** The round's view, with its orders as they are stored now. */
@@ -216,6 +254,112 @@ export function createCollectorRoundsRouter(
     sendView(res, await loadRoundView(round));
   });
 
+  router.post('/:id/route', async (req, res) => {
+    // Never validated here: the repo answers null for a malformed id, so it is a 404 too.
+    const round = await rounds.findById(req.params.id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    // Only once, and only while confirmations are open: a routed round keeps its stored route.
+    if (round.status !== 'open' || round.phase !== 'confirming') {
+      sendConfirmationsClosed(res);
+      return;
+    }
+
+    // Who is a stop, in plan order (which also breaks planRoute's ties). An order that left the
+    // round already (asked for another date, cancelled and so on) has another `roundId`, or none,
+    // or is not confirmed, and is no stop.
+    const now = new Date();
+    const found = new Map((await orders.list({ ids: round.orderIds })).map((o) => [o.id, o]));
+    const stopOrders: Order[] = [];
+    for (const orderId of round.orderIds) {
+      const order = found.get(orderId);
+      if (order?.roundId !== round.id) continue;
+      const settled =
+        order.status === 'pending' ? await sendBackUnconfirmed(order, round, now) : order;
+      if (settled?.roundId === round.id && settled.status === 'confirmed') stopOrders.push(settled);
+    }
+
+    const stops = buildRouteStops(stopOrders, route.start, DROP_OFF.point, route.distance);
+    // Conditional on the round still being open and confirming: of two racing builds (or a build
+    // and a close), only one writes. The loser already sent the same unconfirmed orders back,
+    // which the winner did too, so it changed nothing the winner did not.
+    const routed = await rounds.update(
+      round.id,
+      { phase: 'routed', stops },
+      { ifStatus: ['open'], ifPhase: ['confirming'] },
+    );
+    if (routed === null) {
+      sendConfirmationsClosed(res);
+      return;
+    }
+    // Re-read after the writes, so the view shows the stops' orders as stored now.
+    sendView(res, await loadRoundView(routed));
+  });
+
+  router.post('/:id/stops/:orderId/move', async (req, res) => {
+    // The body first, like POST /: a broken request is a 400 whatever the round. Express 5 leaves
+    // `req.body` undefined when no JSON body was sent, which fails the parse too.
+    const parsed = moveStopRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendInvalidMove(res);
+      return;
+    }
+    const { id, orderId } = req.params;
+    // Never validated here: the repo answers null for a malformed id, so it is a 404 too.
+    const round = await rounds.findById(id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    // Only a built route of an open round is Yoel's to rearrange. Checked before the stop: a
+    // confirming round has no stops yet, and "refresh the screen" is the useful answer then.
+    if (round.status !== 'open' || round.phase !== 'routed') {
+      sendRouteNotOpen(res);
+      return;
+    }
+
+    const moved = moveStop(round.stops, orderId, parsed.data.direction);
+    if (moved === 'notFound') {
+      // Not in the route: another round's order, one sent back as notConfirmed, or a guess.
+      sendOrderNotFound(res);
+      return;
+    }
+    if (moved === 'atEdge') {
+      sendStopAtEdge(res);
+      return;
+    }
+    // Conditional on the route still being open: a move from a screen left open after "סגור
+    // סבב" gets null. Two moves racing on one round both read the same stops, so the later write
+    // wins and the earlier one is lost; Yoel sees the stored order in the answer and taps again.
+    const updated = await rounds.update(
+      round.id,
+      { stops: moved },
+      { ifStatus: ['open'], ifPhase: ['routed'] },
+    );
+    if (updated === null) {
+      sendRouteNotOpen(res);
+      return;
+    }
+    sendView(res, await loadRoundView(updated));
+  });
+
+  /**
+   * Takes a `pending` order of `round` out of it with reason `notConfirmed` (spec §3.6: "מי שלא
+   * אישר יוצא מהסבב וחוזר לחכות"), and resolves to the order as it is now. The write is
+   * conditional on `pending`: when it misses, the order changed in that instant (the customer
+   * confirmed, or cancelled), so it is read again and the caller decides by what it is now. A
+   * confirmed one is then still a stop; null only if the order is gone.
+   */
+  async function sendBackUnconfirmed(order: Order, round: Round, now: Date): Promise<Order | null> {
+    if (!canTransition(order.status, 'waiting')) return order;
+    const left = await orders.update(order.id, leaveRoundPatch(order, round, 'notConfirmed', now), {
+      ifStatus: [order.status],
+    });
+    return left ?? (await orders.findById(order.id));
+  }
+
   return router;
 }
 
@@ -306,12 +450,39 @@ function sendOrderNotFound(res: Response): void {
   res.status(404).json(body);
 }
 
-/** 409: "אישר בטלפון" after the round's confirmations were closed. */
+/**
+ * 409: "אישר בטלפון", or building the route, after the round's confirmations were closed (routed
+ * or closed).
+ */
 function sendConfirmationsClosed(res: Response): void {
   const body: ConfirmationsClosedErrorBody = {
     error: 'confirmations_closed',
     message: ROUND_MESSAGES.confirmationsClosed,
   };
+  res.status(409).json(body);
+}
+
+/**
+ * 400: a move's body is not `{ direction: 'up' | 'down' }`. No message: Yoel's screen never sends
+ * one, only a broken client does.
+ */
+function sendInvalidMove(res: Response): void {
+  const body: InvalidMoveErrorBody = { error: 'invalid_move' };
+  res.status(400).json(body);
+}
+
+/** 409: a move on a round whose route is not built yet (confirming), or that is closed. */
+function sendRouteNotOpen(res: Response): void {
+  const body: RouteNotOpenErrorBody = {
+    error: 'route_not_open',
+    message: ROUND_MESSAGES.routeNotOpen,
+  };
+  res.status(409).json(body);
+}
+
+/** 409: the first stop moved up, or the last one down; nothing was written. */
+function sendStopAtEdge(res: Response): void {
+  const body: StopAtEdgeErrorBody = { error: 'stop_at_edge', message: ROUND_MESSAGES.stopAtEdge };
   res.status(409).json(body);
 }
 
