@@ -761,6 +761,68 @@ html:has(.bottom-nav) {
   margin-block: 0.5rem 0.25rem;
 }
 
+/* --- History tab (collector/HistoryScreen.tsx) ------------------------------------- */
+
+/* The month shown ("אוקטובר 2026"), centred over the two buttons that change it. */
+.month-name {
+  margin-block: 0 0.5rem;
+  text-align: center;
+}
+
+/* "החודש הקודם" and "החודש הבא" side by side, each half the column, apart from the totals. */
+.month-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-block-end: 1.5rem;
+}
+
+.month-picker .button {
+  padding-inline: 0.5rem;
+}
+
+/*
+ * "החודש הבא" on the current month. Inactive controls are exempt from the contrast rule, but the
+ * text keeps its full contrast anyway; the dashed edge and the missing white fill set it apart.
+ */
+.month-picker .button:disabled {
+  border-style: dashed;
+  background: transparent;
+}
+
+/*
+ * The month's three totals, one under the other (a single column, so a large value never
+ * squeezes): the name on the right, the number on the left, framed like an .order-card.
+ */
+.history-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 1.5rem;
+}
+
+.history-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--color-gray);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.history-total dt {
+  font-weight: 700;
+}
+
+.history-total dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
 /* --- Route stops (collector/StopCard.tsx) ------------------------------------------ */
 
 /*

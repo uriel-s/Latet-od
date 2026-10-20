@@ -11,6 +11,7 @@ import {
   collectorOrdersResponseSchema,
   createOrderResponseSchema,
   customerOrderResponseSchema,
+  historyResponseSchema,
   meResponseSchema,
   messageOpenedResponseSchema,
   roundViewSchema,
@@ -22,6 +23,7 @@ import {
   type CreateOrderResponse,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
+  type HistoryResponse,
   type LoginRequest,
   type MoveStopRequest,
   type OrderGroup,
@@ -977,6 +979,53 @@ async function roundViewOf(response: Response): Promise<RoundView | null> {
 /** A JSON array whose every item is a string, like the 409 body's `orderIds`. */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The collector's history: GET /api/collector/history?month=YYYY-MM (spec §3.7, "היסטוריה")
+//
+// Behind the login like the routes above, with the same rules: a 401 is `loggedOut`, nothing is
+// retried, and the success body is parsed with the shared schema.
+// ---------------------------------------------------------------------------------------------
+
+/** How GET /api/collector/history ended, as the "היסטוריה" tab shows it. */
+export type HistoryOutcome =
+  /** 200: the month's totals and its closed orders, newest first (`closedAt` a Date). */
+  | { kind: 'loaded'; history: HistoryResponse }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /**
+   * No usable answer: a network error, a 5xx, or a 200 the app cannot read. A 400
+   * (`invalid_month`) is `failed` too: the screen's picker only builds valid months, so it is a
+   * client bug, and Yoel can do nothing about it but try again.
+   */
+  | { kind: 'failed' };
+
+/**
+ * Loads one calendar month's history (`YYYY-MM`, a month in Israel) from
+ * `GET /api/collector/history?month=`, past the browser cache: the current month changes with
+ * every "אספתי". The month is encoded, so whatever the caller passes stays one query value.
+ */
+export async function fetchHistory(
+  month: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<HistoryOutcome> {
+  const response = await fetchOrNull(
+    fetchFn,
+    `/api/collector/history?month=${encodeURIComponent(month)}`,
+    { method: 'GET', cache: 'no-store' },
+  );
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const parsed = historyResponseSchema.safeParse(await readJson(response));
+      return parsed.success ? { kind: 'loaded', history: parsed.data } : { kind: 'failed' };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
