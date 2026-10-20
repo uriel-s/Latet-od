@@ -9,13 +9,12 @@ export function pageTitle(heading: string | null, appName: string): string {
 }
 
 /**
- * Brings the new page into view: scrolls to the top, sets the tab title from the page's `<h1>`,
- * and focuses the `<h1>` (tabIndex -1: focusable from code, never a Tab stop) so a screen reader
- * reads where it landed. Focus is left alone when the page already put it on a form field or a
- * message, which is a better place than the heading.
+ * Sets the tab title from the page's `<h1>` and focuses the `<h1>` (tabIndex -1: focusable from
+ * code, never a Tab stop) so a screen reader reads where it landed. Focus is left alone when the
+ * page already put it on a form field or a message, which is a better place than the heading.
+ * Returns the `<h1>` it announced, or null when the page has none yet.
  */
-export function announcePageChange(appName: string): void {
-  window.scrollTo(0, 0);
+function announceHeading(appName: string): HTMLElement | null {
   const heading = document.querySelector('main h1');
   document.title = pageTitle(heading?.textContent ?? null, appName);
 
@@ -25,8 +24,38 @@ export function announcePageChange(appName: string): void {
     focused !== document.body &&
     focused.closest('main') !== null &&
     (focused.matches('input, textarea, select') || focused.tabIndex === -1);
-  if (heading instanceof HTMLElement && !pageMovedFocus) {
+  if (!(heading instanceof HTMLElement)) return null;
+  if (!pageMovedFocus) {
     heading.tabIndex = -1;
     heading.focus({ preventScroll: true });
   }
+  return heading;
+}
+
+/**
+ * Brings the new page into view: scrolls to the top, then titles the tab and focuses the heading
+ * ({@link announceHeading}).
+ *
+ * A screen that loads in stages (the collector app shows "אפליקציית האוסף" while it checks the
+ * session, then the screen's own heading) replaces its `<h1>` after this ran: the focused heading
+ * is gone and the title is stale. So this watches `<main>` and announces once more when the
+ * heading changes. Returns the function that stops watching; App calls it before the next change.
+ */
+export function announcePageChange(appName: string): () => void {
+  window.scrollTo(0, 0);
+  const announced = announceHeading(appName);
+  const announcedText = announced?.textContent ?? null;
+
+  const main = document.querySelector('main');
+  if (main === null) return () => undefined;
+
+  const observer = new MutationObserver(() => {
+    const current = document.querySelector('main h1');
+    // The same heading with the same words: some other part of the page changed.
+    if (current === announced && (current?.textContent ?? null) === announcedText) return;
+    observer.disconnect();
+    announceHeading(appName);
+  });
+  observer.observe(main, { childList: true, subtree: true, characterData: true });
+  return () => observer.disconnect();
 }

@@ -132,7 +132,10 @@ describe('OrdersScreen', () => {
       window.history.replaceState({ notice: 'ההזמנה נוספה.' }, '', '/app/orders');
       render(<OrdersScreen loadOrders={fakeLoad(LOADED).load} />);
 
-      expect((await screen.findByText('ההזמנה נוספה.')).getAttribute('role')).toBe('status');
+      const notice = await screen.findByText('ההזמנה נוספה.');
+      expect(notice.getAttribute('role')).toBe('status');
+      // A live region that appears with its text is often not read, so the notice takes focus too.
+      expect(document.activeElement).toBe(notice);
       // Cleared from the history entry, so a reload or the back button does not show it again.
       expect(window.history.state).toBeNull();
     });

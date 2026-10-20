@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -126,6 +127,42 @@ describe('App', () => {
     expect(document.title).toBe('כניסה | לתת עוד');
     // The spy comes from testSetup.ts; spying again returns it.
     expect(vi.spyOn(window, 'scrollTo')).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('re-announces a page whose heading arrives after the first render', async () => {
+    // The collector app draws "אפליקציית האוסף" while it checks the session, then its own screen.
+    let answerSession: (response: Response) => void = () => undefined;
+    const session = new Promise<Response>((resolve) => {
+      answerSession = resolve;
+    });
+    vi.stubGlobal('fetch', (input: string) =>
+      input === '/api/auth/me' ? session : fakeApi(input),
+    );
+    renderAt('/');
+
+    act(() => navigate('/app/rounds'));
+    expect(document.title).toBe('אפליקציית האוסף | לתת עוד');
+
+    answerSession(jsonResponse(LOGGED_IN_BODY));
+    const heading = await screen.findByRole('heading', { level: 1, name: 'סבבים' });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(document.title).toBe('סבבים | לתת עוד');
+    await waitFor(() => expect(screen.queryByText('טוען...')).toBeNull());
+  });
+
+  it('shows the notice a form sent to the orders tab once, also under StrictMode', async () => {
+    window.history.replaceState({ notice: 'ההזמנה נוספה.' }, '', '/app/orders');
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+
+    const notice = await screen.findByText('ההזמנה נוספה.');
+    expect(notice.getAttribute('role')).toBe('status');
+    await waitFor(() => expect(window.history.state).toBeNull());
+    expect(document.activeElement).toBe(notice);
+    await waitFor(() => expect(screen.queryByText('טוען...')).toBeNull());
   });
 
   it('shows the booking form at /', () => {

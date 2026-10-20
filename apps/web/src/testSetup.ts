@@ -7,7 +7,11 @@ import { afterEach, beforeEach, vi } from 'vitest';
 // jsdom has no scrolling: window.scrollTo only logs "not implemented". A spy keeps the log quiet
 // and lets a test check that a page change scrolled to the top.
 beforeEach(() => {
-  vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+  // mockClear: spying again returns the same spy, and its calls from an earlier test must not
+  // count in this one.
+  vi.spyOn(window, 'scrollTo')
+    .mockClear()
+    .mockImplementation(() => undefined);
 });
 
 afterEach(() => {

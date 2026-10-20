@@ -54,7 +54,8 @@ export interface NavigateOptions {
   /**
    * Stored as `history.state` and read back through `useLocation().state`. It survives a reload
    * and the back button, so it must be structured-cloneable (plain data). Section 9 navigates to
-   * `/` with `{ orderPrefill }` ("הזמנה חדשה עם אותם פרטים") and the form reads it.
+   * `/` with `{ orderPrefill }` ("הזמנה חדשה עם אותם פרטים") and the form reads it. The keys in use:
+   * `orderPrefill` (savedDetails.ts) and `notice` (collector/flashNotice.ts); a new one goes here.
    */
   state?: unknown;
   /** Replace the current history entry instead of adding one (the back button skips it). */
