@@ -1,11 +1,24 @@
 // The frame around every page: the brand at the top (spec §3.1, colours in styles.css from
-// spec §7), the page itself in <main>, and the OpenStreetMap credit at the bottom (ADR-0005: the
-// street points come from OSM under ODbL, so the credit is on every page).
+// spec §7), the page itself in <main>, and a quiet footer: the OpenStreetMap credit (ADR-0005: the
+// street points come from OSM under ODbL, so the credit is on every page) and, on the public
+// booking form, the way in for Yoel.
 import type { ReactNode } from 'react';
 import { APP_NAME, APP_SLOGAN, STREETS_ATTRIBUTION } from '@bottlerun/shared';
+import { Link } from './router.tsx';
 
 // OSM's attribution guideline: the credit links to the copyright page, which states the ODbL.
 const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
+
+/** Props of {@link Layout}. */
+export interface LayoutProps {
+  children: ReactNode;
+  /**
+   * Adds "כניסה ליואל" to the footer: a small link to /login, for the public booking form only.
+   * The customer's own page and Yoel's app do not need it, and an extra link there would only
+   * confuse an elderly customer.
+   */
+  collectorLink?: boolean;
+}
 
 /**
  * Wraps a page in the shared header and footer.
@@ -15,7 +28,7 @@ const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
  * בקבוקים"). So a screen reader's heading list starts at what the page is about, and pages never
  * compete with the header for the `<h1>`.
  */
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({ children, collectorLink = false }: LayoutProps) {
   return (
     <div className="layout">
       <header className="site-header">
@@ -28,7 +41,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <main className="column site-main">{children}</main>
 
       <footer className="site-footer">
-        <div className="column">
+        <div className="column site-footer-inner">
           {/* English text inside a right-to-left page: dir="ltr" keeps the © before the words. */}
           <p>
             <a
@@ -43,6 +56,13 @@ export function Layout({ children }: { children: ReactNode }) {
               {STREETS_ATTRIBUTION}
             </a>
           </p>
+          {collectorLink && (
+            <p>
+              <Link to="/login" className="footer-link">
+                כניסה ליואל
+              </Link>
+            </p>
+          )}
         </div>
       </footer>
     </div>
