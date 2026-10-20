@@ -214,9 +214,9 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
   });
 
-  it('offers Yoel a quiet way in from the booking form, and from no other page', () => {
+  it('offers the manager a way in from the booking form header, and from no other page', () => {
     renderAt('/');
-    const entrance = within(screen.getByRole('contentinfo')).getByRole('link', {
+    const entrance = within(screen.getByRole('banner')).getByRole('link', {
       name: 'כניסת מנהל',
     });
     expect(entrance.getAttribute('href')).toBe('/login');
