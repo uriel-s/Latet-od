@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
@@ -9,6 +9,7 @@ import {
   type RoundsResponse,
 } from '@bottlerun/shared';
 import { App } from './App.tsx';
+import { navigate } from './router.tsx';
 
 /** One path for each route, with the heading its page settles on, for the checks every page must pass. */
 const ONE_PATH_PER_ROUTE: [path: string, heading: string][] = [
@@ -226,6 +227,55 @@ describe('App', () => {
       expect(within(screen.getByRole('main')).getByRole('heading', { level: 1 })).toBeDefined();
     },
   );
+
+  describe('install to home screen (PWA head tags)', () => {
+    /** Whether document.head holds the manifest link and the iOS app meta. */
+    function hasPwaTags(): boolean {
+      return (
+        document.head.querySelector('link[rel="manifest"]') !== null &&
+        document.head.querySelector('meta[name="apple-mobile-web-app-capable"]') !== null
+      );
+    }
+    /** Whether document.head holds any of the collector app's install tags. */
+    function hasAnyPwaTag(): boolean {
+      return (
+        document.head.querySelector(
+          'link[rel="manifest"], link[rel="apple-touch-icon"], meta[name^="apple-mobile-web-app-"], meta[name="mobile-web-app-capable"]',
+        ) !== null
+      );
+    }
+
+    it.each([
+      ['/login', 'כניסה'],
+      ['/app', 'הזמנות'],
+      ['/app/rounds', 'סבבים'],
+    ])('makes the collector app installable at %s', async (path, heading) => {
+      await renderSettledAt(path, heading);
+
+      expect(hasPwaTags()).toBe(true);
+      expect(document.head.querySelectorAll('link[rel="manifest"]')).toHaveLength(1);
+    });
+
+    it.each([
+      ['/', 'הזמנת איסוף בקבוקים'],
+      [`/o/${CANCELLED_ORDER_TOKEN}`, 'ההזמנה שלך'],
+      ['/no-such-page', 'העמוד לא נמצא'],
+    ])('offers customers no install at %s', async (path, heading) => {
+      await renderSettledAt(path, heading);
+
+      expect(hasAnyPwaTag()).toBe(false);
+    });
+
+    it('removes the install tags when navigating from /app to / without a reload', async () => {
+      await renderSettledAt('/app/rounds', 'סבבים');
+      expect(hasPwaTags()).toBe(true);
+
+      act(() => navigate('/'));
+
+      expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
+      expect(hasAnyPwaTag()).toBe(false);
+    });
+  });
 
   it('renders exactly one h1, inside main, while the collector app checks the session', async () => {
     renderAt('/app/rounds');
