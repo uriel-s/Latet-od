@@ -66,4 +66,22 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // One-off Node scripts (scripts/geocode-streets.ts) maintain shared data: they may use
+    // @bottlerun/shared, never app code.
+    files: ['scripts/**'],
+    languageOptions: { globals: globals.node },
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [appPattern('api'), appPattern('web')] }],
+    },
+  },
+  {
+    // The Vercel function entry (api/index.ts, ADR-0002) is a thin wrapper around apps/api: it may
+    // import the api's code, never the web app's.
+    files: ['api/**'],
+    languageOptions: { globals: globals.node },
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [appPattern('web')] }],
+    },
+  },
 );

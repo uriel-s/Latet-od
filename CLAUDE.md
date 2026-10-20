@@ -65,13 +65,18 @@ BottleRun/
 │   │   ├── src/             # *.tsx, tests next to the code (*.test.tsx)
 │   │   └── vite.config.ts   # also the Vitest "web" project (jsdom); dev proxy /api → :3000
 │   └── api/                 # Express
-│       ├── src/app.ts       # exports `app`, no listen()
+│       ├── src/app.ts       # exports `createApp(deps)`, no listen()
+│       ├── src/envDeps.ts   # env → deps, shared by the local and the Vercel entry
 │       ├── src/server.ts    # local entry: npm run dev:api
 │       ├── .env.example     # every env var the api reads
 │       └── vitest.config.ts # Vitest "api" project (node)
 ├── packages/
 │   └── shared/              # TS source consumed directly (no build): types, zod, config, message text
-├── docs/                    # spec.md, decisions/ (ADRs), prompts.md, spikes/
+├── api/index.ts             # Vercel function entry (ADR-0002): builds deps from env, exports the app
+├── scripts/                 # one-off Node scripts: geocode-streets, smoke (post-deploy check)
+├── vercel.json              # build, rewrites (/api → function, rest → index.html), region iad1, headers
+├── .github/workflows/       # backup.yml: weekly mongodump artifact
+├── docs/                    # spec.md, decisions/ (ADRs), deploy.md (manual deploy steps), prompts.md, spikes/
 ├── .claude/checks.sh        # THE definition of green (see below)
 ├── .githooks/pre-push       # refuses pushes to main
 ├── eslint.config.js         # lint + workspace boundaries
@@ -111,7 +116,7 @@ Several global commands (/work, /pr) carry a fallback branch: "if `.claude/check
 | `lint` | `eslint .` | Includes the workspace import boundaries. |
 | `format` | `prettier --check .` | `*.md` and `docs/` are excluded (hand-written Hebrew). |
 | `arch` | — | Always `SKIP`: boundaries are ESLint rules and run under `lint`. |
-| `types` | `tsc --noEmit -p` for `apps/web`, `apps/api`, `packages/shared` | |
+| `types` | `tsc --noEmit -p` for `apps/web`, `apps/api`, `packages/shared`, `scripts`, `api` | |
 | `sec` | `npm audit --omit=dev --audit-level=high` | Needs network. |
 | `test` | `vitest run [files]` | Extra args narrow the run. |
 | `build` | `vite build apps/web` | web has one smoke test; the build is its main regression signal. |
@@ -162,7 +167,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 
 ## Testing Conventions
 
-- **Vitest**, two projects: `api` (node) and `web` (jsdom). Tests live next to the code: `src/foo.ts` → `src/foo.test.ts`, components `*.test.tsx`.
+- **Vitest**, four projects: `api` (node), `web` (jsdom), `shared` and `scripts` (node). Tests live next to the code: `src/foo.ts` → `src/foo.test.ts`, components `*.test.tsx`.
 - `describe` per unit, `it('…')` names that state the expected behaviour (`it('rejects fewer than 30 bottles')`).
 - api routes: `supertest` against the exported `app` — no `listen()`, no port.
 - React: Testing Library, query by role / visible text (Hebrew), not by class or test id.
@@ -189,5 +194,5 @@ Maintainer who merges locally and pushes `main`: `git config claude.allowTrunkPu
 
 ## Configuration
 
-- **Env vars** (`apps/api/.env`, template in `.env.example`): `PORT` now; `MONGODB_URI`, `COLLECTOR_PASSWORD_HASH`, `SESSION_SECRET`, `ROUTE_START`, `MESSAGE_SENDER` arrive with their P4 sections.
+- **Env vars** (`apps/api/.env`, template in `.env.example`): `PORT`, `MONGODB_URI`, `NODE_ENV`, `COLLECTOR_PASSWORD_HASH`, `SESSION_SECRET`, `PUBLIC_BASE_URL`, `MESSAGE_SENDER` (default `wame`) are in use; the api refuses to start (locally) or answers 500 (Vercel) if one is missing or malformed. `ROUTE_START` arrives with route planning. `MONGODB_BACKUP_URI` is a GitHub secret for the backup workflow only. Deploy steps: `docs/deploy.md`.
 - **Settings in code, no settings screen** (ADR-0005): bottle value (20 agorot) in `packages/shared`, drop-off point in `apps/api/src/config.ts`, start point from `ROUTE_START`.

@@ -3,7 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#DCEBF8" />
+    <meta name="description" content="הזמנת איסוף בקבוקים בבית שמש. הבקבוקים שלכם, התפילין שלהם!" />
     <title>לתת עוד</title>
+    <!--
+      Link preview (Open Graph) for WhatsApp and other apps. Static in this file because link
+      previews do not run JavaScript (ADR-0002), so React could not add them. The URLs are
+      absolute because WhatsApp needs them so (Open Graph requires it). If the domain changes,
+      change them together with PUBLIC_BASE_URL (docs/deploy.md). The image is
+      apps/web/public/og-image.jpg: the top of the flyer, without the phone number. Every page
+      gets the same preview, including /o/<token>, which shows nothing about the order. No
+      <meta name="robots"> here: it would hide the public form too; the private /o/* pages get
+      X-Robots-Tag: noindex from vercel.json instead.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="לתת עוד" />
+    <meta property="og:locale" content="he_IL" />
+    <meta property="og:url" content="https://latet-od.vercel.app/" />
+    <meta property="og:title" content="לתת עוד: איסוף בקבוקים בבית שמש" />
+    <meta
+      property="og:description"
+      content="הבקבוקים שלכם, התפילין שלהם! מזמינים איסוף של בקבוקי פיקדון מהבית, והכסף הולך לתפילין לנערי בר מצווה ולחיילים."
+    />
+    <meta property="og:image" content="https://latet-od.vercel.app/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="לתת עוד: איסוף בקבוקים לטובת תפילין" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>

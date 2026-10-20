@@ -26,6 +26,7 @@
 - **npm workspaces:** `apps/web` (React+Vite), `apps/api` (Express), `packages/shared` (טיפוסים ו-zod).
   `shared` נצרך כ-TS ישירות, בלי build.
 - **MongoDB Atlas Free**, באזור אירופי (Frankfurt, אם הוא זמין ל-Free. לבדוק ב-UI של Atlas [4]).
+  _עודכן 2026-10-20:_ הקלאסטר נוצר ב-AWS us-east-1 ונשאר שם, וה-function ב-`iad1` לידו (ADR-0002).
 - **ה-driver הרשמי של MongoDB, בלי Mongoose.** zod ב-`shared` הוא המקור היחיד לצורת הנתונים: אותה סכמה מאמתת את הטופס
   ב-web, את הבקשה ב-api, ואת מה שנקרא מה-DB. Mongoose היה מוסיף סכמה שנייה שצריך לסנכרן, ומאריך את ה-cold start.
 - גישה ל-DB רק דרך repositories (`OrdersRepo`, `RoundsRepo`) עם fake בזיכרון לבדיקות.

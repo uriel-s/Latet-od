@@ -1,23 +1,27 @@
 # ארכיטקטורה: BottleRun ("לתת עוד")
 
 > מסכם את `docs/spec.md` ואת `docs/decisions/` (ADRs 0001-0005). איפה שיש סתירה, ה-ADR קובע.
-> מצב נוכחי: שלד בלבד (P3). מה שמסומן _(P4)_ עוד לא קיים בקוד.
+> מצב נוכחי (2026-10-20): P4 בעבודה. קיימים: רשימת הרחובות, הטופס הציבורי, ההתחברות, מסך ההזמנות, הודעות wa.me,
+> תכנון סבב ואישורים, עמוד ההזמנה של הלקוח, ה-function ב-Vercel והגיבוי. מה שמסומן _(P4)_ עוד לא קיים בקוד
+> (בעיקר: המסלול, "אספתי", סגירת סבב וההיסטוריה).
 
 ## רכיבים
 
 | רכיב | מה | איפה | החלטה |
 |---|---|---|---|
 | **web** | SPA ב-React + Vite. שלושה חלקים: טופס ציבורי (`/`), עמוד הזמנה של הלקוח (`/o/<token>`), אפליקציית האוסף (אחרי התחברות). | `apps/web` | ADR-0001 |
-| **api** | Express. `app.ts` מייצא את האפליקציה, ויש שתי נקודות כניסה דקות: `server.ts` (מקומי / hosting רגיל), ו-function ל-Vercel _(P4)_. | `apps/api` | ADR-0001, 0002 |
-| **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק), ורשימת הרחובות עם אזור ונקודה _(P4)_. | `packages/shared` | ADR-0001, 0005 |
-| **MongoDB Atlas Free** | אוספים `orders`, `rounds`, `loginAttempts` (TTL). driver רשמי, בלי Mongoose. | אירופה | ADR-0001 |
-| **Vercel Hobby** | פרויקט אחד: ה-build של web ב-CDN, ו-api כ-function ב-`fra1`. origin אחד. | | ADR-0002 |
+| **api** | Express. `app.ts` מייצא את `createApp(deps)`, שמקבל את התלויות החיצוניות (repos, בדיקת DB, הגדרות ההתחברות וה-WhatsApp). יש שתי נקודות כניסה דקות, ושתיהן בונות את התלויות האמיתיות עם `depsFromEnv` (`envDeps.ts`: `createMongoDeps` + `authDepsFromEnv` + `messagingDepsFromEnv`): `server.ts` (מקומי / hosting רגיל), ו-`api/index.ts` בשורש הריפו, ה-function של Vercel (דרך `createVercelHandler`, שבונה את האפליקציה בבקשה הראשונה). בבדיקות: `createFakeDeps()`. | `apps/api`, `api/index.ts` | ADR-0001, 0002 |
+| **shared** | קוד TS שנצרך ישירות, בלי build: טיפוסים, סכמות zod, `renderMessage`, קבועים (שווי בקבוק _(P4)_), ורשימת הרחובות עם אזור ונקודה (`data/streets.json`, `searchStreets`, `findStreet`). | `packages/shared` | ADR-0001, 0005 |
+| **סקריפט רחובות** | חד-פעמי, לא חלק מהאפליקציה: מוריד את הרשימה מ-data.gov.il (`--refresh-list`) וממלא נקודה ואזור לכל רחוב דרך Nominatim, בקשה בשנייה. אזור לפי `REGION_DIVIDER`. התוצאה נשמרת ב-git. | `scripts/geocode-streets.ts` | ADR-0005 |
+| **MongoDB Atlas Free** | אוספים `orders`, `rounds`, `loginAttempts` (TTL). driver רשמי, בלי Mongoose. | AWS us-east-1 | ADR-0001, 0002 |
+| **Vercel Hobby** | פרויקט אחד (`latet-od`): ה-build של web ב-CDN, ו-api כ-function ב-`iad1`, ליד Atlas. origin אחד. ה-build, ה-region, ה-rewrites וה-headers ב-`vercel.json`. | `vercel.json` | ADR-0002 |
 | **WhatsApp** | `wa.me` עם טקסט מוכן. יואל לוחץ "שלח". מאחורי `MessageSender`. | | ADR-0003 |
 | **Waze / חייגן** | `https://waze.com/ul?q=…&navigate=yes`, `tel:`. קישורים בלבד. | | spec §6.4 |
-| **גיבוי** | GitHub Actions שבועי: `mongodump` עם משתמש read-only, artifact ל-90 יום. מחוץ לאפליקציה. _(P4)_ | | ADR-0002 |
+| **גיבוי** | GitHub Actions שבועי (שני 02:17 UTC) ובהפעלה ידנית: `mongodump` עם משתמש read-only, artifact ל-90 יום. מחוץ לאפליקציה. | `.github/workflows/backup.yml` | ADR-0002 |
+| **בדיקת smoke** | אחרי כל deploy: כמה GET מול האתר (`/api/health`, 404 של ה-api, תגיות OG, קישור עמוק ל-`/o/...`). לא משנה כלום. | `scripts/smoke.ts` | ADR-0002 |
 
 **אין בזמן ריצה:** geocoding, שירות מסלולים, cron, תורים, או זיכרון משותף בין בקשות. המיקום מגיע מקובץ רחובות סטטי
-(OSM, חד-פעמי), וסדר העצירות מחושב בתוך האפליקציה (`planRoute`, קו אוויר).
+(OSM, חד-פעמי), וסדר העצירות מחושב בתוך האפליקציה (`planRoute`, קו אוויר) _(P4)_.
 
 ## פריסה
 
@@ -27,9 +31,9 @@ flowchart LR
     Y["יואל<br/>(אפליקציית האוסף)"]
     subgraph V["Vercel: origin אחד"]
         CDN["CDN<br/>apps/web build"]
-        F["Function fra1<br/>apps/api (Express)"]
+        F["Function iad1<br/>api/index.ts → apps/api (Express)"]
     end
-    M[("MongoDB Atlas Free<br/>orders · rounds · loginAttempts")]
+    M[("MongoDB Atlas Free, us-east-1<br/>orders · rounds · loginAttempts")]
     WA["WhatsApp<br/>(wa.me, מהטלפון של יואל)"]
     WZ["Waze"]
     GH["GitHub Actions<br/>גיבוי שבועי"]
@@ -44,9 +48,15 @@ flowchart LR
     GH -->|"mongodump, read-only"| M
 ```
 
-- `/api/*` עובר ב-rewrite ל-function, וכל השאר ל-`index.html`. בגלל ה-origin האחד: בלי CORS, ו-cookie עם `SameSite=Lax`.
+- `vercel.json`: `/api/*` עובר ב-rewrite ל-function (`api/index.ts`), וכל השאר ל-`index.html`. קובץ שקיים ב-build
+  (`/assets/*`, `/og-image.jpg`) מוגש לפני ה-rewrites. `/o/*` מקבל `X-Robots-Tag: noindex`.
+  בגלל ה-origin האחד: בלי CORS, ו-cookie עם `SameSite=Lax`.
+- **region:** ה-function ב-`iad1`, ליד Atlas ב-us-east-1. הטופס הסטטי מגיע מה-CDN, ורק קריאות ל-api חוצות את האוקיינוס.
 - **warm-up:** הטופס שולח `GET /api/health` כשהוא נטען. עד שהלקוח מסיים למלא, ה-function כבר חם.
 - בפיתוח: Vite ב-5173 מעביר את `/api` ל-Express ב-3000. אותו מבנה, אותו origin.
+- **deploy:** push ל-`main` (באישור בלבד). הצעדים הידניים והבדיקות (משתני סביבה, Atlas, secret של הגיבוי, אבטחה,
+  cold start, rollback): `docs/deploy.md`. אחרי כל deploy: `npm run smoke -- https://latet-od.vercel.app` (`scripts/smoke.ts`).
+  הגיבוי: `.github/workflows/backup.yml`.
 
 ## זרימת הזמנה
 
@@ -67,7 +77,7 @@ sequenceDiagram
     Note over D: status = waiting
 
     Y->>W: תכנון סבב: תאריך + אזור
-    W->>A: POST /api/rounds
+    W->>A: POST /api/collector/rounds
     A->>D: ההזמנות → pending
     A-->>W: MessageSender → { mode: manual, url: wa.me/... }
     Y->>L: לוחץ "שלח" ב-WhatsApp (קישור לעמוד ההזמנה)
@@ -76,6 +86,7 @@ sequenceDiagram
     W->>A: POST /api/o/:token/confirm
     A->>D: pending → confirmed
 
+    Note over W,D: מכאן והלאה: P4, עוד לא בקוד
     Y->>W: "סגור אישורים ובנה מסלול"
     A->>D: מי שלא אישר → waiting + lastMiss<br/>planRoute(בית, עצירות, נקודת פריקה) נשמר בסבב
     loop לכל עצירה
@@ -105,6 +116,8 @@ flowchart TB
 | `apps/web` | `@bottlerun/shared`, React, ספריות דפדפן | `apps/api` | ESLint `no-restricted-imports` |
 | `apps/api` | `@bottlerun/shared`, Express, driver של Mongo | `apps/web` | ESLint `no-restricted-imports` |
 | `packages/shared` | zod, קוד TS טהור | כל אפליקציה, `express`, `react` | ESLint `no-restricted-imports` |
+| `scripts` | `@bottlerun/shared`, Node | כל אפליקציה | ESLint `no-restricted-imports` |
+| `api` (ה-function של Vercel) | `apps/api`, Node | `apps/web` | ESLint `no-restricted-imports` |
 
 **מה שייך ל-shared:** כל דבר ששני הצדדים צריכים להסכים עליו: צורת ההזמנה (zod), קודי סטטוס, כללי validation
 (טלפון ישראלי, מינימום 30), טקסט ההודעות (`renderMessage`), רשימת הרחובות, ושווי בקבוק.
@@ -119,13 +132,15 @@ flowchart TB
 | `MessageSender` | `WaMeLinkSender` (MVP), `CloudApiSender` (אם יואל יבחר אוטומטי) | `FakeSender` | 0003 |
 | `OrdersRepo`, `RoundsRepo` | MongoDB | בזיכרון | 0001 |
 | `AttemptStore` (הגבלת ניסיונות וקצב) | `loginAttempts` ב-Mongo, TTL | בזיכרון | 0004 |
-| `DistanceMatrix` | haversine (פונקציה טהורה). OSRM אם יידרש. | haversine | 0005 |
+| `DistanceMatrix` _(P4)_ | haversine (פונקציה טהורה). OSRM אם יידרש. | haversine | 0005 |
 
 ## אבטחה ופרטיות (תקציר)
 - עמוד הלקוח: רק עם token אקראי וארוך, אישור וביטול ב-POST (ה-preview של WhatsApp שולח GET).
 - האוסף: סיסמה אחת (scrypt hash ב-env), cookie חתום ל-90 יום שמתחדש, בדיקת `Origin` בכל פעולה שמשנה משהו.
 - הגבלת קצב ב-Mongo, כי ב-serverless אין זיכרון משותף. הזמנה פתוחה אחת לטלפון, ושדה honeypot.
-- בלי תוכן בקשות בלוגים. סודות ב-env בלבד.
+- בלי תוכן בקשות בלוגים: הלוגים של ה-api רושמים את תבנית ה-route, לא את ה-path. סודות ב-env בלבד (ב-Vercel:
+  Environment Variables). ה-request logs של Vercel עצמו כן רושמים כל path, כולל `/o/<token>` (ראה `docs/deploy.md`).
 
 ## בדיקות ו"ירוק"
 `bash .claude/checks.sh all`: lint (כולל הגבולות), format, types, sec, test, build. פירוט ב-`CLAUDE.md`.
+מחוץ לירוק, ידני: ה-deploy, ה-smoke מול האתר האמיתי, בדיקות האבטחה וה-cold start (`docs/deploy.md`).
