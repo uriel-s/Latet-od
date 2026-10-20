@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
   groupWaitingOrders,
+  monthInAppZone,
   type CollectorOrdersResponse,
   type CustomerOrderResponse,
   type MeResponse,
@@ -58,7 +59,8 @@ function jsonResponse(body: unknown): Response {
 /**
  * Stands in for the api in every test of this file, so no page sends a real request from jsdom.
  * The collector app's guard calls it (GET /api/auth/me), and so do its orders tab (GET
- * /api/collector/orders) and its rounds tab (GET /api/collector/rounds); the customer's page asks
+ * /api/collector/orders), its rounds tab (GET /api/collector/rounds) and its history tab (GET
+ * /api/collector/history?month=, which answers nothing closed); the customer's page asks
  * for its order (GET /api/o/:token), which only CANCELLED_ORDER_TOKEN finds. Anything else gets a
  * 404.
  */
@@ -69,6 +71,16 @@ function fakeApi(input: string): Promise<Response> {
   }
   if (input === '/api/collector/rounds') {
     return Promise.resolve(jsonResponse(NO_OPEN_ROUNDS_BODY));
+  }
+  const historyMonth = /^\/api\/collector\/history\?month=(\d{4}-\d{2})$/.exec(input)?.[1];
+  if (historyMonth !== undefined) {
+    return Promise.resolve(
+      jsonResponse({
+        month: historyMonth,
+        totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
+        orders: [],
+      }),
+    );
   }
   if (input === `/api/o/${CANCELLED_ORDER_TOKEN}`) {
     return Promise.resolve(jsonResponse(CANCELLED_ORDER_BODY));
@@ -178,10 +190,17 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'היסטוריה' })).toBeDefined();
     expect(window.location.pathname).toBe('/app/history');
     // The session once, and each visited tab's own list once (the rounds tab loads its rounds even
-    // though Yoel moved on at once); no tab switch checks the session.
+    // though Yoel moved on at once; the history tab its current month); no tab switch checks the
+    // session.
     await waitFor(() =>
-      expect(requests).toEqual(['/api/auth/me', '/api/collector/orders', '/api/collector/rounds']),
+      expect(requests).toEqual([
+        '/api/auth/me',
+        '/api/collector/orders',
+        '/api/collector/rounds',
+        `/api/collector/history?month=${monthInAppZone(new Date())}`,
+      ]),
     );
+    expect(await screen.findByText('לא נסגרו הזמנות בחודש הזה.')).toBeDefined();
   });
 
   it('shows "page not found" for an unknown path', () => {
