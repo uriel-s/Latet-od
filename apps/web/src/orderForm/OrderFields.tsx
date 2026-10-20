@@ -1,7 +1,8 @@
 // The order's fields (spec §3.1): contact, address, where the bottles wait, and how many. The
 // public booking form (OrderFormPage) renders them, and so do Yoel's add and edit screens (spec
-// §3.5: the same form), so all three ask the same questions in the same words. The page owns the
-// <form>, its state (useOrderForm), the honeypot and the submit button.
+// §3.5: the same form) and the customer's "שינוי" on their own page (spec §3.3, without the
+// contact), so all of them ask the same questions in the same words. The page owns the <form>,
+// its state (useOrderForm), the honeypot and the submit button.
 import { useId } from 'react';
 import {
   BOTTLES_SPOT_LABELS,
@@ -20,48 +21,63 @@ export interface OrderFieldsProps {
   errors: FormErrors['byField'];
   /** Called with the field and its new value on every change; useOrderForm's `setField`. */
   onFieldChange: <F extends OrderFormField>(field: F, value: OrderFormValues[F]) => void;
+  /**
+   * Show the name and phone fields. Default true. The customer's "שינוי" passes false: the phone
+   * keeps one open order per phone and cannot be changed there (spec §3.3), and neither can the
+   * name, so neither field is offered.
+   */
+  showContact?: boolean;
 }
 
 /**
- * The order's fields, in form order: שם, טלפון נייד, רחוב, מספר בית, איפה הבקבוקים, קומה ודירה
- * (only for the apartment door), הערה, כמות בקבוקים. A fragment, to be placed inside the page's
- * `<form>`. Every field shows its error next to it and carries aria-invalid while it has one,
+ * The order's fields, in form order: שם and טלפון נייד (unless `showContact` is false), רחוב,
+ * מספר בית, איפה הבקבוקים, קומה ודירה (only for the apartment door), הערה, כמות בקבוקים. A
+ * fragment, to be placed inside the page's `<form>`. Every field shows its error next to it and carries aria-invalid while it has one,
  * which is how useOrderForm's `showErrors` finds the first wrong field.
  *
  * The street picker reads `values.street` once, when it mounts: give OrderFields its values
  * before the first render (a saved prefill, a loaded order), or remount it with a new `key` to
  * refill it.
  */
-export function OrderFields({ values, errors, onFieldChange }: OrderFieldsProps) {
+export function OrderFields({
+  values,
+  errors,
+  onFieldChange,
+  showContact = true,
+}: OrderFieldsProps) {
   const spotGroupName = useId();
   const spotErrorId = useId();
   const spotError = errors.bottlesSpot;
 
   return (
     <>
-      <TextField
-        label="שם"
-        value={values.name}
-        onChange={(name) => onFieldChange('name', name)}
-        error={errors.name}
-        autoComplete="name"
-        maxLength={FORM_TEXT_MAX_LENGTH.name}
-      />
+      {showContact && (
+        <>
+          <TextField
+            label="שם"
+            value={values.name}
+            onChange={(name) => onFieldChange('name', name)}
+            error={errors.name}
+            autoComplete="name"
+            maxLength={FORM_TEXT_MAX_LENGTH.name}
+          />
 
-      <TextField
-        label="טלפון נייד"
-        type="tel"
-        digits
-        value={values.phone}
-        onChange={(phone) => onFieldChange('phone', phone)}
-        error={errors.phone}
-        hint={
-          <>
-            למשל <bdi dir="ltr">050-1234567</bdi>
-          </>
-        }
-        autoComplete="tel"
-      />
+          <TextField
+            label="טלפון נייד"
+            type="tel"
+            digits
+            value={values.phone}
+            onChange={(phone) => onFieldChange('phone', phone)}
+            error={errors.phone}
+            hint={
+              <>
+                למשל <bdi dir="ltr">050-1234567</bdi>
+              </>
+            }
+            autoComplete="tel"
+          />
+        </>
+      )}
 
       {/* The picker reads `value` once, when it mounts. A prefill exists before the first
           render, so the saved street shows without a remount `key`. */}

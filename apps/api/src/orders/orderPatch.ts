@@ -118,9 +118,11 @@ function nextRegion(
 
 /**
  * `stored` with `patch` applied like OrdersRepo.update applies it (Mongo `$set` / `$unset`): each
- * key replaces the field as a whole, and a key set to `undefined` removes the field.
+ * key replaces the field as a whole, and a key set to `undefined` removes the field. Pure (a new
+ * object; `stored` is not touched). The patch builders (this file's and the customer's,
+ * customerOrderPatch.ts) check the result with `orderSchema` before anything is written.
  */
-function applyPatch(stored: Order, patch: OrderPatch): Order {
+export function applyPatch(stored: Order, patch: OrderPatch): Order {
   const next: Record<string, unknown> = { ...stored };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) delete next[key];

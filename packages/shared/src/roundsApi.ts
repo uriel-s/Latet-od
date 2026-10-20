@@ -175,9 +175,12 @@ export type RoundsResponse = z.infer<typeof roundsResponseSchema>;
  * The group an order of the round is shown in, or `undefined` for none:
  * - still in this round (`roundId`) and `confirmed` (or already `collected`): "אישרו".
  * - still in this round and `pending`: "עוד לא אישרו".
- * - out of this round, and its last miss was this round: "ביקשו מועד אחר". Any reason counts; the
- *   card's `lastMiss` tag shows the real one.
- * Anything else, e.g. an order cancelled while in the round, is in no group.
+ * - out of this round, and it left this round because the customer asked for another date (its
+ *   `lastMiss` is this round, reason `askedOtherDate`: "לא מתאים הפעם" on the customer's page):
+ *   "ביקשו מועד אחר".
+ * Anything else is in no group: an order cancelled while in the round, and one that left it for
+ * another reason (it changed its address, or did not confirm in time), since the group's title
+ * says what they asked for and they did not ask for it.
  */
 function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
   if (order.roundId === round.id) {
@@ -185,7 +188,9 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
     if (order.status === 'pending') return 'pending';
     return undefined;
   }
-  return order.lastMiss?.roundId === round.id ? 'otherDate' : undefined;
+  const askedOtherDate =
+    order.lastMiss?.roundId === round.id && order.lastMiss.reason === 'askedOtherDate';
+  return askedOtherDate ? 'otherDate' : undefined;
 }
 
 /**
@@ -196,6 +201,8 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
  *   is skipped, and so is an order given whose id is not in the round.
  * - Puts each order in its group (see `roundGroupOf`), as Yoel's screens get an order
  *   ({@link toCollectorOrder}). All three groups are returned, in {@link ROUND_GROUP_KEYS} order.
+ *   An order that left the round is in "ביקשו מועד אחר" only for the reason `askedOtherDate`;
+ *   for any other reason it is in no group.
  * - `sendList`: the latest confirmation request ({@link toMessageLink}) of each `pending` order,
  *   in the same order. A confirmed customer needs no request, so the list shrinks as people
  *   confirm; an order whose newest request is not a wa.me link has no row.
@@ -274,7 +281,8 @@ export interface RoundNotFoundErrorBody {
 
 /**
  * 409 from "אישר בטלפון": the round is closed, or its confirmations are closed (phase `routed`).
- * `message` is {@link ROUND_MESSAGES}.confirmationsClosed.
+ * `message` is {@link ROUND_MESSAGES}.confirmationsClosed. The customer's own confirm
+ * (customerOrderApi.ts) answers the same body, with the customer's message.
  */
 export interface ConfirmationsClosedErrorBody {
   error: 'confirmations_closed';

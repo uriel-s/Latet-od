@@ -152,4 +152,37 @@ describe('OrderFields', () => {
     expect(descriptionOf(input('טלפון נייד'))).toBe('למשל 050-1234567');
     expect(descriptionOf(input('כמות בקבוקים'))).toBe('לפחות 30 בקבוקים');
   });
+
+  describe('without the contact (the customer\'s "שינוי")', () => {
+    function renderWithoutContact(): void {
+      render(
+        <OrderFields
+          values={makeValues({ bottlesSpot: 'apartmentDoor', floorApt: 'קומה 3' })}
+          errors={{}}
+          onFieldChange={() => undefined}
+          showContact={false}
+        />,
+      );
+    }
+
+    it('leaves out the name and the phone', () => {
+      renderWithoutContact();
+
+      expect(screen.queryByLabelText('שם')).toBeNull();
+      expect(screen.queryByLabelText('טלפון נייד')).toBeNull();
+      expect(screen.queryByRole('textbox', { name: 'שם' })).toBeNull();
+      expect(document.querySelector('input[type="tel"]')).toBeNull();
+    });
+
+    it('shows every other field with its value', () => {
+      renderWithoutContact();
+
+      expect(input('רחוב').value).toBe('דרך רבין יצחק');
+      expect(input('מספר בית').value).toBe('12א');
+      expect(input('ליד דלת הדירה').checked).toBe(true);
+      expect(input('קומה ודירה').value).toBe('קומה 3');
+      expect(input('הערה (לא חובה)').value).toBe('ליד השער');
+      expect(input('כמות בקבוקים').value).toBe('45');
+    });
+  });
 });
