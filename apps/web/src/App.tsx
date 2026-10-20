@@ -26,7 +26,8 @@ export function App() {
     announcePageChange(APP_NAME);
   }, [pathname]);
 
-  return <Layout>{pageFor(matchRoute(pathname))}</Layout>;
+  const route = matchRoute(pathname);
+  return <Layout collectorLink={route.name === 'orderForm'}>{pageFor(route)}</Layout>;
 }
 
 /** The page component for a route. Adding a route means a case here and in `matchRoute`. */

@@ -214,6 +214,29 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
   });
 
+  it('offers Yoel a quiet way in from the booking form, and from no other page', () => {
+    renderAt('/');
+    const entrance = within(screen.getByRole('contentinfo')).getByRole('link', {
+      name: 'כניסה ליואל',
+    });
+    expect(entrance.getAttribute('href')).toBe('/login');
+
+    fireEvent.click(entrance);
+    expect(window.location.pathname).toBe('/login');
+    expect(screen.queryByRole('link', { name: 'כניסה ליואל' })).toBeNull();
+  });
+
+  it.each(['/o/abc', '/login', '/app/rounds', '/no-such-page'])(
+    'has no "כניסה ליואל" link at %s',
+    async (path) => {
+      renderAt(path);
+      await screen.findByRole('heading', { level: 1 });
+
+      expect(screen.queryByRole('link', { name: 'כניסה ליואל' })).toBeNull();
+      await waitFor(() => expect(screen.queryByText('טוען...')).toBeNull());
+    },
+  );
+
   it.each(ONE_PATH_PER_ROUTE)(
     'credits OpenStreetMap in the footer at %s',
     async (path, heading) => {

@@ -141,16 +141,30 @@ h1[tabindex='-1']:focus {
   padding-block-end: 2rem;
 }
 
+/* A quiet footer: a thin accent line like the header's, and small centred text (14px, the floor
+   for text that is not a control). The credit is legally required (ODbL), so it stays readable:
+   --color-text on the page is 8.5:1. */
 .site-footer {
-  border-block-start: 2px solid var(--color-gray);
-  padding-block: 0.5rem;
+  border-block-start: 2px solid var(--color-accent);
+  padding-block: 0.25rem;
+  font-size: 0.8125rem;
 }
 
 .site-footer p {
   margin: 0;
 }
 
-/* Taller than the text, so the credit link is a full-size tap target too. */
+/* The credit and, on the booking form, "כניסה ליואל": side by side, one under the other when the
+   phone is too narrow. */
+.site-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 1.5rem;
+}
+
+/* Taller than the text, so each footer link is a full-size tap target too. */
 .footer-link {
   display: inline-flex;
   align-items: center;
