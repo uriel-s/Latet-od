@@ -103,7 +103,7 @@ export interface CloseRoundConfirmProps {
  * "סגור סבב" and, once tapped, its question in its place. Built like BuildRouteConfirm.tsx and
  * components/CancelConfirm.tsx: a question in the page, not
  * `window.confirm`, and the focus where the next step is. The button is the quiet outline style,
- * so it does not compete with the round's main step ("סגור אישורים ובנה מסלול", or the route).
+ * so it does not compete with the round's main step ("התחל מסלול", or the route).
  *
  * The open question is one group, named by the question, top to bottom: the
  * "תודות שלא נשלחו" list (only when there is one), the question, the error of a failed close, and
