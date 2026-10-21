@@ -373,9 +373,13 @@ describe('RouteScreen navigation links', () => {
     const href =
       screen.getByRole('link', { name: GOOGLE_MAPS_ROUTE_TEXT }).getAttribute('href') ?? '';
     expect(href).not.toContain('origin=');
-    const url = new URL(href);
-    expect(url.searchParams.get('waypoints')).toBe('הרצל 3, בית שמש|' + "בית ג'מאל 5, בית שמש");
-    expect(url.searchParams.get('destination')).toContain('נחל נחשון 7');
+    const places = href
+      .slice('https://www.google.com/maps/dir//'.length)
+      .split('/')
+      .map(decodeURIComponent);
+    expect(places).toHaveLength(3);
+    expect(places.slice(0, 2)).toEqual(['הרצל 3, בית שמש', "בית ג'מאל 5, בית שמש"]);
+    expect(places[2]).toContain('נחל נחשון 7');
   });
 
   it('shows neither link for a route with no stop', () => {

@@ -67,8 +67,9 @@ export function nextStopToCollect(stops: readonly RouteStopView[]): RouteStopVie
  * - No `origin`: Maps starts from the phone's location, so Yoel's home (ROUTE_START, private)
  *   never appears in a link.
  * - No `optimize`: Maps keeps the order `planRoute` stored.
- * - Waypoints are joined by an encoded pipe (%7C), the strictly valid URL form that Maps decodes;
- *   each address is encoded on its own, so a "|" or "&" inside a street name cannot split them.
+ * - The path form `/maps/dir//stop1/stop2/…/drop-off`, not `?api=1&waypoints=a|b`: on Yoel's Android
+ *   phone the api form showed only the first stop. The empty segment after `dir/` is "my location";
+ *   each address is encoded on its own, so a "/" or "&" inside a street name cannot split them.
  * - At most {@link MAX_MAPS_WAYPOINTS}: the first ones still to collect.
  */
 export function googleMapsRouteUrl(stops: readonly RouteStopView[]): string | undefined {
@@ -77,12 +78,8 @@ export function googleMapsRouteUrl(stops: readonly RouteStopView[]): string | un
     .slice(0, MAX_MAPS_WAYPOINTS)
     .map((stop) => encodeURIComponent(searchTextOf(stop.order.address)));
   if (waypoints.length === 0) return undefined;
-  return (
-    'https://www.google.com/maps/dir/?api=1' +
-    `&destination=${encodeURIComponent(DROP_OFF_ADDRESS)}` +
-    `&waypoints=${waypoints.join('%7C')}` +
-    '&travelmode=driving'
-  );
+  const places = [...waypoints, encodeURIComponent(DROP_OFF_ADDRESS)];
+  return `https://www.google.com/maps/dir//${places.join('/')}`;
 }
 
 /**
