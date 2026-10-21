@@ -49,7 +49,7 @@ UI text is Hebrew; code, identifiers and commit messages are English.
 |---|---|---|
 | `waiting` | ממתינה לסבב | Created, or back from a round that did not collect it. |
 | `pending` | ממתינה לאישור | In a round; confirmation request sent. |
-| `confirmed` | אושרה | Customer confirmed, or Yoel marked "אישר בטלפון". |
+| `confirmed` | אושרה | Customer confirmed, or Yoel marked "אישר בשיחה או בהודעה". |
 | `collected` | נאספה | Yoel tapped "אספתי". Final. |
 | `cancelled` | בוטלה | Customer or Yoel cancelled. Final. |
 

@@ -1,4 +1,4 @@
-// "סגור אישורים ובנה מסלול", the last step of a round still confirming (spec §3.6): a button, and
+// "התחל מסלול", the last step of a round still confirming (spec §3.6): a button, and
 // once tapped a question in the page that says how many customers go back to waiting. The rounds
 // screen (RoundsScreen.tsx) sends the build itself and tells this component whether it is on its
 // way and whether it failed; this component owns only the question being open and the focus.
@@ -6,19 +6,19 @@ import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 /** The button at the end of a round in step 1 (spec §3.6). */
-export const BUILD_ROUTE_LABEL = 'סגור אישורים ובנה מסלול';
+export const BUILD_ROUTE_LABEL = 'התחל מסלול';
 /** "Yes" of the question: builds the route. */
-export const BUILD_ROUTE_YES_LABEL = 'כן, לבנות מסלול';
+export const BUILD_ROUTE_YES_LABEL = 'כן, להתחיל';
 /** "No" of the question: back to the button, nothing sent. */
 export const BUILD_ROUTE_NO_LABEL = 'לא, עוד לא';
 /** "Yes" while the build is on its way. */
-export const BUILDING_ROUTE_LABEL = 'בונה מסלול...';
+export const BUILDING_ROUTE_LABEL = 'מתחיל מסלול...';
 
 /** Inside the question when the build got no usable answer; "כן" can be tapped again. */
-export const BUILD_ROUTE_FAILED_MESSAGE = 'לא הצלחנו לבנות את המסלול. נא לנסות שוב.';
+export const BUILD_ROUTE_FAILED_MESSAGE = 'לא הצלחנו להתחיל את המסלול. נא לנסות שוב.';
 
 /**
- * The question "סגור אישורים ובנה מסלול" asks first, in plain words: building the route closes the
+ * The question "התחל מסלול" asks first, in plain words: building the route closes the
  * confirmations, and whoever has not confirmed leaves the round and waits for the next one (spec
  * §3.6, ת5), so Yoel hears how many that is before he decides. `pendingCount` is the size of the
  * "עוד לא אישרו" group.
@@ -27,7 +27,7 @@ export const BUILD_ROUTE_FAILED_MESSAGE = 'לא הצלחנו לבנות את ה�
  * all asked for another date (rare, and building it is harmless: an empty route).
  */
 export function buildRouteQuestion(pendingCount: number): string {
-  const question = 'לסגור את האישורים ולבנות מסלול?';
+  const question = 'להתחיל מסלול?';
   if (pendingCount === 0) return `אף לקוח לא יחזור לחכות. ${question}`;
   if (pendingCount === 1) return `לקוח אחד שעוד לא אישר יחזור לחכות לסבב הבא. ${question}`;
   return `${pendingCount} לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. ${question}`;
@@ -38,11 +38,11 @@ export function buildRouteQuestion(pendingCount: number): string {
  * the screen sends the request.
  */
 export interface BuildRouteControl {
-  /** True while the build is on its way ("בונה מסלול..."). */
+  /** True while the build is on its way ("מתחיל מסלול..."). */
   building: boolean;
   /** True when the last build got no usable answer. */
   failed: boolean;
-  /** "כן, לבנות מסלול". Called on every tap, a busy one too: the screen keeps its own guard. */
+  /** "כן, להתחיל". Called on every tap, a busy one too: the screen keeps its own guard. */
   onBuild: () => void;
   /** The question opened or closed; the screen clears an old error here. */
   onOpenChange: () => void;
@@ -55,8 +55,8 @@ export interface BuildRouteConfirmProps extends BuildRouteControl {
 }
 
 /**
- * "סגור אישורים ובנה מסלול" and, once tapped, its question in its place, with
- * "כן, לבנות מסלול" and "לא, עוד לא" under it. Built like components/CancelConfirm.tsx, whose
+ * "התחל מסלול" and, once tapped, its question in its place, with
+ * "כן, להתחיל" and "לא, עוד לא" under it. Built like components/CancelConfirm.tsx, whose
  * words are the cancel's: a question in the page, not `window.confirm`, and the focus where the
  * next step is (to the question when it opens, back to the button on "לא, עוד לא"). The question
  * stays open after a failed build, with the error inside it, for another "כן".

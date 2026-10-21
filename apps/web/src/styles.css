@@ -957,15 +957,15 @@ html:has(.bottom-nav) {
   margin-block: 0 0.75rem;
 }
 
-/* "סגור אישורים ובנה מסלול" ends step 1, under a decorative line and apart from the cards'
-   "אישר בטלפון", so it is not tapped by mistake. Its question uses .cancel-confirm. */
+/* "התחל מסלול" ends step 1, under a decorative line and apart from the cards'
+   "אישר בשיחה או בהודעה", so it is not tapped by mistake. Its question uses .cancel-confirm. */
 .round-build-route {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
   border-block-start: 2px solid var(--color-gray);
 }
 
-/* "סגור סבב" (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
+/* The close button (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
    it. Its question uses .cancel-confirm; the "תודות שלא נשלחו" heading starts that box, so it
    drops the top margin of the other h3s of a round. */
 .round-close {
@@ -983,7 +983,7 @@ html:has(.bottom-nav) {
   min-height: var(--tap-target);
 }
 
-/* "אישר בטלפון" at the end of a card; .button keeps it at least 48px tall. */
+/* "אישר בשיחה או בהודעה" at the end of a card; .button keeps it at least 48px tall. */
 .order-card-confirm {
   min-width: var(--tap-target);
   margin-block: 0.5rem 0.25rem;
