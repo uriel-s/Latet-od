@@ -194,6 +194,10 @@ function cancelOrder(id: string, target: Express = app): request.Test {
     .set('Cookie', cookie);
 }
 
+function deleteOrder(id: string, target: Express = app): request.Test {
+  return request(target).delete(`${BASE}/${id}`).set(SAME_ORIGIN_HEADERS).set('Cookie', cookie);
+}
+
 /** Yoel's "שלח" button: marks the entry at `index` of the order's message log as opened. */
 function markOpened(id: string, index: string | number, target: Express = app): request.Test {
   return request(target)
@@ -618,6 +622,112 @@ describe('POST /api/collector/orders/:id/cancel', () => {
   });
 });
 
+describe('DELETE /api/collector/orders/:id', () => {
+  it('deletes a waiting order for good: 204, no body, and no lookup finds it', async () => {
+    const order = await seed();
+    const kept = await seed();
+
+    const res = await deleteOrder(order.id);
+
+    expect(res.status).toBe(204);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.text).toBe('');
+    expect(await orders.findById(order.id)).toBeNull();
+    expect(await orders.findByToken(order.token)).toBeNull();
+    expect(await orders.list()).toStrictEqual([kept]);
+  });
+
+  it('deletes a cancelled order that is in no round', async () => {
+    const order = await seed({ status: 'cancelled', cancelledAt: MADE_ORDER_CREATED_AT });
+
+    const res = await deleteOrder(order.id);
+
+    expect(res.status).toBe(204);
+    expect(await orders.findById(order.id)).toBeNull();
+  });
+
+  it('lets the same phone book again after its waiting order was deleted', async () => {
+    const order = await seed();
+    await deleteOrder(order.id);
+
+    await expect(
+      orders.create(makeNewOrder({ contact: { ...order.contact } })),
+    ).resolves.toBeDefined();
+  });
+
+  it.each([
+    {
+      label: 'a collected order',
+      overrides: { status: 'collected', collectedAt: MADE_ORDER_CREATED_AT },
+    },
+    { label: 'a pending order in a round', overrides: { status: 'pending', roundId: 'round-7' } },
+    {
+      label: 'a confirmed order in a round',
+      overrides: { status: 'confirmed', roundId: 'round-7' },
+    },
+    {
+      label: 'an order cancelled in a round',
+      overrides: { status: 'cancelled', cancelledAt: MADE_ORDER_CREATED_AT, roundId: 'round-7' },
+    },
+  ] satisfies { label: string; overrides: Partial<NewOrder> }[])(
+    'refuses $label with 409 cannot_delete, changing nothing',
+    async ({ overrides }) => {
+      const order = await seed(overrides);
+
+      const res = await deleteOrder(order.id);
+
+      expect(res.status).toBe(409);
+      expect(res.body).toStrictEqual({
+        error: 'cannot_delete',
+        message: COLLECTOR_ORDER_MESSAGES.cannotDelete,
+      });
+      expect(await stored(order.id)).toStrictEqual(order);
+    },
+  );
+
+  it('answers 409 cannot_delete when the order was collected between the read and the delete', async () => {
+    const racing = new OrdersRepoCollectingOnRead();
+    const order = await racing.create(makeNewOrder());
+
+    const res = await deleteOrder(order.id, appWithRepo(racing));
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ error: 'cannot_delete' });
+    expect((await racing.findById(order.id))?.status).toBe('collected');
+  });
+
+  it('answers 404 for the second delete of the same order', async () => {
+    const order = await seed();
+    expect((await deleteOrder(order.id)).status).toBe(204);
+
+    const res = await deleteOrder(order.id);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'order_not_found' });
+  });
+
+  it.each([
+    { label: 'an unknown id', id: UNKNOWN_ID },
+    { label: 'a malformed id', id: MALFORMED_ID },
+  ])('answers 404 order_not_found for $label, deleting nothing', async ({ id }) => {
+    const order = await seed();
+
+    const res = await deleteOrder(id);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'order_not_found' });
+    expect(await orders.list()).toStrictEqual([order]);
+  });
+
+  it('marks exactly the deletable orders as `deletable` for the screen', async () => {
+    const waiting = await seed();
+    const inRound = await seed({ status: 'pending', roundId: 'round-7' });
+
+    expect(orderOf(await getOne(waiting.id)).deletable).toBe(true);
+    expect(orderOf(await getOne(inRound.id)).deletable).toBe(false);
+  });
+});
+
 describe('POST /api/collector/orders/:id/messages/:index/opened', () => {
   it('sets openedAt of the manual entry to now, changing nothing else, the status included', async () => {
     const order = await seed({
@@ -835,6 +945,7 @@ describe('/api/collector/orders: the login and the Origin check', () => {
       send: () => request(app).patch(`${BASE}/${UNKNOWN_ID}`).send({ bottlesEstimated: 40 }),
     },
     { label: 'POST /:id/cancel', send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/cancel`) },
+    { label: 'DELETE /:id', send: () => request(app).delete(`${BASE}/${UNKNOWN_ID}`) },
     {
       label: 'POST /:id/messages/:index/opened',
       send: () => request(app).post(`${BASE}/${UNKNOWN_ID}/messages/0/opened`),
@@ -869,6 +980,20 @@ describe('/api/collector/orders: the login and the Origin check', () => {
       .set('Origin', 'https://evil.example')
       .set('Cookie', cookie)
       .send({ region: 'old' });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toStrictEqual({ error: 'forbidden_origin' });
+    expect(await stored(order.id)).toStrictEqual(order);
+  });
+
+  it('refuses a DELETE from another site with 403 forbidden_origin, even with the cookie', async () => {
+    const order = await seed();
+
+    const res = await request(app)
+      .delete(`${BASE}/${order.id}`)
+      .set('Host', TEST_HOST)
+      .set('Origin', 'https://evil.example')
+      .set('Cookie', cookie);
 
     expect(res.status).toBe(403);
     expect(res.body).toStrictEqual({ error: 'forbidden_origin' });

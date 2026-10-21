@@ -488,6 +488,58 @@ export function describeOrdersRepoContract(
       });
     });
 
+    describe('delete', () => {
+      it('removes the order, so no lookup finds it any more', async () => {
+        const created = await repo.create(makeNewOrder({ status: 'cancelled' }));
+        const other = await repo.create(makeNewOrder());
+
+        expect(await repo.delete(created.id)).toBe(true);
+
+        expect(await repo.findById(created.id)).toBeNull();
+        expect(await repo.findByToken(created.token)).toBeNull();
+        expect(ids(await repo.list())).toEqual([other.id]);
+      });
+
+      it('frees the phone, so it can book again', async () => {
+        const created = await repo.create(makeNewOrder());
+
+        await repo.delete(created.id);
+
+        await expect(repo.create(samePhoneAs(created))).resolves.toBeDefined();
+      });
+
+      it('returns false for an unknown id, and for a second delete of the same order', async () => {
+        const created = await repo.create(makeNewOrder());
+
+        expect(await repo.delete(UNKNOWN_ID)).toBe(false);
+        expect(await repo.delete(created.id)).toBe(true);
+        expect(await repo.delete(created.id)).toBe(false);
+      });
+
+      it.each(MALFORMED_IDS)('returns false, not an error, for the malformed id %j', async (id) => {
+        await repo.create(makeNewOrder());
+
+        expect(await repo.delete(id)).toBe(false);
+        expect(await repo.list()).toHaveLength(1);
+      });
+
+      it('removes nothing and returns false when ifStatus does not match', async () => {
+        const created = await repo.create(makeNewOrder({ status: 'pending' }));
+
+        expect(await repo.delete(created.id, { ifStatus: ['waiting', 'cancelled'] })).toBe(false);
+
+        expect(await mustFind(created.id)).toEqual(created);
+      });
+
+      it('removes the order when ifStatus matches', async () => {
+        const created = await repo.create(makeNewOrder({ status: 'waiting' }));
+
+        expect(await repo.delete(created.id, { ifStatus: ['waiting'] })).toBe(true);
+
+        expect(await repo.findById(created.id)).toBeNull();
+      });
+    });
+
     describe('copies', () => {
       it('hands out copies: changing a returned order does not change the stored one', async () => {
         const created = await repo.create(makeNewOrder());

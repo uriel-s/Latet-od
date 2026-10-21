@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { COLLECTOR_ORDER_MESSAGES } from '@bottlerun/shared';
 import type {
   AddOrderRequest,
   CollectorOrder,
@@ -25,6 +26,7 @@ import {
   confirmOrderByPhone,
   createOrder,
   declineCustomerOrder,
+  deleteCollectorOrder,
   fetchCollectorOrder,
   fetchCustomerOrder,
   fetchHistory,
@@ -731,6 +733,65 @@ describe('cancelCollectorOrder', () => {
     expect(calls[0]?.input).toBe(`/api/collector/orders/${ODD_ID_IN_PATH}/cancel`);
     expect(calls[0]?.init?.method).toBe('POST');
     expect(calls[0]?.init?.body).toBeUndefined();
+  });
+});
+
+describe('deleteCollectorOrder', () => {
+  it('sends DELETE to /api/collector/orders/:id with the id encoded and no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 204, noBody: true });
+
+    await deleteCollectorOrder(ODD_ID, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/orders/${ODD_ID_IN_PATH}`);
+    expect(calls[0]?.init?.method).toBe('DELETE');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  it('answers deleted on 204', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 204, noBody: true });
+
+    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'deleted' });
+  });
+
+  it('answers deleted on 404 too: the order is already gone, which is what was asked', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 404, body: { error: 'order_not_found' } });
+
+    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'deleted' });
+  });
+
+  it('answers refused with the plain-Hebrew reason on 409 cannot_delete', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'cannot_delete', message: 'x' },
+    });
+
+    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({
+      kind: 'refused',
+      message: COLLECTOR_ORDER_MESSAGES.cannotDelete,
+    });
+  });
+
+  it('answers failed on a 409 it does not know, so it never guesses a reason', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 409, body: { error: 'other' } });
+
+    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'failed' });
+  });
+
+  it('answers loggedOut on 401', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
+
+    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'loggedOut' });
+  });
+
+  it.each([
+    { label: 'a 500', answer: { status: 500, body: {} } as const },
+    { label: 'a 403', answer: { status: 403, body: { error: 'forbidden_origin' } } as const },
+    { label: 'a network error', answer: 'networkError' as const },
+  ])('answers failed on $label', async ({ answer }) => {
+    const { fetchFn } = makeFakeFetch(answer);
+
+    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'failed' });
   });
 });
 

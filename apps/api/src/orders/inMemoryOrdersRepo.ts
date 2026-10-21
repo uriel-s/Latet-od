@@ -61,6 +61,15 @@ export class InMemoryOrdersRepo implements OrdersRepo {
     return new Promise((resolve) => resolve(this.applyPatch(id, patch, options)));
   }
 
+  delete(id: string, options: OrderUpdateOptions = {}): Promise<boolean> {
+    const stored = this.orders.get(id);
+    if (stored === undefined) return Promise.resolve(false);
+    if (options.ifStatus !== undefined && !options.ifStatus.includes(stored.status)) {
+      return Promise.resolve(false);
+    }
+    return Promise.resolve(this.orders.delete(id));
+  }
+
   /** Stores a copy of `order` under a new id, after the checks the Mongo indexes would make. */
   private insert(order: NewOrder): Order {
     const stored: Order = { ...(withoutUndefined(order) as NewOrder), id: this.newId() };

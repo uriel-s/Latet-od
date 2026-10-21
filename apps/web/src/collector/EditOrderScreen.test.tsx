@@ -12,7 +12,11 @@ import {
   type Street,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
-import type { CollectorOrderOutcome, CollectorOrderWriteOutcome } from '../api.ts';
+import type {
+  CollectorOrderOutcome,
+  CollectorOrderWriteOutcome,
+  DeleteCollectorOrderOutcome,
+} from '../api.ts';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
 import {
@@ -21,6 +25,7 @@ import {
   ORDER_LOAD_FAILED_MESSAGE,
   REGION_HINT,
 } from './EditOrderScreen.tsx';
+import { DELETE_FAILED_MESSAGE } from './DeleteOrderButton.tsx';
 import { CANCEL_FAILED_MESSAGE, SAVE_FAILED_MESSAGE } from './orderEditing.ts';
 import { returnToApp } from './visibilityTestHelper.ts';
 
@@ -67,6 +72,8 @@ function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
     source: 'form',
     createdAt: new Date('2026-10-01T08:00:00Z'),
     hasLocation: true,
+    // A waiting order in no round, like the one above: the api says it may be deleted.
+    deletable: true,
     ...overrides,
   };
 }
@@ -115,6 +122,8 @@ interface RenderOptions {
   update?: Answer<CollectorOrderWriteOutcome>;
   /** The answer of cancelOrder. Default: saved. */
   cancel?: Answer<CollectorOrderWriteOutcome>;
+  /** The answer of deleteOrder. Default: deleted. */
+  remove?: Answer<DeleteCollectorOrderOutcome>;
   strict?: boolean;
 }
 
@@ -123,16 +132,17 @@ interface Calls {
   loads: string[];
   updates: [id: string, request: UpdateOrderRequest][];
   cancels: string[];
+  deletes: string[];
   unmount: () => void;
 }
 
 /** Opens the edit screen of `order` at /app/orders/<id>, with fakes that record every call. */
 function renderScreen(
   order: CollectorOrder = makeOrder(),
-  { load, update, cancel, strict = false }: RenderOptions = {},
+  { load, update, cancel, remove, strict = false }: RenderOptions = {},
 ): Calls {
   window.history.replaceState(null, '', `/app/orders/${order.id}`);
-  const calls: Omit<Calls, 'unmount'> = { loads: [], updates: [], cancels: [] };
+  const calls: Omit<Calls, 'unmount'> = { loads: [], updates: [], cancels: [], deletes: [] };
   const nextLoad = answersInTurn(load ?? [{ kind: 'loaded', order }]);
   const saved: CollectorOrderWriteOutcome = { kind: 'saved', order };
   const element = (
@@ -149,6 +159,10 @@ function renderScreen(
       cancelOrder={(id) => {
         calls.cancels.push(id);
         return Promise.resolve(cancel ?? saved);
+      }}
+      deleteOrder={(id) => {
+        calls.deletes.push(id);
+        return Promise.resolve(remove ?? { kind: 'deleted' });
       }}
     />
   );
@@ -524,6 +538,108 @@ describe('EditOrderScreen', () => {
       fireEvent.click(screen.getByRole('button', { name: 'כן, לבטל' }));
 
       await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    });
+  });
+
+  describe('deleting', () => {
+    it('asks first, naming the customer and saying there is no way back', async () => {
+      const calls = await renderLoaded();
+
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+
+      const question = 'למחוק את ההזמנה של דנה כהן לצמיתות? אי אפשר לשחזר אותה.';
+      expect(document.activeElement).toBe(screen.getByText(question));
+      expect(screen.getByRole('button', { name: 'כן, למחוק' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'לא, להשאיר' })).toBeDefined();
+      expect(calls.deletes).toEqual([]);
+    });
+
+    it('deletes once on "כן, למחוק" and returns to the orders with a notice', async () => {
+      const answer = deferred<DeleteCollectorOrderOutcome>();
+      const calls = await renderLoaded(makeOrder(), { remove: answer.promise });
+      const historyLength = window.history.length;
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+      const busy = screen.getByRole('button', { name: 'מוחק...' });
+      expect(busy.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(busy);
+      expect(calls.deletes).toEqual(['o1']);
+
+      answer.resolve({ kind: 'deleted' });
+
+      await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
+      expect(window.history.length).toBe(historyLength);
+      expect(window.history.state).toEqual({ notice: 'ההזמנה נמחקה.' });
+      expect(calls.deletes).toEqual(['o1']);
+      expect(calls.cancels).toEqual([]);
+    });
+
+    it('keeps the order on "לא, להשאיר"', async () => {
+      const calls = await renderLoaded();
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'לא, להשאיר' }));
+
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+      expect(calls.deletes).toEqual([]);
+      expect(window.location.pathname).toBe('/app/orders/o1');
+    });
+
+    it('says why when the api refuses, and stays', async () => {
+      await renderLoaded(makeOrder(), {
+        remove: { kind: 'refused', message: COLLECTOR_ORDER_MESSAGES.cannotDelete },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+
+      expect((await screen.findByRole('alert')).textContent).toBe(
+        COLLECTOR_ORDER_MESSAGES.cannotDelete,
+      );
+      expect(window.location.pathname).toBe('/app/orders/o1');
+    });
+
+    it('asks to check the connection when the delete fails', async () => {
+      await renderLoaded(makeOrder(), { remove: { kind: 'failed' } });
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+
+      expect((await screen.findByRole('alert')).textContent).toBe(DELETE_FAILED_MESSAGE);
+    });
+
+    it('goes to the login when the session ended', async () => {
+      await renderLoaded(makeOrder(), { remove: { kind: 'loggedOut' } });
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+
+      await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    });
+
+    it('offers no delete for an order in a round', async () => {
+      await renderLoaded(makeOrder({ status: 'pending', deletable: false }));
+
+      expect(screen.queryByRole('button', { name: 'מחיקת ההזמנה' })).toBeNull();
+    });
+
+    it('offers the delete on a cancelled order too, next to the closed notice', async () => {
+      const calls = renderScreen(makeOrder({ status: 'cancelled' }));
+      await screen.findByRole('alert');
+
+      fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+
+      await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
+      expect(calls.deletes).toEqual(['o1']);
+    });
+
+    it('offers no delete on a collected order', async () => {
+      renderScreen(makeOrder({ status: 'collected', deletable: false }));
+      await screen.findByRole('alert');
+
+      expect(screen.queryByRole('button', { name: 'מחיקת ההזמנה' })).toBeNull();
     });
   });
 

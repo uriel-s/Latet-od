@@ -9,6 +9,7 @@ import { Router, type Response } from 'express';
 import {
   COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
+  canDeleteOrder,
   canTransition,
   formFieldErrors,
   groupWaitingOrders,
@@ -16,6 +17,7 @@ import {
   orderFormSchema,
   toCollectorOrder,
   updateOrderRequestSchema,
+  type CannotDeleteErrorBody,
   type CollectorOrderResponse,
   type CollectorOrdersResponse,
   type DuplicateOpenOrderErrorBody,
@@ -60,6 +62,12 @@ import { DuplicateOpenOrderError } from './ordersRepo.ts';
  * - 404 {@link OrderNotFoundErrorBody}.
  * - 409 {@link InvalidTransitionErrorBody}: the order cannot be cancelled (it was collected), or it
  *   changed status meanwhile.
+ *
+ * DELETE /:id — "מחיקת ההזמנה", for good (ADR-0008); no body:
+ * - 204: a `waiting` or `cancelled` order that is in no round (`canDeleteOrder`) is gone.
+ * - 404 {@link OrderNotFoundErrorBody}: no such order, or it was deleted meanwhile.
+ * - 409 {@link CannotDeleteErrorBody}: the order was collected or is in a round, or it changed
+ *   status meanwhile. Nothing is removed.
  *
  * POST / — "הוספת הזמנה" for a customer who phoned; body: the booking form (`orderFormSchema`):
  * - 201 {@link CollectorOrderResponse}: a `waiting` order with `source: 'collector'`.
@@ -211,6 +219,32 @@ export function createCollectorOrdersRouter(deps: Pick<AppDeps, 'orders'>): Rout
     sendOrder(res, cancelled);
   });
 
+  router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const stored = await orders.findById(id);
+    if (stored === null) {
+      sendNotFound(res);
+      return;
+    }
+    // One rule for "may this go" (ADR-0008), shared with the screen's button: not a collected
+    // order, and not one a round still names.
+    if (!canDeleteOrder(stored)) {
+      sendCannotDelete(res);
+      return;
+    }
+
+    // Only if the status is still the one decided on: an order that a round planned, or Yoel
+    // collected, between the read and the delete is kept. Not deleted means it changed meanwhile
+    // (409), or that a second screen deleted it first (404, like a tap on an order that is gone).
+    const deleted = await orders.delete(id, { ifStatus: [stored.status] });
+    if (!deleted) {
+      if ((await orders.findById(id)) === null) sendNotFound(res);
+      else sendCannotDelete(res);
+      return;
+    }
+    res.status(204).end();
+  });
+
   router.post('/:id/messages/:index/opened', async (req, res) => {
     const { id, index } = req.params;
     const stored = await orders.findById(id);
@@ -300,6 +334,15 @@ function sendInvalidTransition(res: Response): void {
   const body: InvalidTransitionErrorBody = {
     error: 'invalid_transition',
     message: COLLECTOR_ORDER_MESSAGES.orderClosed,
+  };
+  res.status(409).json(body);
+}
+
+/** 409: the order is collected or in a round (or changed so meanwhile), so it is not deleted. */
+function sendCannotDelete(res: Response): void {
+  const body: CannotDeleteErrorBody = {
+    error: 'cannot_delete',
+    message: COLLECTOR_ORDER_MESSAGES.cannotDelete,
   };
   res.status(409).json(body);
 }

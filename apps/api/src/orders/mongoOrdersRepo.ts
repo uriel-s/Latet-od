@@ -153,6 +153,17 @@ export class MongoOrdersRepo implements OrdersRepo {
     }
   }
 
+  async delete(id: string, options: OrderUpdateOptions = {}): Promise<boolean> {
+    const _id = parseOrderId(id);
+    if (_id === null) return false;
+    // Same atomic status check as update(): the filter holds it, so a racing status change wins.
+    const filter: Filter<OrderDocument> = { _id };
+    if (options.ifStatus !== undefined) filter.status = { $in: [...options.ifStatus] };
+    await this.ensureIndexes();
+    const result = await this.orders.deleteOne(filter);
+    return result.deletedCount === 1;
+  }
+
   /** The first order matching `filter`, parsed, or null. */
   private async findOne(filter: Filter<OrderDocument>): Promise<Order | null> {
     await this.ensureIndexes();

@@ -4,6 +4,7 @@ import {
   ORDER_STATUSES,
   ORDER_STATUS_LABELS,
   ORDER_TRANSITIONS,
+  canDeleteOrder,
   canTransition,
   isOpenStatus,
   orderStatusSchema,
@@ -119,5 +120,25 @@ describe('isOpenStatus', () => {
   it('is false for collected and cancelled', () => {
     expect(isOpenStatus('collected')).toBe(false);
     expect(isOpenStatus('cancelled')).toBe(false);
+  });
+});
+
+describe('canDeleteOrder', () => {
+  it('allows a waiting or cancelled order that is in no round', () => {
+    expect(canDeleteOrder({ status: 'waiting' })).toBe(true);
+    expect(canDeleteOrder({ status: 'cancelled' })).toBe(true);
+  });
+
+  it('refuses a collected order: the statistics count it', () => {
+    expect(canDeleteOrder({ status: 'collected' })).toBe(false);
+  });
+
+  it('refuses a pending or confirmed order, which is in a round', () => {
+    expect(canDeleteOrder({ status: 'pending', roundId: 'round-1' })).toBe(false);
+    expect(canDeleteOrder({ status: 'confirmed', roundId: 'round-1' })).toBe(false);
+  });
+
+  it('refuses an order a round still names, a cancelled one included', () => {
+    expect(canDeleteOrder({ status: 'cancelled', roundId: 'round-1' })).toBe(false);
   });
 });
