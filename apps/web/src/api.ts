@@ -11,17 +11,21 @@ import {
   collectorOrdersResponseSchema,
   createOrderResponseSchema,
   customerOrderResponseSchema,
+  historyResponseSchema,
   meResponseSchema,
   messageOpenedResponseSchema,
   roundViewSchema,
   roundsResponseSchema,
   type AddOrderRequest,
+  type CollectStopRequest,
   type CollectorOrder,
   type CreateOrderRequest,
   type CreateOrderResponse,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
+  type HistoryResponse,
   type LoginRequest,
+  type MoveStopRequest,
   type OrderGroup,
   type PlanRoundRequest,
   type RoundView,
@@ -691,9 +695,7 @@ export async function confirmOrderByPhone(
   orderId: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<ConfirmByPhoneOutcome> {
-  const path =
-    `${COLLECTOR_ROUNDS_PATH}/${encodeURIComponent(roundId)}` +
-    `/orders/${encodeURIComponent(orderId)}/confirm-by-phone`;
+  const path = `${roundPath(roundId)}/orders/${encodeURIComponent(orderId)}/confirm-by-phone`;
   const response = await fetchOrNull(fetchFn, path, { method: 'POST' });
   if (response === null) return { kind: 'failed' };
   switch (response.status) {
@@ -728,6 +730,246 @@ function confirmConflictOutcome(body: unknown): ConfirmByPhoneOutcome {
   }
 }
 
+/** The path of round `roundId`, both ids encoded so each stays one path segment. */
+function roundPath(roundId: string): string {
+  return `${COLLECTOR_ROUNDS_PATH}/${encodeURIComponent(roundId)}`;
+}
+
+/** The path of stop `orderId` in round `roundId`'s route, both ids encoded; the action follows. */
+function roundStopPath(roundId: string, orderId: string): string {
+  return `${roundPath(roundId)}/stops/${encodeURIComponent(orderId)}`;
+}
+
+/** How "סגור אישורים ובנה מסלול" ended, as the round screen shows it. */
+export type BuildRouteOutcome =
+  /** 200: the route is built (phase `routed`); `view.stops` holds it in driving order. */
+  | { kind: 'built'; view: RoundView }
+  /**
+   * 409 `confirmations_closed`: the round is already routed or closed (a second tap, or another
+   * tab), so nothing changed; the screen shows the message and reloads the round.
+   */
+  | { kind: 'closed'; message: string }
+  /** 404: the round is gone. */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403 or 5xx, another 409, or a body it cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Yoel's "סגור אישורים ובנה מסלול" (spec §3.6 step 2) with `POST /api/collector/rounds/:id/route`
+ * (no body): the api closes the confirmations, sends whoever did not confirm back to `waiting`,
+ * and stores the route `planRoute` computes. Not retried: a build whose answer was lost is stored,
+ * and a second one would only answer `closed`.
+ */
+export async function buildRoute(
+  roundId: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<BuildRouteOutcome> {
+  const response = await fetchOrNull(fetchFn, `${roundPath(roundId)}/route`, { method: 'POST' });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const view = await roundViewOf(response);
+      return view === null ? { kind: 'failed' } : { kind: 'built', view };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    case 409: {
+      // Told apart by the body's code: a conflict this screen does not know is `failed`.
+      const body = await readJson(response);
+      return isObject(body) && body.error === 'confirmations_closed'
+        ? { kind: 'closed', message: ROUND_MESSAGES.confirmationsClosed }
+        : { kind: 'failed' };
+    }
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How a stop's move, "אספתי" or "לא נמצא" ended, as the route screen shows it. */
+export type StopActionOutcome =
+  /**
+   * 200: done (also when the same action was already done: a second tap is harmless); `view` is
+   * the round as it is now. After "אספתי", the collected stop's `thankYou` is its "שלח תודה" row.
+   */
+  | { kind: 'saved'; view: RoundView }
+  /**
+   * 409: the screen is stale, so it shows `message` and reloads the round. `route_not_open` (the
+   * route is not built yet, or the round is closed), `stop_handled` (the stop was handled another
+   * way), or `invalid_transition` (the order changed status meanwhile, e.g. the customer cancelled
+   * at that moment), which is told with the `stop_handled` words: either way the stop is no longer
+   * Yoel's to act on, and refreshing shows what happened there.
+   */
+  | { kind: 'stale'; message: string }
+  /** 409 `stop_at_edge` (a move only): the stop is already first or last, so nothing moved. */
+  | { kind: 'atEdge'; message: string }
+  /**
+   * 400 from "אספתי" (`invalid_collect`): the count did not validate (normally caught before
+   * sending). `fieldErrors` maps `bottlesCollected` to its plain-Hebrew message; empty when the
+   * body had none the app can read.
+   */
+  | { kind: 'invalid'; fieldErrors: Record<string, string> }
+  /** 404: the round is gone, or the order is not a stop of its route. */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /**
+   * No usable answer: a network error, a 403 or 5xx, another 409, a body it cannot read, or a 400
+   * from a move or "לא נמצא" (only a broken client sends one, so there is no field to show).
+   */
+  | { kind: 'failed' };
+
+/**
+ * Moves stop `orderId` of round `roundId` one place `up` (earlier) or `down` (later) in the stored
+ * route (spec §3.6 step 2), with `POST /api/collector/rounds/:id/stops/:orderId/move`.
+ */
+export async function moveStop(
+  roundId: string,
+  orderId: string,
+  direction: MoveStopRequest['direction'],
+  fetchFn: FetchFn = globalFetch,
+): Promise<StopActionOutcome> {
+  const request: MoveStopRequest = { direction };
+  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/move`, request, false);
+}
+
+/**
+ * Yoel's "אספתי" (spec §3.6 step 2) on stop `orderId` of round `roundId`, with
+ * `POST /api/collector/rounds/:id/stops/:orderId/collected`. `bottlesCollected` is the real
+ * count; left out (`{}` is sent), the api uses the order's estimate. The api sends the thank-you,
+ * and the `saved` view's collected stop carries its "שלח תודה" row.
+ */
+export async function collectStop(
+  roundId: string,
+  orderId: string,
+  bottlesCollected?: number,
+  fetchFn: FetchFn = globalFetch,
+): Promise<StopActionOutcome> {
+  // The key is left out rather than sent as undefined: "no count" means the estimate.
+  const request: CollectStopRequest = bottlesCollected === undefined ? {} : { bottlesCollected };
+  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/collected`, request, true);
+}
+
+/**
+ * Yoel's "לא נמצא" (spec §3.6 step 2) on stop `orderId` of round `roundId`, with
+ * `POST /api/collector/rounds/:id/stops/:orderId/not-found` (no body): the order goes back to
+ * `waiting` and its stop stays in the route as not found. No message is sent.
+ */
+export async function markStopNotFound(
+  roundId: string,
+  orderId: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<StopActionOutcome> {
+  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/not-found`, undefined, false);
+}
+
+/**
+ * Sends one stop action (a JSON `request`, or no body when undefined) and turns the answer into a
+ * {@link StopActionOutcome}. `hasFields`: whether a 400 is `invalid` (the "אספתי" count) rather
+ * than `failed`. Never retried: every stop action is idempotent, so Yoel just taps again.
+ */
+async function stopAction(
+  fetchFn: FetchFn,
+  path: string,
+  request: MoveStopRequest | CollectStopRequest | undefined,
+  hasFields: boolean,
+): Promise<StopActionOutcome> {
+  const init: RequestInit =
+    request === undefined
+      ? { method: 'POST' }
+      : {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(request),
+        };
+  const response = await fetchOrNull(fetchFn, path, init);
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const view = await roundViewOf(response);
+      return view === null ? { kind: 'failed' } : { kind: 'saved', view };
+    }
+    case 400: {
+      if (!hasFields) return { kind: 'failed' };
+      const body = await readJson(response);
+      const fieldErrors = isObject(body) ? body.fieldErrors : undefined;
+      return { kind: 'invalid', fieldErrors: isStringRecord(fieldErrors) ? fieldErrors : {} };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    case 409:
+      return stopConflictOutcome(await readJson(response));
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/**
+ * A 409 of a stop action, told apart by the body's `error` code (see {@link StopActionOutcome}).
+ * A body without a known code is `failed`: guessing could tell Yoel the wrong thing.
+ */
+function stopConflictOutcome(body: unknown): StopActionOutcome {
+  const code = isObject(body) ? body.error : undefined;
+  switch (code) {
+    case 'route_not_open':
+      return { kind: 'stale', message: ROUND_MESSAGES.routeNotOpen };
+    case 'stop_handled':
+    case 'invalid_transition':
+      return { kind: 'stale', message: ROUND_MESSAGES.stopHandled };
+    case 'stop_at_edge':
+      return { kind: 'atEdge', message: ROUND_MESSAGES.stopAtEdge };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How "סגור סבב" ended, as the round screen shows it. */
+export type CloseRoundOutcome =
+  /**
+   * 200: the round is closed (`view.round.status` is `closed`, `closedAt` set), also when it was
+   * already closed. Every order it did not handle is back in `waiting` with its `lastMiss`.
+   */
+  | { kind: 'closed'; view: RoundView }
+  /** 404: the round is gone. */
+  | { kind: 'notFound' }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403, 409 or 5xx, or a body it cannot read. */
+  | { kind: 'failed' };
+
+/**
+ * Yoel's "סגור סבב" (spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
+ * closes the round and sends every order it did not handle back to `waiting` (a pending or
+ * confirmed order of a round still confirming as "לא אישר בזמן", a stop not reached as "לא הגענו
+ * אליו"). No message is sent. Not retried: a close whose answer was lost is stored, and a second
+ * close is harmless anyway, since it answers `closed` with the round as it is.
+ */
+export async function closeRound(
+  roundId: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<CloseRoundOutcome> {
+  const response = await fetchOrNull(fetchFn, `${roundPath(roundId)}/close`, { method: 'POST' });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const view = await roundViewOf(response);
+      return view === null ? { kind: 'failed' } : { kind: 'closed', view };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    case 404:
+      return { kind: 'notFound' };
+    default:
+      // The route has no 409: a conflict here is from something in between, and so `failed`.
+      return { kind: 'failed' };
+  }
+}
+
 /** The round of a success body, or null when the body is not a `RoundView`. */
 async function roundViewOf(response: Response): Promise<RoundView | null> {
   const parsed = roundViewSchema.safeParse(await readJson(response));
@@ -737,6 +979,53 @@ async function roundViewOf(response: Response): Promise<RoundView | null> {
 /** A JSON array whose every item is a string, like the 409 body's `orderIds`. */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The collector's history: GET /api/collector/history?month=YYYY-MM (spec §3.7, "היסטוריה")
+//
+// Behind the login like the routes above, with the same rules: a 401 is `loggedOut`, nothing is
+// retried, and the success body is parsed with the shared schema.
+// ---------------------------------------------------------------------------------------------
+
+/** How GET /api/collector/history ended, as the "היסטוריה" tab shows it. */
+export type HistoryOutcome =
+  /** 200: the month's totals and its closed orders, newest first (`closedAt` a Date). */
+  | { kind: 'loaded'; history: HistoryResponse }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /**
+   * No usable answer: a network error, a 5xx, or a 200 the app cannot read. A 400
+   * (`invalid_month`) is `failed` too: the screen's picker only builds valid months, so it is a
+   * client bug, and Yoel can do nothing about it but try again.
+   */
+  | { kind: 'failed' };
+
+/**
+ * Loads one calendar month's history (`YYYY-MM`, a month in Israel) from
+ * `GET /api/collector/history?month=`, past the browser cache: the current month changes with
+ * every "אספתי". The month is encoded, so whatever the caller passes stays one query value.
+ */
+export async function fetchHistory(
+  month: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<HistoryOutcome> {
+  const response = await fetchOrNull(
+    fetchFn,
+    `/api/collector/history?month=${encodeURIComponent(month)}`,
+    { method: 'GET', cache: 'no-store' },
+  );
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const parsed = historyResponseSchema.safeParse(await readJson(response));
+      return parsed.success ? { kind: 'loaded', history: parsed.data } : { kind: 'failed' };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -2,7 +2,14 @@
 <html lang="he" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover: the page fills the whole screen, also under the notch in landscape and
+      under the home bar, in the browser and in the installed collector app. styles.css pads the
+      header, the column sides, the footer and the bottom navigation by env(safe-area-inset-*),
+      so no text or button sits under them. No maximum-scale or user-scalable=no: elderly
+      customers must be able to zoom.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#DCEBF8" />
     <meta name="description" content="הזמנת איסוף בקבוקים בבית שמש. הבקבוקים שלכם, התפילין שלהם!" />
     <title>לתת עוד</title>

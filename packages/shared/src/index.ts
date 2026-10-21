@@ -11,13 +11,17 @@ export const APP_NAME = 'לתת עוד';
  */
 export const APP_SLOGAN = 'הבקבוקים שלכם, התפילין שלהם!';
 
+// Settings kept in code, no settings screen: the bottle value (ADR-0005).
+export * from './config.ts';
 // Street list, search and region (ADR-0005).
 export * from './streets.ts';
 // An address's region and map point, from its street codes (ADR-0005).
 export * from './location.ts';
+// Route planning: straight-line distance, the DistanceMatrix interface and planRoute (ADR-0005).
+export * from './route.ts';
 // Israeli mobile phone: form validation and the stored E.164 form.
 export * from './phone.ts';
-// Dates as the app shows them: DD/MM, in Israel's time zone (Asia/Jerusalem).
+// Dates as the app shows them: DD/MM and calendar months, in Israel's time zone (Asia/Jerusalem).
 export * from './dates.ts';
 // Order statuses and allowed status changes (spec §4).
 export * from './orderStatus.ts';
@@ -37,6 +41,8 @@ export * from './round.ts';
 export * from './roundsApi.ts';
 // The /api/o/:token contract: the customer's own page, its change request and errors (spec §3.3).
 export * from './customerOrderApi.ts';
+// The /api/collector/history contract: a month's totals and closed orders (spec §3.7).
+export * from './historyApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and

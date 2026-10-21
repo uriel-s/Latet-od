@@ -22,6 +22,7 @@ import {
   REGION_HINT,
 } from './EditOrderScreen.tsx';
 import { CANCEL_FAILED_MESSAGE, SAVE_FAILED_MESSAGE } from './orderEditing.ts';
+import { returnToApp } from './visibilityTestHelper.ts';
 
 /** The first word of a street's name: what Yoel types to find it. */
 function firstWord(street: Street): string {
@@ -630,6 +631,23 @@ describe('EditOrderScreen', () => {
 
       expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
       expect(window.location.pathname).toBe('/app/orders/o1');
+    });
+  });
+
+  describe('coming back to the app', () => {
+    it('does not load the order again, and keeps what Yoel typed', async () => {
+      // Only the list screens reload on return: here a reload would wipe the form.
+      const calls = await renderLoaded();
+      typeInto('שם', 'דנה לוי');
+      typeInto('כמות בקבוקים', '55');
+
+      returnToApp();
+      await new Promise((settle) => setTimeout(settle, 0));
+
+      expect(calls.loads).toEqual(['o1']);
+      expect(input('שם').value).toBe('דנה לוי');
+      expect(input('כמות בקבוקים').value).toBe('55');
+      expect(screen.queryByRole('status')).toBeNull();
     });
   });
 

@@ -12,6 +12,7 @@ import {
 import type { CollectorOrderWriteOutcome } from '../api.ts';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
 import { AddOrderScreen } from './AddOrderScreen.tsx';
+import { returnToApp } from './visibilityTestHelper.ts';
 
 /**
  * A street of the shared list in רמת בית שמש that the picker shows when its whole name is typed,
@@ -280,5 +281,17 @@ describe('AddOrderScreen', () => {
     await new Promise((settle) => setTimeout(settle, 0));
 
     expect(window.location.pathname).toBe('/app/rounds');
+  });
+
+  it('keeps what Yoel typed when he comes back to the app', () => {
+    // Only the list screens reload on return; this screen has nothing to load, and must not reset.
+    renderScreen();
+    fillValidForm();
+
+    returnToApp();
+
+    expect(input('שם').value).toBe('רחל כהן');
+    expect(input('רחוב').value).toBe(STREET.name);
+    expect(input('כמות בקבוקים').value).toBe('45');
   });
 });

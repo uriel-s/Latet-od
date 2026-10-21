@@ -145,6 +145,9 @@ import {
   ObjectId as ObjectId2
 } from "mongodb";
 
+// packages/shared/src/config.ts
+var BOTTLE_VALUE_AGOROT = 20;
+
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -20398,6 +20401,128 @@ function pointForAddress(address, lookup = findStreet) {
   return void 0;
 }
 
+// packages/shared/src/route.ts
+var EARTH_RADIUS_METERS = 63710088e-1;
+function toRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+function haversine(from, to) {
+  const deltaLat = toRadians(to.lat - from.lat);
+  const deltaLng = toRadians(to.lng - from.lng);
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(toRadians(from.lat)) * Math.cos(toRadians(to.lat)) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+var straightLineDistance = { distance: haversine };
+var MAX_EXHAUSTIVE_STOPS = 8;
+var EPSILON = 1e-9;
+function planRoute(start, stops, end, distance = straightLineDistance) {
+  const located = [];
+  const unlocated = [];
+  for (const stop of stops) {
+    if (stop.point === void 0) unlocated.push(stop);
+    else located.push({ stop, point: stop.point });
+  }
+  if (located.length <= 1) return [...located.map(({ stop }) => stop), ...unlocated];
+  const points = [start, ...located.map(({ point }) => point), end];
+  const size = points.length;
+  const matrix = new Float64Array(size * size);
+  points.forEach((from, fromIndex) => {
+    points.forEach((to, toIndex) => {
+      if (fromIndex !== toIndex) matrix[fromIndex * size + toIndex] = distance.distance(from, to);
+    });
+  });
+  const cost = (from, to) => matrix[from * size + to] ?? Infinity;
+  const stopCount = located.length;
+  const order = stopCount <= MAX_EXHAUSTIVE_STOPS ? bestOrderExhaustive(stopCount, cost) : bestOrderHeuristic(stopCount, cost);
+  const ordered = order.flatMap((index) => located[index - 1]?.stop ?? []);
+  return [...ordered, ...unlocated];
+}
+function bestOrderExhaustive(stopCount, cost) {
+  const endIndex = stopCount + 1;
+  const visited = new Array(stopCount + 1).fill(false);
+  const current = [];
+  let best = [];
+  let bestCost = Infinity;
+  const visit2 = (last, partialCost) => {
+    if (partialCost >= bestCost - EPSILON) return;
+    if (current.length === stopCount) {
+      const total = partialCost + cost(last, endIndex);
+      if (total < bestCost - EPSILON) {
+        bestCost = total;
+        best = [...current];
+      }
+      return;
+    }
+    for (let next = 1; next <= stopCount; next++) {
+      if (visited[next]) continue;
+      visited[next] = true;
+      current.push(next);
+      visit2(next, partialCost + cost(last, next));
+      current.pop();
+      visited[next] = false;
+    }
+  };
+  visit2(0, 0);
+  return best;
+}
+function bestOrderHeuristic(stopCount, cost) {
+  return improveByTwoOpt(nearestNeighborOrder(stopCount, cost), cost);
+}
+function nearestNeighborOrder(stopCount, cost) {
+  const remaining = new Set(Array.from({ length: stopCount }, (_, offset) => offset + 1));
+  const order = [];
+  let last = 0;
+  while (remaining.size > 0) {
+    let nearest = -1;
+    let nearestCost = Infinity;
+    for (const candidate of remaining) {
+      const candidateCost = cost(last, candidate);
+      if (nearest === -1 || candidateCost < nearestCost - EPSILON) {
+        nearest = candidate;
+        nearestCost = candidateCost;
+      }
+    }
+    order.push(nearest);
+    remaining.delete(nearest);
+    last = nearest;
+  }
+  return order;
+}
+function improveByTwoOpt(initialOrder, cost) {
+  const endIndex = initialOrder.length + 1;
+  let order = [...initialOrder];
+  let orderCost = routeCost(order, endIndex, cost);
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let first = 0; first < order.length - 1; first++) {
+      for (let last = first + 1; last < order.length; last++) {
+        const candidate = [
+          ...order.slice(0, first),
+          ...order.slice(first, last + 1).reverse(),
+          ...order.slice(last + 1)
+        ];
+        const candidateCost = routeCost(candidate, endIndex, cost);
+        if (candidateCost < orderCost - EPSILON) {
+          order = candidate;
+          orderCost = candidateCost;
+          improved = true;
+        }
+      }
+    }
+  }
+  return order;
+}
+function routeCost(order, endIndex, cost) {
+  let total = 0;
+  let last = 0;
+  for (const index of order) {
+    total += cost(last, index);
+    last = index;
+  }
+  return total + cost(last, endIndex);
+}
+
 // packages/shared/src/phone.ts
 var PHONE_ERROR = "\u05DE\u05E1\u05E4\u05E8 \u05E0\u05D9\u05D9\u05D3 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05DC\u05DE\u05E9\u05DC: 050-1234567";
 var PHONE_SEPARATORS = /[-\s\u{2010}-\u{2015}.()\u{200e}\u{200f}\u{202a}-\u{202e}]/gu;
@@ -20444,6 +20569,90 @@ function formatDayMonth(value) {
     throw new RangeError("formatDayMonth: Intl gave no day or month");
   }
   return `${day}/${month}`;
+}
+var calendarMonthSchema = external_exports.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "expected YYYY-MM");
+var wallClockInAppZone = new Intl.DateTimeFormat("en-GB", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23"
+});
+function wallClockPartsInAppZone(instant) {
+  const parts = wallClockInAppZone.formatToParts(instant);
+  const read = (type) => {
+    const value = parts.find((part) => part.type === type)?.value;
+    if (value === void 0) throw new RangeError(`dates: Intl gave no ${type}`);
+    return Number(value);
+  };
+  return {
+    year: read("year"),
+    month: read("month"),
+    day: read("day"),
+    hour: read("hour"),
+    minute: read("minute"),
+    second: read("second")
+  };
+}
+function utcMillisOf(year, month, day, hour = 0, minute = 0, second = 0) {
+  const date5 = /* @__PURE__ */ new Date(0);
+  date5.setUTCFullYear(year, month - 1, day);
+  date5.setUTCHours(hour, minute, second, 0);
+  return date5.getTime();
+}
+function appZoneOffsetMs(instant) {
+  const wall = wallClockPartsInAppZone(instant);
+  const wallAsUtc = utcMillisOf(
+    wall.year,
+    wall.month,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second
+  );
+  return wallAsUtc - Math.floor(instant.getTime() / 1e3) * 1e3;
+}
+function parseCalendarMonth(month, caller) {
+  if (!calendarMonthSchema.safeParse(month).success) {
+    throw new RangeError(`${caller}: expected a calendar month YYYY-MM`);
+  }
+  return { year: Number(month.slice(0, 4)), month: Number(month.slice(5, 7)) };
+}
+function formatCalendarMonth(year, month) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+}
+function monthRangeInAppZone(month) {
+  const start = parseCalendarMonth(month, "monthRangeInAppZone");
+  const next = parseCalendarMonth(addMonths(month, 1), "monthRangeInAppZone");
+  return {
+    from: appZoneMidnightOnFirst(start.year, start.month),
+    to: appZoneMidnightOnFirst(next.year, next.month)
+  };
+}
+function appZoneMidnightOnFirst(year, month) {
+  const wallMidnight = utcMillisOf(year, month, 1);
+  let instant = wallMidnight - appZoneOffsetMs(new Date(wallMidnight));
+  instant = wallMidnight - appZoneOffsetMs(new Date(instant));
+  const check2 = wallClockPartsInAppZone(new Date(instant));
+  if (check2.year !== year || check2.month !== month || check2.day !== 1 || check2.hour !== 0 || check2.minute !== 0 || check2.second !== 0) {
+    throw new RangeError("monthRangeInAppZone: midnight on the 1st does not exist in the zone");
+  }
+  return new Date(instant);
+}
+function addMonths(month, delta) {
+  const start = parseCalendarMonth(month, "addMonths");
+  if (!Number.isInteger(delta)) {
+    throw new RangeError("addMonths: expected a whole number of months");
+  }
+  const monthIndex = start.year * 12 + (start.month - 1) + delta;
+  const year = Math.floor(monthIndex / 12);
+  if (year < 0 || year > 9999) {
+    throw new RangeError("addMonths: the result is outside the years 0000-9999");
+  }
+  return formatCalendarMonth(year, monthIndex - year * 12 + 1);
 }
 
 // packages/shared/src/orderStatus.ts
@@ -20837,7 +21046,15 @@ var roundStatusSchema = external_exports.enum(ROUND_STATUSES);
 var ROUND_PHASES = ["confirming", "routed"];
 var roundPhaseSchema = external_exports.enum(ROUND_PHASES);
 var roundStopSchema = external_exports.object({
-  orderId: external_exports.string().min(1)
+  orderId: external_exports.string().min(1),
+  /**
+   * Whether the order had a map point when the route was built. Stops without one were put at
+   * the end by `planRoute` (ADR-0005), and the card shows the "בלי מיקום" tag. Stored, not
+   * re-derived from the order: if Yoel picks a near street later, the stop stays where the route
+   * put it, and the tag still explains why it is there. Required, which is safe: no stored round
+   * has stops yet (they stay empty until the route is built).
+   */
+  hasLocation: external_exports.boolean()
 });
 var roundSchema = external_exports.object({
   id: external_exports.string().min(1),
@@ -20860,10 +21077,16 @@ var roundSchema = external_exports.object({
    * who asked for another date.
    */
   orderIds: external_exports.array(external_exports.string().min(1)),
-  /** The stored route, in driving order. Empty until the route is built (phase `routed`). */
+  /**
+   * The stored route, in driving order: home → these stops → drop-off (the two ends are not
+   * stored here). Empty until the route is built (phase `routed`).
+   */
   stops: external_exports.array(roundStopSchema),
   createdAt: timestampSchema,
-  /** Set when Yoel taps "סגור סבב". */
+  /**
+   * Set when Yoel taps "סגור סבב" (POST /api/collector/rounds/:id/close), once: closing a round
+   * already closed keeps its first `closedAt`.
+   */
   closedAt: timestampSchema.optional()
 });
 
@@ -20909,12 +21132,45 @@ var roundOrderGroupSchema = external_exports.object({
   key: external_exports.enum(ROUND_GROUP_KEYS),
   orders: external_exports.array(collectorOrderSchema)
 });
+var ROUND_STOP_STATES = [
+  "toCollect",
+  "collected",
+  "notFound",
+  "cancelled",
+  "left"
+];
+var roundStopStateSchema = external_exports.enum(ROUND_STOP_STATES);
+var routeStopViewSchema = external_exports.object({
+  order: collectorOrderSchema,
+  /**
+   * The STORED stop's `hasLocation`, from when the route was built, not the order's current one
+   * (`order.hasLocation`). If Yoel picks a near street later, the stop stays where `planRoute` put
+   * it (at the end), and the "בלי מיקום" tag still explains why it is there (round.ts).
+   */
+  hasLocation: roundStopSchema.shape.hasLocation,
+  /** Derived from the order, never stored; see {@link roundStopStateOf}. */
+  state: roundStopStateSchema,
+  /**
+   * The stop's "שלח תודה" row: the NEWEST `thankYou` entry of the order as a wa.me link
+   * (`toMessageLink(order, 'thankYou')`). Set only while `state` is `collected`, and left out
+   * (not set to undefined) otherwise, or when that newest entry is not a `manual` link (it failed,
+   * or was sent automatically). This is how the "אספתי" response returns the wa.me link, and how
+   * the route screen and "סגור סבב" find it again after a refresh: an unsent thank-you is a
+   * collected stop whose `thankYou` has no `openedAt`.
+   */
+  thankYou: messageLinkSchema.optional()
+});
 var roundViewSchema = external_exports.object({
   round: collectorRoundSchema,
   /** Always the three groups in {@link ROUND_GROUP_KEYS} order, empty ones too. */
   groups: external_exports.array(roundOrderGroupSchema),
   /** The "שלח" rows of the confirmation requests, one per customer who has not confirmed yet. */
-  sendList: external_exports.array(messageLinkSchema)
+  sendList: external_exports.array(messageLinkSchema),
+  /**
+   * The route's stops in driving order. Always present: empty until the route is built (phase
+   * `confirming`); a closed round that was routed keeps its stops.
+   */
+  stops: external_exports.array(routeStopViewSchema)
 });
 var roundsResponseSchema = external_exports.object({
   /** The OPEN rounds, by date, then by when they were created. */
@@ -20933,6 +21189,15 @@ function roundGroupOf(round, order) {
   }
   const askedOtherDate = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "askedOtherDate";
   return askedOtherDate ? "otherDate" : void 0;
+}
+function roundStopStateOf(round, order) {
+  if (order.roundId === round.id) {
+    if (order.status === "collected") return "collected";
+    if (order.status === "cancelled") return "cancelled";
+    if (order.status === "confirmed" || order.status === "pending") return "toCollect";
+  }
+  const notFoundHere = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "notFound";
+  return notFoundHere ? "notFound" : "left";
 }
 function buildRoundView(round, orders) {
   const ordersById = new Map(orders.map((order) => [order.id, order]));
@@ -20953,15 +21218,56 @@ function buildRoundView(round, orders) {
       key,
       orders: ordersByGroup[key].map(toCollectorOrder)
     })),
-    sendList: ordersByGroup.pending.map((order) => toMessageLink(order, "confirmRequest")).filter((link) => link !== void 0)
+    sendList: ordersByGroup.pending.map((order) => toMessageLink(order, "confirmRequest")).filter((link) => link !== void 0),
+    stops: round.stops.flatMap((stop) => {
+      const order = ordersById.get(stop.orderId);
+      if (order === void 0) return [];
+      const state = roundStopStateOf(round, order);
+      const thankYou = state === "collected" ? toMessageLink(order, "thankYou") : void 0;
+      return [
+        {
+          order: toCollectorOrder(order),
+          hasLocation: stop.hasLocation,
+          state,
+          // Left out rather than set to undefined, like toMessageLink's `openedAt`.
+          ...thankYou === void 0 ? {} : { thankYou }
+        }
+      ];
+    })
   };
 }
+var STOP_MOVE_DIRECTIONS = ["up", "down"];
+var moveStopRequestSchema = external_exports.strictObject({
+  direction: external_exports.enum(STOP_MOVE_DIRECTIONS)
+});
+var COLLECT_STOP_ERRORS = {
+  bottlesInvalid: "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DB\u05DE\u05D4 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E0\u05D0\u05E1\u05E4\u05D5, \u05DE\u05E1\u05E4\u05E8 \u05E9\u05DC\u05DD \u05DE-1 \u05D5\u05DE\u05E2\u05DC\u05D4",
+  bottlesTooMany: `\u05D0\u05E4\u05E9\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E2\u05D3 ${MAX_BOTTLES} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD`
+};
+var collectStopRequestSchema = external_exports.strictObject({
+  bottlesCollected: external_exports.int({ error: COLLECT_STOP_ERRORS.bottlesInvalid }).min(1, COLLECT_STOP_ERRORS.bottlesInvalid).max(MAX_BOTTLES, COLLECT_STOP_ERRORS.bottlesTooMany).optional()
+});
 var ROUND_MESSAGES = {
   /** Some marked order was meanwhile cancelled, edited away or put in another round. */
   ordersNotWaiting: "\u05D7\u05DC\u05E7 \u05DE\u05D4\u05D4\u05D6\u05DE\u05E0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05DC\u05D0 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D5\u05EA \u05DC\u05E1\u05D1\u05D1. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05E8\u05E9\u05D9\u05DE\u05D4 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
   roundNotFound: "\u05D4\u05E1\u05D1\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0.",
-  /** "אישר בטלפון" after the round was routed or closed. */
-  confirmationsClosed: "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8\u05D9\u05DD \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D5."
+  /**
+   * "אישר בטלפון" after the round was routed or closed; also "סגור אישורים ובנה מסלול" on a round
+   * that is already routed or closed (a second tap, or another tab).
+   */
+  confirmationsClosed: "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8\u05D9\u05DD \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D5.",
+  /**
+   * A stop action or a move on a round whose route is not built yet (phase `confirming`), or that
+   * is closed: the screen is stale, so refreshing shows the round as it is.
+   */
+  routeNotOpen: "\u05D0\u05D9\u05DF \u05DE\u05E1\u05DC\u05D5\u05DC \u05E4\u05EA\u05D5\u05D7 \u05D1\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05DE\u05E1\u05DA.",
+  /** Moving the first stop up, or the last one down. */
+  stopAtEdge: "\u05D4\u05E2\u05E6\u05D9\u05E8\u05D4 \u05DB\u05D1\u05E8 \u05D1\u05E7\u05E6\u05D4 \u05D4\u05DE\u05E1\u05DC\u05D5\u05DC.",
+  /**
+   * A stop action on a stop already handled another way ("אספתי" on one not found, "לא נמצא" on
+   * one collected, ...): the screen is stale, so refreshing shows what happened there.
+   */
+  stopHandled: "\u05D4\u05E2\u05E6\u05D9\u05E8\u05D4 \u05D4\u05D6\u05D0\u05EA \u05DB\u05D1\u05E8 \u05D8\u05D5\u05E4\u05DC\u05D4. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05DE\u05E1\u05DA."
 };
 
 // packages/shared/src/customerOrderApi.ts
@@ -21000,6 +21306,60 @@ var CUSTOMER_ORDER_MESSAGES = {
   /** An unknown token. Most likely a link cut short when it was copied, so the text says so. */
   orderNotFound: "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05D9\u05D9\u05EA\u05DB\u05DF \u05E9\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05D4\u05D5\u05E2\u05EA\u05E7 \u05E2\u05D3 \u05D4\u05E1\u05D5\u05E3."
 };
+
+// packages/shared/src/historyApi.ts
+var HISTORY_ORDER_STATUSES = ["collected", "cancelled"];
+function closedAtOf(order) {
+  if (order.status === "collected") return order.collectedAt;
+  if (order.status === "cancelled") return order.cancelledAt;
+  return void 0;
+}
+var historyOrderSchema = external_exports.object({
+  id: orderSchema.shape.id,
+  status: external_exports.enum(HISTORY_ORDER_STATUSES),
+  contact: orderSchema.shape.contact.pick({ name: true }),
+  address: addressSchema.pick({ streetName: true, houseNumber: true }),
+  bottlesEstimated: orderSchema.shape.bottlesEstimated,
+  /** What Yoel recorded on "אספתי"; absent on a cancelled order. */
+  bottlesCollected: orderSchema.shape.bottlesCollected,
+  closedAt: timestampSchema
+});
+var historyTotalsSchema = external_exports.object({
+  bottlesCollected: external_exports.int().nonnegative(),
+  addressesCollected: external_exports.int().nonnegative(),
+  valueAgorot: external_exports.int().nonnegative()
+});
+var historyResponseSchema = external_exports.object({
+  month: calendarMonthSchema,
+  totals: historyTotalsSchema,
+  orders: external_exports.array(historyOrderSchema)
+});
+var historyQuerySchema = external_exports.object({
+  month: calendarMonthSchema
+});
+function buildHistory(month, closedOrders) {
+  const closed = closedOrders.flatMap((order) => {
+    const closedAt = closedAtOf(order);
+    return closedAt === void 0 ? [] : [{ order, closedAt }];
+  });
+  const collected = closed.filter(({ order }) => order.status === "collected");
+  const bottlesCollected = collected.reduce(
+    (total, { order }) => total + (order.bottlesCollected ?? 0),
+    0
+  );
+  const newestFirst = [...closed].sort((a, b) => b.closedAt.getTime() - a.closedAt.getTime());
+  return {
+    month,
+    totals: {
+      bottlesCollected,
+      addressesCollected: collected.length,
+      valueAgorot: bottlesCollected * BOTTLE_VALUE_AGOROT
+    },
+    orders: newestFirst.map(
+      ({ order, closedAt }) => historyOrderSchema.parse({ ...order, closedAt })
+    )
+  };
+}
 
 // apps/api/src/db/objectId.ts
 import { ObjectId } from "mongodb";
@@ -21127,6 +21487,13 @@ function buildListFilter(filter) {
   if (filter.ids !== void 0) {
     query._id = { $in: filter.ids.flatMap((id) => parseOrderId(id) ?? []) };
   }
+  if (filter.closedBetween !== void 0) {
+    const range = { $gte: filter.closedBetween.from, $lt: filter.closedBetween.to };
+    query.$or = [
+      { status: "collected", collectedAt: range },
+      { status: "cancelled", cancelledAt: range }
+    ];
+  }
   return query;
 }
 function buildUpdate(patch) {
@@ -21176,8 +21543,7 @@ var MongoRoundsRepo = class {
   async update(id, patch, options = {}) {
     const _id = parseObjectId(id);
     if (_id === null) return null;
-    const filter = { _id };
-    if (options.ifStatus !== void 0) filter.status = { $in: [...options.ifStatus] };
+    const filter = buildRoundUpdateFilter(_id, options);
     const update = buildRoundUpdate(patch);
     if (update === null) return this.findOne(filter);
     const doc = await this.rounds.findOneAndUpdate(filter, update, { returnDocument: "after" });
@@ -21199,6 +21565,12 @@ function buildRoundListFilter(filter) {
   const query = {};
   if (filter.statuses !== void 0) query.status = { $in: [...filter.statuses] };
   return query;
+}
+function buildRoundUpdateFilter(_id, options) {
+  const filter = { _id };
+  if (options.ifStatus !== void 0) filter.status = { $in: [...options.ifStatus] };
+  if (options.ifPhase !== void 0) filter.phase = { $in: [...options.ifPhase] };
+  return filter;
 }
 function buildRoundUpdate(patch) {
   return buildPatchUpdate(patch);
@@ -21342,6 +21714,44 @@ function messagingDepsFromEnv(env) {
   };
 }
 
+// apps/api/src/config.ts
+var DROP_OFF = {
+  address: "\u05E0\u05D7\u05DC \u05E0\u05D7\u05E9\u05D5\u05DF 7, \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9",
+  point: { lat: 31.71402, lng: 34.99325 }
+};
+
+// apps/api/src/route/routeConfig.ts
+var ENV_HINT2 = "Set it in apps/api/.env (see .env.example) or in the hosting env.";
+var ROUTE_START_FORMAT = '"lat,lng" in decimal degrees, latitude first, e.g. "<lat>,<lng>" of a point in Beit Shemesh';
+var MAX_START_DISTANCE_METERS = 3e4;
+var LAT_LNG = /^\s*(?<lat>[+-]?\d+(?:\.\d+)?)\s*,\s*(?<lng>[+-]?\d+(?:\.\d+)?)\s*$/u;
+function parseRouteStart(value) {
+  if (!value) {
+    throw new Error(
+      `ROUTE_START is not set: it is where every route starts (Yoel's home), ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+    );
+  }
+  const groups = LAT_LNG.exec(value)?.groups;
+  if (!groups?.lat || !groups.lng) {
+    throw new Error(`ROUTE_START is not two numbers: use ${ROUTE_START_FORMAT}. ${ENV_HINT2}`);
+  }
+  const point = { lat: Number(groups.lat), lng: Number(groups.lng) };
+  if (Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
+    throw new Error(
+      `ROUTE_START is out of range: the latitude must be within \xB190 and the longitude within \xB1180. Use ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+    );
+  }
+  if (haversine(point, DROP_OFF.point) > MAX_START_DISTANCE_METERS) {
+    throw new Error(
+      `ROUTE_START is more than ${MAX_START_DISTANCE_METERS / 1e3} km from the drop-off point: check that the latitude comes first, ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+    );
+  }
+  return point;
+}
+function routeDepsFromEnv(env) {
+  return { start: parseRouteStart(env.ROUTE_START), distance: straightLineDistance };
+}
+
 // apps/api/src/envDeps.ts
 function depsFromEnv(env, createDbDeps = createMongoDeps) {
   const uri = env.MONGODB_URI;
@@ -21352,7 +21762,8 @@ function depsFromEnv(env, createDbDeps = createMongoDeps) {
   }
   const auth = authDepsFromEnv(env);
   const messaging = messagingDepsFromEnv(env);
-  return { ...createDbDeps(uri), auth, messaging };
+  const route = routeDepsFromEnv(env);
+  return { ...createDbDeps(uri), auth, messaging, route };
 }
 function envErrorMessage(error62) {
   return error62 instanceof Error ? error62.message : "api could not start: invalid env";
@@ -21642,8 +22053,28 @@ function stackFrames(stack) {
   return frames === void 0 || frames.length === 0 ? void 0 : frames.join("\n");
 }
 
-// apps/api/src/orders/collectorOrdersRoutes.ts
+// apps/api/src/history/collectorHistoryRoutes.ts
 import { Router as Router2 } from "express";
+function createCollectorHistoryRouter(deps) {
+  const { orders } = deps;
+  const router = Router2();
+  router.get("/", async (req, res) => {
+    const parsed = historyQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      const body2 = { error: "invalid_month" };
+      res.status(400).json(body2);
+      return;
+    }
+    const { month } = parsed.data;
+    const closed = await orders.list({ closedBetween: monthRangeInAppZone(month) });
+    const body = buildHistory(month, closed);
+    res.json(body);
+  });
+  return router;
+}
+
+// apps/api/src/orders/collectorOrdersRoutes.ts
+import { Router as Router3 } from "express";
 
 // apps/api/src/orders/newOrderFromForm.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
@@ -21719,7 +22150,7 @@ function applyPatch(stored, patch) {
 // apps/api/src/orders/collectorOrdersRoutes.ts
 function createCollectorOrdersRouter(deps) {
   const { orders } = deps;
-  const router = Router2();
+  const router = Router3();
   router.get("/", async (_req, res) => {
     const waiting = await orders.list({ statuses: ["waiting"] });
     const body = {
@@ -21943,7 +22374,7 @@ function isHoneypotFilled(body) {
 }
 
 // apps/api/src/orders/customerOrderRoutes.ts
-import { Router as Router3 } from "express";
+import { Router as Router4 } from "express";
 
 // apps/api/src/rounds/leaveRound.ts
 function leaveRoundPatch(order, round, reason, now) {
@@ -22005,7 +22436,7 @@ var CONFIRMATIONS_CLOSED = {
 };
 function createCustomerOrderRouter(deps) {
   const { orders, rounds } = deps;
-  const router = Router3();
+  const router = Router4();
   router.use((_req, res, next) => {
     res.set("Cache-Control", "no-store");
     next();
@@ -22135,7 +22566,7 @@ function sendNotFound2(res) {
 }
 
 // apps/api/src/rounds/collectorRoundsRoutes.ts
-import { Router as Router4 } from "express";
+import { Router as Router5 } from "express";
 
 // apps/api/src/messages/sendAndLog.ts
 function orderPageUrl(publicBaseUrl, token) {
@@ -22201,10 +22632,117 @@ function logEntryFor(kind, at, result) {
   return parsed.success ? parsed.data : void 0;
 }
 
+// apps/api/src/rounds/buildRoute.ts
+function buildRouteStops(stopOrders, start, end, distance, lookup = findStreet) {
+  const inputs = stopOrders.map((order) => {
+    const point = pointForAddress(order.address, lookup);
+    return point === void 0 ? { order } : { order, point };
+  });
+  return planRoute(start, inputs, end, distance).map((input2) => ({
+    orderId: input2.order.id,
+    hasLocation: input2.point !== void 0
+  }));
+}
+function moveStop(stops, orderId, direction) {
+  const from = stops.findIndex((stop) => stop.orderId === orderId);
+  if (from === -1) return "notFound";
+  const to = direction === "up" ? from - 1 : from + 1;
+  const moving = stops[from];
+  const neighbour = stops[to];
+  if (moving === void 0 || neighbour === void 0) return "atEdge";
+  const moved = [...stops];
+  moved[to] = moving;
+  moved[from] = neighbour;
+  return moved;
+}
+
+// apps/api/src/rounds/closeRound.ts
+var CLOSE_ATTEMPTS = 3;
+var SWEEP_ATTEMPTS = 2;
+async function closeRound(deps, roundId) {
+  const { orders } = deps;
+  const now = /* @__PURE__ */ new Date();
+  const round = await closeRoundRecord(deps, roundId, now);
+  if (round === null) return null;
+  for (const order of await orders.list({ ids: round.orderIds })) {
+    await sendBackUnhandled(deps, round, order, now);
+  }
+  return buildRoundView(round, await orders.list({ ids: round.orderIds }));
+}
+async function closeRoundRecord({ rounds }, roundId, now) {
+  for (let attempt = 0; attempt < CLOSE_ATTEMPTS; attempt += 1) {
+    const round = await rounds.findById(roundId);
+    if (round === null) return null;
+    if (round.status === "closed") return round;
+    const closed = await rounds.update(
+      round.id,
+      { status: "closed", closedAt: new Date(now) },
+      { ifStatus: ["open"], ifPhase: [round.phase] }
+    );
+    if (closed !== null) return closed;
+  }
+  throw new Error("the round kept changing while it was being closed");
+}
+async function sendBackUnhandled({ orders }, round, order, now) {
+  let current = order;
+  for (let attempt = 0; attempt < SWEEP_ATTEMPTS; attempt += 1) {
+    if (current === null || !isUnhandledIn(round, current)) return;
+    if (!canTransition(current.status, "waiting")) return;
+    const left = await orders.update(
+      current.id,
+      leaveRoundPatch(current, round, missReasonAtClose(round, current), now),
+      { ifStatus: [current.status] }
+    );
+    if (left !== null) return;
+    current = await orders.findById(current.id);
+  }
+}
+function isUnhandledIn(round, order) {
+  return order.roundId === round.id && (order.status === "pending" || order.status === "confirmed");
+}
+function missReasonAtClose(round, order) {
+  return round.phase === "routed" && order.status === "confirmed" ? "notReached" : "notConfirmed";
+}
+
+// apps/api/src/rounds/roundResponses.ts
+function sendView(res, view, status = 200) {
+  res.status(status).json(view);
+}
+function sendRoundNotFound(res) {
+  const body = { error: "round_not_found" };
+  res.status(404).json(body);
+}
+function sendOrderNotFound(res) {
+  const body = { error: "order_not_found" };
+  res.status(404).json(body);
+}
+function sendRouteNotOpen(res) {
+  const body = {
+    error: "route_not_open",
+    message: ROUND_MESSAGES.routeNotOpen
+  };
+  res.status(409).json(body);
+}
+function sendInvalidTransition2(res) {
+  const body = {
+    error: "invalid_transition",
+    message: COLLECTOR_ORDER_MESSAGES.orderClosed
+  };
+  res.status(409).json(body);
+}
+function sendStopHandled(res) {
+  const body = { error: "stop_handled", message: ROUND_MESSAGES.stopHandled };
+  res.status(409).json(body);
+}
+function sendInvalidCollect(res, fieldErrors) {
+  const body = { error: "invalid_collect", fieldErrors };
+  res.status(400).json(body);
+}
+
 // apps/api/src/rounds/collectorRoundsRoutes.ts
 function createCollectorRoundsRouter(deps) {
-  const { orders, rounds, messaging } = deps;
-  const router = Router4();
+  const { orders, rounds, messaging, route } = deps;
+  const router = Router5();
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
@@ -22307,6 +22845,88 @@ function createCollectorRoundsRouter(deps) {
     }
     sendView(res, await loadRoundView(round));
   });
+  router.post("/:id/route", async (req, res) => {
+    const round = await rounds.findById(req.params.id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    if (round.status !== "open" || round.phase !== "confirming") {
+      sendConfirmationsClosed(res);
+      return;
+    }
+    const now = /* @__PURE__ */ new Date();
+    const found = new Map((await orders.list({ ids: round.orderIds })).map((o) => [o.id, o]));
+    const stopOrders = [];
+    for (const orderId of round.orderIds) {
+      const order = found.get(orderId);
+      if (order?.roundId !== round.id) continue;
+      const settled = order.status === "pending" ? await sendBackUnconfirmed(order, round, now) : order;
+      if (settled?.roundId === round.id && settled.status === "confirmed") stopOrders.push(settled);
+    }
+    const stops = buildRouteStops(stopOrders, route.start, DROP_OFF.point, route.distance);
+    const routed = await rounds.update(
+      round.id,
+      { phase: "routed", stops },
+      { ifStatus: ["open"], ifPhase: ["confirming"] }
+    );
+    if (routed === null) {
+      sendConfirmationsClosed(res);
+      return;
+    }
+    sendView(res, await loadRoundView(routed));
+  });
+  router.post("/:id/stops/:orderId/move", async (req, res) => {
+    const parsed = moveStopRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendInvalidMove(res);
+      return;
+    }
+    const { id, orderId } = req.params;
+    const round = await rounds.findById(id);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    if (round.status !== "open" || round.phase !== "routed") {
+      sendRouteNotOpen(res);
+      return;
+    }
+    const moved = moveStop(round.stops, orderId, parsed.data.direction);
+    if (moved === "notFound") {
+      sendOrderNotFound(res);
+      return;
+    }
+    if (moved === "atEdge") {
+      sendStopAtEdge(res);
+      return;
+    }
+    const updated = await rounds.update(
+      round.id,
+      { stops: moved },
+      { ifStatus: ["open"], ifPhase: ["routed"] }
+    );
+    if (updated === null) {
+      sendRouteNotOpen(res);
+      return;
+    }
+    sendView(res, await loadRoundView(updated));
+  });
+  router.post("/:id/close", async (req, res) => {
+    const view = await closeRound({ orders, rounds }, req.params.id);
+    if (view === null) {
+      sendRoundNotFound(res);
+      return;
+    }
+    sendView(res, view);
+  });
+  async function sendBackUnconfirmed(order, round, now) {
+    if (!canTransition(order.status, "waiting")) return order;
+    const left = await orders.update(order.id, leaveRoundPatch(order, round, "notConfirmed", now), {
+      ifStatus: [order.status]
+    });
+    return left ?? await orders.findById(order.id);
+  }
   return router;
 }
 function isPlannable(order) {
@@ -22338,9 +22958,6 @@ async function updateOrFail(update) {
   if (round === null) throw new Error("the round just planned is no longer stored");
   return round;
 }
-function sendView(res, view, status = 200) {
-  res.status(status).json(view);
-}
 function sendInvalidRound(res, fieldErrors) {
   const body = { error: "invalid_round", fieldErrors };
   res.status(400).json(body);
@@ -22353,14 +22970,6 @@ function sendOrdersNotWaiting(res, orderIds) {
   };
   res.status(409).json(body);
 }
-function sendRoundNotFound(res) {
-  const body = { error: "round_not_found" };
-  res.status(404).json(body);
-}
-function sendOrderNotFound(res) {
-  const body = { error: "order_not_found" };
-  res.status(404).json(body);
-}
 function sendConfirmationsClosed(res) {
   const body = {
     error: "confirmations_closed",
@@ -22368,12 +22977,127 @@ function sendConfirmationsClosed(res) {
   };
   res.status(409).json(body);
 }
-function sendInvalidTransition2(res) {
-  const body = {
-    error: "invalid_transition",
-    message: COLLECTOR_ORDER_MESSAGES.orderClosed
-  };
+function sendInvalidMove(res) {
+  const body = { error: "invalid_move" };
+  res.status(400).json(body);
+}
+function sendStopAtEdge(res) {
+  const body = { error: "stop_at_edge", message: ROUND_MESSAGES.stopAtEdge };
   res.status(409).json(body);
+}
+
+// apps/api/src/rounds/collectorStopActionsRoutes.ts
+import { Router as Router6 } from "express";
+function createCollectorStopActionsRouter(deps) {
+  const { orders, rounds, messaging } = deps;
+  const router = Router6();
+  async function loadRoundView(round) {
+    return buildRoundView(round, await orders.list({ ids: round.orderIds }));
+  }
+  async function findRouteStop(roundId, orderId, res) {
+    const round = await rounds.findById(roundId);
+    if (round === null) {
+      sendRoundNotFound(res);
+      return null;
+    }
+    if (round.status !== "open" || round.phase !== "routed") {
+      sendRouteNotOpen(res);
+      return null;
+    }
+    const order = round.stops.some((stop) => stop.orderId === orderId) ? await orders.findById(orderId) : null;
+    if (order === null) {
+      sendOrderNotFound(res);
+      return null;
+    }
+    return { round, order };
+  }
+  router.post("/:id/stops/:orderId/collected", async (req, res) => {
+    const parsed = collectStopRequestSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      sendInvalidCollect(res, formFieldErrors(parsed.error));
+      return;
+    }
+    const request = parsed.data;
+    const { id, orderId } = req.params;
+    const found = await findRouteStop(id, orderId, res);
+    if (found === null) return;
+    const { round, order } = found;
+    const state = roundStopStateOf(round, order);
+    if (state === "collected") {
+      sendView(res, await loadRoundView(round));
+      return;
+    }
+    if (state !== "toCollect") {
+      sendStopHandled(res);
+      return;
+    }
+    if (!canTransition(order.status, "collected")) {
+      sendInvalidTransition2(res);
+      return;
+    }
+    const now = /* @__PURE__ */ new Date();
+    const collected = await orders.update(
+      orderId,
+      {
+        status: "collected",
+        // Below the 30-bottle minimum is fine: that is a booking rule, not a count.
+        bottlesCollected: request.bottlesCollected ?? order.bottlesEstimated,
+        collectedAt: now,
+        updatedAt: new Date(now)
+      },
+      { ifStatus: [order.status] }
+    );
+    if (collected === null) {
+      const current = await orders.findById(orderId);
+      if (current !== null && roundStopStateOf(round, current) === "collected") {
+        sendView(res, await loadRoundView(round));
+        return;
+      }
+      sendInvalidTransition2(res);
+      return;
+    }
+    await sendAndLog(
+      { orders, sender: messaging.sender },
+      collected,
+      orderMessage(collected, "thankYou", { publicBaseUrl: messaging.publicBaseUrl })
+    );
+    sendView(res, await loadRoundView(round));
+  });
+  router.post("/:id/stops/:orderId/not-found", async (req, res) => {
+    const { id, orderId } = req.params;
+    const found = await findRouteStop(id, orderId, res);
+    if (found === null) return;
+    const { round, order } = found;
+    const state = roundStopStateOf(round, order);
+    if (state === "notFound") {
+      sendView(res, await loadRoundView(round));
+      return;
+    }
+    if (state !== "toCollect") {
+      sendStopHandled(res);
+      return;
+    }
+    if (!canTransition(order.status, "waiting")) {
+      sendInvalidTransition2(res);
+      return;
+    }
+    const left = await orders.update(
+      orderId,
+      leaveRoundPatch(order, round, "notFound", /* @__PURE__ */ new Date()),
+      { ifStatus: [order.status] }
+    );
+    if (left === null) {
+      const current = await orders.findById(orderId);
+      if (current !== null && roundStopStateOf(round, current) === "notFound") {
+        sendView(res, await loadRoundView(round));
+        return;
+      }
+      sendInvalidTransition2(res);
+      return;
+    }
+    sendView(res, await loadRoundView(round));
+  });
+  return router;
 }
 
 // apps/api/src/sameOrigin.ts
@@ -22420,6 +23144,8 @@ function createApp(deps) {
   app.use("/api/collector", requireCollector(deps.auth));
   app.use("/api/collector/orders", createCollectorOrdersRouter(deps));
   app.use("/api/collector/rounds", createCollectorRoundsRouter(deps));
+  app.use("/api/collector/rounds", createCollectorStopActionsRouter(deps));
+  app.use("/api/collector/history", createCollectorHistoryRouter(deps));
   app.use("/api", (_req, res) => {
     const body = { error: "not_found" };
     res.status(404).json(body);

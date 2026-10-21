@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
 import type { WaitingOrdersOutcome } from '../api.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE, OrdersScreen, groupSummary } from './OrdersScreen.tsx';
+import { returnToApp } from './visibilityTestHelper.ts';
 
 /** A waiting order on a listed street in רמת בית שמש, with a map point; overrides change it. */
 function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
@@ -400,6 +401,52 @@ describe('OrdersScreen', () => {
 
       expect(await screen.findByRole('button', { name: 'לנסות שוב' })).toBeDefined();
       expect(orders.calls()).toBe(2);
+    });
+  });
+
+  describe('coming back to the app', () => {
+    it('loads again, keeping the list on screen until the new orders replace it', async () => {
+      const second = deferred<WaitingOrdersOutcome>();
+      const orders = fakeLoad(LOADED, second.promise);
+      renderScreen(orders.load);
+      await screen.findByRole('region', { name: 'רמת בית שמש' });
+
+      returnToApp();
+
+      expect(orders.calls()).toBe(2);
+      // No "טוען..." in place of the list while the new answer is on its way.
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(cardOf('דנה כהן')).toBeDefined();
+
+      const newOrder = makeOrder({
+        id: 'o5',
+        contact: { name: 'שרה גולן', phone: '+972509998877' },
+      });
+      second.resolve({ kind: 'loaded', groups: groupWaitingOrders([newOrder]) });
+
+      expect(await screen.findByRole('heading', { level: 3, name: 'שרה גולן' })).toBeDefined();
+      expect(screen.queryByRole('heading', { level: 3, name: 'דנה כהן' })).toBeNull();
+      const ramat = screen.getByRole('region', { name: 'רמת בית שמש' });
+      expect(within(ramat).getByText('הזמנה אחת · 40 בקבוקים')).toBeDefined();
+    });
+
+    it('keeps the failure message and its retry while it loads again, then shows the orders', async () => {
+      const second = deferred<WaitingOrdersOutcome>();
+      const orders = fakeLoad(FAILED, second.promise);
+      renderScreen(orders.load);
+      await screen.findByRole('alert');
+
+      returnToApp();
+
+      expect(orders.calls()).toBe(2);
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.getByRole('alert').textContent).toBe(ORDERS_LOAD_FAILED_MESSAGE);
+      expect(screen.getByRole('button', { name: 'לנסות שוב' })).toBeDefined();
+
+      second.resolve(LOADED);
+
+      expect(await screen.findByRole('region', { name: 'רמת בית שמש' })).toBeDefined();
+      expect(screen.queryByRole('alert')).toBeNull();
     });
   });
 
