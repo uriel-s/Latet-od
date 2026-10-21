@@ -3,14 +3,12 @@
 // collector's way in; the page itself in <main>; and a quiet footer with the OpenStreetMap credit
 // (ADR-0005: the street points come from OSM under ODbL, so the credit is on every page).
 import type { ReactNode } from 'react';
-import { APP_NAME, APP_SLOGAN } from '@bottlerun/shared';
+import { APP_NAME, APP_SLOGAN, STREETS_ATTRIBUTION } from '@bottlerun/shared';
 import { Bunting } from './components/Bunting.tsx';
 import { Link } from './router.tsx';
 
 // OSM's attribution guideline: the credit links to the copyright page, which states the ODbL.
 const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
-// The short form of STREETS_ATTRIBUTION: still names OpenStreetMap, which is what the licence asks for.
-const OSM_CREDIT_LABEL = '© OpenStreetMap';
 
 /** Props of {@link Layout}. */
 export interface LayoutProps {
@@ -64,7 +62,7 @@ export function Layout({ children, collectorLink = false }: LayoutProps) {
               target="_blank"
               rel="noreferrer"
             >
-              {OSM_CREDIT_LABEL}
+              {STREETS_ATTRIBUTION}
             </a>
           </p>
         </div>

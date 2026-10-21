@@ -298,7 +298,7 @@ describe('App', () => {
       await renderSettledAt(path, heading);
 
       const footer = screen.getByRole('contentinfo');
-      const credit = within(footer).getByRole('link', { name: '© OpenStreetMap' });
+      const credit = within(footer).getByRole('link', { name: '© OpenStreetMap contributors' });
       expect(credit.getAttribute('href')).toBe('https://www.openstreetmap.org/copyright');
     },
   );
