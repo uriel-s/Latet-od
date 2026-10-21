@@ -1,0 +1,187 @@
+<!doctype html>
+<!--
+  Yoel's usage guide: a static page served as /guide.html (Vite copies public/ as is, and Vercel
+  serves a real file before the SPA rewrite in vercel.json). No JavaScript, no dependencies, so
+  it needs no tests or build step. Colours and sizes follow styles.css (AA contrast, 18px+).
+  Keep the button names in sync with the collector screens (docs/spec.md §3.4-3.7).
+-->
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#DCEBF8" />
+    <meta name="robots" content="noindex" />
+    <title>המדריך של יואל | לתת עוד</title>
+    <style>
+      :root {
+        --color-background: #dcebf8;
+        --color-text: #1e3a8a;
+        --color-accent: #a7d3f2;
+        --color-white: #ffffff;
+        --color-muted: #4b5563;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--color-background);
+        color: var(--color-text);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Arial,
+          sans-serif;
+        font-size: 1.125rem;
+        line-height: 1.6;
+        padding: 16px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+          max(16px, env(safe-area-inset-left));
+      }
+      main {
+        max-width: 36rem;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin: 0.5rem 0 0.25rem;
+      }
+      h2 {
+        font-size: 1.35rem;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        margin: 0.4rem 0;
+      }
+      .lead {
+        color: var(--color-muted);
+        margin-bottom: 1rem;
+      }
+      .card {
+        background: var(--color-white);
+        border-radius: 0.5rem;
+        padding: 14px 16px;
+        margin: 0 0 14px;
+      }
+      ol,
+      ul {
+        margin: 0.4rem 0;
+        padding-inline-start: 1.4rem;
+      }
+      li {
+        margin: 0.3rem 0;
+      }
+      b {
+        background: var(--color-accent);
+        border-radius: 0.25rem;
+        padding: 0 0.3rem;
+        white-space: nowrap;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin: 0.5rem 0;
+      }
+      .tabs span {
+        flex: 1;
+        text-align: center;
+        background: var(--color-accent);
+        border-radius: 0.5rem;
+        padding: 10px 4px;
+        font-weight: bold;
+      }
+      .tip {
+        border: 2px solid var(--color-text);
+      }
+      a {
+        color: var(--color-text);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>📖 המדריך של יואל</h1>
+      <p class="lead">איך עובדים עם האפליקציה, צעד אחר צעד.</p>
+
+      <section class="card">
+        <h2>מה יש באפליקציה?</h2>
+        <p>למטה יש שלושה כפתורים:</p>
+        <div class="tabs"><span>הזמנות</span><span>סבבים</span><span>היסטוריה</span></div>
+      </section>
+
+      <section class="card">
+        <h2>1️⃣ הזמנות</h2>
+        <p>כאן רואים את כל מי שמחכה לאיסוף, לפי אזור:</p>
+        <ul>
+          <li><b>רמת בית שמש</b></li>
+          <li><b>בית שמש הוותיקה</b></li>
+          <li><b>בלי אזור</b>: מי שכתב רחוב לבד. לוחצים עליו ובוחרים לו אזור.</li>
+        </ul>
+        <p>על כל הזמנה אפשר לערוך, לשנות אזור או לבטל.</p>
+        <p>לקוח התקשר אליך? לוחצים <b>הוספת הזמנה</b> ומלאים בשבילו.</p>
+      </section>
+
+      <section class="card">
+        <h2>2️⃣ מתכננים סבב</h2>
+        <ol>
+          <li>לוחצים <b>תכנון סבב</b></li>
+          <li>בוחרים תאריך ואזור</li>
+          <li>כל ההזמנות באזור מסומנות. אפשר להוריד וי ממי שלא רוצים</li>
+          <li>לוחצים <b>שלח בקשות אישור</b></li>
+        </ol>
+        <p>מוכנה לך הודעת וואטסאפ לכל לקוח. רק לוחצים "שלח" בכל אחת.</p>
+      </section>
+
+      <section class="card">
+        <h2>3️⃣ מחכים לאישורים</h2>
+        <p>בלשונית <b>סבבים</b> רואים מי אישר, מי עוד לא, ומי ביקש מועד אחר.</p>
+        <ul>
+          <li>לקוח אישר בטלפון או בהודעה? לוחצים <b>אישר בשיחה או בהודעה</b></li>
+          <li>
+            כשמוכנים לצאת, לוחצים <b>התחל מסלול</b>. מי שלא אישר יוצא מהסבב וחוזר לחכות לפעם הבאה.
+          </li>
+        </ul>
+        <p>האפליקציה מסדרת לבד את העצירות: מהבית, דרך הלקוחות, ועד נקודת הפריקה.</p>
+      </section>
+
+      <section class="card">
+        <h2>4️⃣ יוצאים לדרך</h2>
+        <p>לכל עצירה יש כרטיס עם כתובת, איפה הבקבוקים והכמות. הכפתורים:</p>
+        <ul>
+          <li><b>נווט</b>: פותח ווייז</li>
+          <li><b>חייג</b>: מתקשר ללקוח</li>
+          <li><b>אספתי</b>: אפשר לתקן את מספר הבקבוקים. הלקוח מקבל הודעת תודה.</li>
+          <li><b>לא נמצא</b>: ההזמנה חוזרת לחכות לסבב הבא</li>
+        </ul>
+        <p>למעלה יש עוד שניים:</p>
+        <ul>
+          <li><b>נווט לעצירה הבאה</b>: ווייז ישר לעצירה הבאה</li>
+          <li><b>כל המסלול ב-Google Maps</b>: כל המסלול במפה אחת</li>
+        </ul>
+        <p>כרטיס שטיפלת בו משנה צבע ויורד לסוף הרשימה.</p>
+      </section>
+
+      <section class="card">
+        <h2>5️⃣ סיימת?</h2>
+        <p>לוחצים <b>סיימתי את הסבב</b>. מי שלא נאסף חוזר לחכות.</p>
+        <p>שינית דעתך לפני שיצאת? לוחצים <b>בטל את הסבב</b>.</p>
+      </section>
+
+      <section class="card">
+        <h2>6️⃣ היסטוריה</h2>
+        <p>לכל חודש רואים כמה בקבוקים נאספו, בכמה כתובות, וכמה כסף זה (20 אגורות לבקבוק). 💰</p>
+      </section>
+
+      <section class="card tip">
+        <h2>💡 טיפים</h2>
+        <ul>
+          <li>החיבור נשמר, אז לא צריך להזין סיסמה כל פעם.</li>
+          <li>הזמנה חדשה מחכה בלשונית "הזמנות" עד שמתכננים סבב.</li>
+          <li>יש תקלה? מתקשרים אליי.</li>
+        </ul>
+      </section>
+
+      <p class="lead">© OpenStreetMap contributors</p>
+    </main>
+  </body>
+</html>
