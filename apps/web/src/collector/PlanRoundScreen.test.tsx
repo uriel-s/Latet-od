@@ -534,6 +534,8 @@ describe('PlanRoundScreen', () => {
       send();
 
       await waitFor(() => expect(window.location.pathname).toBe('/app/rounds'));
+      // The new round is the one shown, even when an earlier round is open.
+      expect(window.location.search).toBe('?round=r1');
       // Replaced: "back" from the rounds returns to the orders, not to this sent form.
       expect(window.history.length).toBe(historyLength);
       expect(window.history.state).toEqual({ notice: 'הסבב נוצר.' });
