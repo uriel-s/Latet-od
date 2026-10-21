@@ -958,7 +958,7 @@ html:has(.bottom-nav) {
 }
 
 /* "התחל מסלול" ends step 1, under a decorative line and apart from the cards'
-   "אישר בטלפון", so it is not tapped by mistake. Its question uses .cancel-confirm. */
+   "אישר בשיחה או בהודעה", so it is not tapped by mistake. Its question uses .cancel-confirm. */
 .round-build-route {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
@@ -983,7 +983,7 @@ html:has(.bottom-nav) {
   min-height: var(--tap-target);
 }
 
-/* "אישר בטלפון" at the end of a card; .button keeps it at least 48px tall. */
+/* "אישר בשיחה או בהודעה" at the end of a card; .button keeps it at least 48px tall. */
 .order-card-confirm {
   min-width: var(--tap-target);
   margin-block: 0.5rem 0.25rem;
