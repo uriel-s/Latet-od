@@ -957,6 +957,17 @@ html:has(.bottom-nav) {
   margin-block: 0 0.75rem;
 }
 
+/* The two navigation links at the top of the route: stacked, full width, apart from the cards. */
+.route-navigation {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+}
+
+.route-navigation .round-hint {
+  margin-block: 0;
+}
+
 /* "התחל מסלול" ends step 1, under a decorative line and apart from the cards'
    "אישר בשיחה או בהודעה", so it is not tapped by mistake. Its question uses .cancel-confirm. */
 .round-build-route {

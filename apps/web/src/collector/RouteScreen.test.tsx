@@ -11,6 +11,8 @@ import {
 } from '@bottlerun/shared';
 import type { MarkMessageOpenedOutcome, StopActionOutcome } from '../api.ts';
 import {
+  GOOGLE_MAPS_ROUTE_TEXT,
+  NAVIGATE_TO_DROP_OFF_TEXT,
   NO_STOPS_TEXT,
   RouteScreen,
   STOP_ACTION_FAILED_MESSAGE,
@@ -18,6 +20,7 @@ import {
   routeSummary,
   type RouteScreenProps,
 } from './RouteScreen.tsx';
+import { dropOffWazeUrl, wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
 
 /** A confirmed order in round r1, in רמת בית שמש; overrides change it. */
@@ -333,6 +336,52 @@ describe('RouteScreen order', () => {
     expect(within(card).getByRole('link', { name: /^חייג/ }).getAttribute('href')).toBe(
       'tel:+972527654321',
     );
+  });
+});
+
+describe('RouteScreen navigation links', () => {
+  it('opens Waze at the first stop to collect, in stored order', () => {
+    renderRoute(makeView([collected(stopOf(DANA)), stopOf(YOSSI), stopOf(MOSHE)]));
+
+    const link = screen.getByRole('link', { name: 'נווט לעצירה הבאה: הרצל 3' });
+    expect(link.getAttribute('href')).toBe(wazeUrl(YOSSI.address));
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('moves on to the next stop after "אספתי"', async () => {
+    renderRoute();
+    expect(screen.getByRole('link', { name: 'נווט לעצירה הבאה: שד נהר הדן 12' })).toBeTruthy();
+
+    collect('דנה כהן');
+
+    const next = await screen.findByRole('link', { name: "נווט לעצירה הבאה: בית ג'מאל 5" });
+    expect(next.getAttribute('href')).toBe(wazeUrl(MOSHE.address));
+  });
+
+  it('points at the drop-off when every stop is handled, and hides the Google Maps link', () => {
+    renderRoute(makeView([collected(stopOf(DANA)), stopOf(MOSHE, { state: 'notFound' })]));
+
+    const link = screen.getByRole('link', { name: NAVIGATE_TO_DROP_OFF_TEXT });
+    expect(link.getAttribute('href')).toBe(dropOffWazeUrl());
+    expect(screen.queryByRole('link', { name: GOOGLE_MAPS_ROUTE_TEXT })).toBeNull();
+  });
+
+  it('links all stops still to collect in Google Maps, ending at the drop-off, without origin', () => {
+    renderRoute(makeView([collected(stopOf(DANA)), stopOf(YOSSI), stopOf(MOSHE)]));
+
+    const href =
+      screen.getByRole('link', { name: GOOGLE_MAPS_ROUTE_TEXT }).getAttribute('href') ?? '';
+    expect(href).not.toContain('origin=');
+    const url = new URL(href);
+    expect(url.searchParams.get('waypoints')).toBe('הרצל 3, בית שמש|' + "בית ג'מאל 5, בית שמש");
+    expect(url.searchParams.get('destination')).toContain('נחל נחשון 7');
+  });
+
+  it('shows neither link for a route with no stop', () => {
+    renderRoute(makeView([]));
+    expect(screen.queryByRole('link', { name: /נווט/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: GOOGLE_MAPS_ROUTE_TEXT })).toBeNull();
   });
 });
 
