@@ -1,4 +1,7 @@
-// The "סבבים" tab of the collector app (spec §3.6), one section per open round.
+// The "סבבים" tab of the collector app (spec §3.6): ONE open round at a time. A picker above it
+// (RoundPickerSheet.tsx) switches rounds when more than one is open; the chosen round's id lives in
+// the URL as `?round=<id>`, and without it (or with an id that is not open any more) the nearest
+// open round shows. Only open rounds are listed, so a closed round is never an option.
 // Step 1 "אישורים" (phase `confirming`): who confirmed, who did not yet, and who asked for another
 // date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בטלפון"
 // for a customer who confirmed in a call or in a WhatsApp reply; and "סגור אישורים ובנה מסלול",
@@ -31,7 +34,7 @@ import {
   type ConfirmByPhoneOutcome,
   type RoundsOutcome,
 } from '../api.ts';
-import { Link, navigate } from '../router.tsx';
+import { Link, navigate, searchParam, useLocation } from '../router.tsx';
 import {
   BuildRouteConfirm,
   buildRouteQuestion,
@@ -41,6 +44,8 @@ import { CloseRoundConfirm, type CloseRoundConfirmProps } from './CloseRoundConf
 import { FlashNotice } from './FlashNotice.tsx';
 import { bottlesText, ordersText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
+import { pickSelectedRound } from './roundPicker.ts';
+import { RoundPicker } from './RoundPickerSheet.tsx';
 import { RouteScreen, type RouteScreenProps } from './RouteScreen.tsx';
 import { SendList, type SendListProps } from './SendList.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
@@ -153,6 +158,13 @@ interface Notice {
  * keeps what is shown until its answer replaces it. With none open, it says so and links to the
  * planning screen.
  *
+ * Only one round is shown, the one `?round=<id>` names, else the first the api listed (the nearest
+ * date: {@link pickSelectedRound}). With two or more open, {@link RoundPicker} sits above it and
+ * choosing a round writes `?round=<id>` with `replace`, so the choice survives a reload and a
+ * return from WhatsApp without adding history entries. The default is never written to the URL.
+ * The other rounds' state (building, closing, typing) is kept by round id, so an action still
+ * answering for a round that is not on screen finds its way back when Yoel returns to it.
+ *
  * A 401 means the session ended: to the login, like the guard in CollectorApp.tsx. A failed load
  * stays here with a retry: a dropped connection is not a logout.
  *
@@ -170,12 +182,15 @@ interface Notice {
  * heading, with the focus there, since the section Yoel tapped is gone. No reload: the answer is
  * the truth already, and a closed round is never listed again. A reload that set out before the
  * close answered may still list the round, so every loaded answer leaves out the rounds closed
- * here. With none left, "אין סבב פתוח." and the planning link show, as after any load.
+ * here. The selection then falls back to the first round left (the URL still names the closed
+ * one, which is simply not open any more). With none left, "אין סבב פתוח." and the planning link
+ * show, as after any load.
  *
  * The reload on coming back is skipped while a quantity field of "אספתי" is open: a reload must
  * never wipe what Yoel types (a failed load replaces the rounds, and a stop handled elsewhere
  * closes its field). The usual trip away mid-route is to Waze or the dialler; once the field is
- * closed, the next return reloads as before.
+ * closed, the next return reloads as before. Picking another round while a field is open unmounts
+ * that round's route, which reports "not typing" on its way out, so the pause cannot outlast it.
  */
 export function RoundsScreen({
   loadRounds = fetchRounds,
@@ -444,6 +459,23 @@ export function RoundsScreen({
     }
   }
 
+  // The round on screen: the `?round=` of the URL, else the nearest open one. A stale or unknown
+  // id (a round closed meanwhile, an old link) falls back the same way, and the URL is not
+  // rewritten for it: the query is written only when Yoel picks a round himself.
+  const { pathname, search } = useLocation();
+  const selected =
+    state.kind === 'loaded'
+      ? pickSelectedRound(state.rounds, searchParam(search, 'round'))
+      : undefined;
+
+  /**
+   * Yoel picked `roundId` in the picker. Only the query changes, on the page he is on; `replace`,
+   * so choosing a round does not pile up history entries for the back button to walk through.
+   */
+  function selectRound(roundId: string): void {
+    navigate(`${pathname}?round=${encodeURIComponent(roundId)}`, { replace: true });
+  }
+
   return (
     <>
       <h1>סבבים</h1>
@@ -479,31 +511,38 @@ export function RoundsScreen({
         </>
       )}
 
-      {state.kind === 'loaded' &&
-        state.rounds.map((view) => (
-          // Keyed by the round's id, so the section, and the "שלח" list or the route in it, stay
-          // mounted when an action swaps in a new view: the rows Yoel already opened stay marked,
-          // and an open quantity field stays open.
+      {state.kind === 'loaded' && selected !== undefined && (
+        <>
+          {/* Renders nothing for a single round: there is nothing to choose. */}
+          <RoundPicker
+            rounds={state.rounds}
+            selectedId={selected.round.id}
+            onSelect={selectRound}
+          />
+          {/* Keyed by the round's id, so the section, and the "שלח" list or the route in it, stay
+              mounted when an action swaps in a new view: the rows Yoel already opened stay marked,
+              and an open quantity field stays open. Picking another round mounts that round's
+              section anew, and RouteScreen's unmount tells typingChanged the field is gone. */}
           <RoundSection
-            key={view.round.id}
-            view={view}
+            key={selected.round.id}
+            view={selected}
             markOpened={markOpened}
             savingIds={savingIds}
             failedIds={failedIds}
-            onConfirm={(orderId) => void confirm(view.round.id, orderId)}
+            onConfirm={(orderId) => void confirm(selected.round.id, orderId)}
             buildRoute={{
-              building: buildingIds.has(view.round.id),
-              failed: buildFailedIds.has(view.round.id),
-              onBuild: () => void buildRouteOf(view.round.id),
+              building: buildingIds.has(selected.round.id),
+              failed: buildFailedIds.has(selected.round.id),
+              onBuild: () => void buildRouteOf(selected.round.id),
               onOpenChange: () =>
-                setBuildFailedIds((previous) => withId(previous, view.round.id, false)),
+                setBuildFailedIds((previous) => withId(previous, selected.round.id, false)),
             }}
             closeRound={{
-              closing: closingIds.has(view.round.id),
-              failed: closeFailedIds.has(view.round.id),
-              onClose: () => void closeRoundOf(view.round.id),
+              closing: closingIds.has(selected.round.id),
+              failed: closeFailedIds.has(selected.round.id),
+              onClose: () => void closeRoundOf(selected.round.id),
               onOpenChange: () =>
-                setCloseFailedIds((previous) => withId(previous, view.round.id, false)),
+                setCloseFailedIds((previous) => withId(previous, selected.round.id, false)),
             }}
             route={{
               // A saved stop action: its answer replaces the round, and an old notice has served.
@@ -512,14 +551,15 @@ export function RoundsScreen({
                 replaceRound(next);
               },
               onStale: showStale,
-              onTypingChange: (typing) => typingChanged(view.round.id, typing),
+              onTypingChange: (typing) => typingChanged(selected.round.id, typing),
               moveStop,
               collectStop,
               markStopNotFound,
               markOpened,
             }}
           />
-        ))}
+        </>
+      )}
     </>
   );
 }
