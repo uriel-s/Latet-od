@@ -673,7 +673,7 @@ describe('collectStopRequestSchema', () => {
     expect(collectStopRequestSchema.parse({})).toEqual({});
   });
 
-  // The 30 minimum is a booking rule: the real count may be lower than the estimate.
+  // 20 minimum is a booking rule: the real count may be lower than the estimate.
   it('accepts a whole count below the booking minimum, and up to the maximum', () => {
     for (const bottlesCollected of [12, 1, MAX_BOTTLES]) {
       expect(collectStopRequestSchema.parse({ bottlesCollected })).toEqual({ bottlesCollected });
