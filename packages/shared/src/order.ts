@@ -2,7 +2,7 @@
 // - orderSchema: an order as the api reads it from Mongo and returns it as JSON. It checks
 //   structure only, with no cross-field form rules, so a stored order stays readable.
 // - orderFormSchema: the booking form (spec §3.1). The web form, POST /api/orders and Yoel's
-//   "הוספת הזמנה" all validate with it, so the rules (at least 30 bottles, floor and apartment
+//   "הוספת הזמנה" all validate with it, so the rules (at least 20 bottles, floor and apartment
 //   when the bottles wait at the apartment door) are written once, with plain-Hebrew messages.
 import { z } from 'zod';
 import { israeliMobileSchema, e164MobileSchema } from './phone.ts';
@@ -14,7 +14,7 @@ import { findStreet, regionSchema } from './streets.ts';
 // ---------------------------------------------------------------------------------------------
 
 /** Fewest bottles an order may have (spec §3.1): a hard rule of Yoel's (ת8). */
-export const MIN_BOTTLES = 30;
+export const MIN_BOTTLES = 20;
 
 /** Most bottles an order may have. No real order comes near it: it catches a typo like 30000. */
 export const MAX_BOTTLES = 5000;

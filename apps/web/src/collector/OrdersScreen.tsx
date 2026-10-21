@@ -49,7 +49,7 @@ export function ordersText(count: number): string {
 }
 
 /**
- * "בקבוק אחד", "40 בקבוקים". A real order has at least 30, but a count of one still reads right.
+ * "בקבוק אחד", "40 בקבוקים". A real order has at least 20, but a count of one still reads right.
  * The planning screen's order rows use it too, so a card and a row say the count the same way.
  */
 export function bottlesText(count: number): string {

@@ -150,7 +150,7 @@ describe('OrderFields', () => {
     renderFields();
 
     expect(descriptionOf(input('טלפון נייד'))).toBe('למשל 050-1234567');
-    expect(descriptionOf(input('כמות בקבוקים'))).toBe('לפחות 30 בקבוקים');
+    expect(descriptionOf(input('כמות בקבוקים'))).toBe('לפחות 20 בקבוקים');
   });
 
   describe('without the contact (the customer\'s "שינוי")', () => {

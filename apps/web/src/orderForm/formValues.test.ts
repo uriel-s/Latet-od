@@ -110,14 +110,14 @@ describe('validateOrderForm', () => {
     expect(errors.byField.street).toBe(ORDER_FORM_ERRORS.streetRequired);
   });
 
-  it('rejects fewer than 30 bottles next to the bottles field', () => {
-    expect(errorsOf(makeValues({ bottlesEstimated: '29' }))).toEqual({
-      byField: { bottlesEstimated: 'צריך לפחות 30 בקבוקים' },
+  it('rejects fewer than 20 bottles next to the bottles field', () => {
+    expect(errorsOf(makeValues({ bottlesEstimated: '19' }))).toEqual({
+      byField: { bottlesEstimated: 'צריך לפחות 20 בקבוקים' },
     });
   });
 
-  it('accepts exactly 30 bottles', () => {
-    expect(requestOf(makeValues({ bottlesEstimated: '30' })).bottlesEstimated).toBe(30);
+  it('accepts exactly 20 bottles', () => {
+    expect(requestOf(makeValues({ bottlesEstimated: '20' })).bottlesEstimated).toBe(20);
   });
 
   it('asks where the bottles are when no spot was chosen', () => {
@@ -211,7 +211,7 @@ describe('validateOrderDetails', () => {
   it('gives the same errors as the booking form, each next to its field', () => {
     for (const values of [
       emptyOrderFormValues(),
-      makeValues({ bottlesEstimated: '29' }),
+      makeValues({ bottlesEstimated: '19' }),
       makeValues({ bottlesSpot: 'apartmentDoor', floorApt: '' }),
       makeValues({ phone: '02-9912345', street: null }),
     ]) {
@@ -275,9 +275,9 @@ describe('validateCustomerChange', () => {
     expect(customerUpdateOrderRequestSchema.parse(request)).toEqual(request);
   });
 
-  it("rejects fewer than 30 bottles next to the bottles field, in the booking form's words", () => {
-    expect(changeErrorsOf(makeValues({ bottlesEstimated: '29' }))).toEqual({
-      byField: { bottlesEstimated: 'צריך לפחות 30 בקבוקים' },
+  it("rejects fewer than 20 bottles next to the bottles field, in the booking form's words", () => {
+    expect(changeErrorsOf(makeValues({ bottlesEstimated: '19' }))).toEqual({
+      byField: { bottlesEstimated: 'צריך לפחות 20 בקבוקים' },
     });
   });
 
@@ -391,16 +391,16 @@ describe('mapFieldErrors', () => {
 });
 
 describe('hasEnoughBottles', () => {
-  it('accepts a whole number from 30 up', () => {
-    expect(hasEnoughBottles('30')).toBe(true);
+  it('accepts a whole number from 20 up', () => {
+    expect(hasEnoughBottles('20')).toBe(true);
     expect(hasEnoughBottles(' 45 ')).toBe(true);
     expect(hasEnoughBottles('030')).toBe(true);
     // The maximum is the schema's job; the button only hints about the minimum.
     expect(hasEnoughBottles('6000')).toBe(true);
   });
 
-  it('refuses fewer than 30, a blank field and anything that is not a whole number', () => {
-    for (const typed of ['29', '0', '', '  ', 'abc', '4,5', '3.5', '1e3']) {
+  it('refuses fewer than 20, a blank field and anything that is not a whole number', () => {
+    for (const typed of ['19', '0', '', '  ', 'abc', '4,5', '3.5', '1e3']) {
       expect(hasEnoughBottles(typed), typed).toBe(false);
     }
   });

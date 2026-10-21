@@ -193,7 +193,7 @@ describe('createOrderResponseSchema', () => {
 
 describe('formFieldErrors', () => {
   it('maps too few bottles to its field', () => {
-    expect(fieldErrorsOf(makeFormInput({ bottlesEstimated: 29 }))).toEqual({
+    expect(fieldErrorsOf(makeFormInput({ bottlesEstimated: 19 }))).toEqual({
       bottlesEstimated: ORDER_FORM_ERRORS.bottlesTooFew,
     });
   });

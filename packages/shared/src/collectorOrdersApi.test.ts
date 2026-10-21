@@ -308,8 +308,8 @@ describe('updateOrderRequestSchema', () => {
     });
   });
 
-  it('rejects fewer than 30 bottles with the form message', () => {
-    expect(updateIssuesOf({ bottlesEstimated: 29 })).toEqual([
+  it('rejects fewer than 20 bottles with the form message', () => {
+    expect(updateIssuesOf({ bottlesEstimated: 19 })).toEqual([
       `bottlesEstimated: ${ORDER_FORM_ERRORS.bottlesTooFew}`,
     ]);
   });

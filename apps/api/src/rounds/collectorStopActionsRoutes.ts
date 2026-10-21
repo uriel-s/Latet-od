@@ -173,7 +173,7 @@ export function createCollectorStopActionsRouter(
       orderId,
       {
         status: 'collected',
-        // Below the 30-bottle minimum is fine: that is a booking rule, not a count.
+        // Below the 20-bottle minimum is fine: that is a booking rule, not a count.
         bottlesCollected: request.bottlesCollected ?? order.bottlesEstimated,
         collectedAt: now,
         updatedAt: new Date(now),
