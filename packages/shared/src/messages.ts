@@ -36,6 +36,8 @@ export interface MessageVars {
   date?: string;
   /** Time to put the bottles out by, `HH:MM` ({@link pickupTimeSchema}). `confirmRequest` only. */
   pickupBy?: string;
+  /** Start of the pickup window, `HH:MM`; needs `pickupBy` (the end). `confirmRequest` only. */
+  pickupFrom?: string;
 }
 
 /**
@@ -72,12 +74,23 @@ function confirmRequestLines(vars: MessageVars, personalText: string | undefined
   if (vars.pickupBy !== undefined && !pickupTimeSchema.safeParse(vars.pickupBy).success) {
     throw new RangeError('renderMessage: expected pickupBy as HH:MM');
   }
+  if (vars.pickupFrom !== undefined) {
+    if (!pickupTimeSchema.safeParse(vars.pickupFrom).success) {
+      throw new RangeError('renderMessage: expected pickupFrom as HH:MM');
+    }
+    // A window needs both ends; a lone start would read as half a sentence.
+    if (vars.pickupBy === undefined) {
+      throw new RangeError('renderMessage: pickupFrom needs pickupBy');
+    }
+  }
   const lines = [
     `שלום ${vars.name.trim()},`,
     // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD.
     `ב-${formatDayMonth(vars.date)} נעבור לאסוף את הבקבוקים שלכם.`,
   ];
-  if (vars.pickupBy !== undefined) {
+  if (vars.pickupBy !== undefined && vars.pickupFrom !== undefined) {
+    lines.push(`נא להוציא את הבקבוקים בין השעות ${vars.pickupFrom} ל-${vars.pickupBy}.`);
+  } else if (vars.pickupBy !== undefined) {
     lines.push(`נא להוציא את הבקבוקים עד השעה ${vars.pickupBy}.`);
   }
   // A personal text that is only spaces is as good as none: no blank line in the message.
@@ -108,7 +121,7 @@ function thankYouLines(vars: MessageVars): string[] {
  *   `pickupBy` and `personalText`: the personal text belongs to the confirmation request only.
  *
  * @throws RangeError when `confirmRequest` has no `date`, a `date` that is not a real
- *   `YYYY-MM-DD`, or a `pickupBy` that is not `HH:MM`. The message never contains the value: it
+ *   `YYYY-MM-DD`, or a `pickupBy` or `pickupFrom` that is not `HH:MM`, or a `pickupFrom` without `pickupBy`. The message never contains the value: it
  *   may reach the logs.
  */
 export function renderMessage(kind: MessageKind, vars: MessageVars, personalText?: string): string {

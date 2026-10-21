@@ -104,6 +104,30 @@ describe('renderMessage', () => {
       expect(text.split('\n')).toHaveLength(6);
     });
 
+    it('words the pickup time as a window when pickupFrom is given', () => {
+      const text = renderMessage(
+        'confirmRequest',
+        makeVars({ pickupFrom: '07:00', pickupBy: '08:30' }),
+      );
+      expect(text.split('\n')).toContain('נא להוציא את הבקבוקים בין השעות 07:00 ל-08:30.');
+      expect(text).not.toContain('עד השעה');
+    });
+
+    it('throws a RangeError for a malformed pickupFrom or one without pickupBy, without the value', () => {
+      for (const pickupFrom of ['7:00', '24:00', '']) {
+        const error = errorOf(() =>
+          renderMessage('confirmRequest', makeVars({ pickupFrom, pickupBy: '08:30' })),
+        );
+        expect(error, pickupFrom).toBeInstanceOf(RangeError);
+        if (pickupFrom !== '') expect(error.message, pickupFrom).not.toContain(pickupFrom);
+      }
+      const lone = errorOf(() =>
+        renderMessage('confirmRequest', makeVars({ pickupFrom: '07:00' })),
+      );
+      expect(lone).toBeInstanceOf(RangeError);
+      expect(lone.message).not.toContain('07:00');
+    });
+
     it('shows the round date as DD/MM', () => {
       expect(renderMessage('confirmRequest', makeVars({ date: '2027-01-09' }))).toContain(
         'ב-09/01 ',

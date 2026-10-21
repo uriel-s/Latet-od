@@ -167,6 +167,47 @@ describe('planRoundRequestSchema', () => {
     });
   });
 
+  describe('pickup window (pickupFrom + pickupBy)', () => {
+    it('accepts a start before the end and keeps both', () => {
+      const plan = planRoundRequestSchema.parse(makeRequest({ pickupFrom: '07:00' }));
+      expect(plan.pickupFrom).toBe('07:00');
+      expect(plan.pickupBy).toBe('08:00');
+    });
+
+    it('drops an empty pickupFrom, like an empty pickupBy', () => {
+      const plan = planRoundRequestSchema.parse(makeRequest({ pickupFrom: '' }));
+      expect(plan.pickupFrom).toBeUndefined();
+      expect(JSON.parse(JSON.stringify(plan))).not.toHaveProperty('pickupFrom');
+    });
+
+    it('refuses a start without an end, on the pickupBy field', () => {
+      expect(errorsOf(makeRequest({ pickupFrom: '07:00', pickupBy: '' }))).toEqual({
+        pickupBy: ERR.pickupUntilMissing,
+      });
+      expect(ERR.pickupUntilMissing).toBe('נא לכתוב גם שעת סיום');
+    });
+
+    it('refuses a start after the end, on the pickupFrom field', () => {
+      expect(errorsOf(makeRequest({ pickupFrom: '09:00' }))).toEqual({
+        pickupFrom: ERR.pickupFromNotBeforeBy,
+      });
+    });
+
+    it('refuses a start equal to the end', () => {
+      expect(errorsOf(makeRequest({ pickupFrom: '08:00' }))).toEqual({
+        pickupFrom: ERR.pickupFromNotBeforeBy,
+      });
+    });
+
+    it('refuses a pickupFrom that is not HH:MM, in Hebrew', () => {
+      for (const pickupFrom of ['7:00', '24:00', '07:60', 'בבוקר', '07:00:00']) {
+        expect(errorsOf(makeRequest({ pickupFrom })), pickupFrom).toEqual({
+          pickupFrom: ERR.pickupFromInvalid,
+        });
+      }
+    });
+  });
+
   it('refuses a pickupBy that is not HH:MM, in Hebrew', () => {
     for (const pickupBy of ['8:00', '24:00', '08:60', 'בבוקר', '08:00:00']) {
       expect(errorsOf(makeRequest({ pickupBy })), pickupBy).toEqual({

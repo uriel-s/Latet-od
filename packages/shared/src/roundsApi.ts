@@ -33,6 +33,10 @@ export const ROUND_PLAN_ERRORS = {
   tooManyOrders: `אפשר לסמן עד ${MAX_ROUND_ORDERS} הזמנות בסבב`,
   duplicateOrders: 'אותה הזמנה סומנה פעמיים',
   pickupByInvalid: 'נא לכתוב שעה, למשל 08:00',
+  pickupFromInvalid: 'נא לכתוב שעה, למשל 07:00',
+  // Shown on the END field: that is the one still missing when only a start was typed.
+  pickupUntilMissing: 'נא לכתוב גם שעת סיום',
+  pickupFromNotBeforeBy: 'שעת ההתחלה צריכה להיות לפני שעת הסיום',
   personalTextTooLong: 'הטקסט ארוך מדי',
 } as const;
 
@@ -70,6 +74,15 @@ const pickupByInputSchema = z
   .transform((time) => (time === '' ? undefined : time))
   .optional();
 
+/** Same as {@link pickupByInputSchema}, for the window's start: '' is absent. */
+const pickupFromInputSchema = z
+  .string({ error: ERR.pickupFromInvalid })
+  .refine((time) => time === '' || pickupTimeSchema.safeParse(time).success, {
+    error: ERR.pickupFromInvalid,
+  })
+  .transform((time) => (time === '' ? undefined : time))
+  .optional();
+
 /**
  * Body of POST /api/collector/rounds: "שלח בקשות אישור" on the planning screen (spec §3.5). A
  * date, a region, and the order ids Yoel left marked; optionally his personal text and the pickup
@@ -80,25 +93,40 @@ const pickupByInputSchema = z
  * phase `confirming`), moves the orders to `pending` with its `roundId`, and sends each one a
  * `confirmRequest`.
  *
- * Output: `personalText` trimmed, `personalText` and `pickupBy` undefined when left empty (the
- * Mongo client is set to `ignoreUndefined`, so they are not stored).
+ * `pickupFrom` (optional) starts the pickup window that `pickupBy` ends. A start without an end
+ * is refused on `pickupBy` (the missing one); a start at or after the end is refused on
+ * `pickupFrom`. HH:MM strings of one day compare correctly as text.
+ *
+ * Output: `personalText` trimmed; `personalText`, `pickupFrom` and `pickupBy` undefined when left
+ * empty (the Mongo client is set to `ignoreUndefined`, so they are not stored).
  */
-export const planRoundRequestSchema = z.strictObject({
-  /** The round's calendar day in Israel, `YYYY-MM-DD`, as an `<input type="date">` sends it. */
-  date: z.iso.date({ error: ERR.dateRequired }),
-  region: z.enum(regionSchema.options, { error: ERR.regionRequired }),
-  orderIds: z
-    .array(z.string().min(1), { error: ERR.noOrders })
-    .min(1, ERR.noOrders)
-    // spec §1: a round of more than 25 stops is out of the MVP.
-    .max(MAX_ROUND_ORDERS, ERR.tooManyOrders)
-    // A duplicate would send the same customer two confirmation requests.
-    .refine((orderIds) => new Set(orderIds).size === orderIds.length, {
-      error: ERR.duplicateOrders,
-    }),
-  personalText: personalTextInputSchema,
-  pickupBy: pickupByInputSchema,
-});
+export const planRoundRequestSchema = z
+  .strictObject({
+    /** The round's calendar day in Israel, `YYYY-MM-DD`, as an `<input type="date">` sends it. */
+    date: z.iso.date({ error: ERR.dateRequired }),
+    region: z.enum(regionSchema.options, { error: ERR.regionRequired }),
+    orderIds: z
+      .array(z.string().min(1), { error: ERR.noOrders })
+      .min(1, ERR.noOrders)
+      // spec §1: a round of more than 25 stops is out of the MVP.
+      .max(MAX_ROUND_ORDERS, ERR.tooManyOrders)
+      // A duplicate would send the same customer two confirmation requests.
+      .refine((orderIds) => new Set(orderIds).size === orderIds.length, {
+        error: ERR.duplicateOrders,
+      }),
+    personalText: personalTextInputSchema,
+    pickupBy: pickupByInputSchema,
+    pickupFrom: pickupFromInputSchema,
+  })
+  .superRefine((plan, ctx) => {
+    // zod skips this when a field is already invalid, so both times here are well-formed or absent.
+    if (plan.pickupFrom === undefined) return;
+    if (plan.pickupBy === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['pickupBy'], message: ERR.pickupUntilMissing });
+    } else if (plan.pickupFrom >= plan.pickupBy) {
+      ctx.addIssue({ code: 'custom', path: ['pickupFrom'], message: ERR.pickupFromNotBeforeBy });
+    }
+  });
 
 /** What the planning screen sends: the fields as typed, '' for an empty optional field. */
 export type PlanRoundRequest = z.input<typeof planRoundRequestSchema>;
@@ -137,6 +165,7 @@ export const collectorRoundSchema = roundSchema.pick({
   phase: true,
   personalText: true,
   pickupBy: true,
+  pickupFrom: true,
   createdAt: true,
   closedAt: true,
 });
@@ -231,6 +260,8 @@ export const roundsResponseSchema = z.object({
    * "עד איזו שעה להוציא את הבקבוקים" with it (ADR-0003). Absent when that round had none.
    */
   previousPickupBy: pickupTimeSchema.optional(),
+  /** `pickupFrom` of that same round, pre-filled the same way; absent when it had none. */
+  previousPickupFrom: pickupTimeSchema.optional(),
 });
 export type RoundsResponse = z.infer<typeof roundsResponseSchema>;
 
@@ -442,7 +473,7 @@ export const ROUND_MESSAGES = {
 
 /**
  * 400 from POST /api/collector/rounds: the plan did not validate. `fieldErrors` maps a field
- * (`date`, `region`, `orderIds`, `personalText`, `pickupBy`) to its first plain-Hebrew message
+ * (`date`, `region`, `orderIds`, `personalText`, `pickupBy`, `pickupFrom`) to its first plain-Hebrew message
  * from {@link ROUND_PLAN_ERRORS}, built with orderApi.ts's `formFieldErrors`.
  */
 export interface InvalidRoundErrorBody {

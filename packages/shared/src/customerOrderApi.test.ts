@@ -126,6 +126,20 @@ describe('toCustomerOrder', () => {
     }
   });
 
+  it('gives the pickup window start too when the round has one', () => {
+    const customerOrder = toCustomerOrder(makeOrder(), makeRound({ pickupFrom: '07:00' }));
+    expect(customerOrder.round).toStrictEqual({
+      date: '2026-11-05',
+      pickupBy: '08:00',
+      pickupFrom: '07:00',
+    });
+    expect(Object.keys(customerOrder.round ?? {}).sort()).toEqual([
+      'date',
+      'pickupBy',
+      'pickupFrom',
+    ]);
+  });
+
   it('leaves pickupBy out when the round has none', () => {
     const round = makeRound();
     delete round.pickupBy;
