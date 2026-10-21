@@ -310,16 +310,16 @@ describe('nextStopToCollect', () => {
 });
 
 describe('googleMapsRouteUrl', () => {
-  /** The decoded waypoints of a link, as the list of address texts. */
-  function waypointsOf(url: string): string[] {
-    return (new URL(url).searchParams.get('waypoints') ?? '').split('|');
+  /** The decoded places of a link: the stops, then the drop-off last. */
+  function placesOf(url: string): string[] {
+    const path = url.slice('https://www.google.com/maps/dir//'.length);
+    return path.split('/').map(decodeURIComponent);
   }
 
-  it('ends at the drop-off and travels by car', () => {
+  it('starts from the phone location and ends at the drop-off', () => {
     const url = googleMapsRouteUrl([stopOn('a', 'הרצל')]) ?? '';
-    expect(url.startsWith('https://www.google.com/maps/dir/?api=1&')).toBe(true);
-    expect(new URL(url).searchParams.get('destination')).toBe(DROP_OFF_ADDRESS);
-    expect(new URL(url).searchParams.get('travelmode')).toBe('driving');
+    expect(url.startsWith('https://www.google.com/maps/dir//')).toBe(true);
+    expect(placesOf(url).at(-1)).toBe(DROP_OFF_ADDRESS);
   });
 
   it('never has an origin, so the start stays private', () => {
@@ -329,7 +329,7 @@ describe('googleMapsRouteUrl', () => {
 
   it('adds the city to every address and keeps the stored order', () => {
     const url = googleMapsRouteUrl([stopOn('a', 'הרצל'), stopOn('b', 'הגפן')]) ?? '';
-    expect(waypointsOf(url)).toEqual(['הרצל 7, בית שמש', 'הגפן 7, בית שמש']);
+    expect(placesOf(url)).toEqual(['הרצל 7, בית שמש', 'הגפן 7, בית שמש', DROP_OFF_ADDRESS]);
   });
 
   it('leaves out handled stops', () => {
@@ -340,16 +340,16 @@ describe('googleMapsRouteUrl', () => {
         stopOn('c', 'הזית', 'cancelled'),
         stopOn('d', 'הנביאים'),
       ]) ?? '';
-    expect(waypointsOf(url)).toEqual(['הגפן 7, בית שמש', 'הנביאים 7, בית שמש']);
+    expect(placesOf(url)).toEqual(['הגפן 7, בית שמש', 'הנביאים 7, בית שמש', DROP_OFF_ADDRESS]);
   });
 
   it('keeps only the first 9 stops still to collect', () => {
     const stops = Array.from({ length: 11 }, (_, i) => stopOn(`o${i}`, `רחוב${i}`));
-    const waypoints = waypointsOf(googleMapsRouteUrl(stops) ?? '');
+    const stopsInLink = placesOf(googleMapsRouteUrl(stops) ?? '').slice(0, -1);
     expect(MAX_MAPS_WAYPOINTS).toBe(9);
-    expect(waypoints).toHaveLength(9);
-    expect(waypoints[0]).toBe('רחוב0 7, בית שמש');
-    expect(waypoints[8]).toBe('רחוב8 7, בית שמש');
+    expect(stopsInLink).toHaveLength(9);
+    expect(stopsInLink[0]).toBe('רחוב0 7, בית שמש');
+    expect(stopsInLink[8]).toBe('רחוב8 7, בית שמש');
   });
 
   it('counts the cap on stops still to collect, not on handled ones', () => {
@@ -357,14 +357,12 @@ describe('googleMapsRouteUrl', () => {
       stopOn('x', 'הרצל', 'collected'),
       ...Array.from({ length: 9 }, (_, i) => stopOn(`o${i}`, `רחוב${i}`)),
     ];
-    expect(waypointsOf(googleMapsRouteUrl(stops) ?? '')).toHaveLength(9);
+    expect(placesOf(googleMapsRouteUrl(stops) ?? '').slice(0, -1)).toHaveLength(9);
   });
 
-  it('encodes a street name with & or | instead of splitting the link', () => {
-    const url = googleMapsRouteUrl([stopOn('a', 'א&ב|ג')]) ?? '';
-    const rawWaypoints = /waypoints=([^&]*)/.exec(url)?.[1] ?? '';
-    expect(rawWaypoints.split('%7C')).toHaveLength(2);
-    expect(new URL(url).searchParams.get('travelmode')).toBe('driving');
+  it('encodes a street name with / or & instead of splitting the link', () => {
+    const url = googleMapsRouteUrl([stopOn('a', 'א/ב&ג')]) ?? '';
+    expect(placesOf(url)).toEqual(['א/ב&ג 7, בית שמש', DROP_OFF_ADDRESS]);
   });
 
   it('is undefined when no stop is left to collect', () => {
