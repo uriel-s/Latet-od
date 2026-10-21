@@ -104,7 +104,8 @@ const FIELD_BY_PATH: ReadonlyMap<string, OrderFormField> = new Map<string, Order
 /**
  * True when the bottles field holds a whole number of at least {@link MIN_BOTTLES}. The booking
  * form greys its send button until then. Only a hint for the customer: the schema still decides
- * what is valid, and its message shows when the button is tapped anyway.
+ * what is valid, and its message shows when the button is tapped anyway. It ignores the maximum:
+ * 6000 looks ready, and the "too many" message shows on the tap.
  */
 export function hasEnoughBottles(bottlesEstimated: string): boolean {
   return /^\d+$/.test(bottlesEstimated.trim()) && Number(bottlesEstimated) >= MIN_BOTTLES;

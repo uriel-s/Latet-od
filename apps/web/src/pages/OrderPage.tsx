@@ -82,7 +82,7 @@ export const LEFT_ROUND_MESSAGE = 'הכתובת עודכנה. ההזמנה יצ�
 export const PHONE_NOT_CHANGED_TEXT = 'את מספר הטלפון אי אפשר לשנות כאן.';
 
 // What the button really confirms: the customer puts the bottles out on the round's day (not "the
-// pickup", which Yoel does). With the round's date appended when the api sent one.
+// pickup", which Yoel does). ConfirmLabel appends the round's date when the api sent one.
 const CONFIRM_LABEL = 'כן, אוציא את הבקבוקים';
 const DECLINE_LABEL = 'לא מתאים הפעם';
 // A tap on "לא מתאים הפעם" sits just under the big "כן, אוציא את הבקבוקים" and takes the order out of the
@@ -435,13 +435,8 @@ export function OrderPage({
                   >
                     {busy === 'confirm' ? (
                       SENDING_LABEL
-                    ) : state.order.round === undefined ? (
-                      CONFIRM_LABEL
                     ) : (
-                      <>
-                        {CONFIRM_LABEL} ב-
-                        <bdi dir="ltr">{formatDayMonth(state.order.round.date)}</bdi>
-                      </>
+                      <ConfirmLabel round={state.order.round} />
                     )}
                   </button>
                   <CancelConfirm
@@ -648,6 +643,20 @@ function startNewOrder(order: CustomerOrder): void {
   navigate('/', {
     state: orderFormNavigationState({ contact: order.contact, address: order.address }),
   });
+}
+
+/**
+ * The confirm button's text: what is confirmed, and on which day. DD/MM reads left to right inside
+ * the right-to-left text (CLAUDE.md). A pending order whose round the api did not send gets the
+ * text without a day.
+ */
+function ConfirmLabel({ round }: { round: CustomerOrder['round'] }) {
+  if (round === undefined) return CONFIRM_LABEL;
+  return (
+    <>
+      {CONFIRM_LABEL} ב-<bdi dir="ltr">{formatDayMonth(round.date)}</bdi>
+    </>
+  );
 }
 
 /** The status in plain words, and what it means for the customer now (spec §3.3). */

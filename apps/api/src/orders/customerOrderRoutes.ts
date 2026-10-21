@@ -1,5 +1,5 @@
 // /api/o/:token: the api of the customer's own page `/o/<token>` (spec §3.3): read the order, the
-// page's three buttons: "מאשר/ת איסוף" (confirm), "לא מתאים הפעם" (decline) and "ביטול" (cancel),
+// page's three buttons: "כן, אוציא את הבקבוקים" (confirm), "לא מתאים הפעם" (decline) and "ביטול" (cancel),
 // and "שינוי" (PATCH: address, quantity, note; never the phone). Public: no login, and the order is
 // reached by its long random token only, never by its id. createApp mounts the router built here
 // before the /api 404 and NOT behind requireCollector. The shapes are the shared contract
@@ -95,7 +95,7 @@ const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
  * - 200, the order as it is. Writes NOTHING, whatever the status: WhatsApp's link preview sends a
  *   GET to every link in a message (spec §3.3), so a GET must never confirm or change anything.
  *
- * POST /:token/confirm — "מאשר/ת איסוף"; no body:
+ * POST /:token/confirm — "כן, אוציא את הבקבוקים"; no body:
  * - 200: `pending` in a round that is open and still `confirming` → now `confirmed`. Already
  *   `confirmed` → as it is, nothing written (a double tap; `updatedAt` keeps the first moment).
  * - 409 {@link ConfirmationsClosedErrorBody}: the order is not in a round that takes
@@ -243,7 +243,7 @@ export function createCustomerOrderRouter(deps: Pick<AppDeps, 'orders' | 'rounds
 }
 
 /**
- * "מאשר/ת איסוף": `pending` → `confirmed` while the order's round takes confirmations.
+ * "כן, אוציא את הבקבוקים": `pending` → `confirmed` while the order's round takes confirmations.
  * Already confirmed is a success (a double tap, or Yoel's "אישר בטלפון" came first); canTransition
  * says staying in a status is not a transition, so answering it is ours (orderStatus.ts).
  */
