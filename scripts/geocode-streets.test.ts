@@ -15,10 +15,12 @@ import {
   mergeStreetList,
   nominatimSearchUrls,
   parseNominatimResponse,
+  parsePointText,
   parseStreetList,
   recomputeRegions,
   regionForPoint,
   serializeStreetsFile,
+  setStreetPoint,
   streetNameVariants,
   todayInJerusalem,
   userAgentFor,
@@ -604,6 +606,57 @@ describe('recomputeRegions', () => {
   });
 });
 
+describe('parsePointText', () => {
+  it('reads "lat,lng" and "lat, lng" as openstreetmap.org shows it, rounded to 5 decimals', () => {
+    expect(parsePointText('31.7137912,35.0033849')).toEqual({ lat: 31.71379, lng: 35.00338 });
+    expect(parsePointText(' 31.71379, 35.00338 ')).toEqual({ lat: 31.71379, lng: 35.00338 });
+    expect(parsePointText('31.71379 35.00338')).toEqual({ lat: 31.71379, lng: 35.00338 });
+  });
+
+  it('refuses lat and lng the wrong way round, since that point is outside the city', () => {
+    expect(() => parsePointText('35.00338,31.71379')).toThrow(/outside Beit Shemesh/);
+  });
+
+  it("refuses a point in another city (a same-named street in Modi'in)", () => {
+    expect(() => parsePointText(`${MODIIN_POINT.lat},${MODIIN_POINT.lng}`)).toThrow(
+      /outside Beit Shemesh/,
+    );
+  });
+
+  it('refuses text that is not two numbers', () => {
+    for (const text of ['', '31.71379', '31.7,35.0,1', 'abc,def', '31.7;35.0']) {
+      expect(() => parsePointText(text), text).toThrow(/is not "<lat>,<lng>"/);
+    }
+  });
+});
+
+describe('setStreetPoint', () => {
+  it('sets the point and the region the point is in, keeping the file order', () => {
+    const file = makeFile([
+      { code: 1, name: 'א' },
+      { code: 2, name: 'ב' },
+    ]);
+    expect(setStreetPoint(file, 2, RAMAT_POINT).streets).toEqual([
+      { code: 1, name: 'א' },
+      { code: 2, name: 'ב', region: 'ramat', ...RAMAT_POINT },
+    ]);
+    expect(file.streets[1]).toEqual({ code: 2, name: 'ב' });
+  });
+
+  it('replaces a point the street already had, region included', () => {
+    const file = makeFile([{ code: 1, name: 'א', region: 'ramat', ...RAMAT_POINT }]);
+    expect(setStreetPoint(file, 1, CITY_CENTRE).streets).toEqual([
+      { code: 1, name: 'א', region: 'old', ...CITY_CENTRE },
+    ]);
+  });
+
+  it('throws for a code no street has', () => {
+    expect(() => setStreetPoint(makeFile([{ code: 1, name: 'א' }]), 9, RAMAT_POINT)).toThrow(
+      /no street has code 9/,
+    );
+  });
+});
+
 describe('serializeStreetsFile', () => {
   it('round-trips the committed streets.json byte for byte', async () => {
     const text = await fs.readFile(STREETS_FILE, 'utf8');
@@ -732,6 +785,87 @@ describe('with a temp directory', () => {
         { code: 2, name: 'ב' },
       ]);
       expect(logs).toContain('  without a point: 1');
+    });
+
+    it('--point sets one street by hand, without an email or any request', async () => {
+      const streetsFile = await tempStreetsFile(
+        makeFile([
+          { code: 1, name: 'א' },
+          { code: 2, name: 'ב' },
+        ]),
+      );
+      const network = forbiddenFetch();
+      const logs: string[] = [];
+
+      // "lat, lng" pasted with a space reaches argv as two arguments.
+      const exitCode = await main(
+        ['--point', '2', `${RAMAT_POINT.lat},`, `${RAMAT_POINT.lng}`],
+        {},
+        { streetsFile, fetch: network.fetch, log: (line) => logs.push(line), now: fixedNow },
+      );
+
+      expect(exitCode).toBe(0);
+      expect(network.urls).toEqual([]);
+      const written = streetsFileSchema.parse(JSON.parse(await fs.readFile(streetsFile, 'utf8')));
+      expect(written.updatedAt).toBe('2026-10-19');
+      expect(written.streets).toEqual([
+        { code: 1, name: 'א' },
+        { code: 2, name: 'ב', region: 'ramat', ...RAMAT_POINT },
+      ]);
+      expect(logs).toEqual([
+        `set: 2 "ב" ${RAMAT_POINT.lat},${RAMAT_POINT.lng} (ramat)`,
+        '1 streets still have no point',
+      ]);
+    });
+
+    it('--point returns 1 and leaves the file as it was for a point outside the city', async () => {
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const before = await fs.readFile(streetsFile, 'utf8');
+      const logs: string[] = [];
+
+      const exitCode = await main(
+        ['--point', '1', '34.98,31.74'],
+        {},
+        {
+          streetsFile,
+          log: (line) => logs.push(line),
+        },
+      );
+
+      expect(exitCode).toBe(1);
+      expect(await fs.readFile(streetsFile, 'utf8')).toBe(before);
+      expect(logs.join('\n')).toMatch(/outside Beit Shemesh[\s\S]*not changed/);
+    });
+
+    it('--point returns 1 for a code no street has', async () => {
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const logs: string[] = [];
+
+      const exitCode = await main(
+        ['--point', '9', '31.74,34.98'],
+        {},
+        {
+          streetsFile,
+          log: (line) => logs.push(line),
+        },
+      );
+
+      expect(exitCode).toBe(1);
+      expect(logs.join('\n')).toMatch(/no street has code 9/);
+    });
+
+    it('returns 2 for --point without a code or a point', async () => {
+      for (const argv of [['--point'], ['--point', '1'], ['--point', 'x', '31.74,34.98']]) {
+        const exitCode = await main(
+          argv,
+          {},
+          {
+            streetsFile: path.join(tempDir, 'missing.json'),
+            log: () => {},
+          },
+        );
+        expect(exitCode, argv.join(' ')).toBe(2);
+      }
     });
 
     it('returns 1 without NOMINATIM_EMAIL, makes no request and leaves the file as it was', async () => {
