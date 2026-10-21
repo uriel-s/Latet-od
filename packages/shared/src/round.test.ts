@@ -76,6 +76,19 @@ describe('roundSchema', () => {
     expect(roundSchema.parse(round)).toEqual(round);
   });
 
+  // Rounds stored before pickupFrom existed must keep loading (no migration).
+  it('accepts a round with pickupFrom, and one without it (an old round)', () => {
+    const withFrom = makeRound({ pickupFrom: '07:00' });
+    expect(roundSchema.parse(withFrom)).toEqual(withFrom);
+    expect(roundSchema.parse(makeRound()).pickupFrom).toBeUndefined();
+  });
+
+  it('rejects a pickupFrom that is not HH:MM', () => {
+    for (const pickupFrom of ['7:00', '24:00', '', '07:00:00']) {
+      expect(roundSchema.safeParse(makeRound({ pickupFrom })).success, pickupFrom).toBe(false);
+    }
+  });
+
   it('rejects a date that is not a real YYYY-MM-DD day', () => {
     for (const date of ['', '05/11/2026', '2026-11-5', '2026-02-30', '2026-11-05T00:00:00Z']) {
       expect(roundSchema.safeParse(makeRound({ date })).success, date).toBe(false);

@@ -82,6 +82,14 @@ export const roundSchema = z.object({
    */
   pickupBy: pickupTimeSchema.optional(),
   /**
+   * Start of the pickup window, `HH:MM`: with it the customer reads "between pickupFrom and
+   * pickupBy". `pickupBy` stays the END of the window (no rename, no migration), so a round stored
+   * before this field existed still parses and still reads "עד השעה pickupBy". It only makes sense
+   * with `pickupBy` and before it; the plan request checks that (roundsApi.ts), not this stored
+   * shape, so old or hand-edited data never fails to load and `.pick` keeps working.
+   */
+  pickupFrom: pickupTimeSchema.optional(),
+  /**
    * Every order put into the round, in plan order. It never shrinks when an order leaves the
    * round (its `roundId` goes, `lastMiss.roundId` points here), so the round's view still finds
    * who asked for another date.

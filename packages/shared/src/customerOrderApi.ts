@@ -37,7 +37,7 @@ import type { ConfirmationsClosedErrorBody } from './roundsApi.ts';
  * Yoel set one, the time to put the bottles out by (ADR-0003). Picked from the stored round's own
  * schema, so never its id, region, orders or stops: those would tell the customer about others.
  */
-const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true });
+const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, pickupFrom: true });
 
 /**
  * What the customer's own page sees of the order (spec §3.3). An allow-list, like
@@ -73,7 +73,7 @@ const ROUND_SHOWN_STATUSES: readonly OrderStatus[] = ['pending', 'confirmed'];
 /**
  * A stored order as its customer's page gets it: only the fields of {@link customerOrderSchema}.
  *
- * `round` is the given round's date and `pickupBy`, set only when the order is still in that
+ * `round` is the given round's date, `pickupBy` and `pickupFrom`, set only when the order is still in that
  * round (`order.roundId === round.id`) and its status is `pending` or `confirmed`. Otherwise the
  * key is absent, not `undefined`. The api passes the round it looked up by `order.roundId`, or
  * nothing when the order has none; checking the id here as well means a wrong round is never
@@ -85,7 +85,7 @@ export function toCustomerOrder(order: Order, round: Round | null | undefined): 
     round !== undefined &&
     order.roundId === round.id &&
     ROUND_SHOWN_STATUSES.includes(order.status);
-  // The whole round goes in, and the schema keeps only its date and pickupBy. Without the round,
+  // The whole round goes in, and the schema keeps only its date, pickupBy and pickupFrom. Without the round,
   // the order alone: a `round: undefined` key would survive the parse, since zod keeps a key that
   // is present.
   return customerOrderSchema.parse(showsRound ? { ...order, round } : order);
