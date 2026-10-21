@@ -68,7 +68,9 @@ export type BottlesSpot = z.infer<typeof bottlesSpotSchema>;
 /** The form's answers to "איפה הבקבוקים", as the customer and Yoel see them. */
 export const BOTTLES_SPOT_LABELS: Readonly<Record<BottlesSpot, string>> = {
   privateHouse: 'בכניסה לבית פרטי',
-  apartmentDoor: 'ליד דלת הדירה',
+  // "בבניין" first: in the form this sits between a private house and the building's entrance,
+  // and the customer must see that this one is for a flat inside a building.
+  apartmentDoor: 'בבניין - ליד דלת הדירה',
   buildingEntrance: 'למטה בכניסה לבניין',
 };
 

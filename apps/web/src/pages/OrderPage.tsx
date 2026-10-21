@@ -1,6 +1,6 @@
 // The customer's own page `/o/<token>` (spec §3.3), reached from the thank-you screen and from the
 // links in Yoel's WhatsApp messages, by the order's random token only. It loads the order (api.ts,
-// GET /api/o/:token) and draws what fits its status: the round's date and a big "מאשר/ת איסוף"
+// GET /api/o/:token) and draws what fits its status: the round's date and a big "כן, אוציא את הבקבוקים"
 // while a confirmation is asked for, "נתראה ב-<תאריך>" once confirmed, thanks and "הזמנה חדשה עם
 // אותם פרטים" once collected or cancelled, and, while the order is open, "שינוי" (the booking
 // form's fields without the contact: address, note and bottles, never the phone) and "ביטול
@@ -81,9 +81,11 @@ export const LEFT_ROUND_MESSAGE = 'הכתובת עודכנה. ההזמנה יצ�
 /** Above the change form's fields: why the phone is not among them (spec §3.3). */
 export const PHONE_NOT_CHANGED_TEXT = 'את מספר הטלפון אי אפשר לשנות כאן.';
 
-const CONFIRM_LABEL = 'מאשר/ת איסוף';
+// What the button really confirms: the customer puts the bottles out on the round's day (not "the
+// pickup", which Yoel does). ConfirmLabel appends the round's date when the api sent one.
+const CONFIRM_LABEL = 'כן, אוציא את הבקבוקים';
 const DECLINE_LABEL = 'לא מתאים הפעם';
-// A tap on "לא מתאים הפעם" sits just under the big "מאשר/ת איסוף" and takes the order out of the
+// A tap on "לא מתאים הפעם" sits just under the big "כן, אוציא את הבקבוקים" and takes the order out of the
 // round, so it asks first (elderly customers mis-tap).
 const DECLINE_QUESTION = 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.';
 const CONFIRM_DECLINE_LABEL = 'כן, לא מתאים';
@@ -115,7 +117,7 @@ export interface OrderPageProps {
    * identity across renders (a module function, not an inline arrow): a new one loads again.
    */
   loadOrder?: (token: string) => Promise<CustomerOrderOutcome>;
-  /** "מאשר/ת איסוף". Defaults to {@link confirmCustomerOrder}; tests pass a fake. */
+  /** The confirm button. Defaults to {@link confirmCustomerOrder}; tests pass a fake. */
   confirmOrder?: SendAction;
   /** "לא מתאים הפעם". Defaults to {@link declineCustomerOrder}; tests pass a fake. */
   declineOrder?: SendAction;
@@ -431,7 +433,11 @@ export function OrderPage({
                     aria-disabled={busy !== null ? true : undefined}
                     onClick={() => void press('confirm', confirmOrder)}
                   >
-                    {busy === 'confirm' ? SENDING_LABEL : CONFIRM_LABEL}
+                    {busy === 'confirm' ? (
+                      SENDING_LABEL
+                    ) : (
+                      <ConfirmLabel round={state.order.round} />
+                    )}
                   </button>
                   <CancelConfirm
                     inline
@@ -637,6 +643,20 @@ function startNewOrder(order: CustomerOrder): void {
   navigate('/', {
     state: orderFormNavigationState({ contact: order.contact, address: order.address }),
   });
+}
+
+/**
+ * The confirm button's text: what is confirmed, and on which day. DD/MM reads left to right inside
+ * the right-to-left text (CLAUDE.md). A pending order whose round the api did not send gets the
+ * text without a day.
+ */
+function ConfirmLabel({ round }: { round: CustomerOrder['round'] }) {
+  if (round === undefined) return CONFIRM_LABEL;
+  return (
+    <>
+      {CONFIRM_LABEL} ב-<bdi dir="ltr">{formatDayMonth(round.date)}</bdi>
+    </>
+  );
 }
 
 /** The status in plain words, and what it means for the customer now (spec §3.3). */

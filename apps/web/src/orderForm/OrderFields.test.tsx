@@ -65,7 +65,7 @@ describe('OrderFields', () => {
     expect(input('מספר בית').value).toBe('12א');
     expect(screen.getByRole('group', { name: 'איפה הבקבוקים' })).toBeDefined();
     expect(input('בכניסה לבית פרטי').checked).toBe(true);
-    expect(input('ליד דלת הדירה').checked).toBe(false);
+    expect(input('בבניין - ליד דלת הדירה').checked).toBe(false);
     expect(input('הערה (לא חובה)').value).toBe('ליד השער');
     expect(input('כמות בקבוקים').value).toBe('45');
   });
@@ -86,7 +86,7 @@ describe('OrderFields', () => {
   it('shows the floor and apartment, with its hint, for the apartment door', () => {
     renderFields(makeValues({ bottlesSpot: 'apartmentDoor', floorApt: 'קומה 3, דירה 12' }));
 
-    expect(input('ליד דלת הדירה').checked).toBe(true);
+    expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
     expect(input('קומה ודירה').value).toBe('קומה 3, דירה 12');
     expect(descriptionOf(input('קומה ודירה'))).toBe("למשל: כניסה ב', קומה 3, דירה 12");
   });
@@ -179,7 +179,7 @@ describe('OrderFields', () => {
 
       expect(input('רחוב').value).toBe('דרך רבין יצחק');
       expect(input('מספר בית').value).toBe('12א');
-      expect(input('ליד דלת הדירה').checked).toBe(true);
+      expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
       expect(input('קומה ודירה').value).toBe('קומה 3');
       expect(input('הערה (לא חובה)').value).toBe('ליד השער');
       expect(input('כמות בקבוקים').value).toBe('45');
