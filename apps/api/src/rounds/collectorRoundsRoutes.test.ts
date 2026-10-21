@@ -496,6 +496,35 @@ describe('POST /api/collector/rounds: "תכנון סבב" and "שלח בקשות
     for (const order of planned) expect(res.text).not.toContain(order.token);
   });
 
+  it('stores a pickup window and says it in every confirmation request', async () => {
+    const order = await seed();
+
+    const res = await plan(planBody([order.id], { pickupFrom: '07:00' }));
+
+    expect(res.status).toBe(201);
+    const round = await onlyRound();
+    expect(round.pickupFrom).toBe('07:00');
+    expect(round.pickupBy).toBe(PICKUP_BY);
+    expect(viewOf(res).round.pickupFrom).toBe('07:00');
+    expect(sender.sent).toHaveLength(1);
+    expect(sender.sent[0]?.vars).toStrictEqual({
+      name: order.contact.name,
+      link: `${FAKE_PUBLIC_BASE_URL}/o/${order.token}`,
+      date: DATE,
+      pickupFrom: '07:00',
+      pickupBy: PICKUP_BY,
+    });
+  });
+
+  it('leaves pickupFrom out of the round and the messages when none is given', async () => {
+    const order = await seed();
+
+    await plan(planBody([order.id]));
+
+    expect(await onlyRound()).not.toHaveProperty('pickupFrom');
+    expect(sender.sent[0]?.vars).not.toHaveProperty('pickupFrom');
+  });
+
   it('leaves out a personal text and a pickup time left empty: not stored, not in the messages', async () => {
     const order = await seed();
 
@@ -591,6 +620,22 @@ describe('POST /api/collector/rounds: "תכנון סבב" and "שלח בקשות
       label: 'a pickup time that is not HH:MM',
       body: { date: DATE, region: 'ramat', orderIds: ['x'], pickupBy: '8am' },
       fieldErrors: { pickupBy: ROUND_PLAN_ERRORS.pickupByInvalid },
+    },
+    {
+      label: 'a window start without an end',
+      body: { date: DATE, region: 'ramat', orderIds: ['x'], pickupFrom: '07:00' },
+      fieldErrors: { pickupBy: ROUND_PLAN_ERRORS.pickupUntilMissing },
+    },
+    {
+      label: 'a window that starts at or after its end',
+      body: {
+        date: DATE,
+        region: 'ramat',
+        orderIds: ['x'],
+        pickupFrom: '08:00',
+        pickupBy: '08:00',
+      },
+      fieldErrors: { pickupFrom: ROUND_PLAN_ERRORS.pickupFromNotBeforeBy },
     },
     {
       label: 'an unknown key',
@@ -818,6 +863,20 @@ describe('GET /api/collector/rounds: the "סבבים" tab', () => {
 
     expect(res.status).toBe(200);
     expect(roundsResponseSchema.parse(res.body).previousPickupBy).toBe('07:30');
+  });
+
+  it('answers previousPickupFrom from the round created last, and leaves it out for an old round', async () => {
+    await seedRound({
+      pickupFrom: '07:00',
+      pickupBy: '08:00',
+      createdAt: new Date('2026-11-01T10:00:00.000Z'),
+    });
+    expect(roundsResponseSchema.parse((await getRounds()).body).previousPickupFrom).toBe('07:00');
+
+    await seedRound({ pickupBy: '08:00', createdAt: new Date('2026-11-05T10:00:00.000Z') });
+    const res = await getRounds();
+    expect(res.body).not.toHaveProperty('previousPickupFrom');
+    expect(res.body).toHaveProperty('previousPickupBy', '08:00');
   });
 
   it('leaves previousPickupBy out when the round created last had none', async () => {

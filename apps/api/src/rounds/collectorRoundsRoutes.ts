@@ -60,7 +60,8 @@ import {
  *
  * GET / — the "סבבים" tab:
  * - 200 {@link RoundsResponse}: every OPEN round's view, by date, then by when it was created; and
- *   `previousPickupBy`, the `pickupBy` of the round created last (any status), when it had one.
+ *   `previousPickupBy` and `previousPickupFrom`, the `pickupBy` and `pickupFrom` of the round
+ *   created last (any status), each when it had one.
  *
  * GET /:id — one round, whatever its status:
  * - 200 {@link RoundView}.
@@ -214,6 +215,7 @@ export function createCollectorRoundsRouter(
     const body: RoundsResponse = {
       rounds: views,
       ...(latest?.pickupBy === undefined ? {} : { previousPickupBy: latest.pickupBy }),
+      ...(latest?.pickupFrom === undefined ? {} : { previousPickupFrom: latest.pickupFrom }),
     };
     res.json(body);
   });
@@ -412,6 +414,7 @@ function newRoundFromPlan(plan: PlanRound, now: Date): NewRound {
     status: 'open',
     phase: 'confirming',
     ...(plan.personalText === undefined ? {} : { personalText: plan.personalText }),
+    ...(plan.pickupFrom === undefined ? {} : { pickupFrom: plan.pickupFrom }),
     ...(plan.pickupBy === undefined ? {} : { pickupBy: plan.pickupBy }),
     orderIds: [...plan.orderIds],
     stops: [],
@@ -427,6 +430,7 @@ function confirmRequestOptions(round: Round, publicBaseUrl: string): OrderMessag
   return {
     publicBaseUrl,
     date: round.date,
+    ...(round.pickupFrom === undefined ? {} : { pickupFrom: round.pickupFrom }),
     ...(round.pickupBy === undefined ? {} : { pickupBy: round.pickupBy }),
     ...(round.personalText === undefined ? {} : { personalText: round.personalText }),
   };
