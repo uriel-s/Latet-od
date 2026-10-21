@@ -162,7 +162,7 @@ describe('AddOrderScreen', () => {
 
     fillValidForm();
     typeInto('טלפון נייד', '123');
-    typeInto('כמות בקבוקים', '29');
+    typeInto('כמות בקבוקים', '19');
     save();
 
     expect(requests).toEqual([]);

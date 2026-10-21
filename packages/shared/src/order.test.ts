@@ -144,9 +144,9 @@ describe('orderSchema', () => {
     }
   });
 
-  it('rejects fewer than 30 bottles', () => {
-    expect(orderSchema.safeParse(makeOrder({ bottlesEstimated: 29 })).success).toBe(false);
-    expect(orderSchema.safeParse(makeOrder({ bottlesEstimated: 30 })).success).toBe(true);
+  it('rejects fewer than 20 bottles', () => {
+    expect(orderSchema.safeParse(makeOrder({ bottlesEstimated: 19 })).success).toBe(false);
+    expect(orderSchema.safeParse(makeOrder({ bottlesEstimated: 20 })).success).toBe(true);
   });
 
   it('rejects an unknown status', () => {
@@ -283,10 +283,10 @@ describe('orderFormSchema', () => {
     }
   });
 
-  it('rejects fewer than 30 bottles with a Hebrew message on the field', () => {
-    const error = formError(makeFormInput({ bottlesEstimated: 29 }));
-    expect(messagesAt(error, ['bottlesEstimated'])).toEqual(['צריך לפחות 30 בקבוקים']);
-    expect(parseForm(makeFormInput({ bottlesEstimated: 30 })).bottlesEstimated).toBe(30);
+  it('rejects fewer than 20 bottles with a Hebrew message on the field', () => {
+    const error = formError(makeFormInput({ bottlesEstimated: 19 }));
+    expect(messagesAt(error, ['bottlesEstimated'])).toEqual(['צריך לפחות 20 בקבוקים']);
+    expect(parseForm(makeFormInput({ bottlesEstimated: 20 })).bottlesEstimated).toBe(20);
   });
 
   it('rejects a typo far above any real order', () => {

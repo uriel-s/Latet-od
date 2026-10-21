@@ -1049,11 +1049,11 @@ describe('PATCH /api/o/:token: refused changes', () => {
     },
   );
 
-  it("answers 400 with the form's message next to the field for fewer than 30 bottles", async () => {
+  it("answers 400 with the form's message next to the field for fewer than 20 bottles", async () => {
     const order = await seed();
     const before = await storedState();
 
-    const res = await patchOrder(order.token, { bottlesEstimated: '29' });
+    const res = await patchOrder(order.token, { bottlesEstimated: '19' });
 
     expect(res.status).toBe(400);
     expect(res.body).toStrictEqual({

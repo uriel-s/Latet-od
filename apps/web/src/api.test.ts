@@ -156,13 +156,13 @@ describe('createOrder', () => {
       status: 400,
       body: {
         error: 'invalid_order',
-        fieldErrors: { bottlesEstimated: 'צריך לפחות 30 בקבוקים', 'address.streetCode': 'x' },
+        fieldErrors: { bottlesEstimated: 'צריך לפחות 20 בקבוקים', 'address.streetCode': 'x' },
       },
     });
 
     expect(await createOrder(REQUEST, fetchFn)).toEqual({
       kind: 'invalid',
-      errors: { byField: { bottlesEstimated: 'צריך לפחות 30 בקבוקים', street: 'x' } },
+      errors: { byField: { bottlesEstimated: 'צריך לפחות 20 בקבוקים', street: 'x' } },
     });
   });
 
@@ -2244,13 +2244,13 @@ describe.each(CUSTOMER_WRITES)('$name answers', ({ write }) => {
       status: 400,
       body: {
         error: 'invalid_order',
-        fieldErrors: { bottlesEstimated: 'צריך לפחות 30 בקבוקים', 'address.houseNumber': 'x' },
+        fieldErrors: { bottlesEstimated: 'צריך לפחות 20 בקבוקים', 'address.houseNumber': 'x' },
       },
     });
 
     expect(await write(fetchFn)).toEqual({
       kind: 'invalid',
-      errors: { byField: { bottlesEstimated: 'צריך לפחות 30 בקבוקים', houseNumber: 'x' } },
+      errors: { byField: { bottlesEstimated: 'צריך לפחות 20 בקבוקים', houseNumber: 'x' } },
     });
   });
 

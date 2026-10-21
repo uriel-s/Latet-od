@@ -389,7 +389,7 @@ export const COLLECT_STOP_ERRORS = {
  *
  * `bottlesCollected` is how many bottles Yoel really took: a JSON number, a whole one from 1 up
  * to {@link MAX_BOTTLES} (a string such as "40", 0, a negative or a fraction is refused). Below
- * MIN_BOTTLES (30) IS allowed: the minimum is a booking rule, and the real count can be lower than
+ * MIN_BOTTLES (20) IS allowed: the minimum is a booking rule, and the real count can be lower than
  * the customer's estimate. Absent means the order's `bottlesEstimated`, which the api fills in.
  * The api treats a missing body (Express 5 leaves `req.body` undefined) like `{}`.
  *
