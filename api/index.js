@@ -20995,12 +20995,22 @@ function confirmRequestLines(vars, personalText) {
   if (vars.pickupBy !== void 0 && !pickupTimeSchema.safeParse(vars.pickupBy).success) {
     throw new RangeError("renderMessage: expected pickupBy as HH:MM");
   }
+  if (vars.pickupFrom !== void 0) {
+    if (!pickupTimeSchema.safeParse(vars.pickupFrom).success) {
+      throw new RangeError("renderMessage: expected pickupFrom as HH:MM");
+    }
+    if (vars.pickupBy === void 0) {
+      throw new RangeError("renderMessage: pickupFrom needs pickupBy");
+    }
+  }
   const lines = [
     `\u05E9\u05DC\u05D5\u05DD ${vars.name.trim()},`,
     // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD.
     `\u05D1-${formatDayMonth(vars.date)} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.`
   ];
-  if (vars.pickupBy !== void 0) {
+  if (vars.pickupBy !== void 0 && vars.pickupFrom !== void 0) {
+    lines.push(`\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA ${vars.pickupFrom} \u05DC-${vars.pickupBy}.`);
+  } else if (vars.pickupBy !== void 0) {
     lines.push(`\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 ${vars.pickupBy}.`);
   }
   const personal = personalText?.trim() ?? "";
@@ -21085,6 +21095,14 @@ var roundSchema = external_exports.object({
    */
   pickupBy: pickupTimeSchema.optional(),
   /**
+   * Start of the pickup window, `HH:MM`: with it the customer reads "between pickupFrom and
+   * pickupBy". `pickupBy` stays the END of the window (no rename, no migration), so a round stored
+   * before this field existed still parses and still reads "עד השעה pickupBy". It only makes sense
+   * with `pickupBy` and before it; the plan request checks that (roundsApi.ts), not this stored
+   * shape, so old or hand-edited data never fails to load and `.pick` keeps working.
+   */
+  pickupFrom: pickupTimeSchema.optional(),
+  /**
    * Every order put into the round, in plan order. It never shrinks when an order leaves the
    * round (its `roundId` goes, `lastMiss.roundId` points here), so the round's view still finds
    * who asked for another date.
@@ -21111,6 +21129,10 @@ var ROUND_PLAN_ERRORS = {
   tooManyOrders: `\u05D0\u05E4\u05E9\u05E8 \u05DC\u05E1\u05DE\u05DF \u05E2\u05D3 ${MAX_ROUND_ORDERS} \u05D4\u05D6\u05DE\u05E0\u05D5\u05EA \u05D1\u05E1\u05D1\u05D1`,
   duplicateOrders: "\u05D0\u05D5\u05EA\u05D4 \u05D4\u05D6\u05DE\u05E0\u05D4 \u05E1\u05D5\u05DE\u05E0\u05D4 \u05E4\u05E2\u05DE\u05D9\u05D9\u05DD",
   pickupByInvalid: "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E9\u05E2\u05D4, \u05DC\u05DE\u05E9\u05DC 08:00",
+  pickupFromInvalid: "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E9\u05E2\u05D4, \u05DC\u05DE\u05E9\u05DC 07:00",
+  // Shown on the END field: that is the one still missing when only a start was typed.
+  pickupUntilMissing: "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D2\u05DD \u05E9\u05E2\u05EA \u05E1\u05D9\u05D5\u05DD",
+  pickupFromNotBeforeBy: "\u05E9\u05E2\u05EA \u05D4\u05D4\u05EA\u05D7\u05DC\u05D4 \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05D9\u05D5\u05EA \u05DC\u05E4\u05E0\u05D9 \u05E9\u05E2\u05EA \u05D4\u05E1\u05D9\u05D5\u05DD",
   personalTextTooLong: "\u05D4\u05D8\u05E7\u05E1\u05D8 \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9"
 };
 var PERSONAL_TEXT_MAX_LENGTH = 500;
@@ -21118,6 +21140,9 @@ var ERR2 = ROUND_PLAN_ERRORS;
 var personalTextInputSchema = external_exports.string().trim().max(PERSONAL_TEXT_MAX_LENGTH, ERR2.personalTextTooLong).transform((text) => text === "" ? void 0 : text).optional();
 var pickupByInputSchema = external_exports.string({ error: ERR2.pickupByInvalid }).refine((time3) => time3 === "" || pickupTimeSchema.safeParse(time3).success, {
   error: ERR2.pickupByInvalid
+}).transform((time3) => time3 === "" ? void 0 : time3).optional();
+var pickupFromInputSchema = external_exports.string({ error: ERR2.pickupFromInvalid }).refine((time3) => time3 === "" || pickupTimeSchema.safeParse(time3).success, {
+  error: ERR2.pickupFromInvalid
 }).transform((time3) => time3 === "" ? void 0 : time3).optional();
 var planRoundRequestSchema = external_exports.strictObject({
   /** The round's calendar day in Israel, `YYYY-MM-DD`, as an `<input type="date">` sends it. */
@@ -21127,7 +21152,15 @@ var planRoundRequestSchema = external_exports.strictObject({
     error: ERR2.duplicateOrders
   }),
   personalText: personalTextInputSchema,
-  pickupBy: pickupByInputSchema
+  pickupBy: pickupByInputSchema,
+  pickupFrom: pickupFromInputSchema
+}).superRefine((plan, ctx) => {
+  if (plan.pickupFrom === void 0) return;
+  if (plan.pickupBy === void 0) {
+    ctx.addIssue({ code: "custom", path: ["pickupBy"], message: ERR2.pickupUntilMissing });
+  } else if (plan.pickupFrom >= plan.pickupBy) {
+    ctx.addIssue({ code: "custom", path: ["pickupFrom"], message: ERR2.pickupFromNotBeforeBy });
+  }
 });
 var ROUND_GROUP_KEYS = ["confirmed", "pending", "otherDate"];
 var collectorRoundSchema = roundSchema.pick({
@@ -21138,6 +21171,7 @@ var collectorRoundSchema = roundSchema.pick({
   phase: true,
   personalText: true,
   pickupBy: true,
+  pickupFrom: true,
   createdAt: true,
   closedAt: true
 });
@@ -21192,7 +21226,9 @@ var roundsResponseSchema = external_exports.object({
    * `pickupBy` of the most recently created round, open or closed: the planning screen pre-fills
    * "עד איזו שעה להוציא את הבקבוקים" with it (ADR-0003). Absent when that round had none.
    */
-  previousPickupBy: pickupTimeSchema.optional()
+  previousPickupBy: pickupTimeSchema.optional(),
+  /** `pickupFrom` of that same round, pre-filled the same way; absent when it had none. */
+  previousPickupFrom: pickupTimeSchema.optional()
 });
 function roundGroupOf(round, order) {
   if (order.roundId === round.id) {
@@ -21284,7 +21320,7 @@ var ROUND_MESSAGES = {
 };
 
 // packages/shared/src/customerOrderApi.ts
-var customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true });
+var customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, pickupFrom: true });
 var customerOrderSchema = orderSummarySchema.extend({
   status: orderSchema.shape.status,
   /**
@@ -22628,6 +22664,7 @@ function orderMessage(order, kind, options) {
   };
   if (options.date !== void 0) vars.date = options.date;
   if (options.pickupBy !== void 0) vars.pickupBy = options.pickupBy;
+  if (options.pickupFrom !== void 0) vars.pickupFrom = options.pickupFrom;
   const message = { kind, orderId: order.id, to: order.contact.phone, vars };
   if (kind === "confirmRequest" && options.personalText !== void 0) {
     message.personalText = options.personalText;
@@ -22847,7 +22884,8 @@ function createCollectorRoundsRouter(deps) {
     const latest = await rounds.findLatest();
     const body = {
       rounds: views,
-      ...latest?.pickupBy === void 0 ? {} : { previousPickupBy: latest.pickupBy }
+      ...latest?.pickupBy === void 0 ? {} : { previousPickupBy: latest.pickupBy },
+      ...latest?.pickupFrom === void 0 ? {} : { previousPickupFrom: latest.pickupFrom }
     };
     res.json(body);
   });
@@ -22988,6 +23026,7 @@ function newRoundFromPlan(plan, now) {
     status: "open",
     phase: "confirming",
     ...plan.personalText === void 0 ? {} : { personalText: plan.personalText },
+    ...plan.pickupFrom === void 0 ? {} : { pickupFrom: plan.pickupFrom },
     ...plan.pickupBy === void 0 ? {} : { pickupBy: plan.pickupBy },
     orderIds: [...plan.orderIds],
     stops: [],
@@ -22998,6 +23037,7 @@ function confirmRequestOptions(round, publicBaseUrl) {
   return {
     publicBaseUrl,
     date: round.date,
+    ...round.pickupFrom === void 0 ? {} : { pickupFrom: round.pickupFrom },
     ...round.pickupBy === void 0 ? {} : { pickupBy: round.pickupBy },
     ...round.personalText === void 0 ? {} : { personalText: round.personalText }
   };
