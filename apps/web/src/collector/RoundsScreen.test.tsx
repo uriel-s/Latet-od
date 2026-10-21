@@ -36,7 +36,7 @@ import {
   confirmationSummary,
   type RoundsScreenProps,
 } from './RoundsScreen.tsx';
-import { ROUND_PICKER_TITLE } from './RoundPickerSheet.tsx';
+import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
@@ -411,7 +411,11 @@ function stopNames(): string[] {
  * `shownDayMonth`) and taps the row of the round dated `dayMonth`; the sheet closes itself.
  */
 function pickRound(shownDayMonth: string, dayMonth: string): void {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${shownDayMonth}`) }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^${ROUND_PICKER_TRIGGER_PREFIX}${shownDayMonth}`),
+    }),
+  );
   const sheet = screen.getByRole('dialog', { name: ROUND_PICKER_TITLE });
   fireEvent.click(within(sheet).getByRole('button', { name: new RegExp(dayMonth) }));
 }
@@ -454,7 +458,7 @@ describe('RoundsScreen', () => {
 
     const notice = await screen.findByText('הסבב נוצר.');
     expect(notice.getAttribute('role')).toBe('status');
-    expect(document.activeElement).toBe(notice);
+    await waitFor(() => expect(document.activeElement).toBe(notice));
     expect(window.history.state).toBeNull();
     await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
   });
@@ -597,7 +601,7 @@ describe('RoundsScreen', () => {
     it('has no round picker when only one round is open', async () => {
       await renderLoaded();
 
-      expect(screen.queryByRole('button', { name: /^19\/11/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^סבב: 19\/11/ })).toBeNull();
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
@@ -612,7 +616,7 @@ describe('RoundsScreen', () => {
         .map((heading) => heading.textContent);
       expect(roundHeadings).toEqual(['רמת בית שמש · 19/11']);
       expect(screen.queryByRole('region', { name: 'בית שמש · 26/11' })).toBeNull();
-      expect(screen.getByRole('button', { name: /^19\/11/ })).toBeDefined();
+      expect(screen.getByRole('button', { name: /^סבב: 19\/11/ })).toBeDefined();
       // The default is not written to the URL: no query until Yoel picks.
       expect(window.location.search).toBe('');
     });
@@ -631,7 +635,7 @@ describe('RoundsScreen', () => {
       expect(window.location.search).toBe('?round=r2');
       expect(window.history.length).toBe(historyLength);
       // The picker's button now names the round on screen.
-      expect(screen.getByRole('button', { name: /^26\/11/ })).toBeDefined();
+      expect(screen.getByRole('button', { name: /^סבב: 26\/11/ })).toBeDefined();
     });
 
     it('keeps the path Yoel is on when it writes the query', async () => {
@@ -790,7 +794,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe('האישורים לסבב הזה כבר נסגרו.');
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       expect(rounds.calls()).toBe(2);
       // The rounds stay on screen while they load again.
       expect(screen.queryByRole('status')).toBeNull();
@@ -980,7 +984,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.confirmationsClosed);
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
       expect(rounds.calls()).toBe(2);
       expect(document.activeElement).toBe(screen.getByRole('alert'));
@@ -1117,7 +1121,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.stopHandled);
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       await waitFor(() => expect(stopNames()).toEqual(['משה לוי', 'דנה כהן']));
       expect(rounds.calls()).toBe(2);
     });
@@ -1231,12 +1235,12 @@ describe('RoundsScreen', () => {
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_CLOSED_MESSAGE);
       expect(ROUND_CLOSED_MESSAGE).toBe('הסבב נסגר.');
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
       // The selection falls back to the round left, as it was, and the picker is gone: one round.
       const other = screen.getByRole('region', { name: 'בית שמש · 26/11' });
       expect(within(other).getByRole('button', { name: 'אישר בטלפון, שרה גולן' })).toBeDefined();
-      expect(screen.queryByRole('button', { name: /^26\/11/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^סבב: 26\/11/ })).toBeNull();
       expect(screen.queryByText(NO_OPEN_ROUND_TEXT)).toBeNull();
       await settle();
       expect(rounds.calls()).toBe(1);
@@ -1344,7 +1348,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.roundNotFound);
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       expect(await screen.findByText(NO_OPEN_ROUND_TEXT)).toBeDefined();
       expect(rounds.calls()).toBe(2);
     });
