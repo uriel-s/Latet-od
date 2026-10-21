@@ -147,6 +147,7 @@ import {
 
 // packages/shared/src/config.ts
 var BOTTLE_VALUE_AGOROT = 20;
+var DROP_OFF_ADDRESS = "\u05E0\u05D7\u05DC \u05E0\u05D7\u05E9\u05D5\u05DF 7, \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -21716,7 +21717,8 @@ function messagingDepsFromEnv(env) {
 
 // apps/api/src/config.ts
 var DROP_OFF = {
-  address: "\u05E0\u05D7\u05DC \u05E0\u05D7\u05E9\u05D5\u05DF 7, \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9",
+  address: DROP_OFF_ADDRESS,
+  // shared: the browser builds navigation links to it (ADR-0007)
   point: { lat: 31.71402, lng: 34.99325 }
 };
 
