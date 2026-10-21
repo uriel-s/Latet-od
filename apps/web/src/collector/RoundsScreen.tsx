@@ -3,7 +3,7 @@
 // date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בטלפון"
 // for a customer who confirmed in a call or in a WhatsApp reply; and "התחל מסלול",
 // asked as a question first (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
-// stops (RouteScreen.tsx). In both steps the round ends with "סגור סבב" (CloseRoundConfirm.tsx),
+// stops (RouteScreen.tsx). In both steps the round ends with its close button (CloseRoundConfirm.tsx),
 // after which it leaves the tab. GET /api/collector/rounds sends the open rounds already grouped
 // and routed (the shared buildRoundView), so this screen only shows them, and after each action it
 // swaps in the round as the api answers it. The question components own only their open state and
@@ -69,7 +69,7 @@ const CONFIRM_LABEL = 'אישר בטלפון';
 const CONFIRMING_LABEL = 'שומר...';
 
 /**
- * Under the heading once "סגור סבב" answered: the round left the tab (only open rounds are listed),
+ * Under the heading once the close button answered: the round left the tab (only open rounds are listed),
  * so the section Yoel tapped is gone and the focus comes here.
  */
 export const ROUND_CLOSED_MESSAGE = 'הסבב נסגר.';
@@ -118,7 +118,7 @@ export interface RoundsScreenProps {
    * "התחל מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
    */
   buildRoute?: (roundId: string) => Promise<BuildRouteOutcome>;
-  /** "סגור סבב", in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
+  /** The close button ("בטל את הסבב" / "סיימתי את הסבב"), in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
   closeRound?: (roundId: string) => Promise<CloseRoundOutcome>;
   /** A route's arrows; undefined keeps RouteScreen's own default (the api). */
   moveStop?: RouteScreenProps['moveStop'];
@@ -166,7 +166,7 @@ interface Notice {
  * out-of-date screen as above: a notice and a reload. Each stop action of the route is sent by
  * RouteScreen; this screen swaps in its answer, or shows its notice and reloads.
  *
- * "סגור סבב" takes the closed round off the screen and says {@link ROUND_CLOSED_MESSAGE} under the
+ * The close button takes the closed round off the screen and says {@link ROUND_CLOSED_MESSAGE} under the
  * heading, with the focus there, since the section Yoel tapped is gone. No reload: the answer is
  * the truth already, and a closed round is never listed again. A reload that set out before the
  * close answered may still list the round, so every loaded answer leaves out the rounds closed
@@ -205,7 +205,7 @@ export function RoundsScreen({
   const [buildingIds, setBuildingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [buildFailedIds, setBuildFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const buildingIdsRef = useRef(new Set<string>());
-  // The same three for "סגור סבב", by round id.
+  // The same three for the close button, by round id.
   const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [closeFailedIds, setCloseFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const closingIdsRef = useRef(new Set<string>());
@@ -406,7 +406,7 @@ export function RoundsScreen({
     }
   }
 
-  /** Yoel's "כן, לסגור את הסבב" for round `roundId`, in either phase (spec §3.6, "סגור סבב"). */
+  /** Yoel's "yes" to the close question for round `roundId`, in either phase (spec §3.6). */
   async function closeRoundOf(roundId: string): Promise<void> {
     if (closingIdsRef.current.has(roundId)) return;
     closingIdsRef.current.add(roundId);
@@ -418,7 +418,7 @@ export function RoundsScreen({
     try {
       outcome = await closeRound(roundId);
     } catch {
-      // closeRound never rejects, but a rejection must not leave the question on "סוגר סבב...".
+      // closeRound never rejects, but a rejection must not leave the question on its busy label.
       outcome = { kind: 'failed' };
     }
     closingIdsRef.current.delete(roundId);
@@ -525,7 +525,7 @@ export function RoundsScreen({
 }
 
 /**
- * What a section needs for "סגור סבב", in either phase: everything of {@link CloseRoundConfirm}
+ * What a section needs for the close button, in either phase: everything of {@link CloseRoundConfirm}
  * but the view and markOpened, which the section has already. The screen sends the request.
  */
 type SectionCloseRound = Omit<CloseRoundConfirmProps, 'view' | 'markOpened'>;
@@ -546,7 +546,7 @@ interface RoundSectionProps {
   buildRoute: BuildRouteControl;
   /** Step 2's route. */
   route: SectionRoute;
-  /** "סגור סבב", the last button of either step. */
+  /** The close button, the last button of either step. */
   closeRound: SectionCloseRound;
 }
 
@@ -564,7 +564,7 @@ interface RoundSectionProps {
  * counts (one live summary per round, not two), and the groups and the "שלח" list are gone:
  * whoever did not confirm left the round when it was built.
  *
- * Both steps end with "סגור סבב" (CloseRoundConfirm.tsx), after the step's own last part (the
+ * Both steps end with the close button (CloseRoundConfirm.tsx), after the step's own last part (the
  * build question, or the route), so the quieter way out of the round comes after the way on. It
  * is rendered outside the step's branch, at one place in the section, so an open question (and the
  * thank-you rows Yoel tapped in it) stays mounted across every swapped view, a build included.
@@ -572,7 +572,7 @@ interface RoundSectionProps {
  * When a build swaps step 1 for step 2, the question Yoel answered is gone, so the focus goes to
  * the round's heading, at the top of its route. Only when the focus was lost that way (on the page
  * itself, or still in this section): a notice the screen focused meanwhile keeps it, and so does
- * an open "סגור סבב" question, which stays where it was.
+ * an open close question, which stays where it was.
  */
 function RoundSection({
   view,

@@ -928,7 +928,7 @@ function stopConflictOutcome(body: unknown): StopActionOutcome {
   }
 }
 
-/** How "סגור סבב" ended, as the round screen shows it. */
+/** How closing a round ended, as the round screen shows it. */
 export type CloseRoundOutcome =
   /**
    * 200: the round is closed (`view.round.status` is `closed`, `closedAt` set), also when it was
@@ -943,7 +943,7 @@ export type CloseRoundOutcome =
   | { kind: 'failed' };
 
 /**
- * Yoel's "סגור סבב" (spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
+ * Yoel's close button ("בטל את הסבב" / "סיימתי את הסבב", spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
  * closes the round and sends every order it did not handle back to `waiting` (a pending or
  * confirmed order of a round still confirming as "לא אישר בזמן", a stop not reached as "לא הגענו
  * אליו"). No message is sent. Not retried: a close whose answer was lost is stored, and a second

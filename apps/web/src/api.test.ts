@@ -1787,7 +1787,7 @@ describe('markStopNotFound', () => {
 });
 
 /**
- * The routed round once Yoel tapped "סגור סבב": closed, with `closedAt`. Its second stop was not
+ * The routed round once Yoel tapped "סיימתי את הסבב": closed, with `closedAt`. Its second stop was not
  * reached, so that order is back in `waiting` and the stop shows `left`.
  */
 const CLOSED_VIEW: RoundView = {
