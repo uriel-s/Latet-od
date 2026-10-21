@@ -1,9 +1,12 @@
 // The words, links and list order of the route screen (spec §3.6 step 2, "מסלול"): the Waze and
 // phone links of a stop, its address lines, the badge of a handled stop, the screen's order
 // (handled stops drop to the end), how many stored moves one visible arrow tap needs, and keeping
-// a "שלח תודה" row already shown. Pure, so all of it is tested without rendering the screen.
+// a "שלח תודה" row already shown, and the navigation buttons of the screen's top (ADR-0007): the
+// next stop to collect, the Waze link to the drop-off and the one Google Maps link of the whole
+// route. Pure, so all of it is tested without rendering the screen.
 import {
   BOTTLES_SPOT_LABELS,
+  DROP_OFF_ADDRESS,
   type Address,
   type MessageLink,
   type RoundStopState,
@@ -17,6 +20,16 @@ import {
  */
 export const ROUTE_CITY = 'בית שמש';
 
+/** The text a navigation app searches for a stop: "street number, city". One place, so Waze and Google Maps agree. */
+function searchTextOf(address: Pick<Address, 'streetName' | 'houseNumber'>): string {
+  return `${address.streetName.trim()} ${address.houseNumber.trim()}, ${ROUTE_CITY}`;
+}
+
+/** Waze's universal link searching `query` and starting navigation; the query is URL-encoded, Hebrew included. */
+function wazeSearchUrl(query: string): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(query)}&navigate=yes`;
+}
+
 /**
  * The "נווט" link of a stop: Waze's universal link, searching the written address
  * ("street number, city") and starting navigation. `https://waze.com/ul` and not `waze://`
@@ -24,8 +37,52 @@ export const ROUTE_CITY = 'בית שמש';
  * installed. The query is URL-encoded, Hebrew included.
  */
 export function wazeUrl(address: Pick<Address, 'streetName' | 'houseNumber'>): string {
-  const query = `${address.streetName.trim()} ${address.houseNumber.trim()}, ${ROUTE_CITY}`;
-  return `https://waze.com/ul?q=${encodeURIComponent(query)}&navigate=yes`;
+  return wazeSearchUrl(searchTextOf(address));
+}
+
+/** The Waze link to the drop-off point (נחל נחשון 7), for when no stop is left to collect (ADR-0007). */
+export function dropOffWazeUrl(): string {
+  return wazeSearchUrl(DROP_OFF_ADDRESS);
+}
+
+/**
+ * The most waypoints one Google Maps link carries on a phone (ADR-0007). With more stops, the link
+ * holds the first ones still to collect and Yoel opens it again after collecting.
+ */
+export const MAX_MAPS_WAYPOINTS = 9;
+
+/**
+ * The first stop still to collect, in the stored route order (ADR-0007: the "נווט לעצירה הבאה"
+ * button). Handled stops are skipped wherever they sit, so after "אספתי" the answer moves on at
+ * once. `undefined` when nothing is left: the button then points at the drop-off.
+ */
+export function nextStopToCollect(stops: readonly RouteStopView[]): RouteStopView | undefined {
+  return stops.find((stop) => !isStopHandled(stop.state));
+}
+
+/**
+ * One Google Maps link for the stops still to collect, in the stored route order, ending at the
+ * drop-off (ADR-0007). `undefined` when no stop is left.
+ *
+ * - No `origin`: Maps starts from the phone's location, so Yoel's home (ROUTE_START, private)
+ *   never appears in a link.
+ * - No `optimize`: Maps keeps the order `planRoute` stored.
+ * - Waypoints are joined by an encoded pipe (%7C), the strictly valid URL form that Maps decodes;
+ *   each address is encoded on its own, so a "|" or "&" inside a street name cannot split them.
+ * - At most {@link MAX_MAPS_WAYPOINTS}: the first ones still to collect.
+ */
+export function googleMapsRouteUrl(stops: readonly RouteStopView[]): string | undefined {
+  const waypoints = stops
+    .filter((stop) => !isStopHandled(stop.state))
+    .slice(0, MAX_MAPS_WAYPOINTS)
+    .map((stop) => encodeURIComponent(searchTextOf(stop.order.address)));
+  if (waypoints.length === 0) return undefined;
+  return (
+    'https://www.google.com/maps/dir/?api=1' +
+    `&destination=${encodeURIComponent(DROP_OFF_ADDRESS)}` +
+    `&waypoints=${waypoints.join('%7C')}` +
+    '&travelmode=driving'
+  );
 }
 
 /**

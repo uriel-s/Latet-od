@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Address, MessageLink, RoundStopState, RouteStopView } from '@bottlerun/shared';
+import { DROP_OFF_ADDRESS } from '@bottlerun/shared';
 import {
+  MAX_MAPS_WAYPOINTS,
   ROUTE_CITY,
   STOP_STATE_LABELS,
+  dropOffWazeUrl,
+  googleMapsRouteUrl,
   isStopHandled,
   keepThankYouRows,
+  nextStopToCollect,
   screenOrderOfStops,
   stopAddressLines,
   storedMovesFor,
@@ -54,6 +59,19 @@ function makeThankYou(orderId: string, messageIndex = 1): MessageLink {
     kind: 'thankYou',
     name: 'דנה כהן',
     url: `https://wa.me/972501234567?text=${String(messageIndex)}`,
+  };
+}
+
+/** A stop of order `id` on `streetName` number 7, in `state`. */
+function stopOn(
+  id: string,
+  streetName: string,
+  state: RoundStopState = 'toCollect',
+): RouteStopView {
+  const stop = makeStop({ id, state });
+  return {
+    ...stop,
+    order: { ...stop.order, address: makeAddress({ streetName, houseNumber: '7' }) },
   };
 }
 
@@ -266,5 +284,99 @@ describe('keepThankYouRows', () => {
     const kept = keepThankYouRows([], next);
     expect(kept).toEqual(next);
     expect(kept[0] !== undefined && 'thankYou' in kept[0]).toBe(false);
+  });
+});
+
+describe('nextStopToCollect', () => {
+  it('is the first stop still to collect, in the stored order', () => {
+    const stops = [stopOn('a', 'הרצל'), stopOn('b', 'הנביאים')];
+    expect(nextStopToCollect(stops)?.order.id).toBe('a');
+  });
+
+  it('skips handled stops, wherever they sit', () => {
+    const stops = [
+      stopOn('a', 'הרצל', 'collected'),
+      stopOn('b', 'הנביאים', 'notFound'),
+      stopOn('c', 'הגפן'),
+      stopOn('d', 'הזית'),
+    ];
+    expect(nextStopToCollect(stops)?.order.id).toBe('c');
+  });
+
+  it('is undefined when nothing is left to collect or there are no stops', () => {
+    expect(nextStopToCollect([stopOn('a', 'הרצל', 'collected')])).toBeUndefined();
+    expect(nextStopToCollect([])).toBeUndefined();
+  });
+});
+
+describe('googleMapsRouteUrl', () => {
+  /** The decoded waypoints of a link, as the list of address texts. */
+  function waypointsOf(url: string): string[] {
+    return (new URL(url).searchParams.get('waypoints') ?? '').split('|');
+  }
+
+  it('ends at the drop-off and travels by car', () => {
+    const url = googleMapsRouteUrl([stopOn('a', 'הרצל')]) ?? '';
+    expect(url.startsWith('https://www.google.com/maps/dir/?api=1&')).toBe(true);
+    expect(new URL(url).searchParams.get('destination')).toBe(DROP_OFF_ADDRESS);
+    expect(new URL(url).searchParams.get('travelmode')).toBe('driving');
+  });
+
+  it('never has an origin, so the start stays private', () => {
+    const url = googleMapsRouteUrl([stopOn('a', 'הרצל'), stopOn('b', 'הגפן')]) ?? '';
+    expect(url).not.toContain('origin');
+  });
+
+  it('adds the city to every address and keeps the stored order', () => {
+    const url = googleMapsRouteUrl([stopOn('a', 'הרצל'), stopOn('b', 'הגפן')]) ?? '';
+    expect(waypointsOf(url)).toEqual(['הרצל 7, בית שמש', 'הגפן 7, בית שמש']);
+  });
+
+  it('leaves out handled stops', () => {
+    const url =
+      googleMapsRouteUrl([
+        stopOn('a', 'הרצל', 'collected'),
+        stopOn('b', 'הגפן'),
+        stopOn('c', 'הזית', 'cancelled'),
+        stopOn('d', 'הנביאים'),
+      ]) ?? '';
+    expect(waypointsOf(url)).toEqual(['הגפן 7, בית שמש', 'הנביאים 7, בית שמש']);
+  });
+
+  it('keeps only the first 9 stops still to collect', () => {
+    const stops = Array.from({ length: 11 }, (_, i) => stopOn(`o${i}`, `רחוב${i}`));
+    const waypoints = waypointsOf(googleMapsRouteUrl(stops) ?? '');
+    expect(MAX_MAPS_WAYPOINTS).toBe(9);
+    expect(waypoints).toHaveLength(9);
+    expect(waypoints[0]).toBe('רחוב0 7, בית שמש');
+    expect(waypoints[8]).toBe('רחוב8 7, בית שמש');
+  });
+
+  it('counts the cap on stops still to collect, not on handled ones', () => {
+    const stops = [
+      stopOn('x', 'הרצל', 'collected'),
+      ...Array.from({ length: 9 }, (_, i) => stopOn(`o${i}`, `רחוב${i}`)),
+    ];
+    expect(waypointsOf(googleMapsRouteUrl(stops) ?? '')).toHaveLength(9);
+  });
+
+  it('encodes a street name with & or | instead of splitting the link', () => {
+    const url = googleMapsRouteUrl([stopOn('a', 'א&ב|ג')]) ?? '';
+    const rawWaypoints = /waypoints=([^&]*)/.exec(url)?.[1] ?? '';
+    expect(rawWaypoints.split('%7C')).toHaveLength(2);
+    expect(new URL(url).searchParams.get('travelmode')).toBe('driving');
+  });
+
+  it('is undefined when no stop is left to collect', () => {
+    expect(googleMapsRouteUrl([stopOn('a', 'הרצל', 'collected')])).toBeUndefined();
+    expect(googleMapsRouteUrl([])).toBeUndefined();
+  });
+});
+
+describe('dropOffWazeUrl', () => {
+  it('searches the drop-off address in the same Waze form as a stop', () => {
+    const url = dropOffWazeUrl();
+    expect(url).toBe(`https://waze.com/ul?q=${encodeURIComponent(DROP_OFF_ADDRESS)}&navigate=yes`);
+    expect(new URL(url).searchParams.get('q')).toBe('נחל נחשון 7, בית שמש');
   });
 });

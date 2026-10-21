@@ -9,3 +9,10 @@
  * rounding.
  */
 export const BOTTLE_VALUE_AGOROT = 20;
+
+/**
+ * The drop-off address (נקודת פריקה, the end of every route) as Yoel reads it and as the navigation
+ * links search for it. Public text, not private: the browser builds those links (ADR-0007). Only
+ * the drop-off's coordinates stay in apps/api/src/config.ts.
+ */
+export const DROP_OFF_ADDRESS = 'נחל נחשון 7, בית שמש';
