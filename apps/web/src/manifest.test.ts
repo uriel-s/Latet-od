@@ -106,9 +106,9 @@ describe('app icons in apps/web/public', () => {
     }
   });
 
-  it('keeps the SVG the PNGs were made from', () => {
-    const svg = fs.readFileSync(publicFile('/icon.svg'), 'utf8');
-    expect(svg).toContain('<svg');
-    expect(svg).toContain(BRAND_BACKGROUND);
+  it('keeps the logo the PNGs were made from', () => {
+    expect(
+      fs.existsSync(path.resolve(import.meta.dirname, '..', '..', '..', 'docs', 'logo.jpeg')),
+    ).toBe(true);
   });
 });
