@@ -190,6 +190,31 @@ describe('buildListFilter', () => {
     expect(buildListFilter({ ids: ['nope', ''] })).toEqual({ _id: { $in: [] } });
     expect(buildListFilter({ ids: [] })).toEqual({ _id: { $in: [] } });
   });
+
+  it('filters by close time, pairing each closed status with its own timestamp', () => {
+    const from = new Date('2026-09-30T21:00:00.000Z');
+    const to = new Date('2026-10-31T22:00:00.000Z');
+
+    expect(buildListFilter({ closedBetween: { from, to } })).toEqual({
+      $or: [
+        { status: 'collected', collectedAt: { $gte: from, $lt: to } },
+        { status: 'cancelled', cancelledAt: { $gte: from, $lt: to } },
+      ],
+    });
+  });
+
+  it('ANDs the close time with statuses: a top-level status beside the $or', () => {
+    const from = new Date('2026-09-30T21:00:00.000Z');
+    const to = new Date('2026-10-31T22:00:00.000Z');
+
+    expect(buildListFilter({ statuses: ['collected'], closedBetween: { from, to } })).toEqual({
+      status: { $in: ['collected'] },
+      $or: [
+        { status: 'collected', collectedAt: { $gte: from, $lt: to } },
+        { status: 'cancelled', cancelledAt: { $gte: from, $lt: to } },
+      ],
+    });
+  });
 });
 
 describe('buildUpdate', () => {

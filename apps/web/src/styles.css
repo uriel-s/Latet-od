@@ -20,11 +20,24 @@
   --color-gray: #9aa3ad;
   /* Error red: 6.5:1 on white and 5.3:1 on --color-background, AA on both. */
   --color-error: #b91c1c;
+  /*
+   * A handled route stop's background (StopCard.tsx), a quiet gray apart from the page's blue:
+   * --color-text on it is 8.4:1 and --color-error 5.2:1, AA for both.
+   */
+  --color-handled: #e5e7eb;
 
   /* 48px is the floor (CLAUDE.md); 3rem (54px at the default 18px) grows with the user's font. */
   --tap-target: max(48px, 3rem);
   --radius: 0.5rem;
   --gutter: 16px;
+  /*
+   * The side gutters, at least --gutter and at least the screen's safe area. index.html sets
+   * viewport-fit=cover, so in landscape the page reaches under a phone's notch; the inset keeps
+   * text out of it. env() is physical (left/right, not start/end), so these go on padding-left
+   * and padding-right, also in this right-to-left page. It is 0 without a notch: 16px as before.
+   */
+  --gutter-left: max(var(--gutter), env(safe-area-inset-left));
+  --gutter-right: max(var(--gutter), env(safe-area-inset-right));
 }
 
 *,
@@ -105,17 +118,21 @@ svg {
   min-height: 100dvh;
 }
 
-/* The single centred column every page lives in, with a 16px gutter on narrow phones. */
+/* The single centred column every page lives in, with a 16px gutter on narrow phones (wider
+   beside a notch, see --gutter-left). */
 .column {
   width: 100%;
   max-width: 32rem;
   margin-inline: auto;
-  padding-inline: var(--gutter);
+  padding-left: var(--gutter-left);
+  padding-right: var(--gutter-right);
 }
 
+/* The padding lives on the full-width header, not its .column, so the brand colour also fills
+   the strip behind the status bar or notch at the top (viewport-fit=cover, index.html). */
 .site-header {
   background: var(--color-accent);
-  padding-block: 0.75rem;
+  padding-block: calc(0.75rem + env(safe-area-inset-top)) 0.75rem;
 }
 
 /* The app name is plain text, not a heading: each page has its own <h1> (see Layout.tsx). */
@@ -136,9 +153,16 @@ svg {
   padding-block-end: 2rem;
 }
 
+/* The footer ends the page, so on a phone with a home bar the OSM credit is lifted above it. */
 .site-footer {
   border-block-start: 2px solid var(--color-gray);
-  padding-block: 0.5rem;
+  padding-block: 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+}
+
+/* With the bottom navigation, .layout already keeps the home bar's space below the footer
+   (see .layout:has(.bottom-nav)): no second inset here. */
+.layout:has(.bottom-nav) .site-footer {
+  padding-block-end: 0.5rem;
 }
 
 .site-footer p {
@@ -399,7 +423,8 @@ button[aria-disabled='true'] {
 /*
  * The bottom navigation (BottomNav.tsx): fixed to the bottom of the screen, full width, three
  * equal tabs. In the right-to-left row the first tab (הזמנות) is on the right. The padding keeps
- * the tabs above the iPhone's home bar.
+ * the tabs above the iPhone's home bar and, in landscape, out from under the notch at the sides
+ * (physical left/right, like env()); the white background still runs edge to edge.
  */
 .bottom-nav {
   position: fixed;
@@ -409,6 +434,8 @@ button[aria-disabled='true'] {
   border-block-start: 2px solid var(--color-text);
   background: var(--color-white);
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .bottom-nav-list {
@@ -702,6 +729,25 @@ html:has(.bottom-nav) {
   margin-block: 0 0.75rem;
 }
 
+/* "סגור אישורים ובנה מסלול" ends step 1, under a decorative line and apart from the cards'
+   "אישר בטלפון", so it is not tapped by mistake. Its question uses .cancel-confirm. */
+.round-build-route {
+  margin-block-start: 2rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 2px solid var(--color-gray);
+}
+
+/* "סגור סבב" (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
+   it. Its question uses .cancel-confirm; the "תודות שלא נשלחו" heading starts that box, so it
+   drops the top margin of the other h3s of a round. */
+.round-close {
+  margin-block-start: 1.5rem;
+}
+
+.round-close h3 {
+  margin-block-start: 0;
+}
+
 /* The phone on a round's card dials; a full-size tap target although it reads as a link. */
 .order-card-phone {
   display: inline-flex;
@@ -713,6 +759,173 @@ html:has(.bottom-nav) {
 .order-card-confirm {
   min-width: var(--tap-target);
   margin-block: 0.5rem 0.25rem;
+}
+
+/* --- History tab (collector/HistoryScreen.tsx) ------------------------------------- */
+
+/* The month shown ("אוקטובר 2026"), centred over the two buttons that change it. */
+.month-name {
+  margin-block: 0 0.5rem;
+  text-align: center;
+}
+
+/* "החודש הקודם" and "החודש הבא" side by side, each half the column, apart from the totals. */
+.month-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-block-end: 1.5rem;
+}
+
+.month-picker .button {
+  padding-inline: 0.5rem;
+}
+
+/*
+ * "החודש הבא" on the current month. Inactive controls are exempt from the contrast rule, but the
+ * text keeps its full contrast anyway; the dashed edge and the missing white fill set it apart.
+ */
+.month-picker .button:disabled {
+  border-style: dashed;
+  background: transparent;
+}
+
+/*
+ * The month's three totals, one under the other (a single column, so a large value never
+ * squeezes): the name on the right, the number on the left, framed like an .order-card.
+ */
+.history-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 0 1.5rem;
+}
+
+.history-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--color-gray);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.history-total dt {
+  font-weight: 700;
+}
+
+.history-total dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+/* --- Route stops (collector/StopCard.tsx) ------------------------------------------ */
+
+/*
+ * One stop of the route, framed like an .order-card: white on the page's blue, the gray edge
+ * decoration only. The route screen lists the cards in an .order-list.
+ */
+.stop-card {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--color-gray);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.stop-card > p {
+  margin-block: 0 0.25rem;
+}
+
+/*
+ * A handled stop (collected, not found, cancelled, left the round): a quieter gray background
+ * (--color-handled) and a thick --color-text bar on its start edge, next to the state in words,
+ * so it is told apart by shape and text, not by colour alone.
+ */
+.stop-card-handled {
+  border-inline-start: 6px solid var(--color-text);
+  background: var(--color-handled);
+}
+
+/* "עצירה 2": a small header line above the name. */
+.stop-card-position {
+  font-weight: 700;
+}
+
+/* The customer's name heads the card, like .order-card-name. */
+.stop-card-name {
+  margin-block: 0 0.25rem;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+/* The street is what Yoel looks for at the door: bold, like the bottles. */
+.stop-card-street,
+.stop-card-bottles {
+  font-weight: 700;
+}
+
+/* The customer's note keeps the line breaks they typed. */
+.stop-card-note {
+  white-space: pre-line;
+}
+
+/*
+ * "נאסף", "לא נמצא", ...: a badge like .tag, but white inside, so it stands out on the gray of a
+ * handled card (--color-text on white, 10.4:1).
+ */
+.stop-card-state {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border: 2px solid var(--color-text);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/*
+ * A row of the card's buttons ("נווט" and "חייג", "אספתי" and "לא נמצא", the arrows), each at
+ * least 8rem wide, one under the other when the phone is too narrow for two.
+ */
+.stop-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 0.75rem;
+}
+
+.stop-card-actions .button {
+  flex: 1 1 8rem;
+}
+
+/* The quantity field and the "לא נמצא" question sit under the links, with room above. */
+.stop-card-quantity,
+.stop-card .cancel-confirm {
+  margin-block-start: 0.75rem;
+}
+
+/* The field's own bottom margin would leave a gap above "שמור"; the actions keep their gap. */
+.stop-card-quantity .field {
+  margin-block-end: 0.75rem;
+}
+
+/* The thank-you's "שלח" row under a handled card's street. */
+.stop-card-thanks {
+  margin-block-start: 0.75rem;
+}
+
+.stop-card-thanks-title {
+  margin-block: 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+/* The card's error under its buttons. */
+.stop-card .field-error {
+  margin-block-start: 0.5rem;
 }
 
 /* --- Customer order page (pages/OrderPage.tsx) ------------------------------------ */

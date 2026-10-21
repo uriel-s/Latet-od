@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    The "לתת עוד" app icon: a bottle in the brand colours, the source of icon-180.png (the
+    apple-touch-icon), icon-192.png and icon-512.png (manifest.webmanifest). Square, a fully opaque
+    background and no rounded corners: iOS and Android round and mask the icon themselves. The
+    bottle stays inside the central 80% circle, so the same image also works as a maskable icon.
+    The PNGs were made once from this file with sharp-cli, in a folder outside the project so it
+    is not a dependency, for each size (512, 192, 180):
+      npx -y sharp-cli -i icon.svg -o icon-512.png resize 512 512 [two hyphens] removeAlpha
+    (an XML comment cannot hold two hyphens in a row, so they are spelled out here). removeAlpha
+    makes an RGB PNG with no alpha channel. Change this file, then make the PNGs again that way.
+  -->
+  <rect width="512" height="512" fill="#DCEBF8" />
+  <!-- Cap -->
+  <rect x="222" y="96" width="68" height="36" rx="6" fill="#1E3A8A" />
+  <!-- Neck, shoulders and body -->
+  <path
+    d="M234 140 H278 V180 C278 205 336 215 336 255 V392 Q336 416 312 416 H200 Q176 416 176 392 V255 C176 215 234 205 234 180 Z"
+    fill="#1E3A8A"
+  />
+  <!-- Label -->
+  <rect x="198" y="284" width="116" height="64" rx="8" fill="#DCEBF8" />
+</svg>

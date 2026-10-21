@@ -2,19 +2,22 @@
 // cannot drift apart: server.ts (local runs and plain Node hosting) at startup, and the Vercel
 // function entry vercelEntry.ts (through vercelHandler.ts) on its first request (ADR-0002). Every
 // error it throws names the variable that is wrong and how to fix it, never the value: several
-// are secrets (MONGODB_URI holds the database password), and the message is printed or logged.
+// are secrets (MONGODB_URI holds the database password) or private (ROUTE_START is Yoel's home),
+// and the message is printed or logged.
 import { authDepsFromEnv } from './auth/authConfig.ts';
 import { createMongoDeps } from './db/mongoDeps.ts';
 import type { AppDeps, DbDeps } from './deps.ts';
 import { messagingDepsFromEnv } from './messages/messagingConfig.ts';
+import { routeDepsFromEnv } from './route/routeConfig.ts';
 
 /**
  * The api's real {@link AppDeps} described by `env` (normally `process.env`).
  *
  * The order is the guarantee: first `MONGODB_URI` must be set, then the login's settings
  * (authDepsFromEnv: COLLECTOR_PASSWORD_HASH, SESSION_SECRET) and the WhatsApp settings
- * (messagingDepsFromEnv: MESSAGE_SENDER, PUBLIC_BASE_URL) are checked, and only then
- * `createDbDeps` runs. So a bad setting stops the startup before any database client exists.
+ * (messagingDepsFromEnv: MESSAGE_SENDER, PUBLIC_BASE_URL) and the route's start point
+ * (routeDepsFromEnv: ROUTE_START) are checked, and only then `createDbDeps` runs. So a bad
+ * setting stops the startup before any database client exists.
  *
  * There is no fallback to in-memory storage when MONGODB_URI is missing: every order would be
  * lost on the next restart (or, on Vercel, the next cold start), and nobody would notice.
@@ -37,7 +40,8 @@ export function depsFromEnv(
   }
   const auth = authDepsFromEnv(env);
   const messaging = messagingDepsFromEnv(env);
-  return { ...createDbDeps(uri), auth, messaging };
+  const route = routeDepsFromEnv(env);
+  return { ...createDbDeps(uri), auth, messaging, route };
 }
 
 /**

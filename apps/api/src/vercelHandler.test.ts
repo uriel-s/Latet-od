@@ -124,6 +124,7 @@ describe('vercelEntry.ts (the Vercel function entry)', () => {
     vi.stubEnv('SESSION_SECRET', '');
     vi.stubEnv('PUBLIC_BASE_URL', '');
     vi.stubEnv('MESSAGE_SENDER', '');
+    vi.stubEnv('ROUTE_START', '');
 
     const res = await request(handler).get('/api/health');
 

@@ -24,6 +24,7 @@ import {
   PlanRoundScreen,
   UNASSIGNED_ORDERS_HINT,
 } from './PlanRoundScreen.tsx';
+import { returnToApp } from './visibilityTestHelper.ts';
 
 /** A waiting order on a listed street in רמת בית שמש, with a map point; overrides change it. */
 function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
@@ -105,6 +106,7 @@ const ROUND_VIEW: RoundView = {
     { key: 'otherDate', orders: [] },
   ],
   sendList: [],
+  stops: [],
 };
 const PLANNED: PlanRoundOutcome = { kind: 'planned', view: ROUND_VIEW };
 
@@ -914,6 +916,29 @@ describe('PlanRoundScreen', () => {
       await new Promise((settle) => setTimeout(settle, 0));
 
       expect(window.location.pathname).toBe('/app/rounds');
+    });
+  });
+
+  describe('coming back to the app', () => {
+    it('does not load again, and keeps the plan Yoel started', async () => {
+      // Only the list screens reload on return: here a reload would wipe the plan.
+      const recorded = await renderLoaded();
+      fillValidPlan();
+      fireEvent.change(textInput(), { target: { value: 'תודה רבה!' } });
+      fireEvent.click(orderBox('משה לוי'));
+
+      returnToApp();
+      await new Promise((settle) => setTimeout(settle, 0));
+
+      expect(recorded.ordersCalls()).toBe(1);
+      expect(recorded.roundsCalls()).toBe(1);
+      expect(dateInput().value).toBe('2026-11-19');
+      expect(regionRadio('רמת בית שמש').checked).toBe(true);
+      expect(textInput().value).toBe('תודה רבה!');
+      expect(orderBoxes()).toEqual([
+        ['דנה כהן', true],
+        ['משה לוי', false],
+      ]);
     });
   });
 

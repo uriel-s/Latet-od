@@ -29,7 +29,10 @@ export type RoundStatus = z.infer<typeof roundStatusSchema>;
  * Where an open round is (spec §3.6):
  * - `confirming`: the confirmation requests went out, and the customers are confirming (step 1).
  * - `routed`: Yoel tapped "סגור אישורים ובנה מסלול"; whoever did not confirm left the round and
- *   the route is built and stored (step 2, a later section).
+ *   the route is built and stored (step 2).
+ * "סגור סבב" does not change the phase: a closed round keeps the one it was closed in, which
+ * records whether its route was ever built (and why its orders left: `notConfirmed` or
+ * `notReached`).
  */
 export const ROUND_PHASES = ['confirming', 'routed'] as const;
 export const roundPhaseSchema = z.enum(ROUND_PHASES);
@@ -40,12 +43,22 @@ export type RoundPhase = z.infer<typeof roundPhaseSchema>;
 // ---------------------------------------------------------------------------------------------
 
 /**
- * One stop of the stored route, in driving order. Only the order for now: the route-building
- * section extends it, and `stops` stays empty until then. The route is computed once and stored,
- * so the order of the stops does not change in the middle of the drive (spec §3.6).
+ * One stop of the stored route, in driving order. The route is computed once by `planRoute` and
+ * stored, so the order of the stops does not change in the middle of the drive (spec §3.6).
+ *
+ * A stop has no status of its own: whether it was collected, not found, and so on is derived from
+ * its order's status (and `lastMiss`). Yoel moving a stop up or down just reorders `stops`.
  */
 export const roundStopSchema = z.object({
   orderId: z.string().min(1),
+  /**
+   * Whether the order had a map point when the route was built. Stops without one were put at
+   * the end by `planRoute` (ADR-0005), and the card shows the "בלי מיקום" tag. Stored, not
+   * re-derived from the order: if Yoel picks a near street later, the stop stays where the route
+   * put it, and the tag still explains why it is there. Required, which is safe: no stored round
+   * has stops yet (they stay empty until the route is built).
+   */
+  hasLocation: z.boolean(),
 });
 export type RoundStop = z.infer<typeof roundStopSchema>;
 
@@ -74,10 +87,16 @@ export const roundSchema = z.object({
    * who asked for another date.
    */
   orderIds: z.array(z.string().min(1)),
-  /** The stored route, in driving order. Empty until the route is built (phase `routed`). */
+  /**
+   * The stored route, in driving order: home → these stops → drop-off (the two ends are not
+   * stored here). Empty until the route is built (phase `routed`).
+   */
   stops: z.array(roundStopSchema),
   createdAt: timestampSchema,
-  /** Set when Yoel taps "סגור סבב". */
+  /**
+   * Set when Yoel taps "סגור סבב" (POST /api/collector/rounds/:id/close), once: closing a round
+   * already closed keeps its first `closedAt`.
+   */
   closedAt: timestampSchema.optional(),
 });
 export type Round = z.infer<typeof roundSchema>;
