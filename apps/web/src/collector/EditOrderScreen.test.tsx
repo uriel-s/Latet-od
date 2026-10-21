@@ -359,10 +359,10 @@ describe('EditOrderScreen', () => {
       expect(request.nearStreetCode).toBeNull();
     });
 
-    it('shows "at least 30 bottles" next to the field for 29 and sends nothing', async () => {
+    it('shows "at least 20 bottles" next to the field for 19 and sends nothing', async () => {
       const calls = await renderLoaded();
 
-      typeInto('כמות בקבוקים', '29');
+      typeInto('כמות בקבוקים', '19');
       save();
 
       const bottles = input('כמות בקבוקים');

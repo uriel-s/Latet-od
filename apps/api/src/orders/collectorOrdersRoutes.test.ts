@@ -471,10 +471,10 @@ describe('PATCH /api/collector/orders/:id: editing', () => {
     },
   );
 
-  it('refuses 29 bottles with 400 and the plain message, changing nothing', async () => {
+  it('refuses 19 bottles with 400 and the plain message, changing nothing', async () => {
     const order = await seed();
 
-    const res = await patchOrder(order.id, { bottlesEstimated: 29 });
+    const res = await patchOrder(order.id, { bottlesEstimated: 19 });
 
     expect(res.status).toBe(400);
     expect(res.body).toStrictEqual({
@@ -787,8 +787,8 @@ describe('POST /api/collector/orders: "הוספת הזמנה"', () => {
     },
   );
 
-  it('refuses 29 bottles with 400 and the plain message, storing nothing', async () => {
-    const res = await addOrder(addBody({ bottlesEstimated: 29 }));
+  it('refuses 19 bottles with 400 and the plain message, storing nothing', async () => {
+    const res = await addOrder(addBody({ bottlesEstimated: 19 }));
 
     expect(res.status).toBe(400);
     expect(res.body).toStrictEqual({
@@ -903,7 +903,7 @@ describe('/api/collector/orders: logs', () => {
       (await getOne(order.id)).status,
       (await getOne(UNKNOWN_ID)).status,
       (await patchOrder(order.id, { nearStreetCode: RAMAT_STREET.code })).status,
-      (await patchOrder(order.id, { bottlesEstimated: 29 })).status,
+      (await patchOrder(order.id, { bottlesEstimated: 19 })).status,
       (await patchOrder(order.id, { contact: { name: NAME, phone: PHONE } })).status,
       (await addOrder(addBody())).status,
       (await cancelOrder(other.id)).status,

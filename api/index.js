@@ -20681,7 +20681,7 @@ function isOpenStatus(status) {
 }
 
 // packages/shared/src/order.ts
-var MIN_BOTTLES = 30;
+var MIN_BOTTLES = 20;
 var MAX_BOTTLES = 5e3;
 var FORM_TEXT_MAX_LENGTH = {
   name: 60,
@@ -23042,7 +23042,7 @@ function createCollectorStopActionsRouter(deps) {
       orderId,
       {
         status: "collected",
-        // Below the 30-bottle minimum is fine: that is a booking rule, not a count.
+        // Below the 20-bottle minimum is fine: that is a booking rule, not a count.
         bottlesCollected: request.bottlesCollected ?? order.bottlesEstimated,
         collectedAt: now,
         updatedAt: new Date(now)

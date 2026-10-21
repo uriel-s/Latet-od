@@ -208,11 +208,11 @@ describe('POST /api/orders: a valid booking', () => {
     expect((await storedOrder(body.token)).bottlesEstimated).toBe(45);
   });
 
-  it('accepts exactly 30 bottles, the minimum', async () => {
-    const res = await postOrder(validBody({ bottlesEstimated: 30 }));
+  it('accepts exactly 20 bottles, the minimum', async () => {
+    const res = await postOrder(validBody({ bottlesEstimated: 20 }));
 
     expect(res.status).toBe(201);
-    expect((await storedOrder(createdBody(res).token)).bottlesEstimated).toBe(30);
+    expect((await storedOrder(createdBody(res).token)).bottlesEstimated).toBe(20);
   });
 
   it('stores a free-text street with no region and no street code', async () => {
@@ -235,8 +235,8 @@ describe('POST /api/orders: a valid booking', () => {
 });
 
 describe('POST /api/orders: an invalid booking', () => {
-  it('refuses 29 bottles with 400 and the plain message, storing nothing', async () => {
-    const res = await postOrder(validBody({ bottlesEstimated: 29 }));
+  it('refuses 19 bottles with 400 and the plain message, storing nothing', async () => {
+    const res = await postOrder(validBody({ bottlesEstimated: 19 }));
 
     expect(res.status).toBe(400);
     expect(res.headers['cache-control']).toBe('no-store');
@@ -396,7 +396,7 @@ describe('POST /api/orders: the honeypot', () => {
 
   it('is checked after validation: filled on an invalid form still gets the 400', async () => {
     const res = await postOrder({
-      ...validBody({ bottlesEstimated: 29 }),
+      ...validBody({ bottlesEstimated: 19 }),
       website: 'https://spam.example',
     });
 
@@ -435,7 +435,7 @@ describe('POST /api/orders: the rate limit', () => {
 
   it('counts invalid requests too', async () => {
     for (let sent = 0; sent < ORDER_RATE_LIMIT.max; sent += 1) {
-      expect((await postOrder(validBody({ bottlesEstimated: 29 }))).status).toBe(400);
+      expect((await postOrder(validBody({ bottlesEstimated: 19 }))).status).toBe(400);
     }
 
     expect((await postOrder(validBody())).status).toBe(429);
@@ -445,7 +445,7 @@ describe('POST /api/orders: the rate limit', () => {
   it('counts every request: valid, duplicate, invalid and honeypot', async () => {
     await postOrder(validBody());
     await postOrder(validBody());
-    await postOrder(validBody({ bottlesEstimated: 29 }));
+    await postOrder(validBody({ bottlesEstimated: 19 }));
     await postOrder({ ...bodyWithPhone(phoneNumber(1)), website: 'https://spam.example' });
 
     expect(await attempts.count(`order:ip:${IP}`, ORDER_RATE_LIMIT.windowMs)).toBe(4);
@@ -503,7 +503,7 @@ describe('POST /api/orders: failures', () => {
 describe('POST /api/orders: logs', () => {
   it('never contain what the customer sent, nor a token, whatever the answer', async () => {
     const created = await postOrder(validBody());
-    const invalid = await postOrder(validBody({ bottlesEstimated: 29 }));
+    const invalid = await postOrder(validBody({ bottlesEstimated: 19 }));
     const duplicate = await postOrder(bodyWithPhone('+972 50-123-4567'));
     const honeypot = await postOrder({
       ...bodyWithPhone('052-7654321'),

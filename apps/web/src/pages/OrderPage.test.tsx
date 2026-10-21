@@ -784,15 +784,15 @@ describe('OrderPage', () => {
       expect(calls.updates).toHaveLength(1);
     });
 
-    it('refuses fewer than 30 bottles next to the field, and sends nothing', async () => {
+    it('refuses fewer than 20 bottles next to the field, and sends nothing', async () => {
       const calls = await openChange();
 
-      fillIn('כמות בקבוקים', '29');
+      fillIn('כמות בקבוקים', '19');
       click('שמירת השינויים');
 
       const bottles = input('כמות בקבוקים');
       expect(bottles.getAttribute('aria-invalid')).toBe('true');
-      expect(descriptionOf(bottles)).toContain('צריך לפחות 30 בקבוקים');
+      expect(descriptionOf(bottles)).toContain('צריך לפחות 20 בקבוקים');
       expect(document.activeElement).toBe(bottles);
       expect(calls.updates).toEqual([]);
     });
