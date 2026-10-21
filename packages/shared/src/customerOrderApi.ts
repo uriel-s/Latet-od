@@ -7,7 +7,7 @@
 //
 // The routes, each answering 200 with a CustomerOrderResponse (the order as it is now):
 // - GET    /api/o/:token          the page. Changes nothing: WhatsApp's link preview sends a GET.
-// - POST   /api/o/:token/confirm  "מאשר/ת איסוף": pending → confirmed. A second tap succeeds too.
+// - POST   /api/o/:token/confirm  "כן, אוציא את הבקבוקים": pending → confirmed. A second tap succeeds too.
 // - POST   /api/o/:token/decline  "לא מתאים הפעם": the order leaves its round, back to `waiting`
 //                                 with `lastMiss` reason `askedOtherDate`, so Yoel's round screen
 //                                 shows it under "ביקשו מועד אחר".
@@ -173,7 +173,7 @@ export function isLocationChange(before: AddressPlace, after: AddressPlace): boo
  * `InvalidOrderErrorBody`, whose field messages are the booking form's own.
  */
 export const CUSTOMER_ORDER_MESSAGES = {
-  /** "מאשר/ת איסוף" after Yoel closed the confirmations. Exactly the spec's text (§3.3). */
+  /** "כן, אוציא את הבקבוקים" after Yoel closed the confirmations. Exactly the spec's text (§3.3). */
   confirmationsClosed: 'האישור נסגר. נחזור אליך עם מועד חדש.',
   /** Any change to an order that was collected or cancelled meanwhile. */
   orderClosed: 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',

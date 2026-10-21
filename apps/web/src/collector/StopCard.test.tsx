@@ -159,7 +159,7 @@ describe('StopCard to collect', () => {
     expect(within(card).getByText('עצירה 2')).toBeTruthy();
     expect(within(card).getByRole('heading', { level: 3, name: 'דנה כהן' })).toBeTruthy();
     expect(within(card).getByText('שד נהר הדן 12')).toBeTruthy();
-    expect(within(card).getByText('ליד דלת הדירה · קומה 3, דירה 12')).toBeTruthy();
+    expect(within(card).getByText('בבניין - ליד דלת הדירה · קומה 3, דירה 12')).toBeTruthy();
     expect(within(card).getByText('הערה: ליד העגלה')).toBeTruthy();
     expect(within(card).getByText('40 בקבוקים')).toBeTruthy();
     expect(within(card).queryByText('בלי מיקום')).toBeNull();
