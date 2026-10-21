@@ -6,6 +6,7 @@ import type {
   CreateOrderResponse,
   CustomerOrder,
   CustomerUpdateOrderRequest,
+  HistoryResponse,
   MeResponse,
   OrderGroup,
   PlanRoundRequest,
@@ -15,20 +16,26 @@ import type {
 } from '@bottlerun/shared';
 import {
   addCollectorOrder,
+  buildRoute,
   cancelCollectorOrder,
   cancelCustomerOrder,
+  closeRound,
+  collectStop,
   confirmCustomerOrder,
   confirmOrderByPhone,
   createOrder,
   declineCustomerOrder,
   fetchCollectorOrder,
   fetchCustomerOrder,
+  fetchHistory,
   fetchRounds,
   fetchSession,
   fetchWaitingOrders,
   login,
   logout,
   markMessageOpened,
+  markStopNotFound,
+  moveStop,
   planRound,
   updateCollectorOrder,
   updateCustomerOrder,
@@ -36,6 +43,7 @@ import {
   type CollectorOrderWriteOutcome,
   type CustomerOrderWriteOutcome,
   type FetchFn,
+  type StopActionOutcome,
 } from './api.ts';
 import { UNKNOWN_FIELD_ERROR } from './orderForm/formValues.ts';
 
@@ -1014,6 +1022,7 @@ const ROUND_VIEW: RoundView = {
       url: 'https://wa.me/972501234567?text=%D7%A9%D7%9C%D7%95%D7%9D',
     },
   ],
+  stops: [],
 };
 
 /** The same round once its customer confirmed: no "שלח" row left. */
@@ -1375,6 +1384,624 @@ describe('confirmOrderByPhone', () => {
       expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn), answer).toEqual({
         kind: 'failed',
       });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+/** A second order of the routed round, still to collect, at a street with no map point. */
+const SECOND_ORDER: CollectorOrder = {
+  ...ORDER,
+  id: '6710f3a2c4b5d6e7f8a9b0c9',
+  status: 'confirmed',
+  hasLocation: false,
+};
+
+/**
+ * The round once its route is built and its first stop collected: that stop carries its
+ * "שלח תודה" row, the second is still to collect.
+ */
+const ROUTED_VIEW: RoundView = {
+  ...ROUND_VIEW,
+  round: { ...ROUND_VIEW.round, phase: 'routed' },
+  groups: [
+    { key: 'confirmed', orders: [{ ...ORDER, status: 'collected' }, SECOND_ORDER] },
+    { key: 'pending', orders: [] },
+    { key: 'otherDate', orders: [] },
+  ],
+  sendList: [],
+  stops: [
+    {
+      order: { ...ORDER, status: 'collected' },
+      hasLocation: true,
+      state: 'collected',
+      thankYou: {
+        orderId: ORDER.id,
+        messageIndex: 1,
+        kind: 'thankYou',
+        name: 'משה כהן',
+        url: 'https://wa.me/972501234567?text=%D7%AA%D7%95%D7%93%D7%94',
+      },
+    },
+    { order: SECOND_ORDER, hasLocation: false, state: 'toCollect' },
+  ],
+};
+
+/** Bodies of a success that are not a routed `RoundView`, on top of {@link NOT_A_ROUND_VIEW}. */
+const NOT_A_ROUTED_VIEW: ({ body: unknown } | { text: string })[] = [
+  ...NOT_A_ROUND_VIEW,
+  { body: { ...ROUTED_VIEW, stops: [{ ...ROUTED_VIEW.stops[0], state: 'maybe' }] } },
+  { body: { ...ROUTED_VIEW, stops: undefined } },
+];
+
+describe('buildRoute', () => {
+  it('posts to /api/collector/rounds/:id/route, the id encoded, no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    await buildRoute(ODD_ID, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/rounds/${ODD_ID_IN_PATH}/route`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.init?.headers).toBeUndefined();
+  });
+
+  it('answers built with the routed view on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    const outcome = await buildRoute(ROUND_VIEW.round.id, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'built', view: ROUTED_VIEW });
+    if (outcome.kind !== 'built') throw new Error('expected built');
+    expect(outcome.view.stops[1]?.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not a round view', async () => {
+    for (const answer of NOT_A_ROUTED_VIEW) {
+      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
+      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers closed with the shared message on a 409 confirmations_closed', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'confirmations_closed', message: 'anything' },
+    });
+
+    expect(await buildRoute(ROUND_VIEW.round.id, fetchFn)).toEqual({
+      kind: 'closed',
+      message: 'האישורים לסבב הזה כבר נסגרו.',
+    });
+  });
+
+  it('answers failed on a 409 whose body has no known error code', async () => {
+    for (const answer of [
+      { status: 409, body: { error: 'route_not_open', message: 'x' } },
+      { status: 409, body: { error: 'invalid_transition', message: 'x' } },
+      { status: 409, body: { message: 'x' } },
+      { status: 409, body: ['confirmations_closed'] },
+      { status: 409, text: 'Conflict' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers notFound on a 404', async () => {
+    for (const answer of [
+      { status: 404, body: { error: 'round_not_found' } },
+      { status: 404, text: 'Not Found' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'notFound',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [201, 400, 403, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'x' } },
+        { status: 200, body: ROUTED_VIEW },
+      );
+      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), String(status)).toEqual({
+        kind: 'failed',
+      });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ROUTED_VIEW });
+      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+/** One stop action, called the way the route screen calls it. */
+interface StopActionCase {
+  name: string;
+  act: (roundId: string, orderId: string, fetchFn: FetchFn) => Promise<StopActionOutcome>;
+  /** The path's last segment, after `/stops/:orderId/`. */
+  action: string;
+  /** The JSON body it sends, or undefined for none. */
+  body: unknown;
+}
+
+const STOP_ACTIONS: StopActionCase[] = [
+  {
+    name: 'moveStop',
+    act: (roundId, orderId, fetchFn) => moveStop(roundId, orderId, 'down', fetchFn),
+    action: 'move',
+    body: { direction: 'down' },
+  },
+  {
+    name: 'collectStop',
+    act: (roundId, orderId, fetchFn) => collectStop(roundId, orderId, undefined, fetchFn),
+    action: 'collected',
+    body: {},
+  },
+  {
+    name: 'markStopNotFound',
+    act: (roundId, orderId, fetchFn) => markStopNotFound(roundId, orderId, fetchFn),
+    action: 'not-found',
+    body: undefined,
+  },
+];
+
+describe.each(STOP_ACTIONS)('$name', ({ act, action, body }) => {
+  const roundId = ROUND_VIEW.round.id;
+
+  it('posts to /api/collector/rounds/:id/stops/:orderId/<action>, both ids encoded', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    await act(ODD_ID, 'e/f?g', fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(
+      `/api/collector/rounds/${ODD_ID_IN_PATH}/stops/e%2Ff%3Fg/${action}`,
+    );
+    expect(calls[0]?.init?.method).toBe('POST');
+    if (body === undefined) {
+      expect(calls[0]?.init?.body).toBeUndefined();
+      expect(calls[0]?.init?.headers).toBeUndefined();
+    } else {
+      expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+      expect(jsonBodyOf(calls[0])).toEqual(body);
+    }
+  });
+
+  it('answers saved with the round view on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    const outcome = await act(roundId, ORDER.id, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'saved', view: ROUTED_VIEW });
+    if (outcome.kind !== 'saved') throw new Error('expected saved');
+    expect(outcome.view.round.createdAt).toBeInstanceOf(Date);
+    expect(outcome.view.stops[0]?.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not a round view', async () => {
+    for (const answer of NOT_A_ROUTED_VIEW) {
+      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
+      expect(await act(roundId, ORDER.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers stale with the shared message on a 409 route_not_open', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'route_not_open', message: 'anything' },
+    });
+
+    expect(await act(roundId, ORDER.id, fetchFn)).toEqual({
+      kind: 'stale',
+      message: 'אין מסלול פתוח בסבב הזה. נא לרענן את המסך.',
+    });
+  });
+
+  it('answers stale with the stop-handled message on a 409 stop_handled or invalid_transition', async () => {
+    for (const error of ['stop_handled', 'invalid_transition']) {
+      const { fetchFn } = makeFakeFetch({ status: 409, body: { error, message: 'anything' } });
+      expect(await act(roundId, ORDER.id, fetchFn), error).toEqual({
+        kind: 'stale',
+        message: 'העצירה הזאת כבר טופלה. נא לרענן את המסך.',
+      });
+    }
+  });
+
+  it('answers failed on a 409 whose body has no known error code', async () => {
+    for (const answer of [
+      { status: 409, body: { error: 'confirmations_closed', message: 'x' } },
+      { status: 409, body: { message: 'x' } },
+      { status: 409, body: ['route_not_open'] },
+      { status: 409, text: 'Conflict' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await act(roundId, ORDER.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers notFound on a 404, for a missing round and a missing stop alike', async () => {
+    for (const answer of [
+      { status: 404, body: { error: 'round_not_found' } },
+      { status: 404, body: { error: 'order_not_found' } },
+      { status: 404, text: 'Not Found' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await act(roundId, ORDER.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'notFound',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await act(roundId, ORDER.id, fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, without a retry', async () => {
+    for (const status of [201, 403, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'x' } },
+        { status: 200, body: ROUTED_VIEW },
+      );
+      expect(await act(roundId, ORDER.id, fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ROUTED_VIEW });
+      expect(await act(roundId, ORDER.id, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+describe('moveStop', () => {
+  it('sends the direction it is given', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    await moveStop(ROUND_VIEW.round.id, ORDER.id, 'up', fetchFn);
+
+    expect(jsonBodyOf(calls[0])).toEqual({ direction: 'up' });
+  });
+
+  it('answers atEdge with the shared message on a 409 stop_at_edge', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 409,
+      body: { error: 'stop_at_edge', message: 'anything' },
+    });
+
+    expect(await moveStop(ROUND_VIEW.round.id, ORDER.id, 'up', fetchFn)).toEqual({
+      kind: 'atEdge',
+      message: 'העצירה כבר בקצה המסלול.',
+    });
+  });
+
+  it('answers failed on a 400 invalid_move: the screen has no field to show it next to', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 400, body: { error: 'invalid_move' } });
+
+    expect(await moveStop(ROUND_VIEW.round.id, ORDER.id, 'up', fetchFn)).toEqual({
+      kind: 'failed',
+    });
+  });
+});
+
+describe('collectStop', () => {
+  it('sends the count it is given', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    await collectStop(ROUND_VIEW.round.id, ORDER.id, 12, fetchFn);
+
+    expect(jsonBodyOf(calls[0])).toEqual({ bottlesCollected: 12 });
+  });
+
+  it('sends {} without a count, so the api uses the estimate', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    await collectStop(ROUND_VIEW.round.id, ORDER.id, undefined, fetchFn);
+
+    expect(calls[0]?.init?.body).toBe('{}');
+  });
+
+  it("answers saved with the collected stop's thank-you row", async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: ROUTED_VIEW });
+
+    const outcome = await collectStop(ROUND_VIEW.round.id, ORDER.id, 45, fetchFn);
+
+    if (outcome.kind !== 'saved') throw new Error('expected saved');
+    expect(outcome.view.stops[0]?.thankYou?.url).toBe(
+      'https://wa.me/972501234567?text=%D7%AA%D7%95%D7%93%D7%94',
+    );
+  });
+
+  it('answers invalid with the field errors of a 400 invalid_collect', async () => {
+    const fieldErrors = { bottlesCollected: 'נא לכתוב כמה בקבוקים נאספו, מספר שלם מ-1 ומעלה' };
+    const { fetchFn } = makeFakeFetch({
+      status: 400,
+      body: { error: 'invalid_collect', fieldErrors },
+    });
+
+    expect(await collectStop(ROUND_VIEW.round.id, ORDER.id, 0, fetchFn)).toEqual({
+      kind: 'invalid',
+      fieldErrors,
+    });
+  });
+
+  it('answers invalid with no field errors on a 400 without usable ones', async () => {
+    for (const answer of [
+      { status: 400, body: { error: 'invalid_collect', fieldErrors: { bottlesCollected: 0 } } },
+      { status: 400, body: { error: 'invalid_collect', fieldErrors: ['bottlesCollected'] } },
+      { status: 400, body: { error: 'invalid_json' } },
+      { status: 400, text: 'Bad Request' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(
+        await collectStop(ROUND_VIEW.round.id, ORDER.id, 0, fetchFn),
+        JSON.stringify(answer),
+      ).toEqual({ kind: 'invalid', fieldErrors: {} });
+    }
+  });
+});
+
+describe('markStopNotFound', () => {
+  it('answers failed on a 400: it sends no body, so there is no field to show', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 400, body: { error: 'invalid_json' } });
+
+    expect(await markStopNotFound(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
+      kind: 'failed',
+    });
+  });
+});
+
+/**
+ * The routed round once Yoel tapped "סגור סבב": closed, with `closedAt`. Its second stop was not
+ * reached, so that order is back in `waiting` and the stop shows `left`.
+ */
+const CLOSED_VIEW: RoundView = {
+  ...ROUTED_VIEW,
+  round: {
+    ...ROUTED_VIEW.round,
+    status: 'closed',
+    closedAt: new Date('2026-11-12T15:30:00.000Z'),
+  },
+  stops: [
+    ROUTED_VIEW.stops[0]!,
+    {
+      order: {
+        ...SECOND_ORDER,
+        status: 'waiting',
+        lastMiss: { date: '2026-11-12', reason: 'notReached', roundId: ROUND_VIEW.round.id },
+      },
+      hasLocation: false,
+      state: 'left',
+    },
+  ],
+};
+
+describe('closeRound', () => {
+  it('posts to /api/collector/rounds/:id/close, the id encoded, no body', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: CLOSED_VIEW });
+
+    await closeRound(ODD_ID, fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(`/api/collector/rounds/${ODD_ID_IN_PATH}/close`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.body).toBeUndefined();
+    expect(calls[0]?.init?.headers).toBeUndefined();
+  });
+
+  it('answers closed with the closed view on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: CLOSED_VIEW });
+
+    const outcome = await closeRound(ROUND_VIEW.round.id, fetchFn);
+
+    expect(outcome).toEqual({ kind: 'closed', view: CLOSED_VIEW });
+    if (outcome.kind !== 'closed') throw new Error('expected closed');
+    expect(outcome.view.round.closedAt).toBeInstanceOf(Date);
+    expect(outcome.view.stops[1]?.order.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('answers failed on a 200 whose body is not a round view', async () => {
+    for (const answer of NOT_A_ROUTED_VIEW) {
+      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers notFound on a 404', async () => {
+    for (const answer of [
+      { status: 404, body: { error: 'round_not_found' } },
+      { status: 404, text: 'Not Found' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'notFound',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, a 409 too, without a retry', async () => {
+    for (const status of [201, 400, 403, 409, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'confirmations_closed' } },
+        { status: 200, body: CLOSED_VIEW },
+      );
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), String(status)).toEqual({
+        kind: 'failed',
+      });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: CLOSED_VIEW });
+      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), answer).toEqual({ kind: 'failed' });
+      expect(calls, answer).toHaveLength(1);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The collector's history: GET /api/collector/history?month=
+// ---------------------------------------------------------------------------------------------
+
+/** October 2026: one collected order and one cancelled one, newest first. */
+const HISTORY: HistoryResponse = {
+  month: '2026-10',
+  totals: { bottlesCollected: 45, addressesCollected: 1, valueAgorot: 900 },
+  orders: [
+    {
+      id: 'o2',
+      status: 'cancelled',
+      contact: { name: 'משה לוי' },
+      address: { streetName: 'הרצל', houseNumber: '5' },
+      bottlesEstimated: 40,
+      closedAt: new Date('2026-10-20T09:00:00.000Z'),
+    },
+    {
+      id: 'o1',
+      status: 'collected',
+      contact: { name: 'דנה כהן' },
+      address: { streetName: 'שד נהר הדן', houseNumber: '12' },
+      bottlesEstimated: 40,
+      bottlesCollected: 45,
+      closedAt: new Date('2026-10-12T07:30:00.000Z'),
+    },
+  ],
+};
+
+describe('fetchHistory', () => {
+  it('asks GET /api/collector/history with the month, past the browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: HISTORY });
+
+    await fetchHistory('2026-10', fetchFn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/history?month=2026-10');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  it('encodes the month, so it stays one query value', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 400, body: { error: 'invalid_month' } });
+
+    await fetchHistory('2026-10&month=2026-11', fetchFn);
+
+    expect(calls[0]?.input).toBe('/api/collector/history?month=2026-10%26month%3D2026-11');
+  });
+
+  it('answers loaded with the totals and the closed orders on 200, Dates parsed', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 200, body: HISTORY });
+
+    const outcome = await fetchHistory('2026-10', fetchFn);
+
+    expect(outcome).toEqual({ kind: 'loaded', history: HISTORY });
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.history.orders[0]?.closedAt).toBeInstanceOf(Date);
+  });
+
+  it('answers loaded for a month with nothing closed', async () => {
+    const empty: HistoryResponse = {
+      month: '2026-09',
+      totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
+      orders: [],
+    };
+    const { fetchFn } = makeFakeFetch({ status: 200, body: empty });
+
+    expect(await fetchHistory('2026-09', fetchFn)).toEqual({ kind: 'loaded', history: empty });
+  });
+
+  it('answers failed on a 200 whose body is not a history', async () => {
+    const [firstOrder] = HISTORY.orders;
+    for (const answer of [
+      { status: 200, body: { ...HISTORY, month: '2026-13' } },
+      { status: 200, body: { ...HISTORY, totals: { ...HISTORY.totals, valueAgorot: -1 } } },
+      { status: 200, body: { ...HISTORY, orders: [{ ...firstOrder, status: 'waiting' }] } },
+      { status: 200, body: { ...HISTORY, orders: [{ ...firstOrder, closedAt: 'yesterday' }] } },
+      { status: 200, body: { totals: HISTORY.totals, orders: [] } },
+      { status: 200, body: [] },
+      { status: 200, text: '<html>ok</html>' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchHistory('2026-10', fetchFn), JSON.stringify(answer)).toEqual({
+        kind: 'failed',
+      });
+    }
+  });
+
+  it('answers loggedOut on 401, whatever the body says', async () => {
+    for (const answer of [
+      { status: 401, body: { error: 'unauthenticated' } },
+      { status: 401, text: 'Unauthorized' },
+    ]) {
+      const { fetchFn } = makeFakeFetch(answer);
+      expect(await fetchHistory('2026-10', fetchFn)).toEqual({ kind: 'loggedOut' });
+    }
+  });
+
+  it('answers failed on any other status, a 400 too, without a retry', async () => {
+    for (const status of [201, 400, 403, 404, 429, 500, 503]) {
+      const { fetchFn, calls } = makeFakeFetch(
+        { status, body: { error: 'invalid_month' } },
+        { status: 200, body: HISTORY },
+      );
+      expect(await fetchHistory('2026-10', fetchFn), String(status)).toEqual({ kind: 'failed' });
+      expect(calls, String(status)).toHaveLength(1);
+    }
+  });
+
+  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
+    for (const answer of ['networkError', 'throws'] as const) {
+      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: HISTORY });
+      expect(await fetchHistory('2026-10', fetchFn), answer).toEqual({ kind: 'failed' });
       expect(calls, answer).toHaveLength(1);
     }
   });

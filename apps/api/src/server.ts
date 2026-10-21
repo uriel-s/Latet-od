@@ -9,7 +9,8 @@ import { depsFromEnv, envErrorMessage } from './envDeps.ts';
 let deps: AppDeps;
 try {
   // Fail fast: a missing MONGODB_URI, or a missing or bad COLLECTOR_PASSWORD_HASH, SESSION_SECRET,
-  // MESSAGE_SENDER or PUBLIC_BASE_URL, stops the startup before any database client exists.
+  // MESSAGE_SENDER, PUBLIC_BASE_URL or ROUTE_START, stops the startup before any database client
+  // exists.
   deps = depsFromEnv(process.env);
 } catch (error) {
   // Only the message: it names the variable that is wrong, never its value (some hold secrets).

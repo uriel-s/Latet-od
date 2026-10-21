@@ -3,10 +3,12 @@
 // by hand with the contract suite (outside green).
 import { describe, expect, it } from 'vitest';
 import { ObjectId } from 'mongodb';
+import type { RoundPhase } from '@bottlerun/shared';
 import { makeNewRound } from './makeRound.ts';
 import {
   buildRoundListFilter,
   buildRoundUpdate,
+  buildRoundUpdateFilter,
   toRound,
   toRoundDocument,
 } from './mongoRoundsRepo.ts';
@@ -59,7 +61,7 @@ describe('toRound', () => {
       status: 'closed',
       phase: 'routed',
       orderIds: [HEX_ID],
-      stops: [{ orderId: HEX_ID }],
+      stops: [{ orderId: HEX_ID, hasLocation: true }],
       closedAt: new Date('2026-11-12T15:00:00.000Z'),
     });
     const _id = new ObjectId();
@@ -98,6 +100,35 @@ describe('buildRoundListFilter', () => {
   });
 });
 
+describe('buildRoundUpdateFilter', () => {
+  const _id = ObjectId.createFromHexString(HEX_ID);
+
+  it('matches only the id without conditions', () => {
+    expect(buildRoundUpdateFilter(_id, {})).toEqual({ _id });
+  });
+
+  it('adds ifStatus and ifPhase with $in, both required', () => {
+    expect(buildRoundUpdateFilter(_id, { ifStatus: ['open'], ifPhase: ['confirming'] })).toEqual({
+      _id,
+      status: { $in: ['open'] },
+      phase: { $in: ['confirming'] },
+    });
+  });
+
+  it('keeps an empty phase list, which matches nothing', () => {
+    expect(buildRoundUpdateFilter(_id, { ifPhase: [] })).toEqual({ _id, phase: { $in: [] } });
+  });
+
+  it('copies the lists, sharing nothing with the caller', () => {
+    const ifPhase: RoundPhase[] = ['routed'];
+    const filter = buildRoundUpdateFilter(_id, { ifPhase });
+
+    ifPhase.push('confirming');
+
+    expect(filter.phase).toEqual({ $in: ['routed'] });
+  });
+});
+
 describe('buildRoundUpdate', () => {
   it('sets the fields with a value and unsets the undefined ones', () => {
     const closedAt = new Date('2026-11-12T15:00:00.000Z');
@@ -111,7 +142,7 @@ describe('buildRoundUpdate', () => {
   });
 
   it('replaces an array as a whole', () => {
-    const stops = [{ orderId: HEX_ID }];
+    const stops = [{ orderId: HEX_ID, hasLocation: false }];
 
     expect(buildRoundUpdate({ stops })).toEqual({ $set: { stops } });
   });

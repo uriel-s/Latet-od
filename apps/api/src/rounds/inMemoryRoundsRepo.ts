@@ -64,11 +64,12 @@ export class InMemoryRoundsRepo implements RoundsRepo {
     return structuredClone(stored);
   }
 
-  /** The update itself; null when the round is missing or `ifStatus` does not match. */
+  /** The update itself; null when the round is missing or `ifStatus` or `ifPhase` does not match. */
   private applyPatch(id: string, patch: RoundPatch, options: RoundUpdateOptions): Round | null {
     const stored = this.rounds.get(id);
     if (stored === undefined) return null;
     if (options.ifStatus !== undefined && !options.ifStatus.includes(stored.status)) return null;
+    if (options.ifPhase !== undefined && !options.ifPhase.includes(stored.phase)) return null;
 
     // Like Mongo's `$set` / `$unset`: a top-level key replaces the field as a whole, and
     // `undefined` removes it. `withoutUndefined` copies the value, so the caller keeps no handle

@@ -7,6 +7,11 @@ import { LOGIN_MESSAGES, LOGIN_PASSWORD_MAX_LENGTH } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE, login, type LoginOutcome } from '../api.ts';
 import { TextField } from '../components/TextField.tsx';
 import { navigate } from '../router.tsx';
+import {
+  INSTALL_HINT_TEXT,
+  shouldShowInstallHint,
+  type InstallHintNavigator,
+} from './installHint.ts';
 
 const SUBMIT_LABEL = 'כניסה';
 const SENDING_LABEL = 'נכנס...';
@@ -18,6 +23,11 @@ export interface LoginPageProps {
    * pass a fake that records what it was given.
    */
   submitLogin?: (password: string) => Promise<LoginOutcome>;
+  /**
+   * The browser the install hint is decided for. Defaults to the real `navigator`; tests pass an
+   * iPhone, a desktop or the installed app without stubbing the global.
+   */
+  browser?: InstallHintNavigator;
 }
 
 /**
@@ -29,7 +39,10 @@ export interface LoginPageProps {
  * On success the app opens in place of this screen, which leaves the history: "back" from the app
  * must not land on a password form for a session that is already open.
  */
-export function LoginPage({ submitLogin = login }: LoginPageProps) {
+export function LoginPage({ submitLogin = login, browser = navigator }: LoginPageProps) {
+  // Decided once: the browser and whether the page runs as the installed app do not change while
+  // it is open.
+  const [showInstallHint] = useState(() => shouldShowInstallHint(browser));
   const [password, setPassword] = useState('');
   // The message under the password field (empty field, wrong password).
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
@@ -103,6 +116,9 @@ export function LoginPage({ submitLogin = login }: LoginPageProps) {
     <>
       <h1>כניסה</h1>
       <p>כניסה לאפליקציית האוסף.</p>
+      {/* iPhone Safari only (ADR-0006): "Add to Home Screen" is hidden in the Share menu, so Yoel
+          needs a pointer to install the app. In the installed app or on a computer it is noise. */}
+      {showInstallHint && <p>{INSTALL_HINT_TEXT}</p>}
 
       {/* noValidate: the browser's own bubbles would show English-shaped messages in the wrong
           place; the form shows its Hebrew message next to the field instead. */}

@@ -1,6 +1,7 @@
 // Tests for the static <head> of apps/web/index.html: the Open Graph tags WhatsApp reads to build
 // a link preview (ADR-0002), and the image they point at in apps/web/public/. Link previews do not
 // run JavaScript, so these tags must be in the file itself; this reads the file, not the rendered app.
+// Also the viewport meta: full screen (viewport-fit=cover) and zoom left on.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -97,5 +98,33 @@ describe('index.html link preview (Open Graph)', () => {
     // index.html is served for every page, so a robots tag here would hide the public form too.
     // The private customer pages (/o/<token>) get `X-Robots-Tag: noindex` from vercel.json.
     expect(head.querySelector('meta[name="robots"]')).toBeNull();
+  });
+});
+
+describe('index.html viewport', () => {
+  /** The viewport meta's settings, e.g. `{ width: 'device-width', 'initial-scale': '1.0' }`. */
+  function viewportSettings(): Record<string, string> {
+    const content = head.querySelector('meta[name="viewport"]')?.getAttribute('content') ?? '';
+    const settings: Record<string, string> = {};
+    for (const setting of content.split(',')) {
+      const [key = '', value = ''] = setting.split('=').map((part) => part.trim().toLowerCase());
+      if (key) settings[key] = value;
+    }
+    return settings;
+  }
+
+  it('fits the device width at scale 1 and covers the whole screen (safe areas in styles.css)', () => {
+    const settings = viewportSettings();
+    expect(settings.width).toBe('device-width');
+    expect(Number(settings['initial-scale'])).toBe(1);
+    expect(settings['viewport-fit']).toBe('cover');
+  });
+
+  it('lets the user zoom: no maximum-scale and no user-scalable=no', () => {
+    // Elderly customers enlarge the page; blocking zoom also fails WCAG 1.4.4.
+    const settings = viewportSettings();
+    expect(settings).not.toHaveProperty('maximum-scale');
+    expect(settings['user-scalable']).not.toBe('no');
+    expect(settings['user-scalable']).not.toBe('0');
   });
 });
