@@ -77,7 +77,7 @@ const MANUAL_REQUEST: MessageLogEntry = {
  * An in-memory orders repo where the customer acts at the worst moment: just before a route's
  * conditional write (`ifStatus`) to an id in {@link cancelBeforeConditionalWrite}, the order is
  * cancelled; to an id in {@link confirmBeforeConditionalWrite}, it is confirmed (the customer's
- * "מאשר/ת איסוף"). Either way the write finds another status and answers null. Unconditional
+ * "כן, אוציא את הבקבוקים"). Either way the write finds another status and answers null. Unconditional
  * writes (the message log) go through as usual.
  */
 class RacingOrdersRepo extends InMemoryOrdersRepo {
@@ -270,7 +270,7 @@ function moveStopOf(roundId: string, orderId: string, body?: object): request.Te
   return body === undefined ? req : req.send(body);
 }
 
-/** The customer's "מאשר/ת איסוף" on their own page (no login). */
+/** The customer's "כן, אוציא את הבקבוקים" on their own page (no login). */
 function customerConfirm(token: string): request.Test {
   return request(app).post(`/api/o/${token}/confirm`).set(SAME_ORIGIN_HEADERS);
 }

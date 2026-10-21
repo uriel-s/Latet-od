@@ -377,6 +377,13 @@ describe('OrderPage', () => {
       expect(screen.queryByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' })).toBeNull();
     });
 
+    it('says only what is confirmed, with no day, when the pending order has no round', async () => {
+      await renderLoaded(makeOrder({ status: 'pending' }));
+
+      expect(button('כן, אוציא את הבקבוקים')).toBeDefined();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
+    });
+
     it('confirms on "כן, אוציא את הבקבוקים" and shows the confirmed order, with thanks', async () => {
       const calls = await renderLoaded(pendingOrder());
 

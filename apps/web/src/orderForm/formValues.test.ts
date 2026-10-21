@@ -394,6 +394,9 @@ describe('hasEnoughBottles', () => {
   it('accepts a whole number from 30 up', () => {
     expect(hasEnoughBottles('30')).toBe(true);
     expect(hasEnoughBottles(' 45 ')).toBe(true);
+    expect(hasEnoughBottles('030')).toBe(true);
+    // The maximum is the schema's job; the button only hints about the minimum.
+    expect(hasEnoughBottles('6000')).toBe(true);
   });
 
   it('refuses fewer than 30, a blank field and anything that is not a whole number', () => {
