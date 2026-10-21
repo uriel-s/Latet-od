@@ -1,4 +1,5 @@
-// "סגור סבב" of an open round (spec §3.6), in both of its phases: a button, and once tapped a
+// The close button of an open round (spec §3.6), in both of its phases ("סיימתי את הסבב" once
+// routed, "בטל את הסבב" while confirming): a button, and once tapped a
 // question in the page that says what closing does, with the "תודות שלא נשלחו" list above it, so
 // Yoel can still send a thank-you he forgot before the round leaves his screen. The rounds screen
 // sends the close itself and tells this component whether it is on its way and whether it failed;
@@ -8,22 +9,51 @@ import { flushSync } from 'react-dom';
 import type { MessageLink, RoundPhase, RoundView } from '@bottlerun/shared';
 import { SendList, type SendListProps } from './SendList.tsx';
 
-/** The button that opens the question. */
-export const CLOSE_ROUND_LABEL = 'סגור סבב';
-/** "Yes" of the question: closes the round. */
-export const CLOSE_ROUND_YES_LABEL = 'כן, לסגור את הסבב';
-/** "No" of the question: back to the button, nothing sent. */
-export const CLOSE_ROUND_NO_LABEL = 'לא, עוד לא';
-/** "Yes" while the close is on its way. */
-export const CLOSING_ROUND_LABEL = 'סוגר סבב...';
+/** The texts of the close button and its question for one {@link RoundPhase}. */
+export interface CloseRoundTexts {
+  /** The button that opens the question. */
+  label: string;
+  /** The last sentence of the question, after the count of customers who go back to waiting. */
+  question: string;
+  /** "Yes" of the question: closes the round. */
+  yesLabel: string;
+  /** "Yes" while the close is on its way. */
+  busyLabel: string;
+  /** Inside the question when the close got no usable answer; "כן" can be tapped again. */
+  failedMessage: string;
+}
 
-/** Inside the question when the close got no usable answer; "כן" can be tapped again. */
-export const CLOSE_ROUND_FAILED_MESSAGE = 'לא הצלחנו לסגור את הסבב. נא לנסות שוב.';
+/**
+ * The close texts by phase. The same api call means two different things to Yoel: once the route
+ * is built (`routed`) he is done with the drive, and whatever he did not collect goes back to
+ * waiting ("סיימתי את הסבב"); while the round is still `confirming` there is no drive yet, so
+ * closing calls the whole round off, e.g. for rain ("בטל את הסבב"). One label cannot be right for
+ * both, so the wording follows `view.round.phase`.
+ */
+export const CLOSE_ROUND_TEXTS: Record<RoundPhase, CloseRoundTexts> = {
+  routed: {
+    label: 'סיימתי את הסבב',
+    question: 'לסיים את הסבב?',
+    yesLabel: 'כן, לסיים',
+    busyLabel: 'מסיים סבב...',
+    failedMessage: 'לא הצלחנו לסיים את הסבב. נא לנסות שוב.',
+  },
+  confirming: {
+    label: 'בטל את הסבב',
+    question: 'לבטל את הסבב?',
+    yesLabel: 'כן, לבטל את הסבב',
+    busyLabel: 'מבטל סבב...',
+    failedMessage: 'לא הצלחנו לבטל את הסבב. נא לנסות שוב.',
+  },
+};
+
+/** "No" of the question, in both phases: back to the button, nothing sent. */
+export const CLOSE_ROUND_NO_LABEL = 'לא, עוד לא';
 
 /** Heading of the thank-yous Yoel has not opened yet; shown only when there is one. */
 export const UNSENT_THANK_YOUS_TITLE = 'תודות שלא נשלחו';
 /** Under {@link UNSENT_THANK_YOUS_TITLE}: why the list is here. */
-export const UNSENT_THANK_YOUS_HINT = 'כדאי לשלוח אותן לפני שסוגרים את הסבב.';
+export const UNSENT_THANK_YOUS_HINT = 'כדאי לשלוח אותן לפני שמסיימים את הסבב.';
 
 /**
  * The thank-yous of `view` that Yoel has not opened yet, in the route's stored order: the
@@ -61,14 +91,14 @@ export function ordersSentBackCount(view: RoundView): number {
 }
 
 /**
- * The question "סגור סבב" asks first, in plain words like buildRouteQuestion
+ * The question the close button asks first, in plain words like buildRouteQuestion
  * (BuildRouteConfirm.tsx): how many customers go back to waiting for the next round, so Yoel hears
  * it before he decides.
  * In phase `routed` they are the stops he has not collected from yet, and it says so; in phase
  * `confirming` it is everyone still in the round.
  */
 export function closeRoundQuestion(sentBackCount: number, phase: RoundPhase): string {
-  const question = 'לסגור את הסבב?';
+  const question = CLOSE_ROUND_TEXTS[phase].question;
   if (sentBackCount === 0) return `אף לקוח לא יחזור לחכות. ${question}`;
   if (phase === 'routed') {
     if (sentBackCount === 1) {
@@ -84,12 +114,12 @@ export function closeRoundQuestion(sentBackCount: number, phase: RoundPhase): st
 export interface CloseRoundConfirmProps {
   /** The round as shown now; the question's count and the thank-you rows come from it. */
   view: RoundView;
-  /** True while the close is on its way: "כן" reads {@link CLOSING_ROUND_LABEL}. */
+  /** True while the close is on its way: "כן" reads the phase's `busyLabel`. */
   closing: boolean;
-  /** True when the last close got no usable answer: {@link CLOSE_ROUND_FAILED_MESSAGE}. */
+  /** True when the last close got no usable answer: the phase's `failedMessage`. */
   failed: boolean;
   /**
-   * "כן, לסגור את הסבב". Called on every tap, a busy one too: the screen keeps its own guard, so
+   * The "yes" of the question ("כן, לסיים" / "כן, לבטל את הסבב"). Called on every tap, a busy one too: the screen keeps its own guard, so
    * a double tap sends one request.
    */
   onClose: () => void;
@@ -100,10 +130,11 @@ export interface CloseRoundConfirmProps {
 }
 
 /**
- * "סגור סבב" and, once tapped, its question in its place. Built like BuildRouteConfirm.tsx and
+ * The close button and, once tapped, its question in its place; the wording follows the round's
+ * phase ({@link CLOSE_ROUND_TEXTS}). Built like BuildRouteConfirm.tsx and
  * components/CancelConfirm.tsx: a question in the page, not
  * `window.confirm`, and the focus where the next step is. The button is the quiet outline style,
- * so it does not compete with the round's main step ("סגור אישורים ובנה מסלול", or the route).
+ * so it does not compete with the round's main step ("התחל מסלול", or the route).
  *
  * The open question is one group, named by the question, top to bottom: the
  * "תודות שלא נשלחו" list (only when there is one), the question, the error of a failed close, and
@@ -133,6 +164,7 @@ export function CloseRoundConfirm({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const questionRef = useRef<HTMLParagraphElement>(null);
   const questionId = useId();
+  const texts = CLOSE_ROUND_TEXTS[view.round.phase];
 
   const rows = open ? thankYouRows(view, keptOrderIds) : [];
 
@@ -169,7 +201,7 @@ export function CloseRoundConfirm({
           </p>
           {failed && (
             <p className="form-alert" role="alert">
-              {CLOSE_ROUND_FAILED_MESSAGE}
+              {texts.failedMessage}
             </p>
           )}
           <div className="cancel-confirm-actions">
@@ -181,7 +213,7 @@ export function CloseRoundConfirm({
               aria-disabled={closing ? true : undefined}
               onClick={onClose}
             >
-              {closing ? CLOSING_ROUND_LABEL : CLOSE_ROUND_YES_LABEL}
+              {closing ? texts.busyLabel : texts.yesLabel}
             </button>
             <button
               type="button"
@@ -203,7 +235,7 @@ export function CloseRoundConfirm({
           className="button button-secondary button-block"
           onClick={() => showQuestion(true)}
         >
-          {CLOSE_ROUND_LABEL}
+          {texts.label}
         </button>
       )}
     </div>

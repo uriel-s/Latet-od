@@ -668,7 +668,7 @@ export async function planRound(
   }
 }
 
-/** How "אישר בטלפון" ended, as the round screen shows it. */
+/** How "אישר בשיחה או בהודעה" ended, as the round screen shows it. */
 export type ConfirmByPhoneOutcome =
   /** 200: the order is confirmed (also when it already was); `view` is the round as it is now. */
   | { kind: 'confirmed'; view: RoundView }
@@ -685,7 +685,7 @@ export type ConfirmByPhoneOutcome =
   | { kind: 'failed' };
 
 /**
- * Yoel's "אישר בטלפון" (spec §3.6): marks order `orderId` of round `roundId` confirmed, with
+ * Yoel's "אישר בשיחה או בהודעה" (spec §3.6): marks order `orderId` of round `roundId` confirmed, with
  * `POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone` (no body). Both ids are
  * encoded into the path. An order already confirmed answers `confirmed` too, so a second tap is
  * harmless.
@@ -715,7 +715,7 @@ export async function confirmOrderByPhone(
 }
 
 /**
- * A 409 of "אישר בטלפון", told apart by the body's `error` code: both are `closed`, each with its
+ * A 409 of "אישר בשיחה או בהודעה", told apart by the body's `error` code: both are `closed`, each with its
  * own words. A body without a known code is `failed`: guessing could tell Yoel the wrong thing.
  */
 function confirmConflictOutcome(body: unknown): ConfirmByPhoneOutcome {
@@ -740,7 +740,7 @@ function roundStopPath(roundId: string, orderId: string): string {
   return `${roundPath(roundId)}/stops/${encodeURIComponent(orderId)}`;
 }
 
-/** How "סגור אישורים ובנה מסלול" ended, as the round screen shows it. */
+/** How "התחל מסלול" ended, as the round screen shows it. */
 export type BuildRouteOutcome =
   /** 200: the route is built (phase `routed`); `view.stops` holds it in driving order. */
   | { kind: 'built'; view: RoundView }
@@ -757,7 +757,7 @@ export type BuildRouteOutcome =
   | { kind: 'failed' };
 
 /**
- * Yoel's "סגור אישורים ובנה מסלול" (spec §3.6 step 2) with `POST /api/collector/rounds/:id/route`
+ * Yoel's "התחל מסלול" (spec §3.6 step 2) with `POST /api/collector/rounds/:id/route`
  * (no body): the api closes the confirmations, sends whoever did not confirm back to `waiting`,
  * and stores the route `planRoute` computes. Not retried: a build whose answer was lost is stored,
  * and a second one would only answer `closed`.
@@ -928,7 +928,7 @@ function stopConflictOutcome(body: unknown): StopActionOutcome {
   }
 }
 
-/** How "סגור סבב" ended, as the round screen shows it. */
+/** How closing a round ended, as the round screen shows it. */
 export type CloseRoundOutcome =
   /**
    * 200: the round is closed (`view.round.status` is `closed`, `closedAt` set), also when it was
@@ -943,7 +943,7 @@ export type CloseRoundOutcome =
   | { kind: 'failed' };
 
 /**
- * Yoel's "סגור סבב" (spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
+ * Yoel's close button ("בטל את הסבב" / "סיימתי את הסבב", spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
  * closes the round and sends every order it did not handle back to `waiting` (a pending or
  * confirmed order of a round still confirming as "לא אישר בזמן", a stop not reached as "לא הגענו
  * אליו"). No message is sent. Not retried: a close whose answer was lost is stored, and a second

@@ -9,11 +9,8 @@ import type {
 } from '@bottlerun/shared';
 import type { MarkMessageOpenedOutcome } from '../api.ts';
 import {
-  CLOSE_ROUND_FAILED_MESSAGE,
-  CLOSE_ROUND_LABEL,
   CLOSE_ROUND_NO_LABEL,
-  CLOSE_ROUND_YES_LABEL,
-  CLOSING_ROUND_LABEL,
+  CLOSE_ROUND_TEXTS,
   CloseRoundConfirm,
   UNSENT_THANK_YOUS_HINT,
   UNSENT_THANK_YOUS_TITLE,
@@ -165,9 +162,12 @@ function renderConfirm(overrides: Partial<CloseRoundConfirmProps> = {}) {
   };
 }
 
-/** Taps "סגור סבב" and returns the question group that opens in its place. */
-function openQuestion(): HTMLElement {
-  fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_LABEL }));
+/** The close texts of the default (routed) view of {@link renderConfirm}. */
+const ROUTED_TEXTS = CLOSE_ROUND_TEXTS.routed;
+
+/** Taps the close button ("סיימתי את הסבב" by default) and returns the question group that opens. */
+function openQuestion(buttonName: string = ROUTED_TEXTS.label): HTMLElement {
+  fireEvent.click(screen.getByRole('button', { name: buttonName }));
   return screen.getByRole('group');
 }
 
@@ -231,35 +231,34 @@ describe('ordersSentBackCount', () => {
 
 describe('closeRoundQuestion', () => {
   it('says no one goes back when the count is 0, in both phases', () => {
-    const expected = 'אף לקוח לא יחזור לחכות. לסגור את הסבב?';
-    expect(closeRoundQuestion(0, 'confirming')).toBe(expected);
-    expect(closeRoundQuestion(0, 'routed')).toBe(expected);
+    expect(closeRoundQuestion(0, 'confirming')).toBe('אף לקוח לא יחזור לחכות. לבטל את הסבב?');
+    expect(closeRoundQuestion(0, 'routed')).toBe('אף לקוח לא יחזור לחכות. לסיים את הסבב?');
   });
 
   it('counts the customers of a confirming round, singular and plural', () => {
     expect(closeRoundQuestion(1, 'confirming')).toBe(
-      'לקוח אחד יחזור לחכות לסבב הבא. לסגור את הסבב?',
+      'לקוח אחד יחזור לחכות לסבב הבא. לבטל את הסבב?',
     );
     expect(closeRoundQuestion(4, 'confirming')).toBe(
-      '4 לקוחות יחזרו לחכות לסבב הבא. לסגור את הסבב?',
+      '4 לקוחות יחזרו לחכות לסבב הבא. לבטל את הסבב?',
     );
   });
 
   it('names the customers not collected yet in a routed round, singular and plural', () => {
     expect(closeRoundQuestion(1, 'routed')).toBe(
-      'לקוח אחד שעוד לא אספנו ממנו יחזור לחכות לסבב הבא. לסגור את הסבב?',
+      'לקוח אחד שעוד לא אספנו ממנו יחזור לחכות לסבב הבא. לסיים את הסבב?',
     );
     expect(closeRoundQuestion(2, 'routed')).toBe(
-      '2 לקוחות שעוד לא אספנו מהם יחזרו לחכות לסבב הבא. לסגור את הסבב?',
+      '2 לקוחות שעוד לא אספנו מהם יחזרו לחכות לסבב הבא. לסיים את הסבב?',
     );
   });
 });
 
 describe('CloseRoundConfirm', () => {
-  it('starts as one outline "סגור סבב" button', () => {
+  it('starts as one outline "סיימתי את הסבב" button in a routed round', () => {
     renderConfirm();
 
-    const button = screen.getByRole('button', { name: 'סגור סבב' });
+    const button = screen.getByRole('button', { name: 'סיימתי את הסבב' });
     expect(button.className).toContain('button-secondary');
     expect(screen.queryByRole('group')).toBeNull();
   });
@@ -271,19 +270,19 @@ describe('CloseRoundConfirm', () => {
 
     const question = openQuestion();
 
-    const text = '2 לקוחות שעוד לא אספנו מהם יחזרו לחכות לסבב הבא. לסגור את הסבב?';
+    const text = '2 לקוחות שעוד לא אספנו מהם יחזרו לחכות לסבב הבא. לסיים את הסבב?';
     expect(screen.getByRole('group', { name: text })).toBe(question);
     expect(within(question).getByText(text)).toBe(document.activeElement);
-    expect(within(question).getByRole('button', { name: CLOSE_ROUND_YES_LABEL })).toBeDefined();
+    expect(within(question).getByRole('button', { name: 'כן, לסיים' })).toBeDefined();
     expect(within(question).getByRole('button', { name: CLOSE_ROUND_NO_LABEL })).toBeDefined();
-    expect(screen.queryByRole('button', { name: CLOSE_ROUND_LABEL })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'סיימתי את הסבב' })).toBeNull();
     expect(calls.openChange).toBe(1);
     // No thank-you to send: no list and no heading.
     expect(screen.queryByRole('heading')).toBeNull();
     expect(screen.queryByRole('list')).toBeNull();
   });
 
-  it('asks about every order still in a confirming round', () => {
+  it('asks about every order still in a confirming round, as "בטל את הסבב"', () => {
     renderConfirm({
       view: confirmingView({
         confirmed: [DANA],
@@ -291,10 +290,10 @@ describe('CloseRoundConfirm', () => {
       }),
     });
 
-    openQuestion();
+    openQuestion('בטל את הסבב');
 
     expect(
-      screen.getByRole('group', { name: '2 לקוחות יחזרו לחכות לסבב הבא. לסגור את הסבב?' }),
+      screen.getByRole('group', { name: '2 לקוחות יחזרו לחכות לסבב הבא. לבטל את הסבב?' }),
     ).toBeDefined();
   });
 
@@ -305,16 +304,16 @@ describe('CloseRoundConfirm', () => {
     fireEvent.click(screen.getByRole('button', { name: CLOSE_ROUND_NO_LABEL }));
 
     expect(screen.queryByRole('group')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: CLOSE_ROUND_LABEL }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: ROUTED_TEXTS.label }));
     expect(calls.close).toBe(0);
     expect(calls.openChange).toBe(2);
   });
 
-  it('calls onClose on "כן, לסגור את הסבב", every tap', () => {
+  it('calls onClose on "כן, לסיים", every tap', () => {
     const { calls } = renderConfirm();
     openQuestion();
 
-    const yes = screen.getByRole('button', { name: CLOSE_ROUND_YES_LABEL });
+    const yes = screen.getByRole('button', { name: ROUTED_TEXTS.yesLabel });
     fireEvent.click(yes);
     fireEvent.click(yes);
 
@@ -327,8 +326,8 @@ describe('CloseRoundConfirm', () => {
 
     rerender({ closing: true });
 
-    const busy = screen.getByRole('button', { name: CLOSING_ROUND_LABEL });
-    expect(CLOSING_ROUND_LABEL).toBe('סוגר סבב...');
+    const busy = screen.getByRole('button', { name: ROUTED_TEXTS.busyLabel });
+    expect(ROUTED_TEXTS.busyLabel).toBe('מסיים סבב...');
     expect(busy.getAttribute('aria-disabled')).toBe('true');
     const no = screen.getByRole('button', { name: CLOSE_ROUND_NO_LABEL });
     expect(no.getAttribute('aria-disabled')).toBe('true');
@@ -342,9 +341,51 @@ describe('CloseRoundConfirm', () => {
 
     rerender({ failed: true });
 
-    expect(within(question).getByRole('alert').textContent).toBe(CLOSE_ROUND_FAILED_MESSAGE);
-    expect(CLOSE_ROUND_FAILED_MESSAGE).toBe('לא הצלחנו לסגור את הסבב. נא לנסות שוב.');
-    expect(within(question).getByRole('button', { name: CLOSE_ROUND_YES_LABEL })).toBeDefined();
+    expect(within(question).getByRole('alert').textContent).toBe(ROUTED_TEXTS.failedMessage);
+    expect(ROUTED_TEXTS.failedMessage).toBe('לא הצלחנו לסיים את הסבב. נא לנסות שוב.');
+    expect(within(question).getByRole('button', { name: ROUTED_TEXTS.yesLabel })).toBeDefined();
+  });
+
+  describe('texts by phase', () => {
+    const CONFIRMING = confirmingView({ confirmed: [DANA] });
+
+    it('reads "סיימתי את הסבב" / "לסיים את הסבב?" / "כן, לסיים" once the round is routed', () => {
+      renderConfirm({ view: routedView([toCollect(DANA)]) });
+
+      const question = openQuestion('סיימתי את הסבב');
+
+      expect(within(question).getByText(/לסיים את הסבב\?$/)).toBeDefined();
+      expect(within(question).getByRole('button', { name: 'כן, לסיים' })).toBeDefined();
+    });
+
+    it('reads "בטל את הסבב" / "לבטל את הסבב?" / "כן, לבטל את הסבב" while confirming', () => {
+      renderConfirm({ view: CONFIRMING });
+
+      expect(screen.queryByRole('button', { name: 'סיימתי את הסבב' })).toBeNull();
+      const question = openQuestion('בטל את הסבב');
+
+      expect(within(question).getByText(/לבטל את הסבב\?$/)).toBeDefined();
+      expect(within(question).getByRole('button', { name: 'כן, לבטל את הסבב' })).toBeDefined();
+      expect(within(question).getByRole('button', { name: CLOSE_ROUND_NO_LABEL })).toBeDefined();
+    });
+
+    it('has the busy and failed texts of each phase', () => {
+      expect(CLOSE_ROUND_TEXTS.routed.busyLabel).toBe('מסיים סבב...');
+      expect(CLOSE_ROUND_TEXTS.routed.failedMessage).toBe('לא הצלחנו לסיים את הסבב. נא לנסות שוב.');
+      expect(CLOSE_ROUND_TEXTS.confirming.busyLabel).toBe('מבטל סבב...');
+      expect(CLOSE_ROUND_TEXTS.confirming.failedMessage).toBe(
+        'לא הצלחנו לבטל את הסבב. נא לנסות שוב.',
+      );
+
+      const { rerender } = renderConfirm({ view: CONFIRMING });
+      const question = openQuestion('בטל את הסבב');
+      rerender({ closing: true });
+      expect(within(question).getByRole('button', { name: 'מבטל סבב...' })).toBeDefined();
+      rerender({ closing: false, failed: true });
+      expect(within(question).getByRole('alert').textContent).toBe(
+        'לא הצלחנו לבטל את הסבב. נא לנסות שוב.',
+      );
+    });
   });
 
   describe('"תודות שלא נשלחו"', () => {
@@ -376,7 +417,7 @@ describe('CloseRoundConfirm', () => {
       const question = openQuestion();
 
       const list = within(question).getByRole('list');
-      const text = within(question).getByText(/לסגור את הסבב\?$/);
+      const text = within(question).getByText(/לסיים את הסבב\?$/);
       expect(list.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
         Node.DOCUMENT_POSITION_FOLLOWING,
       );
@@ -417,7 +458,7 @@ describe('CloseRoundConfirm', () => {
       expect(within(items[1]!).getByRole('link', { name: 'שלח לרינה פרץ' })).toBeDefined();
       // The count follows the newer view: no stop is left to collect.
       expect(
-        screen.getByRole('group', { name: 'אף לקוח לא יחזור לחכות. לסגור את הסבב?' }),
+        screen.getByRole('group', { name: 'אף לקוח לא יחזור לחכות. לסיים את הסבב?' }),
       ).toBeDefined();
     });
 

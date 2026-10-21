@@ -3,10 +3,10 @@
 // the URL as `?round=<id>`, and without it (or with an id that is not open any more) the nearest
 // open round shows. Only open rounds are listed, so a closed round is never an option.
 // Step 1 "אישורים" (phase `confirming`): who confirmed, who did not yet, and who asked for another
-// date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בטלפון"
-// for a customer who confirmed in a call or in a WhatsApp reply; and "סגור אישורים ובנה מסלול",
+// date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בשיחה או בהודעה"
+// for a customer who confirmed in a call or in a WhatsApp reply; and "התחל מסלול",
 // asked as a question first (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
-// stops (RouteScreen.tsx). In both steps the round ends with "סגור סבב" (CloseRoundConfirm.tsx),
+// stops (RouteScreen.tsx). In both steps the round ends with its close button (CloseRoundConfirm.tsx),
 // after which it leaves the tab. GET /api/collector/rounds sends the open rounds already grouped
 // and routed (the shared buildRoundView), so this screen only shows them, and after each action it
 // swaps in the round as the api answers it. The question components own only their open state and
@@ -64,17 +64,17 @@ export const EMPTY_ROUND_GROUP_TEXT = 'אין';
 export const SEND_LIST_HINT =
   'לחיצה על "שלח" פותחת את WhatsApp עם ההודעה כבר כתובה, ושם לוחצים "שלח".';
 
-/** Next to a card whose "אישר בטלפון" got no usable answer; the button can be tapped again. */
+/** Next to a card whose "אישר בשיחה או בהודעה" got no usable answer; the button can be tapped again. */
 export const CONFIRM_FAILED_MESSAGE = 'לא הצלחנו לשמור. נא לנסות שוב.';
 
-/** "אישר בטלפון" answered 404: the order (or its round) left the round meanwhile. */
+/** "אישר בשיחה או בהודעה" answered 404: the order (or its round) left the round meanwhile. */
 export const ORDER_LEFT_ROUND_MESSAGE = 'ההזמנה כבר לא בסבב.';
 
-const CONFIRM_LABEL = 'אישר בטלפון';
+const CONFIRM_LABEL = 'אישר בשיחה או בהודעה';
 const CONFIRMING_LABEL = 'שומר...';
 
 /**
- * Under the heading once "סגור סבב" answered: the round left the tab (only open rounds are listed),
+ * Under the heading once the close button answered: the round left the tab (only open rounds are listed),
  * so the section Yoel tapped is gone and the focus comes here.
  */
 export const ROUND_CLOSED_MESSAGE = 'הסבב נסגר.';
@@ -117,13 +117,13 @@ export interface RoundsScreenProps {
    * not an inline arrow: a new one loads again.
    */
   loadRounds?: () => Promise<RoundsOutcome>;
-  /** Yoel's "אישר בטלפון". Defaults to {@link confirmOrderByPhone}; tests pass a fake. */
+  /** Yoel's "אישר בשיחה או בהודעה". Defaults to {@link confirmOrderByPhone}; tests pass a fake. */
   confirmByPhone?: (roundId: string, orderId: string) => Promise<ConfirmByPhoneOutcome>;
   /**
-   * "סגור אישורים ובנה מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
+   * "התחל מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
    */
   buildRoute?: (roundId: string) => Promise<BuildRouteOutcome>;
-  /** "סגור סבב", in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
+  /** The close button ("בטל את הסבב" / "סיימתי את הסבב"), in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
   closeRound?: (roundId: string) => Promise<CloseRoundOutcome>;
   /** A route's arrows; undefined keeps RouteScreen's own default (the api). */
   moveStop?: RouteScreenProps['moveStop'];
@@ -168,17 +168,17 @@ interface Notice {
  * A 401 means the session ended: to the login, like the guard in CollectorApp.tsx. A failed load
  * stays here with a retry: a dropped connection is not a logout.
  *
- * "אישר בטלפון" swaps in the round the api answers: the customer moves to "אישרו" and leaves the
+ * "אישר בשיחה או בהודעה" swaps in the round the api answers: the customer moves to "אישרו" and leaves the
  * "שלח" list. When the api says the order can no longer be confirmed, or is no longer in the
  * round, the screen says so under the heading, moves the focus there (the card Yoel tapped may be
  * gone after the reload), and loads the rounds again without blanking them first.
  *
- * "סגור אישורים ובנה מסלול" swaps in the routed round the api answers, so the section shows its
+ * "התחל מסלול" swaps in the routed round the api answers, so the section shows its
  * route in place of the confirmations. A route already built, or a round gone, is the same kind of
  * out-of-date screen as above: a notice and a reload. Each stop action of the route is sent by
  * RouteScreen; this screen swaps in its answer, or shows its notice and reloads.
  *
- * "סגור סבב" takes the closed round off the screen and says {@link ROUND_CLOSED_MESSAGE} under the
+ * The close button takes the closed round off the screen and says {@link ROUND_CLOSED_MESSAGE} under the
  * heading, with the focus there, since the section Yoel tapped is gone. No reload: the answer is
  * the truth already, and a closed round is never listed again. A reload that set out before the
  * close answered may still list the round, so every loaded answer leaves out the rounds closed
@@ -204,10 +204,10 @@ export function RoundsScreen({
 }: RoundsScreenProps) {
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   // Counts the loads asked for after the first ("לנסות שוב", a reload after a refused
-  // "אישר בטלפון", or Yoel coming back to the app): a new value runs the load below again.
+  // "אישר בשיחה או בהודעה", or Yoel coming back to the app): a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // The orders whose "אישר בטלפון" is on its way ("שומר..."), and those whose last one failed.
+  // The orders whose "אישר בשיחה או בהודעה" is on its way ("שומר..."), and those whose last one failed.
   // By order id: an order is in one open round at most (spec §4), and only its own round's
   // "עוד לא אישרו" group has the button.
   const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -215,12 +215,12 @@ export function RoundsScreen({
   // The state above reaches the handler only after a re-render; this ref stops a second tap on the
   // same card that comes before it, so one tap sends one request.
   const busyIdsRef = useRef(new Set<string>());
-  // The rounds whose route build is on its way ("בונה מסלול..."), and those whose last one failed,
+  // The rounds whose route build is on its way ("מתחיל מסלול..."), and those whose last one failed,
   // by round id; the ref is the same double-tap guard as busyIdsRef.
   const [buildingIds, setBuildingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [buildFailedIds, setBuildFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const buildingIdsRef = useRef(new Set<string>());
-  // The same three for "סגור סבב", by round id.
+  // The same three for the close button, by round id.
   const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [closeFailedIds, setCloseFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const closingIdsRef = useRef(new Set<string>());
@@ -294,7 +294,7 @@ export function RoundsScreen({
 
   // Back in the app: the same reload, rounds kept on screen. A notice stays: the usual trip away is
   // to WhatsApp from "שלח", and the notice still explains why the card Yoel tapped moved or left;
-  // his next "אישר בטלפון" or "לנסות שוב" clears it, as before. Skipped while he is typing a
+  // his next "אישר בשיחה או בהודעה" or "לנסות שוב" clears it, as before. Skipped while he is typing a
   // quantity (see the doc comment above): nothing is lost, the next return loads.
   useReloadOnReturn(() => {
     if (typingRoundIdsRef.current.size === 0) reload();
@@ -336,7 +336,7 @@ export function RoundsScreen({
     );
   }
 
-  /** Yoel's "אישר בטלפון" on `orderId` of round `roundId` (spec §3.6). */
+  /** Yoel's "אישר בשיחה או בהודעה" on `orderId` of round `roundId` (spec §3.6). */
   async function confirm(roundId: string, orderId: string): Promise<void> {
     if (busyIdsRef.current.has(orderId)) return;
     busyIdsRef.current.add(orderId);
@@ -380,7 +380,7 @@ export function RoundsScreen({
     }
   }
 
-  /** Yoel's "כן, לבנות מסלול" for round `roundId` (spec §3.6, "סגור אישורים ובנה מסלול"). */
+  /** Yoel's "כן, להתחיל" for round `roundId` (spec §3.6, "התחל מסלול"). */
   async function buildRouteOf(roundId: string): Promise<void> {
     if (buildingIdsRef.current.has(roundId)) return;
     buildingIdsRef.current.add(roundId);
@@ -392,7 +392,7 @@ export function RoundsScreen({
     try {
       outcome = await buildRoute(roundId);
     } catch {
-      // buildRoute never rejects, but a rejection must not leave the question on "בונה מסלול...".
+      // buildRoute never rejects, but a rejection must not leave the question on "מתחיל מסלול...".
       outcome = { kind: 'failed' };
     }
     buildingIdsRef.current.delete(roundId);
@@ -421,7 +421,7 @@ export function RoundsScreen({
     }
   }
 
-  /** Yoel's "כן, לסגור את הסבב" for round `roundId`, in either phase (spec §3.6, "סגור סבב"). */
+  /** Yoel's "yes" to the close question for round `roundId`, in either phase (spec §3.6). */
   async function closeRoundOf(roundId: string): Promise<void> {
     if (closingIdsRef.current.has(roundId)) return;
     closingIdsRef.current.add(roundId);
@@ -433,7 +433,7 @@ export function RoundsScreen({
     try {
       outcome = await closeRound(roundId);
     } catch {
-      // closeRound never rejects, but a rejection must not leave the question on "סוגר סבב...".
+      // closeRound never rejects, but a rejection must not leave the question on its busy label.
       outcome = { kind: 'failed' };
     }
     closingIdsRef.current.delete(roundId);
@@ -565,7 +565,7 @@ export function RoundsScreen({
 }
 
 /**
- * What a section needs for "סגור סבב", in either phase: everything of {@link CloseRoundConfirm}
+ * What a section needs for the close button, in either phase: everything of {@link CloseRoundConfirm}
  * but the view and markOpened, which the section has already. The screen sends the request.
  */
 type SectionCloseRound = Omit<CloseRoundConfirmProps, 'view' | 'markOpened'>;
@@ -577,16 +577,16 @@ type SectionRoute = Omit<RouteScreenProps, 'view'>;
 interface RoundSectionProps {
   view: RoundView;
   markOpened: SendListProps['markOpened'];
-  /** Orders whose "אישר בטלפון" is on its way. */
+  /** Orders whose "אישר בשיחה או בהודעה" is on its way. */
   savingIds: ReadonlySet<string>;
-  /** Orders whose last "אישר בטלפון" failed. */
+  /** Orders whose last "אישר בשיחה או בהודעה" failed. */
   failedIds: ReadonlySet<string>;
   onConfirm: (orderId: string) => void;
   /** Step 1's last button. */
   buildRoute: BuildRouteControl;
   /** Step 2's route. */
   route: SectionRoute;
-  /** "סגור סבב", the last button of either step. */
+  /** The close button, the last button of either step. */
   closeRound: SectionCloseRound;
 }
 
@@ -597,14 +597,14 @@ interface RoundSectionProps {
  *
  * Step 1 (phase `confirming`): the confirmation counts, the "שלח" list, the three groups of orders
  * (every group shows, an empty one too, so the layout does not jump as customers confirm), and
- * last "סגור אישורים ובנה מסלול": the step that ends step 1 comes after everything Yoel checks
- * before it, and lies apart from the "אישר בטלפון" buttons.
+ * last "התחל מסלול": the step that ends step 1 comes after everything Yoel checks
+ * before it, and lies apart from the "אישר בשיחה או בהודעה" buttons.
  *
  * Step 2 (phase `routed`): the route alone. Its own summary takes the place of the confirmation
  * counts (one live summary per round, not two), and the groups and the "שלח" list are gone:
  * whoever did not confirm left the round when it was built.
  *
- * Both steps end with "סגור סבב" (CloseRoundConfirm.tsx), after the step's own last part (the
+ * Both steps end with the close button (CloseRoundConfirm.tsx), after the step's own last part (the
  * build question, or the route), so the quieter way out of the round comes after the way on. It
  * is rendered outside the step's branch, at one place in the section, so an open question (and the
  * thank-you rows Yoel tapped in it) stays mounted across every swapped view, a build included.
@@ -612,7 +612,7 @@ interface RoundSectionProps {
  * When a build swaps step 1 for step 2, the question Yoel answered is gone, so the focus goes to
  * the round's heading, at the top of its route. Only when the focus was lost that way (on the page
  * itself, or still in this section): a notice the screen focused meanwhile keeps it, and so does
- * an open "סגור סבב" question, which stays where it was.
+ * an open close question, which stays where it was.
  */
 function RoundSection({
   view,
@@ -668,7 +668,7 @@ function RoundSection({
         <RouteScreen view={view} {...route} />
       ) : (
         <>
-          {/* Polite live text: a screen reader hears the new counts after "אישר בטלפון". */}
+          {/* Polite live text: a screen reader hears the new counts after "אישר בשיחה או בהודעה". */}
           <p className="round-summary" aria-live="polite">
             {confirmationSummary(groups)}
           </p>
@@ -718,7 +718,7 @@ interface RoundGroupSectionProps {
 /**
  * One group of the round ("אישרו", "עוד לא אישרו", "ביקשו מועד אחר") as a named region, with its
  * order count, or {@link EMPTY_ROUND_GROUP_TEXT} and no list. Only "עוד לא אישרו" has the
- * "אישר בטלפון" button on its cards.
+ * "אישר בשיחה או בהודעה" button on its cards.
  */
 function RoundGroupSection({
   groupKey,
@@ -758,7 +758,7 @@ function RoundGroupSection({
   );
 }
 
-/** The "אישר בטלפון" part of a card in "עוד לא אישרו". */
+/** The "אישר בשיחה או בהודעה" part of a card in "עוד לא אישרו". */
 interface CardConfirm {
   saving: boolean;
   failed: boolean;
