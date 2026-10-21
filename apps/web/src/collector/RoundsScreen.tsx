@@ -1,7 +1,7 @@
 // The "סבבים" tab of the collector app (spec §3.6), one section per open round.
 // Step 1 "אישורים" (phase `confirming`): who confirmed, who did not yet, and who asked for another
 // date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בטלפון"
-// for a customer who confirmed in a call or in a WhatsApp reply; and "סגור אישורים ובנה מסלול",
+// for a customer who confirmed in a call or in a WhatsApp reply; and "התחל מסלול",
 // asked as a question first (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
 // stops (RouteScreen.tsx). In both steps the round ends with "סגור סבב" (CloseRoundConfirm.tsx),
 // after which it leaves the tab. GET /api/collector/rounds sends the open rounds already grouped
@@ -115,7 +115,7 @@ export interface RoundsScreenProps {
   /** Yoel's "אישר בטלפון". Defaults to {@link confirmOrderByPhone}; tests pass a fake. */
   confirmByPhone?: (roundId: string, orderId: string) => Promise<ConfirmByPhoneOutcome>;
   /**
-   * "סגור אישורים ובנה מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
+   * "התחל מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
    */
   buildRoute?: (roundId: string) => Promise<BuildRouteOutcome>;
   /** "סגור סבב", in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
@@ -161,7 +161,7 @@ interface Notice {
  * round, the screen says so under the heading, moves the focus there (the card Yoel tapped may be
  * gone after the reload), and loads the rounds again without blanking them first.
  *
- * "סגור אישורים ובנה מסלול" swaps in the routed round the api answers, so the section shows its
+ * "התחל מסלול" swaps in the routed round the api answers, so the section shows its
  * route in place of the confirmations. A route already built, or a round gone, is the same kind of
  * out-of-date screen as above: a notice and a reload. Each stop action of the route is sent by
  * RouteScreen; this screen swaps in its answer, or shows its notice and reloads.
@@ -200,7 +200,7 @@ export function RoundsScreen({
   // The state above reaches the handler only after a re-render; this ref stops a second tap on the
   // same card that comes before it, so one tap sends one request.
   const busyIdsRef = useRef(new Set<string>());
-  // The rounds whose route build is on its way ("בונה מסלול..."), and those whose last one failed,
+  // The rounds whose route build is on its way ("מתחיל מסלול..."), and those whose last one failed,
   // by round id; the ref is the same double-tap guard as busyIdsRef.
   const [buildingIds, setBuildingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [buildFailedIds, setBuildFailedIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -365,7 +365,7 @@ export function RoundsScreen({
     }
   }
 
-  /** Yoel's "כן, לבנות מסלול" for round `roundId` (spec §3.6, "סגור אישורים ובנה מסלול"). */
+  /** Yoel's "כן, להתחיל" for round `roundId` (spec §3.6, "התחל מסלול"). */
   async function buildRouteOf(roundId: string): Promise<void> {
     if (buildingIdsRef.current.has(roundId)) return;
     buildingIdsRef.current.add(roundId);
@@ -377,7 +377,7 @@ export function RoundsScreen({
     try {
       outcome = await buildRoute(roundId);
     } catch {
-      // buildRoute never rejects, but a rejection must not leave the question on "בונה מסלול...".
+      // buildRoute never rejects, but a rejection must not leave the question on "מתחיל מסלול...".
       outcome = { kind: 'failed' };
     }
     buildingIdsRef.current.delete(roundId);
@@ -557,7 +557,7 @@ interface RoundSectionProps {
  *
  * Step 1 (phase `confirming`): the confirmation counts, the "שלח" list, the three groups of orders
  * (every group shows, an empty one too, so the layout does not jump as customers confirm), and
- * last "סגור אישורים ובנה מסלול": the step that ends step 1 comes after everything Yoel checks
+ * last "התחל מסלול": the step that ends step 1 comes after everything Yoel checks
  * before it, and lies apart from the "אישר בטלפון" buttons.
  *
  * Step 2 (phase `routed`): the route alone. Its own summary takes the place of the confirmation

@@ -740,7 +740,7 @@ function roundStopPath(roundId: string, orderId: string): string {
   return `${roundPath(roundId)}/stops/${encodeURIComponent(orderId)}`;
 }
 
-/** How "סגור אישורים ובנה מסלול" ended, as the round screen shows it. */
+/** How "התחל מסלול" ended, as the round screen shows it. */
 export type BuildRouteOutcome =
   /** 200: the route is built (phase `routed`); `view.stops` holds it in driving order. */
   | { kind: 'built'; view: RoundView }
@@ -757,7 +757,7 @@ export type BuildRouteOutcome =
   | { kind: 'failed' };
 
 /**
- * Yoel's "סגור אישורים ובנה מסלול" (spec §3.6 step 2) with `POST /api/collector/rounds/:id/route`
+ * Yoel's "התחל מסלול" (spec §3.6 step 2) with `POST /api/collector/rounds/:id/route`
  * (no body): the api closes the confirmations, sends whoever did not confirm back to `waiting`,
  * and stores the route `planRoute` computes. Not retried: a build whose answer was lost is stored,
  * and a second one would only answer `closed`.

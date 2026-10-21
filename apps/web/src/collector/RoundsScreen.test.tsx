@@ -257,7 +257,7 @@ function routedView(stops: RouteStopView[]): RoundView {
   return { ...makeView({ round: { phase: 'routed' }, sendList: [] }), stops };
 }
 
-/** VIEW after "סגור אישורים ובנה מסלול": משה and יוסי went back to waiting; דנה is the route. */
+/** VIEW after "התחל מסלול": משה and יוסי went back to waiting; דנה is the route. */
 const ROUTED = routedView([stopOf(DANA), stopOf(MOSHE)]);
 
 /** A fake `buildRoute` that records its calls (answers built {@link ROUTED}). */
@@ -803,9 +803,8 @@ describe('RoundsScreen', () => {
     });
   });
 
-  describe('"סגור אישורים ובנה מסלול"', () => {
-    const QUESTION_OF_VIEW =
-      '2 לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. לסגור את האישורים ולבנות מסלול?';
+  describe('"התחל מסלול"', () => {
+    const QUESTION_OF_VIEW = '2 לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. להתחיל מסלול?';
 
     /** Taps the button and returns the question that opens in its place. */
     function openQuestion(): HTMLElement {
@@ -816,7 +815,7 @@ describe('RoundsScreen', () => {
     it('ends a round in step 1, after its groups', async () => {
       const round = await renderLoaded();
 
-      const button = within(round).getByRole('button', { name: 'סגור אישורים ובנה מסלול' });
+      const button = within(round).getByRole('button', { name: 'התחל מסלול' });
       const lastGroup = groupRegion('ביקשו מועד אחר');
       // The button comes after the last group in the page.
       expect(lastGroup.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
@@ -830,7 +829,7 @@ describe('RoundsScreen', () => {
       const question = openQuestion();
 
       expect(within(question).getByText(QUESTION_OF_VIEW)).toBe(document.activeElement);
-      expect(within(question).getByRole('button', { name: 'כן, לבנות מסלול' })).toBeDefined();
+      expect(within(question).getByRole('button', { name: 'כן, להתחיל' })).toBeDefined();
       expect(within(question).getByRole('button', { name: 'לא, עוד לא' })).toBeDefined();
       expect(screen.queryByRole('button', { name: BUILD_ROUTE_LABEL })).toBeNull();
     });
@@ -853,8 +852,8 @@ describe('RoundsScreen', () => {
       await renderLoaded({ buildRoute });
       openQuestion();
 
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
-      const busy = screen.getByRole('button', { name: 'בונה מסלול...' });
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
+      const busy = screen.getByRole('button', { name: 'מתחיל מסלול...' });
       expect(busy.getAttribute('aria-disabled')).toBe('true');
       expect(screen.getByRole('button', { name: 'לא, עוד לא' }).getAttribute('aria-disabled')).toBe(
         'true',
@@ -888,7 +887,7 @@ describe('RoundsScreen', () => {
       });
       openQuestion();
 
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.confirmationsClosed);
@@ -906,7 +905,7 @@ describe('RoundsScreen', () => {
       });
       openQuestion();
 
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
 
       expect((await screen.findByRole('alert')).textContent).toBe(ROUND_MESSAGES.roundNotFound);
       expect(await screen.findByText(NO_OPEN_ROUND_TEXT)).toBeDefined();
@@ -922,12 +921,12 @@ describe('RoundsScreen', () => {
       await renderLoaded({ loadRounds: rounds.load, buildRoute });
       const question = openQuestion();
 
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
 
       const alert = await within(question).findByRole('alert');
       expect(alert.textContent).toBe(BUILD_ROUTE_FAILED_MESSAGE);
-      expect(BUILD_ROUTE_FAILED_MESSAGE).toBe('לא הצלחנו לבנות את המסלול. נא לנסות שוב.');
-      const yes = screen.getByRole('button', { name: 'כן, לבנות מסלול' });
+      expect(BUILD_ROUTE_FAILED_MESSAGE).toBe('לא הצלחנו להתחיל את המסלול. נא לנסות שוב.');
+      const yes = screen.getByRole('button', { name: 'כן, להתחיל' });
       expect(yes.getAttribute('aria-disabled')).toBeNull();
       expect(rounds.calls()).toBe(1);
 
@@ -935,14 +934,14 @@ describe('RoundsScreen', () => {
       fireEvent.click(yes);
       await waitFor(() =>
         expect(
-          screen.getByRole('button', { name: 'כן, לבנות מסלול' }).getAttribute('aria-disabled'),
+          screen.getByRole('button', { name: 'כן, להתחיל' }).getAttribute('aria-disabled'),
         ).toBeNull(),
       );
       expect(within(screen.getByRole('group')).getByRole('alert').textContent).toBe(
         BUILD_ROUTE_FAILED_MESSAGE,
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
 
       await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
       expect(calls).toEqual(['r1', 'r1', 'r1']);
@@ -952,7 +951,7 @@ describe('RoundsScreen', () => {
     it('clears the error when the question is closed and opened again', async () => {
       await renderLoaded({ buildRoute: fakeBuildRoute({ kind: 'failed' }).buildRoute });
       openQuestion();
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
       await screen.findByText(BUILD_ROUTE_FAILED_MESSAGE);
 
       fireEvent.click(screen.getByRole('button', { name: 'לא, עוד לא' }));
@@ -966,7 +965,7 @@ describe('RoundsScreen', () => {
       const historyLength = window.history.length;
       openQuestion();
 
-      fireEvent.click(screen.getByRole('button', { name: 'כן, לבנות מסלול' }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
 
       await waitFor(() => expect(window.location.pathname).toBe('/login'));
       expect(window.history.length).toBe(historyLength);
@@ -1076,7 +1075,7 @@ describe('RoundsScreen', () => {
       return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     }
 
-    it('ends a round in step 1, after "סגור אישורים ובנה מסלול"', async () => {
+    it('ends a round in step 1, after "התחל מסלול"', async () => {
       const round = await renderLoaded();
 
       const close = within(round).getByRole('button', { name: 'סגור סבב' });
