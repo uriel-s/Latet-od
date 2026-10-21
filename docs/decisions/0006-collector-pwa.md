@@ -24,7 +24,7 @@
 
 - **Manifest** (`apps/web/public/manifest.webmanifest`): name ו-short_name "לתת עוד", `start_url` ו-`scope` הם `/app`,
   `display: standalone`, `lang: he`, `dir: rtl`, רקע ו-theme `#DCEBF8`.
-- **אייקונים:** בקבוק בצבעי המותג (`#DCEBF8` ו-`#1E3A8A`) ב-SVG שנכתב ביד, `apps/web/public/icon.svg`.
+- **אייקונים:** הלוגו (`docs/logo.jpeg`): סמל מיחזור לבן על רקע כחול בהיר, חתוך פנימה כדי שלא יישארו פינות לבנות.
   ממנו נוצרו פעם אחת `icon-180.png` (ה-apple-touch-icon), `icon-192.png` ו-`icon-512.png` (ב-manifest, גם maskable).
   ה-PNG-ים אטומים (בלי ערוץ alpha) ונשמרים ב-git ליד ה-SVG. בלי תלות בפרויקט.
 - **תגיות ב-head:** `apps/web/src/pwaHead.tsx` (`CollectorPwaHead`) מוסיף את קישור ה-manifest, ה-apple-touch-icon ותגיות
@@ -49,10 +49,9 @@
   שורה אחת ב-manifest. לא משנים עכשיו.
 - 👎 בלי offline ובלי push. התראה על הזמנה חדשה הוחלט שלא צריך (spec ש10). אם תידרש בעתיד: ADR חדש (SW ו-Web Push).
 - 👎 Android לא נבדק. ה-manifest מתאים לו, אבל יואל באייפון.
-- 🔁 **החלפת האייקון:** עורכים את `icon.svg`, ובתיקייה זמנית מחוץ לפרויקט (כדי ש-sharp לא ייכנס כתלות) מריצים לכל
-  גודל s מתוך 180, 192, 512:
-  `npx -y sharp-cli -i icon.svg -o icon-<s>.png resize <s> <s> -- removeAlpha`
-  ומעתיקים את ה-PNG-ים חזרה ל-`apps/web/public`.
+- 🔁 **החלפת האייקון:** מחליפים את `docs/logo.jpeg`, חותכים ממנו ריבוע פנימי (בלי שוליים ובלי פינות מעוגלות,
+  הסמל בתוך 80% האמצעיים) ומקטינים ל-180, 192 ו-512 (PNG ללא alpha, למשל עם Pillow או sharp-cli מחוץ לפרויקט).
+  מעתיקים את ה-PNG-ים ל-`apps/web/public`.
 
 **עלות:** 0.
 
