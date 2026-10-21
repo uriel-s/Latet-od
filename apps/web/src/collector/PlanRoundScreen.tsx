@@ -406,7 +406,10 @@ function PlanRoundForm({
       case 'planned':
         // Replace, not push: "back" from the rounds returns to the orders, not to this form,
         // whose orders are no longer waiting (a second send would only be refused).
-        navigate(ROUNDS_PATH, {
+        // `?round=` names the new round: the rounds tab shows one round at a time, the nearest
+        // open one by default, so without it an earlier open round would hide the "שלח" list of
+        // the round Yoel just planned.
+        navigate(`${ROUNDS_PATH}?round=${encodeURIComponent(outcome.view.round.id)}`, {
           replace: true,
           state: flashNoticeState(FLASH_NOTICES.roundPlanned),
         });
