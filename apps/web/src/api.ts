@@ -668,7 +668,7 @@ export async function planRound(
   }
 }
 
-/** How "אישר בטלפון" ended, as the round screen shows it. */
+/** How "אישר בשיחה או בהודעה" ended, as the round screen shows it. */
 export type ConfirmByPhoneOutcome =
   /** 200: the order is confirmed (also when it already was); `view` is the round as it is now. */
   | { kind: 'confirmed'; view: RoundView }
@@ -685,7 +685,7 @@ export type ConfirmByPhoneOutcome =
   | { kind: 'failed' };
 
 /**
- * Yoel's "אישר בטלפון" (spec §3.6): marks order `orderId` of round `roundId` confirmed, with
+ * Yoel's "אישר בשיחה או בהודעה" (spec §3.6): marks order `orderId` of round `roundId` confirmed, with
  * `POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone` (no body). Both ids are
  * encoded into the path. An order already confirmed answers `confirmed` too, so a second tap is
  * harmless.
@@ -715,7 +715,7 @@ export async function confirmOrderByPhone(
 }
 
 /**
- * A 409 of "אישר בטלפון", told apart by the body's `error` code: both are `closed`, each with its
+ * A 409 of "אישר בשיחה או בהודעה", told apart by the body's `error` code: both are `closed`, each with its
  * own words. A body without a known code is `failed`: guessing could tell Yoel the wrong thing.
  */
 function confirmConflictOutcome(body: unknown): ConfirmByPhoneOutcome {

@@ -1,6 +1,6 @@
 // The "סבבים" tab of the collector app (spec §3.6), one section per open round.
 // Step 1 "אישורים" (phase `confirming`): who confirmed, who did not yet, and who asked for another
-// date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בטלפון"
+// date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בשיחה או בהודעה"
 // for a customer who confirmed in a call or in a WhatsApp reply; and "התחל מסלול",
 // asked as a question first (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
 // stops (RouteScreen.tsx). In both steps the round ends with its close button (CloseRoundConfirm.tsx),
@@ -59,13 +59,13 @@ export const EMPTY_ROUND_GROUP_TEXT = 'אין';
 export const SEND_LIST_HINT =
   'לחיצה על "שלח" פותחת את WhatsApp עם ההודעה כבר כתובה, ושם לוחצים "שלח".';
 
-/** Next to a card whose "אישר בטלפון" got no usable answer; the button can be tapped again. */
+/** Next to a card whose "אישר בשיחה או בהודעה" got no usable answer; the button can be tapped again. */
 export const CONFIRM_FAILED_MESSAGE = 'לא הצלחנו לשמור. נא לנסות שוב.';
 
-/** "אישר בטלפון" answered 404: the order (or its round) left the round meanwhile. */
+/** "אישר בשיחה או בהודעה" answered 404: the order (or its round) left the round meanwhile. */
 export const ORDER_LEFT_ROUND_MESSAGE = 'ההזמנה כבר לא בסבב.';
 
-const CONFIRM_LABEL = 'אישר בטלפון';
+const CONFIRM_LABEL = 'אישר בשיחה או בהודעה';
 const CONFIRMING_LABEL = 'שומר...';
 
 /**
@@ -112,7 +112,7 @@ export interface RoundsScreenProps {
    * not an inline arrow: a new one loads again.
    */
   loadRounds?: () => Promise<RoundsOutcome>;
-  /** Yoel's "אישר בטלפון". Defaults to {@link confirmOrderByPhone}; tests pass a fake. */
+  /** Yoel's "אישר בשיחה או בהודעה". Defaults to {@link confirmOrderByPhone}; tests pass a fake. */
   confirmByPhone?: (roundId: string, orderId: string) => Promise<ConfirmByPhoneOutcome>;
   /**
    * "התחל מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
@@ -156,7 +156,7 @@ interface Notice {
  * A 401 means the session ended: to the login, like the guard in CollectorApp.tsx. A failed load
  * stays here with a retry: a dropped connection is not a logout.
  *
- * "אישר בטלפון" swaps in the round the api answers: the customer moves to "אישרו" and leaves the
+ * "אישר בשיחה או בהודעה" swaps in the round the api answers: the customer moves to "אישרו" and leaves the
  * "שלח" list. When the api says the order can no longer be confirmed, or is no longer in the
  * round, the screen says so under the heading, moves the focus there (the card Yoel tapped may be
  * gone after the reload), and loads the rounds again without blanking them first.
@@ -189,10 +189,10 @@ export function RoundsScreen({
 }: RoundsScreenProps) {
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   // Counts the loads asked for after the first ("לנסות שוב", a reload after a refused
-  // "אישר בטלפון", or Yoel coming back to the app): a new value runs the load below again.
+  // "אישר בשיחה או בהודעה", or Yoel coming back to the app): a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // The orders whose "אישר בטלפון" is on its way ("שומר..."), and those whose last one failed.
+  // The orders whose "אישר בשיחה או בהודעה" is on its way ("שומר..."), and those whose last one failed.
   // By order id: an order is in one open round at most (spec §4), and only its own round's
   // "עוד לא אישרו" group has the button.
   const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -279,7 +279,7 @@ export function RoundsScreen({
 
   // Back in the app: the same reload, rounds kept on screen. A notice stays: the usual trip away is
   // to WhatsApp from "שלח", and the notice still explains why the card Yoel tapped moved or left;
-  // his next "אישר בטלפון" or "לנסות שוב" clears it, as before. Skipped while he is typing a
+  // his next "אישר בשיחה או בהודעה" or "לנסות שוב" clears it, as before. Skipped while he is typing a
   // quantity (see the doc comment above): nothing is lost, the next return loads.
   useReloadOnReturn(() => {
     if (typingRoundIdsRef.current.size === 0) reload();
@@ -321,7 +321,7 @@ export function RoundsScreen({
     );
   }
 
-  /** Yoel's "אישר בטלפון" on `orderId` of round `roundId` (spec §3.6). */
+  /** Yoel's "אישר בשיחה או בהודעה" on `orderId` of round `roundId` (spec §3.6). */
   async function confirm(roundId: string, orderId: string): Promise<void> {
     if (busyIdsRef.current.has(orderId)) return;
     busyIdsRef.current.add(orderId);
@@ -537,9 +537,9 @@ type SectionRoute = Omit<RouteScreenProps, 'view'>;
 interface RoundSectionProps {
   view: RoundView;
   markOpened: SendListProps['markOpened'];
-  /** Orders whose "אישר בטלפון" is on its way. */
+  /** Orders whose "אישר בשיחה או בהודעה" is on its way. */
   savingIds: ReadonlySet<string>;
-  /** Orders whose last "אישר בטלפון" failed. */
+  /** Orders whose last "אישר בשיחה או בהודעה" failed. */
   failedIds: ReadonlySet<string>;
   onConfirm: (orderId: string) => void;
   /** Step 1's last button. */
@@ -558,7 +558,7 @@ interface RoundSectionProps {
  * Step 1 (phase `confirming`): the confirmation counts, the "שלח" list, the three groups of orders
  * (every group shows, an empty one too, so the layout does not jump as customers confirm), and
  * last "התחל מסלול": the step that ends step 1 comes after everything Yoel checks
- * before it, and lies apart from the "אישר בטלפון" buttons.
+ * before it, and lies apart from the "אישר בשיחה או בהודעה" buttons.
  *
  * Step 2 (phase `routed`): the route alone. Its own summary takes the place of the confirmation
  * counts (one live summary per round, not two), and the groups and the "שלח" list are gone:
@@ -628,7 +628,7 @@ function RoundSection({
         <RouteScreen view={view} {...route} />
       ) : (
         <>
-          {/* Polite live text: a screen reader hears the new counts after "אישר בטלפון". */}
+          {/* Polite live text: a screen reader hears the new counts after "אישר בשיחה או בהודעה". */}
           <p className="round-summary" aria-live="polite">
             {confirmationSummary(groups)}
           </p>
@@ -678,7 +678,7 @@ interface RoundGroupSectionProps {
 /**
  * One group of the round ("אישרו", "עוד לא אישרו", "ביקשו מועד אחר") as a named region, with its
  * order count, or {@link EMPTY_ROUND_GROUP_TEXT} and no list. Only "עוד לא אישרו" has the
- * "אישר בטלפון" button on its cards.
+ * "אישר בשיחה או בהודעה" button on its cards.
  */
 function RoundGroupSection({
   groupKey,
@@ -718,7 +718,7 @@ function RoundGroupSection({
   );
 }
 
-/** The "אישר בטלפון" part of a card in "עוד לא אישרו". */
+/** The "אישר בשיחה או בהודעה" part of a card in "עוד לא אישרו". */
 interface CardConfirm {
   saving: boolean;
   failed: boolean;
