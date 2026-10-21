@@ -5,6 +5,7 @@
 //   NOMINATIM_EMAIL=<contact mail> npx tsx scripts/geocode-streets.ts                 # fill missing points
 //   npx tsx scripts/geocode-streets.ts --refresh-list                                  # re-download codes+names from data.gov.il, then fill missing points (needs NOMINATIM_EMAIL for the second step)
 //   npx tsx scripts/geocode-streets.ts --regions                                       # recompute region of every street from its point (no network); overwrites hand-fixed regions
+//   npx tsx scripts/geocode-streets.ts --point <code> <lat>,<lng>                      # set one street's point by hand (no network); region from the point
 //
 // Nominatim usage policy (https://operations.osmfoundation.org/policies/nominatim/), which allows
 // small one-off bulk jobs like this one only on these terms:
@@ -503,6 +504,49 @@ export function recomputeRegions(file: StreetsFile): StreetsFile {
   };
 }
 
+/** Latitude, then longitude, separated by a comma, spaces, or both: "31.71379, 35.00338". */
+const LAT_LNG_TEXT = /^\s*(-?\d+(?:\.\d+)?)\s*(?:,\s*|\s+)(-?\d+(?:\.\d+)?)\s*$/u;
+
+/**
+ * A point typed by hand: latitude first, as openstreetmap.org shows it (right-click → "Show
+ * address" puts "31.71379, 35.00338" in the search box). Throws on anything else, and on a point
+ * outside the city: that also catches lat and lng typed the wrong way round, since 34.99,31.71
+ * is nowhere near Beit Shemesh.
+ */
+export function parsePointText(
+  text: string,
+  bbox: typeof BEIT_SHEMESH_BBOX = BEIT_SHEMESH_BBOX,
+): LatLng {
+  const match = LAT_LNG_TEXT.exec(text);
+  if (match === null) {
+    throw new Error(`"${text}" is not "<lat>,<lng>" (for example 31.71379,35.00338)`);
+  }
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  const insideCity = lat >= bbox.south && lat <= bbox.north && lng >= bbox.west && lng <= bbox.east;
+  if (!insideCity) {
+    throw new Error(
+      `${lat},${lng} is outside Beit Shemesh (lat ${bbox.south}..${bbox.north}, lng ` +
+        `${bbox.west}..${bbox.east}); latitude comes first`,
+    );
+  }
+  return { lat: roundCoordinate(lat), lng: roundCoordinate(lng) };
+}
+
+/**
+ * The file with the point of street `code` set by hand (ADR-0005: a street Nominatim does not
+ * find is filled from openstreetmap.org), and its region computed from that point. Replaces a
+ * point the street already had. Throws when no street has `code`. Never mutates `file`.
+ */
+export function setStreetPoint(file: StreetsFile, code: number, point: LatLng): StreetsFile {
+  const index = file.streets.findIndex((street) => street.code === code);
+  const street = file.streets[index];
+  if (street === undefined) throw new Error(`no street has code ${code}`);
+  const streets = [...file.streets];
+  streets[index] = withPoint(street, point);
+  return { ...file, streets };
+}
+
 /**
  * The file's exact text format: header keys indented 2 spaces, then each street on its own line
  * (4 spaces + compact JSON, keys code,name,region,lat,lng), sorted by code, LF, trailing newline.
@@ -573,13 +617,26 @@ const USAGE = [
   '  npx tsx scripts/geocode-streets.ts --regions',
   '      recompute every street region from its point after REGION_DIVIDER changed',
   '      (no network; overwrites hand-fixed regions)',
+  '  npx tsx scripts/geocode-streets.ts --point <code> <lat>,<lng>',
+  '      set the point of one street by hand, e.g. --point 331 31.71379,35.00338',
+  '      (no network; the region follows from the point)',
 ].join('\n');
 
-type Mode = 'geocode' | 'refresh-list' | 'regions' | 'help';
+type Mode =
+  'geocode' | 'refresh-list' | 'regions' | 'help' | { point: { code: number; text: string } };
 
-/** The mode the arguments ask for; undefined for anything unknown (one flag at most). */
+/** A street code as typed on the command line: a positive whole number. */
+const CODE_TEXT = /^[1-9]\d*$/u;
+
+/** The mode the arguments ask for; undefined for anything unknown. */
 function parseMode(argv: readonly string[]): Mode | undefined {
   if (argv.length === 0) return 'geocode';
+  // --point <code> <lat>,<lng>; "<lat>, <lng>" pasted with a space arrives as two arguments.
+  if (argv[0] === '--point') {
+    const [, code, ...pointParts] = argv;
+    if (code === undefined || !CODE_TEXT.test(code) || pointParts.length === 0) return undefined;
+    return { point: { code: Number(code), text: pointParts.join(' ') } };
+  }
   if (argv.length > 1) return undefined;
   switch (argv[0]) {
     case '--refresh-list':
@@ -664,6 +721,22 @@ export async function main(
     await writeStreetsFile(streetsFile, stamped);
     file = stamped;
   };
+
+  if (typeof mode === 'object') {
+    const { code, text } = mode.point;
+    try {
+      const updated = setStreetPoint(file, code, parsePointText(text));
+      await save(updated);
+      const street = file.streets.find((candidate) => candidate.code === code);
+      log(`set: ${code} "${street?.name ?? ''}" ${street?.lat},${street?.lng} (${street?.region})`);
+      log(`${file.streets.filter((other) => !hasPoint(other)).length} streets still have no point`);
+    } catch (error) {
+      log(`could not set the point: ${errorMessage(error)}`);
+      log('the streets file was not changed.');
+      return 1;
+    }
+    return 0;
+  }
 
   if (mode === 'regions') {
     try {
