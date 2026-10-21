@@ -17,6 +17,8 @@ import {
 export const ROUND_PICKER_TITLE = 'בחירת סבב';
 /** The chip that shows every round. */
 export const ROUND_PICKER_ALL_LABEL = 'הכל';
+/** Starts the button's visible text, so it says what it chooses (WCAG 2.5.3: part of its name). */
+export const ROUND_PICKER_TRIGGER_PREFIX = 'סבב: ';
 /** The button that closes the sheet without choosing. */
 export const ROUND_PICKER_CLOSE_LABEL = 'סגור';
 
@@ -58,8 +60,16 @@ export function RoundPicker({ rounds, selectedId, onSelect }: RoundPickerProps) 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
+  // The rounds can drop below two while the sheet is open (a reload on coming back, a round closed
+  // on another phone): the component then renders nothing, so the sheet must count as closed. Else
+  // the scroll lock below would stay on a page with no sheet, and the sheet would pop open by
+  // itself when a second round showed up again.
+  const sheetOpen = open && rounds.length >= 2;
+  // Reset during render (React's way to adjust state to new props), not in an effect.
+  if (open && rounds.length < 2) setOpen(false);
+
   useEffect(() => {
-    if (!open) return undefined;
+    if (!sheetOpen) return undefined;
     dialogRef.current?.focus();
     // Lock the page's scroll while the sheet is open; put back whatever was there.
     const previousOverflow = document.body.style.overflow;
@@ -67,7 +77,7 @@ export function RoundPicker({ rounds, selectedId, onSelect }: RoundPickerProps) 
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [open]);
+  }, [sheetOpen]);
 
   const first = rounds[0];
   if (rounds.length < 2 || first === undefined) return null;
@@ -122,10 +132,12 @@ export function RoundPicker({ rounds, selectedId, onSelect }: RoundPickerProps) 
         type="button"
         className="button button-secondary round-picker-trigger"
         aria-haspopup="dialog"
-        aria-expanded={open}
+        aria-expanded={sheetOpen}
         onClick={() => setOpen(true)}
       >
         <span className="round-picker-trigger-text">
+          {/* Says what the button is for; the date alone reads as a label with no purpose. */}
+          {ROUND_PICKER_TRIGGER_PREFIX}
           <RoundText view={selected} />
         </span>
         <span className="round-picker-chevron" aria-hidden="true">
@@ -133,7 +145,7 @@ export function RoundPicker({ rounds, selectedId, onSelect }: RoundPickerProps) 
         </span>
       </button>
 
-      {open && (
+      {sheetOpen && (
         <>
           <div className="round-picker-backdrop" onClick={close} />
           {/* The key handler sits on the dialog, where the keys of its buttons bubble to. */}

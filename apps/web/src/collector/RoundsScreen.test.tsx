@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   ROUND_MESSAGES,
   type CollectorOrder,
@@ -30,6 +30,7 @@ import {
   confirmationSummary,
   type RoundsScreenProps,
 } from './RoundsScreen.tsx';
+import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
@@ -149,7 +150,15 @@ const VIEW_MOSHE_CONFIRMED = makeView({
   otherDate: [RACHEL],
 });
 
+/** Round r2, a week after r1 in the other half of the city, still confirming, one customer. */
+const SECOND = makeView({
+  round: { id: 'r2', date: '2026-11-26', region: 'old' },
+  pending: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
+});
+
 const LOADED: RoundsOutcome = { kind: 'loaded', rounds: [VIEW] };
+/** Two open rounds, as the api lists them: the nearest date first. */
+const LOADED_TWO: RoundsOutcome = { kind: 'loaded', rounds: [VIEW, SECOND] };
 const NO_ROUNDS: RoundsOutcome = { kind: 'loaded', rounds: [] };
 const LOGGED_OUT = { kind: 'loggedOut' } as const;
 const FAILED = { kind: 'failed' } as const;
@@ -332,9 +341,9 @@ function settle(): Promise<void> {
  */
 function renderScreen(
   props: RoundsScreenProps,
-  { strict = false }: { strict?: boolean } = {},
+  { strict = false, url = '/app/rounds' }: { strict?: boolean; url?: string } = {},
 ): { unmount: () => void } {
-  window.history.replaceState(null, '', '/app/rounds');
+  window.history.replaceState(null, '', url);
   const stopActions = fakeStopActions().props;
   const screenElement = (
     <RoundsScreen
@@ -391,6 +400,20 @@ function stopNames(): string[] {
     .map((heading) => heading.textContent ?? '');
 }
 
+/**
+ * Opens the round picker through its button (named after the round on screen, dated
+ * `shownDayMonth`) and taps the row of the round dated `dayMonth`; the sheet closes itself.
+ */
+function pickRound(shownDayMonth: string, dayMonth: string): void {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^${ROUND_PICKER_TRIGGER_PREFIX}${shownDayMonth}`),
+    }),
+  );
+  const sheet = screen.getByRole('dialog', { name: ROUND_PICKER_TITLE });
+  fireEvent.click(within(sheet).getByRole('button', { name: new RegExp(dayMonth) }));
+}
+
 /** The page has exactly one h1, and it is the tab's name. */
 function expectOneH1(): void {
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
@@ -412,6 +435,11 @@ describe('confirmationSummary', () => {
 });
 
 describe('RoundsScreen', () => {
+  // The selected round lives in the URL (`?round=`): do not let one test's query reach the next.
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
   it('tells the notice the planning screen sent along, once', async () => {
     window.history.replaceState({ notice: 'הסבב נוצר.' }, '', '/app/rounds');
     render(
@@ -424,7 +452,7 @@ describe('RoundsScreen', () => {
 
     const notice = await screen.findByText('הסבב נוצר.');
     expect(notice.getAttribute('role')).toBe('status');
-    expect(document.activeElement).toBe(notice);
+    await waitFor(() => expect(document.activeElement).toBe(notice));
     expect(window.history.state).toBeNull();
     await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
   });
@@ -564,15 +592,81 @@ describe('RoundsScreen', () => {
       expect(within(cardOf('רחל אברהם')).queryByRole('button')).toBeNull();
     });
 
-    it('shows each open round, in the order the api gave', async () => {
-      const second = makeView({ round: { id: 'r2', date: '2026-11-26', region: 'old' } });
-      renderScreen({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [VIEW, second] }).load });
+    it('has no round picker when only one round is open', async () => {
+      await renderLoaded();
+
+      expect(screen.queryByRole('button', { name: /^סבב: 19\/11/ })).toBeNull();
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  describe('with several open rounds', () => {
+    it('shows only the nearest one, the first the api gave, and a picker for the rest', async () => {
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
 
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       const roundHeadings = screen
         .getAllByRole('heading', { level: 2 })
         .map((heading) => heading.textContent);
-      expect(roundHeadings).toEqual(['רמת בית שמש · 19/11', 'בית שמש · 26/11']);
+      expect(roundHeadings).toEqual(['רמת בית שמש · 19/11']);
+      expect(screen.queryByRole('region', { name: 'בית שמש · 26/11' })).toBeNull();
+      expect(screen.getByRole('button', { name: /^סבב: 19\/11/ })).toBeDefined();
+      // The default is not written to the URL: no query until Yoel picks.
+      expect(window.location.search).toBe('');
+    });
+
+    it('shows the picked round alone and writes ?round= by replacing the history entry', async () => {
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+      const historyLength = window.history.length;
+
+      pickRound('19/11', '26/11');
+
+      expect(await screen.findByRole('region', { name: 'בית שמש · 26/11' })).toBeDefined();
+      expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, שרה גולן' })).toBeDefined();
+      expect(window.location.pathname).toBe('/app/rounds');
+      expect(window.location.search).toBe('?round=r2');
+      expect(window.history.length).toBe(historyLength);
+      // The picker's button now names the round on screen.
+      expect(screen.getByRole('button', { name: /^סבב: 26\/11/ })).toBeDefined();
+    });
+
+    it('keeps the path Yoel is on when it writes the query', async () => {
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/somewhere' });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+
+      pickRound('19/11', '26/11');
+
+      await screen.findByRole('region', { name: 'בית שמש · 26/11' });
+      expect(window.location.pathname).toBe('/app/somewhere');
+      expect(window.location.search).toBe('?round=r2');
+    });
+
+    it('opens on the round the URL names', async () => {
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/rounds?round=r2' });
+
+      expect(await screen.findByRole('region', { name: 'בית שמש · 26/11' })).toBeDefined();
+      expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
+    });
+
+    it('falls back to the first round for an unknown ?round=, leaving the URL alone', async () => {
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/rounds?round=zzz' });
+
+      expect(await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeDefined();
+      expect(screen.queryByRole('region', { name: 'בית שמש · 26/11' })).toBeNull();
+      expect(window.location.search).toBe('?round=zzz');
+    });
+
+    it('follows a query that changes from outside, as the back button does', async () => {
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+
+      // The browser changed the URL (back or forward) and fires popstate; no navigate() call.
+      window.history.pushState(null, '', '/app/rounds?round=r2');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+
+      expect(await screen.findByRole('region', { name: 'בית שמש · 26/11' })).toBeDefined();
     });
   });
 
@@ -666,17 +760,15 @@ describe('RoundsScreen', () => {
     });
 
     it('swaps in only the round the api answered', async () => {
-      const second = makeView({
-        round: { id: 'r2', date: '2026-11-26', region: 'old' },
-        pending: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
-      });
-      renderScreen({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [VIEW, second] }).load });
-      await screen.findByRole('region', { name: 'בית שמש · 26/11' });
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
 
       fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
 
       await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toContain('משה לוי'));
-      const other = screen.getByRole('region', { name: 'בית שמש · 26/11' });
+      // The other round is not on screen: pick it, it is as it was.
+      pickRound('19/11', '26/11');
+      const other = await screen.findByRole('region', { name: 'בית שמש · 26/11' });
       expect(
         within(other).getByRole('button', { name: 'אישר בשיחה או בהודעה, שרה גולן' }),
       ).toBeDefined();
@@ -698,7 +790,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe('האישורים לסבב הזה כבר נסגרו.');
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       expect(rounds.calls()).toBe(2);
       // The rounds stay on screen while they load again.
       expect(screen.queryByRole('status')).toBeNull();
@@ -887,7 +979,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.confirmationsClosed);
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
       expect(rounds.calls()).toBe(2);
       expect(document.activeElement).toBe(screen.getByRole('alert'));
@@ -1024,7 +1116,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.stopHandled);
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       await waitFor(() => expect(stopNames()).toEqual(['משה לוי', 'דנה כהן']));
       expect(rounds.calls()).toBe(2);
     });
@@ -1050,6 +1142,29 @@ describe('RoundsScreen', () => {
 
       expect(rounds.calls()).toBe(2);
     });
+
+    it('reloads on coming back after Yoel switched rounds with a quantity field open', async () => {
+      // The field belongs to the round that leaves the screen; it must not pause reloads for good.
+      const routedSecond: RoundView = {
+        ...routedView([stopOf(MOSHE)]),
+        round: { ...ROUND, id: 'r2', date: '2026-11-26', region: 'old', phase: 'routed' },
+      };
+      const rounds = fakeLoad({ kind: 'loaded', rounds: [ROUTED, routedSecond] });
+      renderScreen({ loadRounds: rounds.load });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+      fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
+      returnToApp();
+      await settle();
+      expect(rounds.calls()).toBe(1);
+
+      pickRound('19/11', '26/11');
+      await screen.findByRole('region', { name: 'בית שמש · 26/11' });
+      expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
+      returnToApp();
+      await settle();
+
+      expect(rounds.calls()).toBe(2);
+    });
   });
 
   // The close button reads "בטל את הסבב" while the round is confirming (VIEW) and "סיימתי את
@@ -1059,12 +1174,6 @@ describe('RoundsScreen', () => {
     const CONFIRMING_TEXTS = CLOSE_ROUND_TEXTS.confirming;
     const ROUTED_TEXTS = CLOSE_ROUND_TEXTS.routed;
     const LOADED_ROUTED: RoundsOutcome = { kind: 'loaded', rounds: [ROUTED] };
-    /** Round r2, in the other half of the city, still confirming. */
-    const SECOND = makeView({
-      round: { id: 'r2', date: '2026-11-26', region: 'old' },
-      pending: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
-    });
-
     /**
      * Taps the close button of round r1 (confirming, "בטל את הסבב", unless `texts` says
      * otherwise) and returns the question that opens in its place.
@@ -1120,7 +1229,7 @@ describe('RoundsScreen', () => {
     });
 
     it('takes the closed round off the tab, says so with the focus there, and does not reload', async () => {
-      const rounds = fakeLoad({ kind: 'loaded', rounds: [VIEW, SECOND] });
+      const rounds = fakeLoad(LOADED_TWO);
       const { closeRound } = fakeCloseRound();
       renderScreen({ loadRounds: rounds.load, closeRound });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
@@ -1131,16 +1240,36 @@ describe('RoundsScreen', () => {
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_CLOSED_MESSAGE);
       expect(ROUND_CLOSED_MESSAGE).toBe('הסבב נסגר.');
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
-      // The other round stays as it was.
+      // The selection falls back to the round left, as it was, and the picker is gone: one round.
       const other = screen.getByRole('region', { name: 'בית שמש · 26/11' });
       expect(
         within(other).getByRole('button', { name: 'אישר בשיחה או בהודעה, שרה גולן' }),
       ).toBeDefined();
+      expect(screen.queryByRole('button', { name: /^סבב: 26\/11/ })).toBeNull();
       expect(screen.queryByText(NO_OPEN_ROUND_TEXT)).toBeNull();
       await settle();
       expect(rounds.calls()).toBe(1);
+    });
+
+    it('shows the other round after closing the one picked with ?round=', async () => {
+      // r2 is the selected round; r1 is the one left when it closes, by the same fallback.
+      const { closeRound, calls } = fakeCloseRound({ kind: 'closed', view: closedView(SECOND) });
+      renderScreen(
+        { loadRounds: fakeLoad(LOADED_TWO).load, closeRound },
+        { url: '/app/rounds?round=r2' },
+      );
+      await screen.findByRole('region', { name: 'בית שמש · 26/11' });
+      // Round r2 is still confirming, so its close button is the "call off" one.
+      fireEvent.click(screen.getByRole('button', { name: CONFIRMING_TEXTS.label }));
+
+      fireEvent.click(screen.getByRole('button', { name: CONFIRMING_TEXTS.yesLabel }));
+
+      expect((await screen.findByRole('alert')).textContent).toBe(ROUND_CLOSED_MESSAGE);
+      expect(calls).toEqual(['r2']);
+      expect(screen.getByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeDefined();
+      expect(screen.queryByRole('region', { name: 'בית שמש · 26/11' })).toBeNull();
     });
 
     it('says no round is open, with the planning link, when the last one closed', async () => {
@@ -1157,7 +1286,7 @@ describe('RoundsScreen', () => {
 
     it('does not bring the round back when a reload that set out before the close answers', async () => {
       const reload = deferred<RoundsOutcome>();
-      const rounds = fakeLoad({ kind: 'loaded', rounds: [VIEW, SECOND] }, reload.promise);
+      const rounds = fakeLoad(LOADED_TWO, reload.promise);
       renderScreen({ loadRounds: rounds.load, closeRound: fakeCloseRound().closeRound });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       returnToApp();
@@ -1167,7 +1296,7 @@ describe('RoundsScreen', () => {
       await screen.findByText(ROUND_CLOSED_MESSAGE);
 
       // Its answer was read before the close: round r1 is still in it.
-      reload.resolve({ kind: 'loaded', rounds: [VIEW, SECOND] });
+      reload.resolve(LOADED_TWO);
       await settle();
 
       expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
@@ -1229,7 +1358,7 @@ describe('RoundsScreen', () => {
 
       const notice = await screen.findByRole('alert');
       expect(notice.textContent).toBe(ROUND_MESSAGES.roundNotFound);
-      expect(document.activeElement).toBe(notice);
+      await waitFor(() => expect(document.activeElement).toBe(notice));
       expect(await screen.findByText(NO_OPEN_ROUND_TEXT)).toBeDefined();
       expect(rounds.calls()).toBe(2);
     });
