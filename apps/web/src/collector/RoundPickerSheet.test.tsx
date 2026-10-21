@@ -81,6 +81,28 @@ describe('RoundPicker', () => {
     expect(container.innerHTML).toBe('');
   });
 
+  it('releases the scroll lock and stays closed when the rounds drop below two while open', () => {
+    const { container, rerender } = render(
+      <RoundPicker rounds={ROUNDS} selectedId="a" onSelect={vi.fn()} />,
+    );
+    openSheet();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    rerender(<RoundPicker rounds={[RAMAT_1]} selectedId="a" onSelect={vi.fn()} />);
+    expect(container.innerHTML).toBe('');
+    expect(document.body.style.overflow).toBe('');
+
+    // A second round showing up again must not bring the old sheet back by itself.
+    rerender(<RoundPicker rounds={ROUNDS} selectedId="a" onSelect={vi.fn()} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('starts the button text with what it chooses, so the date does not stand alone', () => {
+    render(<Harness rounds={ROUNDS} />);
+    expect(trigger().textContent?.startsWith('סבב: 28/10')).toBe(true);
+  });
+
   it('shows the selected round on the button, with the sheet closed', () => {
     render(<Harness rounds={ROUNDS} />);
     const button = trigger();
