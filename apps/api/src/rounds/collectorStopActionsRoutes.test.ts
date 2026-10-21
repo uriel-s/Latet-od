@@ -343,7 +343,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/collected: "אספתי"'
     });
   });
 
-  it('accepts a count below the 30-bottle booking minimum', async () => {
+  it('accepts a count below the 20-bottle booking minimum', async () => {
     const { round, stops } = await seedRoutedRound();
     const stop = first(stops);
 

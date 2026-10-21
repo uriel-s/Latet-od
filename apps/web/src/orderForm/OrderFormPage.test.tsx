@@ -146,36 +146,36 @@ describe('OrderFormPage', () => {
     ]);
   });
 
-  it('shows "at least 30 bottles" next to the field for 29 and sends nothing', () => {
+  it('shows "at least 20 bottles" next to the field for 19 and sends nothing', () => {
     const { requests } = renderForm();
     fillValidForm();
-    typeInto('כמות בקבוקים', '29');
+    typeInto('כמות בקבוקים', '19');
 
     submit();
 
     const bottles = input('כמות בקבוקים');
-    expect(descriptionOf(bottles)).toContain('צריך לפחות 30 בקבוקים');
+    expect(descriptionOf(bottles)).toContain('צריך לפחות 20 בקבוקים');
     expect(bottles.getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(bottles);
     expect(requests).toEqual([]);
   });
 
   // Class and aria only: jsdom loads no CSS, so the colour itself is checked on a real phone.
-  it('greys the send button, with the reason, until the bottles reach 30', () => {
+  it('greys the send button, with the reason, until the bottles reach 20', () => {
     renderForm();
     fillValidForm();
-    typeInto('כמות בקבוקים', '29');
+    typeInto('כמות בקבוקים', '19');
 
     const button = screen.getByRole('button', { name: 'שליחת הזמנה' });
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.className).toContain('button-not-ready');
-    expect(descriptionOf(button)).toBe('כדי לשלוח צריך לפחות 30 בקבוקים');
+    expect(descriptionOf(button)).toBe('כדי לשלוח צריך לפחות 20 בקבוקים');
 
-    typeInto('כמות בקבוקים', '30');
+    typeInto('כמות בקבוקים', '20');
     expect(button.getAttribute('aria-disabled')).toBeNull();
     expect(button.className).not.toContain('button-not-ready');
     expect(button.getAttribute('aria-describedby')).toBeNull();
-    expect(screen.queryByText('כדי לשלוח צריך לפחות 30 בקבוקים')).toBeNull();
+    expect(screen.queryByText('כדי לשלוח צריך לפחות 20 בקבוקים')).toBeNull();
   });
 
   it('greys the send button while the bottles field is empty', () => {
@@ -184,10 +184,10 @@ describe('OrderFormPage', () => {
     const button = screen.getByRole('button', { name: 'שליחת הזמנה' });
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.className).toContain('button-not-ready');
-    expect(descriptionOf(button)).toBe('כדי לשלוח צריך לפחות 30 בקבוקים');
+    expect(descriptionOf(button)).toBe('כדי לשלוח צריך לפחות 20 בקבוקים');
   });
 
-  it('keeps "שולח..." plain, without the reason, if the bottles drop below 30 while sending', async () => {
+  it('keeps "שולח..." plain, without the reason, if the bottles drop below 20 while sending', async () => {
     const answer = deferred<CreateOrderOutcome>();
     renderForm(answer.promise);
     fillValidForm();
@@ -198,7 +198,7 @@ describe('OrderFormPage', () => {
     const sending = screen.getByRole('button', { name: 'שולח...' });
     expect(sending.className).not.toContain('button-not-ready');
     expect(sending.getAttribute('aria-describedby')).toBeNull();
-    expect(screen.queryByText('כדי לשלוח צריך לפחות 30 בקבוקים')).toBeNull();
+    expect(screen.queryByText('כדי לשלוח צריך לפחות 20 בקבוקים')).toBeNull();
 
     answer.resolve(CREATED);
     await screen.findByRole('heading', { level: 1, name: 'תודה!' });
@@ -465,6 +465,6 @@ describe('OrderFormPage', () => {
 
     expect(screen.getByText('הפרטים משמשים רק לתיאום האיסוף')).toBeDefined();
     expect(descriptionOf(input('טלפון נייד'))).toBe('למשל 050-1234567');
-    expect(descriptionOf(input('כמות בקבוקים'))).toBe('לפחות 30 בקבוקים');
+    expect(descriptionOf(input('כמות בקבוקים'))).toBe('לפחות 20 בקבוקים');
   });
 });

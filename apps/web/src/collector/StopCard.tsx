@@ -39,7 +39,7 @@ const SAVING_LABEL = 'שומר...';
  * The quantity Yoel typed, checked with the api's own rules ({@link collectStopRequestSchema}):
  * a whole number from 1 up to MAX_BOTTLES. Digits only, so a blank field, "2.5", "4,5" or "1e3"
  * gets the plain message instead of becoming a number the api would refuse or misread (as in the
- * booking form's bottles field, order.ts). Below 30 is fine: the real count can be lower than the
+ * booking form's bottles field, order.ts). Below 20 is fine: the real count can be lower than the
  * estimate; the minimum is a booking rule only.
  */
 export function parseBottlesCollected(

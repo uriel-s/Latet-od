@@ -193,7 +193,7 @@ describe('editRequest', () => {
 
 describe('saveErrors', () => {
   it("shows the api's field errors as they are", () => {
-    const errors = { byField: { bottlesEstimated: 'מינימום 30 בקבוקים' } };
+    const errors = { byField: { bottlesEstimated: 'מינימום 20 בקבוקים' } };
 
     expect(saveErrors({ kind: 'invalid', errors })).toBe(errors);
   });
