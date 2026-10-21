@@ -692,7 +692,16 @@ function StatusText({ order }: { order: CustomerOrder }) {
           </p>
           {round.pickupBy !== undefined && (
             <p>
-              נא להוציא את הבקבוקים עד השעה <bdi dir="ltr">{round.pickupBy}</bdi>.
+              {round.pickupFrom !== undefined ? (
+                <>
+                  נא להוציא את הבקבוקים בין השעות <bdi dir="ltr">{round.pickupFrom}</bdi> ל-
+                  <bdi dir="ltr">{round.pickupBy}</bdi>.
+                </>
+              ) : (
+                <>
+                  נא להוציא את הבקבוקים עד השעה <bdi dir="ltr">{round.pickupBy}</bdi>.
+                </>
+              )}
             </p>
           )}
         </>

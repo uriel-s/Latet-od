@@ -361,6 +361,19 @@ describe('OrderPage', () => {
       expect(screen.getByText('18:00').getAttribute('dir')).toBe('ltr');
     });
 
+    it('shows the window "בין השעות X ל-Y" when the round has a start', async () => {
+      await renderLoaded(
+        makeOrder({
+          status: 'pending',
+          round: { date: '2026-11-12', pickupFrom: '16:00', pickupBy: '18:00' },
+        }),
+      );
+
+      expect(getByWholeText('נא להוציא את הבקבוקים בין השעות 16:00 ל-18:00.')).toBeDefined();
+      expect(screen.getByText('16:00').getAttribute('dir')).toBe('ltr');
+      expect(screen.getByText('18:00').getAttribute('dir')).toBe('ltr');
+    });
+
     it('leaves out the time when the round has none', async () => {
       await renderLoaded(makeOrder({ status: 'pending', round: { date: '2026-11-12' } }));
 
