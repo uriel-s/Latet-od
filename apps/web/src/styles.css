@@ -383,7 +383,7 @@ button[aria-disabled='true'] {
 }
 
 /*
- * A button that cannot be used yet (the booking form's "שליחת הזמנה" below 30 bottles). Still
+ * A button that cannot be used yet (the booking form's "שליחת הזמנה" Below 20 is fine). Still
  * aria-disabled, not disabled, so a tap shows the form's messages; greyed, but --color-text on
  * --color-handled keeps AA contrast.
  */
