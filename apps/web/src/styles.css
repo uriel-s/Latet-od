@@ -18,6 +18,7 @@
    * separator lines, never text, never the only edge of something to tap.
    */
   --color-gray: #9aa3ad;
+  --color-muted: #4b5563; /* quiet text on --color-background, about 6:1 (AA) */
   /* Error red: 6.5:1 on white and 5.3:1 on --color-background, AA on both. */
   --color-error: #b91c1c;
   /*
@@ -118,10 +119,8 @@ h1[tabindex='-1']:focus {
 .layout {
   display: flex;
   flex-direction: column;
-  /* The footer sits at the bottom of a short page. dvh: the phone's visible height, without the
-     part hidden under the browser's address bar; vh for browsers that lack dvh. */
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* No min-height: the footer follows the content, so on a short page it is not pinned to the
+     bottom of the screen and the OSM credit stays quiet until the end of the page. */
 }
 
 /* The single centred column every page lives in, with a 16px gutter on narrow phones (wider
@@ -199,7 +198,7 @@ h1[tabindex='-1']:focus {
 
 /* A quiet footer: a thin accent line like the header's, and very small centred text (about 12px,
    the smallest size in the app, chosen on purpose). The credit is legally required (ODbL), so it
-   stays readable: --color-text on the page is 8.5:1. The footer ends the page, so on a phone with
+   stays readable: --color-muted on the page is about 6:1. The footer ends the page, so on a phone with
    a home bar the OSM credit is lifted above it. */
 .site-footer {
   border-block-start: 2px solid var(--color-accent);
@@ -228,6 +227,7 @@ h1[tabindex='-1']:focus {
 
 /* Taller than the text, so the credit link is a full-size tap target too. */
 .footer-link {
+  color: var(--color-muted);
   display: inline-flex;
   align-items: center;
   min-height: var(--tap-target);
