@@ -1,15 +1,15 @@
 import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
   groupWaitingOrders,
+  monthInAppZone,
   type CollectorOrdersResponse,
   type CustomerOrderResponse,
   type MeResponse,
   type RoundsResponse,
 } from '@bottlerun/shared';
-import { act } from '@testing-library/react';
 import { App } from './App.tsx';
 import { navigate } from './router.tsx';
 
@@ -60,7 +60,8 @@ function jsonResponse(body: unknown): Response {
 /**
  * Stands in for the api in every test of this file, so no page sends a real request from jsdom.
  * The collector app's guard calls it (GET /api/auth/me), and so do its orders tab (GET
- * /api/collector/orders) and its rounds tab (GET /api/collector/rounds); the customer's page asks
+ * /api/collector/orders), its rounds tab (GET /api/collector/rounds) and its history tab (GET
+ * /api/collector/history?month=, which answers nothing closed); the customer's page asks
  * for its order (GET /api/o/:token), which only CANCELLED_ORDER_TOKEN finds. Anything else gets a
  * 404.
  */
@@ -71,6 +72,16 @@ function fakeApi(input: string): Promise<Response> {
   }
   if (input === '/api/collector/rounds') {
     return Promise.resolve(jsonResponse(NO_OPEN_ROUNDS_BODY));
+  }
+  const historyMonth = /^\/api\/collector\/history\?month=(\d{4}-\d{2})$/.exec(input)?.[1];
+  if (historyMonth !== undefined) {
+    return Promise.resolve(
+      jsonResponse({
+        month: historyMonth,
+        totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
+        orders: [],
+      }),
+    );
   }
   if (input === `/api/o/${CANCELLED_ORDER_TOKEN}`) {
     return Promise.resolve(jsonResponse(CANCELLED_ORDER_BODY));
@@ -230,10 +241,17 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'היסטוריה' })).toBeDefined();
     expect(window.location.pathname).toBe('/app/history');
     // The session once, and each visited tab's own list once (the rounds tab loads its rounds even
-    // though Yoel moved on at once); no tab switch checks the session.
+    // though Yoel moved on at once; the history tab its current month); no tab switch checks the
+    // session.
     await waitFor(() =>
-      expect(requests).toEqual(['/api/auth/me', '/api/collector/orders', '/api/collector/rounds']),
+      expect(requests).toEqual([
+        '/api/auth/me',
+        '/api/collector/orders',
+        '/api/collector/rounds',
+        `/api/collector/history?month=${monthInAppZone(new Date())}`,
+      ]),
     );
+    expect(await screen.findByText('לא נסגרו הזמנות בחודש הזה.')).toBeDefined();
   });
 
   it('shows "page not found" for an unknown path', () => {
@@ -302,6 +320,55 @@ describe('App', () => {
       expect(within(screen.getByRole('main')).getByRole('heading', { level: 1 })).toBeDefined();
     },
   );
+
+  describe('install to home screen (PWA head tags)', () => {
+    /** Whether document.head holds the manifest link and the iOS app meta. */
+    function hasPwaTags(): boolean {
+      return (
+        document.head.querySelector('link[rel="manifest"]') !== null &&
+        document.head.querySelector('meta[name="apple-mobile-web-app-capable"]') !== null
+      );
+    }
+    /** Whether document.head holds any of the collector app's install tags. */
+    function hasAnyPwaTag(): boolean {
+      return (
+        document.head.querySelector(
+          'link[rel="manifest"], link[rel="apple-touch-icon"], meta[name^="apple-mobile-web-app-"], meta[name="mobile-web-app-capable"]',
+        ) !== null
+      );
+    }
+
+    it.each([
+      ['/login', 'כניסה'],
+      ['/app', 'הזמנות'],
+      ['/app/rounds', 'סבבים'],
+    ])('makes the collector app installable at %s', async (path, heading) => {
+      await renderSettledAt(path, heading);
+
+      expect(hasPwaTags()).toBe(true);
+      expect(document.head.querySelectorAll('link[rel="manifest"]')).toHaveLength(1);
+    });
+
+    it.each([
+      ['/', 'הזמנת איסוף בקבוקים'],
+      [`/o/${CANCELLED_ORDER_TOKEN}`, 'ההזמנה שלך'],
+      ['/no-such-page', 'העמוד לא נמצא'],
+    ])('offers customers no install at %s', async (path, heading) => {
+      await renderSettledAt(path, heading);
+
+      expect(hasAnyPwaTag()).toBe(false);
+    });
+
+    it('removes the install tags when navigating from /app to / without a reload', async () => {
+      await renderSettledAt('/app/rounds', 'סבבים');
+      expect(hasPwaTags()).toBe(true);
+
+      act(() => navigate('/'));
+
+      expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
+      expect(hasAnyPwaTag()).toBe(false);
+    });
+  });
 
   it('renders exactly one h1, inside main, while the collector app checks the session', async () => {
     renderAt('/app/rounds');

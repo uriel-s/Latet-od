@@ -2,12 +2,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { LOGIN_MESSAGES } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE, type LoginOutcome } from '../api.ts';
+import { INSTALL_HINT_TEXT, type InstallHintNavigator } from './installHint.ts';
 import { LoginPage } from './LoginPage.tsx';
 
 /** A sentence password as ADR-0004 asks for, with spaces at both ends that must reach the api. */
 const TYPED_PASSWORD = '  שמש עולה מעל ההרים הירוקים  ';
 
 const LOGGED_IN: LoginOutcome = { kind: 'loggedIn', user: { sub: 'collector' } };
+
+const IPHONE_SAFARI =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
+const WINDOWS_CHROME =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
 
 /** A promise the test settles by hand, to look at the screen while its request is on its way. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -196,5 +202,46 @@ describe('LoginPage', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/app'));
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+});
+
+describe('LoginPage install hint', () => {
+  /** Opens `/login` as `browser` would see it. */
+  function renderLoginIn(browser: InstallHintNavigator): void {
+    window.history.replaceState(null, '', '/login');
+    render(<LoginPage submitLogin={() => Promise.resolve(LOGGED_IN)} browser={browser} />);
+  }
+
+  it('shows "להתקנה: שיתוף ← הוסף למסך הבית" in iPhone Safari', () => {
+    renderLoginIn({ userAgent: IPHONE_SAFARI, standalone: false });
+
+    expect(screen.getByText('להתקנה: שיתוף ← הוסף למסך הבית')).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows the hint on an iPhone that does not report standalone at all', () => {
+    renderLoginIn({ userAgent: IPHONE_SAFARI });
+
+    expect(screen.getByText(INSTALL_HINT_TEXT)).toBeDefined();
+  });
+
+  it('does not show the hint in the installed app (navigator.standalone is true)', () => {
+    renderLoginIn({ userAgent: IPHONE_SAFARI, standalone: true });
+
+    expect(screen.queryByText(INSTALL_HINT_TEXT)).toBeNull();
+    expect(screen.getByText('כניסה לאפליקציית האוסף.')).toBeDefined();
+  });
+
+  it('does not show the hint on a computer', () => {
+    renderLoginIn({ userAgent: WINDOWS_CHROME });
+
+    expect(screen.queryByText(INSTALL_HINT_TEXT)).toBeNull();
+  });
+
+  it('reads the real navigator by default, which in the test browser is not an iPhone', () => {
+    window.history.replaceState(null, '', '/login');
+    render(<LoginPage submitLogin={() => Promise.resolve(LOGGED_IN)} />);
+
+    expect(screen.queryByText(INSTALL_HINT_TEXT)).toBeNull();
   });
 });

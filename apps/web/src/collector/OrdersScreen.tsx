@@ -17,6 +17,7 @@ import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api.ts';
 import { Link, navigate } from '../router.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
 import { orderTags } from './orderTags.ts';
+import { useReloadOnReturn } from './useReloadOnReturn.ts';
 
 /** Shown when the list got no usable answer (network error, 5xx, unreadable body). */
 export const ORDERS_LOAD_FAILED_MESSAGE =
@@ -82,8 +83,10 @@ type ScreenState =
  * The orders tab. Renders the page's only `<h1>` (Layout's heading rule) in every state, and the
  * "הוספת הזמנה" and "תכנון סבב" links right under it: a customer who phones while the list loads,
  * or while the connection is down, can still be added, and the planning screen loads its own
- * list. The list loads once per visit to the tab (each visit mounts the screen anew), and again
- * when Yoel taps "לנסות שוב".
+ * list. The list loads once per visit to the tab (each visit mounts the screen anew), again when
+ * Yoel taps "לנסות שוב", and again when he comes back to the app ({@link useReloadOnReturn}: the
+ * installed app has no pull-to-refresh). That last reload keeps what is shown, the list or the
+ * failure message, until its answer replaces it: no "טוען..." in between, nothing jumps.
  *
  * A 401 means the session ended (expired, or logged out on another tab): to the login, like the
  * guard in CollectorApp.tsx. A failed load stays here with a retry: a dropped connection is not a
@@ -91,8 +94,14 @@ type ScreenState =
  */
 export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenProps) {
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
-  // Counts the "לנסות שוב" taps: a new value runs the load below again.
+  // Counts the loads asked for after the first ("לנסות שוב", or Yoel coming back to the app): a
+  // new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
+
+  // Back in the app: load again without blanking the screen first, unlike retry().
+  useReloadOnReturn(() => {
+    setAttempt((previous) => previous + 1);
+  });
 
   useEffect(() => {
     // False once this load's answer no longer matters: Yoel left the tab, a retry started a newer
