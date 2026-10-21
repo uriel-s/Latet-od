@@ -57,12 +57,13 @@ const SEND_LABEL = 'שלח בקשות אישור';
 const SENDING_LABEL = 'שולח...';
 
 /** A field of the plan that shows its error next to it, in form order. */
-type PlanField = 'date' | 'region' | 'orderIds' | 'pickupBy' | 'personalText';
+type PlanField = 'date' | 'region' | 'orderIds' | 'pickupFrom' | 'pickupBy' | 'personalText';
 
 const PLAN_FIELDS: readonly PlanField[] = [
   'date',
   'region',
   'orderIds',
+  'pickupFrom',
   'pickupBy',
   'personalText',
 ];
@@ -145,7 +146,12 @@ export interface PlanRoundScreenProps {
 type ScreenState =
   | { kind: 'loading' }
   | { kind: 'failed' }
-  | { kind: 'loaded'; groups: OrderGroup[]; previousPickupBy: string | undefined };
+  | {
+      kind: 'loaded';
+      groups: OrderGroup[];
+      previousPickupBy: string | undefined;
+      previousPickupFrom: string | undefined;
+    };
 
 /**
  * The planning screen. Renders the page's only `<h1>` (Layout's heading rule) and the way back to
@@ -189,6 +195,7 @@ export function PlanRoundScreen({
         kind: 'loaded',
         groups: ordersOutcome.groups,
         previousPickupBy: roundsOutcome.previousPickupBy,
+        previousPickupFrom: roundsOutcome.previousPickupFrom,
       });
     });
     return () => {
@@ -225,6 +232,7 @@ export function PlanRoundScreen({
         <PlanRoundForm
           initialGroups={state.groups}
           previousPickupBy={state.previousPickupBy}
+          previousPickupFrom={state.previousPickupFrom}
           loadOrders={loadOrders}
           submitPlan={submitPlan}
         />
@@ -239,6 +247,8 @@ interface PlanRoundFormProps {
   initialGroups: OrderGroup[];
   /** The last round's pickup time, `HH:MM`, which the field starts with (ADR-0003). */
   previousPickupBy: string | undefined;
+  /** The last round's window start, `HH:MM`, which the "from" field starts with. */
+  previousPickupFrom: string | undefined;
   /** Loads the orders again after a conflict (`ordersNotWaiting`). */
   loadOrders: () => Promise<WaitingOrdersOutcome>;
   submitPlan: (request: PlanRoundRequest) => Promise<PlanRoundOutcome>;
@@ -253,6 +263,7 @@ interface PlanRoundFormProps {
 function PlanRoundForm({
   initialGroups,
   previousPickupBy,
+  previousPickupFrom,
   loadOrders,
   submitPlan,
 }: PlanRoundFormProps) {
@@ -267,6 +278,7 @@ function PlanRoundForm({
   // The marked ids. Choosing a region replaces the whole set with that region's orders, so ids of
   // another region never linger here; only the shown region's marked orders are sent anyway.
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [pickupFrom, setPickupFrom] = useState(previousPickupFrom ?? '');
   const [pickupBy, setPickupBy] = useState(previousPickupBy ?? '');
   const [personalText, setPersonalText] = useState('');
   const [errors, setErrors] = useState<PlanErrors>(NO_ERRORS);
@@ -372,6 +384,7 @@ function PlanRoundForm({
       date,
       region,
       orderIds,
+      pickupFrom,
       pickupBy,
       personalText,
     });
@@ -541,6 +554,18 @@ function PlanRoundForm({
           )}
         </fieldset>
       )}
+
+      <TextField
+        label="מאיזו שעה להוציא את הבקבוקים (לא חובה)"
+        type="time"
+        value={pickupFrom}
+        onChange={(nextTime) => {
+          setPickupFrom(nextTime);
+          clearErrors('pickupFrom', 'pickupBy');
+        }}
+        error={errors.byField.pickupFrom}
+        autoComplete="off"
+      />
 
       <TextField
         label="עד איזו שעה להוציא את הבקבוקים (לא חובה)"

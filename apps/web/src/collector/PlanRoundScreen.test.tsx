@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_ROUND_ORDERS,
@@ -86,6 +86,12 @@ const ORDERS_LOADED: WaitingOrdersOutcome = {
   groups: groupWaitingOrders([DANA, MOSHE, YOSSI, RACHEL]),
 };
 const ROUNDS_LOADED: RoundsOutcome = { kind: 'loaded', rounds: [], previousPickupBy: '08:30' };
+const ROUNDS_WITH_WINDOW: RoundsOutcome = {
+  kind: 'loaded',
+  rounds: [],
+  previousPickupFrom: '07:00',
+  previousPickupBy: '08:30',
+};
 const ROUNDS_WITHOUT_TIME: RoundsOutcome = { kind: 'loaded', rounds: [] };
 const LOGGED_OUT = { kind: 'loggedOut' } as const;
 const FAILED = { kind: 'failed' } as const;
@@ -202,6 +208,10 @@ function dateInput(): HTMLInputElement {
 
 function timeInput(): HTMLInputElement {
   return screen.getByLabelText<HTMLInputElement>('עד איזו שעה להוציא את הבקבוקים (לא חובה)');
+}
+
+function fromInput(): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>('מאיזו שעה להוציא את הבקבוקים (לא חובה)');
 }
 
 function textInput(): HTMLTextAreaElement {
@@ -452,6 +462,17 @@ describe('PlanRoundScreen', () => {
       expect(timeInput().value).toBe('08:30');
     });
 
+    it('pre-fills the window start from the previous round, empty when it had none', async () => {
+      await renderLoaded({ rounds: [ROUNDS_WITH_WINDOW] });
+      expect(fromInput().type).toBe('time');
+      expect(fromInput().value).toBe('07:00');
+      expect(timeInput().value).toBe('08:30');
+      cleanup();
+
+      await renderLoaded();
+      expect(fromInput().value).toBe('');
+    });
+
     it('leaves the pickup time empty when the previous round had none', async () => {
       await renderLoaded({ rounds: [ROUNDS_WITHOUT_TIME] });
 
@@ -499,6 +520,34 @@ describe('PlanRoundScreen', () => {
         orderIds: ['o1', 'o2'],
         pickupBy: '08:30',
       });
+    });
+
+    it('sends the window start with the end, and leaves an empty start out', async () => {
+      const recorded = await renderLoaded();
+      fillValidPlan();
+      send();
+      await waitFor(() => expect(recorded.plans).toHaveLength(1));
+      expect(recorded.plans[0]?.pickupFrom).toBeUndefined();
+      cleanup();
+
+      const second = await renderLoaded();
+      fillValidPlan();
+      fireEvent.change(fromInput(), { target: { value: '07:15' } });
+      send();
+      await waitFor(() => expect(second.plans).toHaveLength(1));
+      expect(second.plans[0]).toMatchObject({ pickupFrom: '07:15', pickupBy: '08:30' });
+    });
+
+    it('refuses a start without an end before sending, next to the end field', async () => {
+      const recorded = await renderLoaded({ rounds: [ROUNDS_WITHOUT_TIME] });
+      fillValidPlan();
+      fireEvent.change(fromInput(), { target: { value: '07:15' } });
+
+      send();
+
+      expect(await screen.findByText(ROUND_PLAN_ERRORS.pickupUntilMissing)).toBeDefined();
+      expect(timeInput().getAttribute('aria-invalid')).toBe('true');
+      expect(recorded.plans).toHaveLength(0);
     });
 
     it('leaves out an emptied pickup time and a blank personal text', async () => {
@@ -701,6 +750,24 @@ describe('PlanRoundScreen', () => {
       expect(document.activeElement).toBe(timeInput());
       expect(screen.getByRole('alert').textContent).toBe(UNKNOWN_FIELD_ERROR);
       expect(window.location.pathname).toBe('/app/orders/plan');
+    });
+
+    it('shows a refused window start next to the start field', async () => {
+      await renderLoaded({
+        plan: [
+          {
+            kind: 'invalid',
+            fieldErrors: { pickupFrom: ROUND_PLAN_ERRORS.pickupFromNotBeforeBy },
+          },
+        ],
+      });
+      fillValidPlan();
+
+      send();
+
+      expect(await screen.findByText(ROUND_PLAN_ERRORS.pickupFromNotBeforeBy)).toBeDefined();
+      expect(fromInput().getAttribute('aria-invalid')).toBe('true');
+      expect(timeInput().getAttribute('aria-invalid')).toBeNull();
     });
 
     it('shows a 400 without field errors as a message above the button', async () => {

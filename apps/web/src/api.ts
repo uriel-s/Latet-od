@@ -607,10 +607,10 @@ const COLLECTOR_ROUNDS_PATH = '/api/collector/rounds';
 export type RoundsOutcome =
   /**
    * 200: the OPEN rounds, by date, each with its orders in groups and its "שלח" list; and the
-   * `pickupBy` of the round created last, which the planning screen pre-fills (ADR-0003). Absent
-   * when that round had none, or there was no round yet.
+   * `pickupBy` (and optional `pickupFrom`) of the round created last, which the planning screen
+   * pre-fills (ADR-0003). Each is absent when that round had none, or there was no round yet.
    */
-  | { kind: 'loaded'; rounds: RoundView[]; previousPickupBy?: string }
+  | { kind: 'loaded'; rounds: RoundView[]; previousPickupBy?: string; previousPickupFrom?: string }
   /** 401: no valid session; the screen goes to /login. */
   | { kind: 'loggedOut' }
   /** No usable answer: a network error, a 5xx, or a 200 the app cannot read. */
@@ -631,6 +631,7 @@ export async function fetchRounds(fetchFn: FetchFn = globalFetch): Promise<Round
             kind: 'loaded',
             rounds: parsed.data.rounds,
             previousPickupBy: parsed.data.previousPickupBy,
+            previousPickupFrom: parsed.data.previousPickupFrom,
           }
         : { kind: 'failed' };
     }
@@ -647,7 +648,7 @@ export type PlanRoundOutcome =
   | { kind: 'planned'; view: RoundView }
   /**
    * 400: the plan did not validate (normally caught by the same check before sending).
-   * `fieldErrors` maps a field (`date`, `region`, `orderIds`, `pickupBy`, `personalText`) to its
+   * `fieldErrors` maps a field (`date`, `region`, `orderIds`, `pickupFrom`, `pickupBy`, `personalText`) to its
    * plain-Hebrew message; empty when the body had none the app can read.
    */
   | { kind: 'invalid'; fieldErrors: Record<string, string> }

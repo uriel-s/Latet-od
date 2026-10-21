@@ -1136,6 +1136,22 @@ describe('fetchRounds', () => {
     expect(outcome.rounds[0]?.groups[1]?.orders[0]?.createdAt).toBeInstanceOf(Date);
   });
 
+  it('carries previousPickupFrom next to previousPickupBy', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 200,
+      body: { ...ROUNDS, previousPickupFrom: '07:00' },
+    });
+
+    const outcome = await fetchRounds(fetchFn);
+
+    expect(outcome).toEqual({
+      kind: 'loaded',
+      rounds: [ROUND_VIEW],
+      previousPickupBy: '08:30',
+      previousPickupFrom: '07:00',
+    });
+  });
+
   it('answers loaded without a pickup time when the api has none, and with no rounds', async () => {
     const { fetchFn } = makeFakeFetch({ status: 200, body: { rounds: [] } });
 

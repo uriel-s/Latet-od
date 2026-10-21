@@ -655,7 +655,16 @@ function RoundSection({
       </h2>
       {round.pickupBy !== undefined && (
         <p>
-          להוציא את הבקבוקים עד <bdi dir="ltr">{round.pickupBy}</bdi>
+          {round.pickupFrom !== undefined ? (
+            <>
+              להוציא את הבקבוקים בין <bdi dir="ltr">{round.pickupFrom}</bdi> ל-
+              <bdi dir="ltr">{round.pickupBy}</bdi>
+            </>
+          ) : (
+            <>
+              להוציא את הבקבוקים עד <bdi dir="ltr">{round.pickupBy}</bdi>
+            </>
+          )}
         </p>
       )}
       {round.personalText !== undefined && (

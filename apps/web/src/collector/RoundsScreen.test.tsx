@@ -507,6 +507,18 @@ describe('RoundsScreen', () => {
       expect(within(round).getByText(/^טקסט אישי:/).textContent).toBe('טקסט אישי: תודה רבה!\nיואל');
     });
 
+    it('shows the window as "בין X ל-Y" when the round has a start', async () => {
+      const view = makeView({ round: { pickupFrom: '07:00' }, pending: [MOSHE] });
+      const round = await renderLoaded({
+        loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
+      });
+
+      const pickup = within(round).getByText(/^להוציא את הבקבוקים בין/);
+      expect(pickup.textContent).toBe('להוציא את הבקבוקים בין 07:00 ל-08:30');
+      expect(within(pickup).getByText('07:00').closest('[dir="ltr"]')).not.toBeNull();
+      expect(within(pickup).getByText('08:30').closest('[dir="ltr"]')).not.toBeNull();
+    });
+
     it('leaves out the pickup time and the personal text when the round has none', async () => {
       const view = makeView({
         round: { pickupBy: undefined, personalText: undefined },
