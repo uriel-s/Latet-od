@@ -382,6 +382,17 @@ describe('GET /api/o/:token', () => {
     expect(page.round).toStrictEqual({ date: DATE, pickupBy: PICKUP_BY });
   });
 
+  it('shows the pickup window start when the round has one', async () => {
+    const { order } = await seedInRound({
+      order: { status: 'confirmed' },
+      round: { pickupFrom: '07:00' },
+    });
+
+    const page = orderOf(await getPage(order.token));
+
+    expect(page.round).toStrictEqual({ date: DATE, pickupBy: PICKUP_BY, pickupFrom: '07:00' });
+  });
+
   it('shows no round for a waiting order', async () => {
     const order = await seed();
 

@@ -34,6 +34,8 @@ export interface OrderMessageOptions {
   date?: string;
   /** Time to put the bottles out by, `HH:MM` (ADR-0003). Only the confirmation request says it. */
   pickupBy?: string;
+  /** Start of the pickup window, `HH:MM`. Only valid together with `pickupBy` (the window end). */
+  pickupFrom?: string;
   /** Yoel's own words for the round. Kept for `confirmRequest` only (see below). */
   personalText?: string;
 }
@@ -57,6 +59,7 @@ export function orderMessage(
   };
   if (options.date !== undefined) vars.date = options.date;
   if (options.pickupBy !== undefined) vars.pickupBy = options.pickupBy;
+  if (options.pickupFrom !== undefined) vars.pickupFrom = options.pickupFrom;
 
   const message: OutgoingMessage = { kind, orderId: order.id, to: order.contact.phone, vars };
   if (kind === 'confirmRequest' && options.personalText !== undefined) {

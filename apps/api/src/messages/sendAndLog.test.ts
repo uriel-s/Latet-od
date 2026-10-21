@@ -121,6 +121,25 @@ describe('orderMessage', () => {
     });
   });
 
+  it('passes pickupFrom to the message vars only when given', async () => {
+    const order = await seed();
+
+    const withWindow = orderMessage(order, 'confirmRequest', {
+      publicBaseUrl: FAKE_PUBLIC_BASE_URL,
+      date: ROUND_DATE,
+      pickupFrom: '07:00',
+      pickupBy: '08:00',
+    });
+    const without = orderMessage(order, 'confirmRequest', {
+      publicBaseUrl: FAKE_PUBLIC_BASE_URL,
+      date: ROUND_DATE,
+      pickupBy: '08:00',
+    });
+
+    expect(withWindow.vars.pickupFrom).toBe('07:00');
+    expect(without.vars).not.toHaveProperty('pickupFrom');
+  });
+
   it('leaves out the optional values that are not given, instead of setting them to undefined', async () => {
     const order = await seed();
 

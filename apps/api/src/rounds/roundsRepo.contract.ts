@@ -64,6 +64,7 @@ export function describeRoundsRepoContract(
       it('returns the round with a new id, in the stored round shape', async () => {
         const input = makeNewRound({
           personalText: 'נאסוף אחרי מנחה',
+          pickupFrom: '15:00',
           pickupBy: '16:00',
           orderIds: orderIds(),
         });
@@ -91,7 +92,11 @@ export function describeRoundsRepoContract(
       });
 
       it('leaves out fields whose value is undefined', async () => {
-        const input = makeNewRound({ personalText: undefined, pickupBy: undefined });
+        const input = makeNewRound({
+          personalText: undefined,
+          pickupBy: undefined,
+          pickupFrom: undefined,
+        });
 
         const created = await repo.create(input);
         const found = await mustFind(created.id);
@@ -99,6 +104,7 @@ export function describeRoundsRepoContract(
         for (const round of [created, found]) {
           expect('personalText' in round).toBe(false);
           expect('pickupBy' in round).toBe(false);
+          expect('pickupFrom' in round).toBe(false);
           expect('closedAt' in round).toBe(false);
         }
       });

@@ -17,19 +17,28 @@ const HEX_ID = '0123456789abcdef01234567';
 
 describe('toRoundDocument', () => {
   it('is the round with the given _id', () => {
-    const round = makeNewRound({ personalText: 'נאסוף אחרי מנחה', pickupBy: '16:00' });
+    const round = makeNewRound({
+      personalText: 'נאסוף אחרי מנחה',
+      pickupFrom: '15:00',
+      pickupBy: '16:00',
+    });
     const _id = new ObjectId();
 
     expect(toRoundDocument(round, _id)).toEqual({ ...round, _id });
   });
 
   it('leaves out undefined fields', () => {
-    const round = makeNewRound({ personalText: undefined, pickupBy: undefined });
+    const round = makeNewRound({
+      personalText: undefined,
+      pickupBy: undefined,
+      pickupFrom: undefined,
+    });
 
     const doc = toRoundDocument(round, new ObjectId());
 
     expect('personalText' in doc).toBe(false);
     expect('pickupBy' in doc).toBe(false);
+    expect('pickupFrom' in doc).toBe(false);
   });
 
   it('shares nothing with the caller, arrays and dates included', () => {
