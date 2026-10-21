@@ -5,12 +5,13 @@
 // file is the screen itself, the parts only the public form has (the honeypot, the privacy line),
 // and what happens after each answer.
 import { useId, useRef, useState } from 'react';
-import { ORDER_HONEYPOT_FIELD, type CreateOrderRequest } from '@bottlerun/shared';
+import { MIN_BOTTLES, ORDER_HONEYPOT_FIELD, type CreateOrderRequest } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE, createOrder, type CreateOrderOutcome } from '../api.ts';
 import { navigate, useLocation } from '../router.tsx';
 import {
   NO_ERRORS,
   emptyOrderFormValues,
+  hasEnoughBottles,
   validateOrderForm,
   type OrderFormValues,
 } from './formValues.ts';
@@ -26,6 +27,8 @@ import { useOrderForm } from './useOrderForm.ts';
 
 const SUBMIT_LABEL = 'שליחת הזמנה';
 const SENDING_LABEL = 'שולח...';
+// Under the greyed send button: a button that looks dead with no reason would stump the customer.
+const NOT_ENOUGH_BOTTLES_TEXT = `כדי לשלוח צריך לפחות ${MIN_BOTTLES} בקבוקים`;
 
 /**
  * The values the form opens with. Section 9's "הזמנה חדשה עם אותם פרטים" (the details passed in
@@ -68,6 +71,10 @@ export function OrderFormPage({ submitOrder = createOrder }: OrderFormPageProps)
   // Enter that comes before it.
   const sendingRef = useRef(false);
   const honeypotId = useId();
+  const notReadyId = useId();
+  // Below the minimum the button looks unavailable. It stays tappable: a tap still validates and
+  // shows every mistake of the form, and validation sends nothing while the bottles are too few.
+  const notReady = !hasEnoughBottles(values.bottlesEstimated);
 
   if (createdToken !== null) return <ThankYou token={createdToken} />;
 
@@ -163,13 +170,20 @@ export function OrderFormPage({ submitOrder = createOrder }: OrderFormPageProps)
           </p>
         )}
 
-        {/* aria-disabled, not disabled, while sending: a disabled button drops focus to the
-            page itself, and a keyboard or screen-reader user would lose their place; this one
-            keeps focus and is announced as unavailable. sendingRef ignores the extra taps. */}
+        {notReady && !sending && (
+          <p id={notReadyId} className="field-hint">
+            {NOT_ENOUGH_BOTTLES_TEXT}
+          </p>
+        )}
+        {/* aria-disabled, not disabled, while sending or below the minimum: a disabled button
+            drops focus to the page itself, and a keyboard or screen-reader user would lose their
+            place; this one keeps focus and is announced as unavailable. sendingRef ignores the
+            extra taps while sending, and validation refuses too few bottles. */}
         <button
           type="submit"
-          className="button button-primary button-block"
-          aria-disabled={sending ? true : undefined}
+          className={`button button-primary button-block${notReady && !sending ? ' button-not-ready' : ''}`}
+          aria-disabled={sending || notReady ? true : undefined}
+          aria-describedby={notReady && !sending ? notReadyId : undefined}
         >
           {sending ? SENDING_LABEL : SUBMIT_LABEL}
         </button>

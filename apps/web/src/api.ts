@@ -1098,7 +1098,7 @@ export type CustomerOrderWriteOutcome =
   | { kind: 'failed' };
 
 /**
- * "מאשר/ת איסוף" with `POST /api/o/:token/confirm` (no body): pending → confirmed. An order
+ * "כן, אוציא את הבקבוקים" with `POST /api/o/:token/confirm` (no body): pending → confirmed. An order
  * already confirmed answers `saved` too; a round no longer taking confirmations answers `closed`.
  */
 export async function confirmCustomerOrder(

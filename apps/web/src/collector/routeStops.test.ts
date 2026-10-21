@@ -110,7 +110,7 @@ describe('stopAddressLines', () => {
 
   it('joins the floor and apartment to the spot with " · "', () => {
     const address = makeAddress({ bottlesSpot: 'apartmentDoor', floorApt: 'קומה 3, דירה 12' });
-    expect(stopAddressLines(address).spot).toBe('ליד דלת הדירה · קומה 3, דירה 12');
+    expect(stopAddressLines(address).spot).toBe('בבניין - ליד דלת הדירה · קומה 3, דירה 12');
   });
 
   it('has the note when there is one, trimmed', () => {

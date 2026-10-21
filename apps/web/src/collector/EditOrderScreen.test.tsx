@@ -242,7 +242,7 @@ describe('EditOrderScreen', () => {
       expect(phone.getAttribute('dir')).toBe('ltr');
       expect(input('רחוב').value).toBe(RAMAT_STREET.name);
       expect(input('מספר בית').value).toBe('12');
-      expect(input('ליד דלת הדירה').checked).toBe(true);
+      expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
       expect(input('קומה ודירה').value).toBe('קומה 3, דירה 12');
       expect(input('כמות בקבוקים').value).toBe('40');
     });
