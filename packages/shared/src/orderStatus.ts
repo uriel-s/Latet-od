@@ -65,6 +65,23 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ORDER_TRANSITIONS[from].includes(to);
 }
 
+/**
+ * Whether Yoel may delete the order for good (ADR-0008): only a `waiting` or `cancelled` order
+ * that is in no round. A `collected` order is history the statistics count. An order with a
+ * `roundId` is still named by that round's `orderIds` and by the route stored in it, and deleting
+ * it would leave a stop pointing at nothing. An order that came back from a round to `waiting`
+ * has no `roundId` any more (rounds/leaveRound.ts), so it can go; a cancelled one keeps the
+ * `roundId` of the round it was cancelled in and stays as history.
+ */
+export function canDeleteOrder(order: {
+  status: OrderStatus;
+  roundId?: string | undefined;
+}): boolean {
+  return (
+    (order.status === 'waiting' || order.status === 'cancelled') && order.roundId === undefined
+  );
+}
+
 /** Whether an order in this status is still open, i.e. counts toward one open order per phone. */
 export function isOpenStatus(status: OrderStatus): boolean {
   return OPEN_ORDER_STATUSES.includes(status);

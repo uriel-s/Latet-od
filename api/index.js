@@ -20676,6 +20676,9 @@ var ORDER_TRANSITIONS = {
 function canTransition(from, to) {
   return ORDER_TRANSITIONS[from].includes(to);
 }
+function canDeleteOrder(order) {
+  return (order.status === "waiting" || order.status === "cancelled") && order.roundId === void 0;
+}
 function isOpenStatus(status) {
   return OPEN_ORDER_STATUSES.includes(status);
 }
@@ -20922,12 +20925,19 @@ var collectorOrderSchema = external_exports.object({
   source: orderSchema.shape.source,
   createdAt: orderSchema.shape.createdAt,
   /** Whether the address has a map point; false shows the "בלי מיקום" tag (ADR-0005). */
-  hasLocation: external_exports.boolean()
+  hasLocation: external_exports.boolean(),
+  /**
+   * Whether "מחיקת ההזמנה" is offered: `canDeleteOrder`, decided by the api (ADR-0008), which
+   * always sends it. Optional in the type so a screen's test data need not spell it out; absent
+   * means "not offered", the safe reading.
+   */
+  deletable: external_exports.boolean().optional()
 });
 function toCollectorOrder(order) {
   return collectorOrderSchema.parse({
     ...order,
-    hasLocation: pointForAddress(order.address) !== void 0
+    hasLocation: pointForAddress(order.address) !== void 0,
+    deletable: canDeleteOrder(order)
   });
 }
 var orderGroupSchema = external_exports.object({
@@ -20970,7 +20980,9 @@ var updateOrderRequestSchema = external_exports.strictObject({
 var COLLECTOR_ORDER_MESSAGES = {
   /** The order was collected or cancelled meanwhile (e.g. on another screen). */
   orderClosed: "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D4, \u05D5\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D0\u05D5\u05EA\u05D4.",
-  orderNotFound: "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D4."
+  orderNotFound: "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D4.",
+  /** A delete the order's state does not allow (collected, or in a round), ADR-0008. */
+  cannotDelete: "\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4: \u05D4\u05D9\u05D0 \u05E0\u05D0\u05E1\u05E4\u05D4 \u05D0\u05D5 \u05E9\u05D4\u05D9\u05D0 \u05D1\u05E1\u05D1\u05D1. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D1\u05D8\u05DC \u05D0\u05D5\u05EA\u05D4."
 };
 
 // packages/shared/src/messages.ts
@@ -21464,6 +21476,15 @@ var MongoOrdersRepo = class {
     } catch (error62) {
       throw mapDuplicateKeyError(error62) ?? error62;
     }
+  }
+  async delete(id, options = {}) {
+    const _id = parseOrderId(id);
+    if (_id === null) return false;
+    const filter = { _id };
+    if (options.ifStatus !== void 0) filter.status = { $in: [...options.ifStatus] };
+    await this.ensureIndexes();
+    const result = await this.orders.deleteOne(filter);
+    return result.deletedCount === 1;
   }
   /** The first order matching `filter`, parsed, or null. */
   async findOne(filter) {
@@ -22248,6 +22269,25 @@ function createCollectorOrdersRouter(deps) {
     }
     sendOrder(res, cancelled);
   });
+  router.delete("/:id", async (req, res) => {
+    const { id } = req.params;
+    const stored = await orders.findById(id);
+    if (stored === null) {
+      sendNotFound(res);
+      return;
+    }
+    if (!canDeleteOrder(stored)) {
+      sendCannotDelete(res);
+      return;
+    }
+    const deleted = await orders.delete(id, { ifStatus: [stored.status] });
+    if (!deleted) {
+      if (await orders.findById(id) === null) sendNotFound(res);
+      else sendCannotDelete(res);
+      return;
+    }
+    res.status(204).end();
+  });
   router.post("/:id/messages/:index/opened", async (req, res) => {
     const { id, index } = req.params;
     const stored = await orders.findById(id);
@@ -22309,6 +22349,13 @@ function sendInvalidTransition(res) {
   const body = {
     error: "invalid_transition",
     message: COLLECTOR_ORDER_MESSAGES.orderClosed
+  };
+  res.status(409).json(body);
+}
+function sendCannotDelete(res) {
+  const body = {
+    error: "cannot_delete",
+    message: COLLECTOR_ORDER_MESSAGES.cannotDelete
   };
   res.status(409).json(body);
 }

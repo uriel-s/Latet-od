@@ -15,10 +15,12 @@ import {
 } from '@bottlerun/shared';
 import {
   cancelCollectorOrder,
+  deleteCollectorOrder,
   fetchCollectorOrder,
   updateCollectorOrder,
   type CollectorOrderOutcome,
   type CollectorOrderWriteOutcome,
+  type DeleteCollectorOrderOutcome,
 } from '../api.ts';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { NO_ERRORS, validateOrderDetails } from '../orderForm/formValues.ts';
@@ -27,6 +29,7 @@ import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import type { StreetChoice } from '../streetPicker/streetChoice.ts';
+import { DeleteOrderButton } from './DeleteOrderButton.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import {
   ORDERS_LIST_PATH,
@@ -64,6 +67,8 @@ export interface EditOrderScreenProps {
   updateOrder?: (id: string, request: UpdateOrderRequest) => Promise<CollectorOrderWriteOutcome>;
   /** Cancels the order. Defaults to {@link cancelCollectorOrder}; tests pass a fake. */
   cancelOrder?: (id: string) => Promise<CollectorOrderWriteOutcome>;
+  /** Deletes the order for good. Defaults to {@link deleteCollectorOrder}; tests pass a fake. */
+  deleteOrder?: (id: string) => Promise<DeleteCollectorOrderOutcome>;
 }
 
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
@@ -87,6 +92,7 @@ export function EditOrderScreen({
   loadOrder = fetchCollectorOrder,
   updateOrder = updateCollectorOrder,
   cancelOrder = cancelCollectorOrder,
+  deleteOrder = deleteCollectorOrder,
 }: EditOrderScreenProps) {
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   // Counts the "לנסות שוב" taps: a new value runs the load below again.
@@ -158,12 +164,21 @@ export function EditOrderScreen({
 
       {state.kind === 'loaded' &&
         (isOpenStatus(state.order.status) ? (
-          <EditOrderForm order={state.order} updateOrder={updateOrder} cancelOrder={cancelOrder} />
+          <EditOrderForm
+            order={state.order}
+            updateOrder={updateOrder}
+            cancelOrder={cancelOrder}
+            deleteOrder={deleteOrder}
+          />
         ) : (
           // Collected or cancelled: final statuses (spec §4), so there is nothing left to edit.
-          <p className="form-alert" role="alert">
-            {COLLECTOR_ORDER_MESSAGES.orderClosed}
-          </p>
+          // A cancelled order in no round can still be removed for good (ADR-0008).
+          <>
+            <p className="form-alert" role="alert">
+              {COLLECTOR_ORDER_MESSAGES.orderClosed}
+            </p>
+            <DeleteOrderButton order={state.order} deleteOrder={deleteOrder} />
+          </>
         ))}
     </>
   );
@@ -174,13 +189,14 @@ interface EditOrderFormProps {
   order: CollectorOrder;
   updateOrder: NonNullable<EditOrderScreenProps['updateOrder']>;
   cancelOrder: NonNullable<EditOrderScreenProps['cancelOrder']>;
+  deleteOrder: NonNullable<EditOrderScreenProps['deleteOrder']>;
 }
 
 /**
  * The form of a loaded, open order, and its cancel. Mounted only once the order is there, so
  * every field (the two street pickers too) starts from the stored values.
  */
-function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) {
+function EditOrderForm({ order, updateOrder, cancelOrder, deleteOrder }: EditOrderFormProps) {
   const { values, errors, setErrors, setField, formRef, showErrors } = useOrderForm(() =>
     formValuesFromOrder(order),
   );
@@ -358,6 +374,10 @@ function EditOrderForm({ order, updateOrder, cancelOrder }: EditOrderFormProps) 
         onConfirm={() => void confirmCancel()}
         onOpenChange={() => setCancelError(null)}
       />
+
+      {/* Only for an order in no round (ADR-0008); a pending or confirmed one is cancelled first
+          or leaves its round, and the button does not show. */}
+      <DeleteOrderButton order={order} deleteOrder={deleteOrder} />
     </>
   );
 }

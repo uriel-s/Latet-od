@@ -15,6 +15,7 @@ import {
   type OrderFormInput,
 } from './order.ts';
 import type { DuplicateOpenOrderErrorBody, InvalidOrderErrorBody } from './orderApi.ts';
+import { canDeleteOrder } from './orderStatus.ts';
 import { findStreet, regionSchema, type Region } from './streets.ts';
 
 // ---------------------------------------------------------------------------------------------
@@ -69,6 +70,12 @@ export const collectorOrderSchema = z.object({
   createdAt: orderSchema.shape.createdAt,
   /** Whether the address has a map point; false shows the "בלי מיקום" tag (ADR-0005). */
   hasLocation: z.boolean(),
+  /**
+   * Whether "מחיקת ההזמנה" is offered: `canDeleteOrder`, decided by the api (ADR-0008), which
+   * always sends it. Optional in the type so a screen's test data need not spell it out; absent
+   * means "not offered", the safe reading.
+   */
+  deletable: z.boolean().optional(),
 });
 export type CollectorOrder = z.infer<typeof collectorOrderSchema>;
 
@@ -86,6 +93,7 @@ export function toCollectorOrder(order: Order): CollectorOrder {
   return collectorOrderSchema.parse({
     ...order,
     hasLocation: pointForAddress(order.address) !== undefined,
+    deletable: canDeleteOrder(order),
   });
 }
 
@@ -224,6 +232,8 @@ export const COLLECTOR_ORDER_MESSAGES = {
   /** The order was collected or cancelled meanwhile (e.g. on another screen). */
   orderClosed: 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
   orderNotFound: 'ההזמנה לא נמצאה.',
+  /** A delete the order's state does not allow (collected, or in a round), ADR-0008. */
+  cannotDelete: 'אי אפשר למחוק את ההזמנה: היא נאספה או שהיא בסבב. אפשר לבטל אותה.',
 } as const;
 
 // The bodies below follow ApiErrorBody (index.ts): a stable `error` code, plus a Hebrew `message`
@@ -250,6 +260,16 @@ export interface InvalidTransitionErrorBody {
 }
 
 /**
+ * 409 from DELETE /api/collector/orders/:id: `canDeleteOrder` refuses the order (it was collected,
+ * or it is in a round), or it changed status while the delete was on its way. `message` is
+ * {@link COLLECTOR_ORDER_MESSAGES}.cannotDelete.
+ */
+export interface CannotDeleteErrorBody {
+  error: 'cannot_delete';
+  message: string;
+}
+
+/**
  * Every error body /api/collector/orders adds to the ones every route may answer (ApiErrorBody).
  * A 401 comes from the login guard: authApi.ts's `UnauthenticatedErrorBody`.
  */
@@ -257,4 +277,5 @@ export type CollectorOrderErrorBody =
   | InvalidOrderErrorBody
   | DuplicateOpenOrderErrorBody
   | OrderNotFoundErrorBody
-  | InvalidTransitionErrorBody;
+  | InvalidTransitionErrorBody
+  | CannotDeleteErrorBody;

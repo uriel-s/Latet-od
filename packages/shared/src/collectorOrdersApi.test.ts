@@ -131,7 +131,17 @@ describe('toCollectorOrder', () => {
       source: 'form',
       createdAt: CREATED_AT,
       hasLocation: true,
+      deletable: true,
     });
+  });
+
+  it('marks an order as deletable by canDeleteOrder, without exposing the roundId', () => {
+    expect(toCollectorOrder(makeOrder()).deletable).toBe(true);
+    expect(toCollectorOrder(makeOrder({ roundId: 'round-1' })).deletable).toBe(false);
+    expect(toCollectorOrder(makeOrder({ status: 'pending', roundId: 'round-1' })).deletable).toBe(
+      false,
+    );
+    expect(toCollectorOrder(makeOrder({ status: 'collected' })).deletable).toBe(false);
   });
 
   it('never carries the token, the message log or the other internal fields', () => {

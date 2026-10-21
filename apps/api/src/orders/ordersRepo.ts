@@ -103,4 +103,12 @@ export interface OrdersRepo {
    *   has one. Nothing changes then.
    */
   update(id: string, patch: OrderPatch, options?: OrderUpdateOptions): Promise<Order | null>;
+
+  /**
+   * Removes the order for good (ADR-0008) and returns true; false, with nothing removed, when the
+   * id is unknown or malformed or when `options.ifStatus` does not match the stored status (the
+   * same atomic check as `update`). Whether an order MAY be deleted is the caller's to decide
+   * (`canDeleteOrder` in shared); the repo is dumb storage.
+   */
+  delete(id: string, options?: OrderUpdateOptions): Promise<boolean>;
 }

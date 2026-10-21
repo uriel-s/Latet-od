@@ -14,6 +14,7 @@ export const FLASH_NOTICES = {
   orderAdded: 'ההזמנה נוספה.',
   orderSaved: 'השינויים נשמרו.',
   orderCancelled: 'ההזמנה בוטלה.',
+  orderDeleted: 'ההזמנה נמחקה.',
   roundPlanned: 'הסבב נוצר.',
 } as const;
 

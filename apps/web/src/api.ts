@@ -441,6 +441,44 @@ export async function cancelCollectorOrder(
   return writeOutcomeOf(response, { successStatus: 200, notFoundMeansOrder: true });
 }
 
+/** How a delete ended (Yoel's "מחיקת ההזמנה", ADR-0008). */
+export type DeleteCollectorOrderOutcome =
+  /** 204, or 404: the order is gone, which is what Yoel asked for (a second screen got there first). */
+  | { kind: 'deleted' }
+  /** 409 `cannot_delete`: collected, in a round, or changed meanwhile; `message` says so. */
+  | { kind: 'refused'; message: string }
+  /** 401: no valid session; the screen goes to /login. */
+  | { kind: 'loggedOut' }
+  /** No usable answer: a network error, a 403 or 5xx. Nothing is retried: the delete may have arrived. */
+  | { kind: 'failed' };
+
+/**
+ * Deletes an order for good (Yoel's "מחיקת ההזמנה") with `DELETE /api/collector/orders/:id`, which
+ * takes no body and answers 204. Only a waiting or cancelled order in no round may go (ADR-0008).
+ */
+export async function deleteCollectorOrder(
+  id: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<DeleteCollectorOrderOutcome> {
+  const response = await fetchOrNull(fetchFn, collectorOrderPath(id), { method: 'DELETE' });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 204:
+    case 404:
+      return { kind: 'deleted' };
+    case 401:
+      return { kind: 'loggedOut' };
+    case 409: {
+      const body = await readJson(response);
+      return isObject(body) && body.error === 'cannot_delete'
+        ? { kind: 'refused', message: COLLECTOR_ORDER_MESSAGES.cannotDelete }
+        : { kind: 'failed' };
+    }
+    default:
+      return { kind: 'failed' };
+  }
+}
+
 /**
  * The outcome of a write's answer (null: none arrived). `successStatus` is the route's success
  * (201 for an add, 200 otherwise); any other 2xx is `failed`, since the app cannot tell what it
