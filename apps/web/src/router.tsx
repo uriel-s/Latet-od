@@ -66,7 +66,11 @@ export interface NavigateOptions {
 // so `navigate` tells these listeners itself; `popstate` covers the back and forward buttons.
 const listeners = new Set<() => void>();
 
-/** Goes to `to` (a same-origin path) without reloading the page, and re-renders the app. */
+/**
+ * Goes to `to` (a same-origin path) without reloading the page, and re-renders the app. `to` may
+ * carry a query string: `navigate('/app/rounds?round=abc', { replace: true })` changes only the
+ * query of the current screen, and `useLocation().search` re-renders its readers.
+ */
 export function navigate(to: string, options: NavigateOptions = {}): void {
   const state = options.state ?? null;
   if (options.replace) window.history.replaceState(state, '', to);
@@ -77,8 +81,22 @@ export function navigate(to: string, options: NavigateOptions = {}): void {
 /** Where the app is now, as {@link useLocation} returns it. */
 export interface AppLocation {
   pathname: string;
+  /**
+   * The raw query string, as `window.location.search` has it: `''` or `'?round=abc'`. Read one
+   * value with {@link searchParam}. `matchRoute` ignores it: the query never picks the page.
+   */
+  search: string;
   /** `history.state` of the current entry: whatever `navigate` stored, or null. */
   state: unknown;
+}
+
+/**
+ * One value from a query string (`location.search`, with or without the leading `?`), decoded.
+ * A missing or empty parameter gives `undefined`, so `?round=` and no `round` mean the same.
+ */
+export function searchParam(search: string, name: string): string | undefined {
+  const value = new URLSearchParams(search).get(name);
+  return value ? value : undefined;
 }
 
 function subscribe(onChange: () => void): () => void {
@@ -91,22 +109,28 @@ function subscribe(onChange: () => void): () => void {
 }
 
 // useSyncExternalStore compares snapshots by identity and re-renders on every new object, so a
-// fresh `{ pathname, state }` on every call would loop forever. The last snapshot is kept and
-// handed out again until the path or the state object actually changes.
+// fresh `{ pathname, search, state }` on every call would loop forever. The last snapshot is kept
+// and handed out again until the path, the query or the state object actually changes.
 let lastSnapshot: AppLocation | null = null;
 
 function getSnapshot(): AppLocation {
   const pathname = window.location.pathname;
+  const search = window.location.search;
   const state: unknown = window.history.state;
-  if (lastSnapshot?.pathname !== pathname || lastSnapshot.state !== state) {
-    lastSnapshot = { pathname, state };
+  if (
+    lastSnapshot?.pathname !== pathname ||
+    lastSnapshot.search !== search ||
+    lastSnapshot.state !== state
+  ) {
+    lastSnapshot = { pathname, search, state };
   }
   return lastSnapshot;
 }
 
 /**
- * The current path and history state. The component re-renders after {@link navigate}, a
- * {@link Link} click, and the browser's back and forward buttons.
+ * The current path, query string and history state. The component re-renders after
+ * {@link navigate} (also when only the query changed), a {@link Link} click, and the browser's
+ * back and forward buttons.
  */
 export function useLocation(): AppLocation {
   return useSyncExternalStore(subscribe, getSnapshot);
