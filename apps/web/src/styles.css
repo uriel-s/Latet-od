@@ -965,7 +965,7 @@ html:has(.bottom-nav) {
   border-block-start: 2px solid var(--color-gray);
 }
 
-/* "סגור סבב" (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
+/* The close button (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
    it. Its question uses .cancel-confirm; the "תודות שלא נשלחו" heading starts that box, so it
    drops the top margin of the other h3s of a round. */
 .round-close {
