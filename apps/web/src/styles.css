@@ -382,6 +382,21 @@ button[aria-disabled='true'] {
   cursor: progress;
 }
 
+/*
+ * A button that cannot be used yet (the booking form's "שליחת הזמנה" below 30 bottles). Still
+ * aria-disabled, not disabled, so a tap shows the form's messages; greyed, but --color-text on
+ * --color-handled keeps AA contrast.
+ */
+/* Two classes: .button-primary (below) has the same weight as one class and comes later. */
+.button-primary.button-not-ready {
+  background: var(--color-handled);
+  color: var(--color-text);
+}
+
+button.button-not-ready[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
 /* The shared shape of buttons and of links that look like buttons (<a class="button">). */
 .button {
   display: inline-flex;
@@ -1020,7 +1035,7 @@ html:has(.bottom-nav) {
   font-size: 1.15rem;
 }
 
-/* "מאשר/ת איסוף" over "לא מתאים הפעם", with room between them against a wrong tap. */
+/* "כן, אוציא את הבקבוקים" over "לא מתאים הפעם", with room between them against a wrong tap. */
 .order-actions {
   display: flex;
   flex-direction: column;

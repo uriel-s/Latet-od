@@ -160,6 +160,50 @@ describe('OrderFormPage', () => {
     expect(requests).toEqual([]);
   });
 
+  // Class and aria only: jsdom loads no CSS, so the colour itself is checked on a real phone.
+  it('greys the send button, with the reason, until the bottles reach 30', () => {
+    renderForm();
+    fillValidForm();
+    typeInto('כמות בקבוקים', '29');
+
+    const button = screen.getByRole('button', { name: 'שליחת הזמנה' });
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.className).toContain('button-not-ready');
+    expect(descriptionOf(button)).toBe('כדי לשלוח צריך לפחות 30 בקבוקים');
+
+    typeInto('כמות בקבוקים', '30');
+    expect(button.getAttribute('aria-disabled')).toBeNull();
+    expect(button.className).not.toContain('button-not-ready');
+    expect(button.getAttribute('aria-describedby')).toBeNull();
+    expect(screen.queryByText('כדי לשלוח צריך לפחות 30 בקבוקים')).toBeNull();
+  });
+
+  it('greys the send button while the bottles field is empty', () => {
+    renderForm();
+
+    const button = screen.getByRole('button', { name: 'שליחת הזמנה' });
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.className).toContain('button-not-ready');
+    expect(descriptionOf(button)).toBe('כדי לשלוח צריך לפחות 30 בקבוקים');
+  });
+
+  it('keeps "שולח..." plain, without the reason, if the bottles drop below 30 while sending', async () => {
+    const answer = deferred<CreateOrderOutcome>();
+    renderForm(answer.promise);
+    fillValidForm();
+    submit();
+
+    typeInto('כמות בקבוקים', '20');
+
+    const sending = screen.getByRole('button', { name: 'שולח...' });
+    expect(sending.className).not.toContain('button-not-ready');
+    expect(sending.getAttribute('aria-describedby')).toBeNull();
+    expect(screen.queryByText('כדי לשלוח צריך לפחות 30 בקבוקים')).toBeNull();
+
+    answer.resolve(CREATED);
+    await screen.findByRole('heading', { level: 1, name: 'תודה!' });
+  });
+
   it('shows every mistake of an empty form next to its field and focuses the first', () => {
     const { requests } = renderForm();
 
@@ -218,7 +262,7 @@ describe('OrderFormPage', () => {
     renderForm();
     expect(screen.queryByLabelText('קומה ודירה')).toBeNull();
 
-    fireEvent.click(input('ליד דלת הדירה'));
+    fireEvent.click(input('בבניין - ליד דלת הדירה'));
     expect(input('קומה ודירה')).toBeDefined();
     expect(descriptionOf(input('קומה ודירה'))).toBe("למשל: כניסה ב', קומה 3, דירה 12");
 
@@ -229,7 +273,7 @@ describe('OrderFormPage', () => {
   it('requires the floor and apartment for the apartment door and sends nothing without it', () => {
     const { requests } = renderForm();
     fillValidForm();
-    fireEvent.click(input('ליד דלת הדירה'));
+    fireEvent.click(input('בבניין - ליד דלת הדירה'));
 
     submit();
 
@@ -248,7 +292,7 @@ describe('OrderFormPage', () => {
     expect(input('טלפון נייד').value).toBe('052-7654321');
     expect(input('רחוב').value).toBe('דרך רבין יצחק');
     expect(input('מספר בית').value).toBe('7ב');
-    expect(input('ליד דלת הדירה').checked).toBe(true);
+    expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
     expect(input('קומה ודירה').value).toBe('קומה 3, דירה 12');
     expect(input('כמות בקבוקים').value).toBe('');
   });

@@ -259,7 +259,7 @@ function postToRound(roundId: string, path: string, body?: object): request.Test
   return body === undefined ? req : req.send(body);
 }
 
-/** The customer's "מאשר/ת איסוף" on their own page (no login). */
+/** The customer's "כן, אוציא את הבקבוקים" on their own page (no login). */
 function customerConfirm(token: string): request.Test {
   return request(app).post(`/api/o/${token}/confirm`).set(SAME_ORIGIN_HEADERS);
 }

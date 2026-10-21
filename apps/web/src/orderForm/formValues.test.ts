@@ -8,6 +8,7 @@ import {
   UNKNOWN_FIELD_ERROR,
   addressPlaceOf,
   emptyOrderFormValues,
+  hasEnoughBottles,
   mapFieldErrors,
   validateCustomerChange,
   validateOrderDetails,
@@ -386,5 +387,21 @@ describe('mapFieldErrors', () => {
     expect(errors).toEqual({ byField: { phone: 'טלפון' }, other: UNKNOWN_FIELD_ERROR });
     expect(Object.getPrototypeOf(errors.byField)).toBe(Object.prototype);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+describe('hasEnoughBottles', () => {
+  it('accepts a whole number from 30 up', () => {
+    expect(hasEnoughBottles('30')).toBe(true);
+    expect(hasEnoughBottles(' 45 ')).toBe(true);
+    expect(hasEnoughBottles('030')).toBe(true);
+    // The maximum is the schema's job; the button only hints about the minimum.
+    expect(hasEnoughBottles('6000')).toBe(true);
+  });
+
+  it('refuses fewer than 30, a blank field and anything that is not a whole number', () => {
+    for (const typed of ['29', '0', '', '  ', 'abc', '4,5', '3.5', '1e3']) {
+      expect(hasEnoughBottles(typed), typed).toBe(false);
+    }
   });
 });

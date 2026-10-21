@@ -6,6 +6,7 @@
 // the schema's input and maps its errors back onto fields, so the form and the api can never
 // disagree about what is valid.
 import {
+  MIN_BOTTLES,
   ORDER_HONEYPOT_FIELD,
   customerUpdateOrderRequestSchema,
   formFieldErrors,
@@ -99,6 +100,16 @@ const FIELD_BY_PATH: ReadonlyMap<string, OrderFormField> = new Map<string, Order
   ['address.note', 'note'],
   ['bottlesEstimated', 'bottlesEstimated'],
 ]);
+
+/**
+ * True when the bottles field holds a whole number of at least {@link MIN_BOTTLES}. The booking
+ * form greys its send button until then. Only a hint for the customer: the schema still decides
+ * what is valid, and its message shows when the button is tapped anyway. It ignores the maximum:
+ * 6000 looks ready, and the "too many" message shows on the tap.
+ */
+export function hasEnoughBottles(bottlesEstimated: string): boolean {
+  return /^\d+$/.test(bottlesEstimated.trim()) && Number(bottlesEstimated) >= MIN_BOTTLES;
+}
 
 /**
  * Maps `{ dottedPath: message }` (from `formFieldErrors`, or the api's 400 body) onto the form's

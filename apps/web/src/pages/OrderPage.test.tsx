@@ -31,6 +31,9 @@ const TOKEN = 'Q'.repeat(43);
 /** The round of a pending or confirmed order: 12/11, bottles out by 18:00. */
 const ROUND = { date: '2026-11-12', pickupBy: '18:00' };
 
+/** The customer's confirm button for {@link ROUND}: it names what is confirmed, and the day. */
+const CONFIRM_BUTTON = 'כן, אוציא את הבקבוקים ב-12/11';
+
 /** A waiting order, as GET /api/o/:token answers it; overrides change it. */
 function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
   return {
@@ -316,7 +319,7 @@ describe('OrderPage', () => {
       expect(details.getByText('דנה כהן')).toBeDefined();
       expect(details.getByText('050-1234567')).toBeDefined();
       expect(details.getByText('דרך רבין יצחק 12')).toBeDefined();
-      expect(details.getByText('ליד דלת הדירה · קומה 3, דירה 12')).toBeDefined();
+      expect(details.getByText('בבניין - ליד דלת הדירה · קומה 3, דירה 12')).toBeDefined();
       expect(details.getByText('ליד העגלה הכחולה')).toBeDefined();
       expect(details.getByText('40')).toBeDefined();
     });
@@ -339,7 +342,7 @@ describe('OrderPage', () => {
       await renderLoaded();
 
       expect(button('ביטול ההזמנה')).toBeDefined();
-      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' })).toBeNull();
     });
@@ -351,7 +354,9 @@ describe('OrderPage', () => {
 
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
-      expect(screen.getByText('12/11').getAttribute('dir')).toBe('ltr');
+      // Twice: in the status line and in the confirm button.
+      expect(screen.getAllByText('12/11')).toHaveLength(2);
+      for (const date of screen.getAllByText('12/11')) expect(date.getAttribute('dir')).toBe('ltr');
       expect(getByWholeText('נא להוציא את הבקבוקים עד השעה 18:00.')).toBeDefined();
       expect(screen.getByText('18:00').getAttribute('dir')).toBe('ltr');
     });
@@ -363,26 +368,33 @@ describe('OrderPage', () => {
       expect(screen.queryByText('נא להוציא את הבקבוקים', { exact: false })).toBeNull();
     });
 
-    it('offers "מאשר/ת איסוף", "לא מתאים הפעם" and the cancel', async () => {
+    it('offers "כן, אוציא את הבקבוקים", "לא מתאים הפעם" and the cancel', async () => {
       await renderLoaded(pendingOrder());
 
-      expect(button('מאשר/ת איסוף')).toBeDefined();
+      expect(button(CONFIRM_BUTTON)).toBeDefined();
       expect(button('לא מתאים הפעם')).toBeDefined();
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(screen.queryByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' })).toBeNull();
     });
 
-    it('confirms on "מאשר/ת איסוף" and shows the confirmed order, with thanks', async () => {
+    it('says only what is confirmed, with no day, when the pending order has no round', async () => {
+      await renderLoaded(makeOrder({ status: 'pending' }));
+
+      expect(button('כן, אוציא את הבקבוקים')).toBeDefined();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
+    });
+
+    it('confirms on "כן, אוציא את הבקבוקים" and shows the confirmed order, with thanks', async () => {
       const calls = await renderLoaded(pendingOrder());
 
-      click('מאשר/ת איסוף');
+      click(CONFIRM_BUTTON);
 
       const notice = await screen.findByRole('status');
       expect(notice.textContent).toBe('תודה! האיסוף אושר.');
       expect(document.activeElement).toBe(notice);
       expect(statusLabel()).toBe('מצב ההזמנה: אושרה');
       expect(getByWholeText('נתראה ב-12/11.')).toBeDefined();
-      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(calls.confirms).toEqual([TOKEN]);
     });
 
@@ -390,7 +402,7 @@ describe('OrderPage', () => {
       const answer = deferred<CustomerOrderWriteOutcome>();
       const calls = await renderLoaded(pendingOrder(), { confirm: answer.promise });
 
-      click('מאשר/ת איסוף');
+      click(CONFIRM_BUTTON);
 
       const busy = button('שולח...');
       expect(busy.getAttribute('aria-disabled')).toBe('true');
@@ -418,7 +430,7 @@ describe('OrderPage', () => {
       );
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
       expect(screen.getByText(WAITING_TEXT)).toBeDefined();
-      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(calls.declines).toEqual([TOKEN]);
       expect(calls.confirms).toEqual([]);
@@ -438,7 +450,7 @@ describe('OrderPage', () => {
       expect(screen.queryByText('לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.')).toBeNull();
       expect(document.activeElement).toBe(button('לא מתאים הפעם'));
       expect(calls.declines).toEqual([]);
-      expect(button('מאשר/ת איסוף')).toBeDefined();
+      expect(button(CONFIRM_BUTTON)).toBeDefined();
     });
 
     it('keeps the question open with the network message when "לא מתאים הפעם" fails', async () => {
@@ -461,7 +473,7 @@ describe('OrderPage', () => {
         confirm: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed },
       });
 
-      click('מאשר/ת איסוף');
+      click(CONFIRM_BUTTON);
 
       const alert = await screen.findByRole('alert');
       expect(alert.textContent).toBe('האישור נסגר. נחזור אליך עם מועד חדש.');
@@ -485,14 +497,14 @@ describe('OrderPage', () => {
       async (_kind, outcome) => {
         const calls = await renderLoaded(pendingOrder(), { confirm: outcome });
 
-        click('מאשר/ת איסוף');
+        click(CONFIRM_BUTTON);
 
         expect((await screen.findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
         expect(NETWORK_ERROR_MESSAGE).toBe(
           'לא הצלחנו לשלוח. נא לבדוק את החיבור לאינטרנט ולנסות שוב.',
         );
         expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
-        expect(button('מאשר/ת איסוף').getAttribute('aria-disabled')).toBeNull();
+        expect(button(CONFIRM_BUTTON).getAttribute('aria-disabled')).toBeNull();
         expect(calls.loads).toEqual([TOKEN]);
       },
     );
@@ -506,16 +518,16 @@ describe('OrderPage', () => {
         />,
       );
 
-      fireEvent.click(await screen.findByRole('button', { name: 'מאשר/ת איסוף' }));
+      fireEvent.click(await screen.findByRole('button', { name: CONFIRM_BUTTON }));
 
       expect((await screen.findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
-      expect(button('מאשר/ת איסוף')).toBeDefined();
+      expect(button(CONFIRM_BUTTON)).toBeDefined();
     });
 
     it('says the order was not found when the confirm answers so', async () => {
       await renderLoaded(pendingOrder(), { confirm: { kind: 'notFound' } });
 
-      click('מאשר/ת איסוף');
+      click(CONFIRM_BUTTON);
 
       expect((await screen.findByRole('alert')).textContent).toBe(
         CUSTOMER_ORDER_MESSAGES.orderNotFound,
@@ -532,7 +544,7 @@ describe('OrderPage', () => {
       expect(getByWholeText('נתראה ב-12/11.')).toBeDefined();
       expect(getByWholeText('נא להוציא את הבקבוקים עד השעה 18:00.')).toBeDefined();
       expect(button('ביטול ההזמנה')).toBeDefined();
-      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
     });
   });
@@ -617,7 +629,7 @@ describe('OrderPage', () => {
       const busy = button('מבטל...');
       expect(busy.getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(busy);
-      click('מאשר/ת איסוף');
+      click(CONFIRM_BUTTON);
       expect(calls.cancels).toEqual([TOKEN]);
       expect(calls.confirms).toEqual([]);
 
@@ -692,7 +704,7 @@ describe('OrderPage', () => {
       expect(PHONE_NOT_CHANGED_TEXT).toBe('את מספר הטלפון אי אפשר לשנות כאן.');
       expect(input('רחוב').value).toBe('דרך רבין יצחק');
       expect(input('מספר בית').value).toBe('12');
-      expect(input('ליד דלת הדירה').checked).toBe(true);
+      expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
       expect(input('קומה ודירה').value).toBe('קומה 3, דירה 12');
       expect(input('הערה (לא חובה)').value).toBe('ליד העגלה הכחולה');
       expect(input('כמות בקבוקים').value).toBe('40');
@@ -709,7 +721,7 @@ describe('OrderPage', () => {
       expect(screen.queryByRole('region', { name: 'פרטי ההזמנה' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'שינוי' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(button('שמירת השינויים')).toBeDefined();
       expect(button('בלי לשנות')).toBeDefined();
       // The status and the round's date stay above the form.
@@ -807,7 +819,7 @@ describe('OrderPage', () => {
       expect(LEFT_ROUND_MESSAGE).toBe('הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.');
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
       expect(screen.getByText(WAITING_TEXT)).toBeDefined();
-      expect(screen.queryByRole('button', { name: 'מאשר/ת איסוף' })).toBeNull();
+      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(screen.getByText('דרך רבין יצחק 14')).toBeDefined();
       expect(calls.updates[0]?.request.address?.houseNumber).toBe('14');
     });
@@ -853,7 +865,7 @@ describe('OrderPage', () => {
 
       expect((await screen.findByRole('status')).textContent).toBe('השינויים נשמרו.');
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
-      expect(button('מאשר/ת איסוף')).toBeDefined();
+      expect(button(CONFIRM_BUTTON)).toBeDefined();
       expect(calls.updates[0]?.request.bottlesEstimated).toBe(60);
     });
 

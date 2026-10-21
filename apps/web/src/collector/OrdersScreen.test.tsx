@@ -219,7 +219,7 @@ describe('OrdersScreen', () => {
       const phone = within(card).getByText('050-1234567');
       expect(phone.closest('[dir="ltr"]')).not.toBeNull();
       expect(within(card).getByText('שד נהר הדן 12')).toBeDefined();
-      expect(within(card).getByText('ליד דלת הדירה · קומה 3, דירה 12')).toBeDefined();
+      expect(within(card).getByText('בבניין - ליד דלת הדירה · קומה 3, דירה 12')).toBeDefined();
       expect(within(card).getByText('הערה: לדפוק חזק')).toBeDefined();
       expect(within(card).getByText('40 בקבוקים')).toBeDefined();
     });

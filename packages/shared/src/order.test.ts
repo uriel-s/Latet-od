@@ -213,7 +213,7 @@ describe('labels', () => {
   it('has a Hebrew label for every bottles spot and miss reason', () => {
     expect(Object.keys(BOTTLES_SPOT_LABELS)).toEqual(bottlesSpotSchema.options);
     expect(Object.keys(MISS_REASON_LABELS)).toEqual(missReasonSchema.options);
-    expect(BOTTLES_SPOT_LABELS.apartmentDoor).toBe('ליד דלת הדירה');
+    expect(BOTTLES_SPOT_LABELS.apartmentDoor).toBe('בבניין - ליד דלת הדירה');
   });
 
   it('documents a token length that matches its random bytes', () => {

@@ -83,7 +83,7 @@ sequenceDiagram
     A-->>W: MessageSender → { mode: manual, url: wa.me/... }
     Y->>L: לוחץ "שלח" ב-WhatsApp (קישור לעמוד ההזמנה)
 
-    L->>W: /o/token → "מאשר/ת איסוף"
+    L->>W: /o/token → "כן, אוציא את הבקבוקים"
     W->>A: POST /api/o/:token/confirm
     A->>D: pending → confirmed
 
