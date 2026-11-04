@@ -1,6 +1,7 @@
 // Tests of the wa.me sender (ADR-0003): the phone in wa.me's form (972, no 0, no +), the strict
 // percent-encoding of the text (Hebrew, spaces, line breaks), and that WaMeLinkSender.send gives
-// a link whose text is exactly renderMessage's, in a shape the order's message log accepts.
+// a link whose text is exactly renderMessage's, in the message's language (Hebrew when it has
+// none), in a shape the order's message log accepts.
 import {
   messageLogEntrySchema,
   renderMessage,
@@ -138,6 +139,32 @@ describe('WaMeLinkSender', () => {
     const url = manualUrl(await new WaMeLinkSender().send(message));
 
     expect(decodeURIComponent(encodedTextOf(url))).toBe(renderMessage('thankYou', message.vars));
+  });
+
+  it('writes the text in English for a message with lang en', async () => {
+    const message = makeMessage({ lang: 'en' });
+
+    const text = decodeURIComponent(
+      encodedTextOf(manualUrl(await new WaMeLinkSender().send(message))),
+    );
+
+    expect(text).toBe(renderMessage(message.kind, message.vars, message.personalText, 'en'));
+    expect(text).toMatch(/^Hello משה כהן,\nOn Nov 5 /);
+    expect(text).toContain('Please put the bottles out by 8:00 AM.');
+    // Yoel's personal text goes in as he wrote it.
+    expect(text).toContain('נא לשים בשקית (לא בקרטון)!');
+  });
+
+  it('writes the text in Hebrew for a message without lang', async () => {
+    const message = makeMessage();
+    expect(message).not.toHaveProperty('lang');
+
+    const text = decodeURIComponent(
+      encodedTextOf(manualUrl(await new WaMeLinkSender().send(message))),
+    );
+
+    expect(text).toBe(renderMessage(message.kind, message.vars, message.personalText, 'he'));
+    expect(text).toMatch(/^שלום משה כהן,\nב-05\/11 /);
   });
 
   it.each<MessageKind>(['confirmRequest', 'thankYou'])(

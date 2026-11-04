@@ -171,7 +171,20 @@ describe('MESSAGES', () => {
     expect(t('en', 'customerOrder.orderNotFound')).toBe(
       'We could not find the order. The link may not have been copied in full.',
     );
+    expect(t('en', 'whatsapp.greeting', { name: 'Moshe' })).toBe('Hello Moshe,');
+    expect(
+      t('en', 'whatsapp.confirmRequest.pickupWindow', { from: '7:00 AM', by: '8:30 AM' }),
+    ).toBe('Please put the bottles out between 7:00 AM and 8:30 AM.');
   });
+
+  // The brand is a name, not a word to translate: English WhatsApp texts that mention it keep it
+  // in Hebrew, as the customer knows it.
+  it.each(['whatsapp.confirmRequest.signOff', 'whatsapp.thankYou.thanks'] as const)(
+    'keeps the brand name in Hebrew in %s',
+    (key) => {
+      expect(t('en', key)).toContain('לתת עוד');
+    },
+  );
 });
 
 // Type-level checks: `tsc` (checks.sh types) fails with "Unused '@ts-expect-error'" if any of these

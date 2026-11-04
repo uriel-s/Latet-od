@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pickupTimeSchema } from './dates.ts';
+import { t, type Lang } from './i18n.ts';
 import { APP_NAME } from './index.ts';
 import {
   messageLinkSchema,
@@ -8,7 +9,7 @@ import {
   toMessageLink,
   type MessageVars,
 } from './messages.ts';
-import type { MessageLogEntry, Order } from './order.ts';
+import type { MessageKind, MessageLogEntry, Order } from './order.ts';
 
 const LINK = 'https://bottlerun.example/o/Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const AT = new Date('2026-11-04T17:00:00.000Z');
@@ -209,6 +210,162 @@ describe('renderMessage', () => {
 
     it('trims the name', () => {
       expect(renderMessage('thankYou', { name: ' משה ', link: LINK })).toMatch(/^שלום משה,\n/);
+    });
+  });
+
+  describe('language', () => {
+    it.each<MessageKind>(['confirmRequest', 'thankYou'])(
+      'gives exactly the default (Hebrew) text for an explicit he (%s)',
+      (kind) => {
+        const vars = makeVars({ pickupFrom: '07:00', pickupBy: '08:30' });
+        expect(renderMessage(kind, vars, 'טקסט אישי', 'he')).toBe(
+          renderMessage(kind, vars, 'טקסט אישי'),
+        );
+      },
+    );
+
+    it.each<Lang>(['he', 'en'])(
+      'signs the confirmation request off with the app name (%s)',
+      (lang) => {
+        expect(t(lang, 'whatsapp.confirmRequest.signOff').endsWith(APP_NAME)).toBe(true);
+        expect(
+          renderMessage('confirmRequest', makeVars(), undefined, lang).endsWith(APP_NAME),
+        ).toBe(true);
+      },
+    );
+  });
+
+  describe('confirmRequest in English', () => {
+    const englishVars = (overrides: Partial<MessageVars> = {}): MessageVars =>
+      makeVars({ name: 'Moshe Cohen', ...overrides });
+
+    it('writes name, the date as "Nov 5", link and sign-off, line by line', () => {
+      expect(renderMessage('confirmRequest', englishVars(), undefined, 'en')).toBe(
+        [
+          'Hello Moshe Cohen,',
+          'On Nov 5 we will come to collect your bottles.',
+          'Please confirm the pickup at this link:',
+          LINK,
+          'Thank you, לתת עוד',
+        ].join('\n'),
+      );
+    });
+
+    it('writes the pickup time on a 12-hour clock', () => {
+      expect(
+        renderMessage('confirmRequest', englishVars({ pickupBy: '08:30' }), undefined, 'en'),
+      ).toBe(
+        [
+          'Hello Moshe Cohen,',
+          'On Nov 5 we will come to collect your bottles.',
+          'Please put the bottles out by 8:30 AM.',
+          'Please confirm the pickup at this link:',
+          LINK,
+          'Thank you, לתת עוד',
+        ].join('\n'),
+      );
+    });
+
+    it('writes a pickup window, with midnight as 12 AM and the afternoon as PM', () => {
+      const text = renderMessage(
+        'confirmRequest',
+        englishVars({ pickupFrom: '00:30', pickupBy: '13:05' }),
+        undefined,
+        'en',
+      );
+      expect(text.split('\n')).toEqual([
+        'Hello Moshe Cohen,',
+        'On Nov 5 we will come to collect your bottles.',
+        'Please put the bottles out between 12:30 AM and 1:05 PM.',
+        'Please confirm the pickup at this link:',
+        LINK,
+        'Thank you, לתת עוד',
+      ]);
+    });
+
+    it('keeps the personal text as Yoel wrote it, Hebrew included, never translated', () => {
+      const text = renderMessage(
+        'confirmRequest',
+        englishVars({ pickupBy: '18:00' }),
+        '  נאסוף אחרי מנחה\nWe come after 6 PM  ',
+        'en',
+      );
+      expect(text.split('\n')).toEqual([
+        'Hello Moshe Cohen,',
+        'On Nov 5 we will come to collect your bottles.',
+        'Please put the bottles out by 6:00 PM.',
+        'נאסוף אחרי מנחה',
+        'We come after 6 PM',
+        'Please confirm the pickup at this link:',
+        LINK,
+        'Thank you, לתת עוד',
+      ]);
+    });
+
+    it('leaves out a personal text that is empty or only spaces', () => {
+      const withoutText = renderMessage('confirmRequest', englishVars(), undefined, 'en');
+      for (const blank of ['', '   ', '\n\t \n']) {
+        expect(
+          renderMessage('confirmRequest', englishVars(), blank, 'en'),
+          JSON.stringify(blank),
+        ).toBe(withoutText);
+      }
+    });
+
+    it('keeps a Hebrew name as it is and trims it', () => {
+      expect(
+        renderMessage('confirmRequest', makeVars({ name: ' משה ' }), undefined, 'en').split(
+          '\n',
+        )[0],
+      ).toBe('Hello משה,');
+    });
+
+    it('keeps the brand name in Hebrew', () => {
+      const text = renderMessage('confirmRequest', englishVars(), undefined, 'en');
+      expect(text).toContain(APP_NAME);
+      expect(text).not.toMatch(/latet od/i);
+    });
+
+    it('throws the same RangeErrors as in Hebrew, without the value', () => {
+      const bad: Partial<MessageVars>[] = [
+        { date: undefined },
+        { date: '05/11/2026' },
+        { pickupBy: '8:30' },
+        { pickupFrom: '24:00', pickupBy: '08:30' },
+        { pickupFrom: '07:00' },
+      ];
+      for (const overrides of bad) {
+        const label = JSON.stringify(overrides);
+        const english = errorOf(() =>
+          renderMessage('confirmRequest', englishVars(overrides), undefined, 'en'),
+        );
+        const hebrew = errorOf(() => renderMessage('confirmRequest', makeVars(overrides)));
+        expect(english, label).toBeInstanceOf(RangeError);
+        expect(english.message, label).toBe(hebrew.message);
+        for (const value of Object.values(overrides)) {
+          if (value !== undefined) expect(english.message, label).not.toContain(value);
+        }
+      }
+    });
+  });
+
+  describe('thankYou in English', () => {
+    it('thanks, keeps the brand name in Hebrew and links for ordering again', () => {
+      expect(renderMessage('thankYou', { name: ' Moshe ', link: LINK }, undefined, 'en')).toBe(
+        [
+          'Hello Moshe,',
+          'Your order has been collected! Thank you for taking part in לתת עוד!',
+          'To order again:',
+          LINK,
+        ].join('\n'),
+      );
+    });
+
+    it('ignores the date, the pickup time and the personal text', () => {
+      const plain = renderMessage('thankYou', { name: 'משה כהן', link: LINK }, undefined, 'en');
+      expect(renderMessage('thankYou', makeVars({ pickupBy: '08:30' }), 'Personal', 'en')).toBe(
+        plain,
+      );
     });
   });
 });

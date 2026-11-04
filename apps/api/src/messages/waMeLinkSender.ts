@@ -1,5 +1,5 @@
 // The MVP MessageSender (ADR-0003, option ג): it sends nothing over the network. It renders the
-// message text (renderMessage, packages/shared) into a `https://wa.me/<phone>?text=<text>` link;
+// message text (renderMessage, packages/shared, in the customer's language) into a `https://wa.me/<phone>?text=<text>` link;
 // the collector app shows it as a "שלח" button, which opens WhatsApp on Yoel's phone with the
 // message already written, and Yoel taps "send" from his own number.
 import { e164MobileSchema, renderMessage, type OutgoingMessage } from '@bottlerun/shared';
@@ -85,6 +85,7 @@ function waMeResult(message: OutgoingMessage): SendResult {
   // The phone first: a number no link can reach fails the same way whatever the text.
   const phone = waMePhone(message.to);
   if (phone === null) return { mode: 'failed', reason: 'invalid_phone' };
-  const text = renderMessage(message.kind, message.vars, message.personalText);
+  // In the customer's language; a message without `lang` is Hebrew (renderMessage's default).
+  const text = renderMessage(message.kind, message.vars, message.personalText, message.lang);
   return { mode: 'manual', url: linkTo(phone, text) };
 }

@@ -107,6 +107,21 @@ const HE = {
   'customerOrder.confirmationsClosed': 'האישור נסגר. נחזור אליך עם מועד חדש.',
   'customerOrder.orderClosed': 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
   'customerOrder.orderNotFound': 'לא מצאנו את ההזמנה. ייתכן שהקישור לא הועתק עד הסוף.',
+
+  // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
+  // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
+  // already formatted for the language. The Hebrew must stay exactly as sent before English
+  // existed: messages.test.ts compares whole messages char for char.
+  'whatsapp.greeting': 'שלום {name},',
+  'whatsapp.confirmRequest.date': 'ב-{date} נעבור לאסוף את הבקבוקים שלכם.',
+  'whatsapp.confirmRequest.pickupWindow': 'נא להוציא את הבקבוקים בין השעות {from} ל-{by}.',
+  'whatsapp.confirmRequest.pickupBy': 'נא להוציא את הבקבוקים עד השעה {by}.',
+  'whatsapp.confirmRequest.confirmAtLink': 'נא לאשר את האיסוף בקישור:',
+  // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
+  'whatsapp.confirmRequest.signOff': 'תודה, לתת עוד',
+  // spec §6.1, word for word.
+  'whatsapp.thankYou.thanks': 'הזמנתכם נאספה! תודה רבה שלקחתם חלק בלתת עוד!',
+  'whatsapp.thankYou.orderAgain': 'להזמנה חוזרת:',
 } as const satisfies Record<string, string>;
 
 /** A key of the app's dictionary. */
@@ -157,6 +172,18 @@ const EN = {
   'customerOrder.orderClosed': 'This order is already closed and cannot be changed.',
   'customerOrder.orderNotFound':
     'We could not find the order. The link may not have been copied in full.',
+
+  // WhatsApp messages. The brand name "לתת עוד" stays in Hebrew: it is the name the customer
+  // knows the project by, in either language.
+  'whatsapp.greeting': 'Hello {name},',
+  'whatsapp.confirmRequest.date': 'On {date} we will come to collect your bottles.',
+  'whatsapp.confirmRequest.pickupWindow': 'Please put the bottles out between {from} and {by}.',
+  'whatsapp.confirmRequest.pickupBy': 'Please put the bottles out by {by}.',
+  'whatsapp.confirmRequest.confirmAtLink': 'Please confirm the pickup at this link:',
+  'whatsapp.confirmRequest.signOff': 'Thank you, לתת עוד',
+  'whatsapp.thankYou.thanks':
+    'Your order has been collected! Thank you for taking part in לתת עוד!',
+  'whatsapp.thankYou.orderAgain': 'To order again:',
 } as const satisfies Record<MessageKey, string>;
 
 /** The app's dictionary: every UI text in every {@link Lang}. Read it through {@link t}. */
