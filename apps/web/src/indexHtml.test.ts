@@ -102,6 +102,16 @@ describe('index.html link preview (Open Graph)', () => {
   });
 });
 
+describe('index.html theme-color', () => {
+  it.each([
+    ['light', '#edf3f9'],
+    ['dark', '#0f1a28'],
+  ])('has a theme-color for prefers-color-scheme: %s (--bg of that palette)', (scheme, color) => {
+    const selector = `meta[name="theme-color"][media="(prefers-color-scheme: ${scheme})"]`;
+    expect(head.querySelector(selector)?.getAttribute('content')).toBe(color);
+  });
+});
+
 describe('index.html viewport', () => {
   /** The viewport meta's settings, e.g. `{ width: 'device-width', 'initial-scale': '1.0' }`. */
   function viewportSettings(): Record<string, string> {

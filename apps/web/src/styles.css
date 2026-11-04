@@ -7,6 +7,7 @@
  */
 
 :root {
+  color-scheme: light dark; /* form controls and scrollbars follow the dark palette below */
   /*
    * The "dawn" palette, ADR-0011, same names as the mockup. Write each colour as a 6-digit hex:
    * styles.test.ts reads these values and checks WCAG AA (4.5:1) for every text/background pair
@@ -34,6 +35,7 @@
   --error: #b91c1c;
   --white: #ffffff; /* text on --brand and --brand-2 */
   --peach: #f0c79f; /* the hint of dawn on the bunting; decoration only, never text */
+  --on-hdr: #ffffff; /* the text on the header gradient; stays light in dark mode, unlike --white */
 
   /* Spacing steps and corners, from the mockup. */
   --space-1: 4px;
@@ -175,6 +177,38 @@ h1[tabindex='-1']:focus {
   outline: none;
 }
 
+/*
+ * Automatic dark mode (ADR-0011): follows the phone, no switch. Only the tokens change; no screen
+ * has a dark rule of its own. Same names and same pairs as :root, so styles.test.ts checks this
+ * block against the same 4.5:1 list. Two names keep their meaning, not their colour:
+ * --white is "text on --brand / --error", so it turns dark here (the brand colours get lighter);
+ * --color-white is "a white surface", so it follows --card. --on-hdr stays light on the header.
+ * Not tokens, and fine in both modes: the translucent shadows and the sheet backdrop.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1a28;
+    --card: #182638;
+    --brand: #7db4ea;
+    --brand-2: #5a9ad8;
+    --brand-soft: #1f3a58;
+    --ink: #e8eff7;
+    --muted: #a3b2c3;
+    --line: #2b3d52;
+    --done: #213246;
+    /* Same dawn hint as the light header, but a dim peach so it does not glare at night. */
+    --hdr: linear-gradient(165deg, #173a63 0%, #2a6199 62%, #8f6d58 135%);
+    --green: #7fd1a0;
+    --green-soft: #17382a;
+    --amber: #f0b86e;
+    --amber-soft: #3d2e12;
+    --error: #ff8a8a;
+    --white: #0b1522;
+    --peach: #c9a07a;
+    --color-white: var(--card);
+  }
+}
+
 /* --- Layout (Layout.tsx) --------------------------------------------------- */
 
 .layout {
@@ -198,7 +232,7 @@ h1[tabindex='-1']:focus {
    the strip behind the status bar or notch at the top (viewport-fit=cover, index.html). */
 .site-header {
   background: var(--hdr);
-  color: var(--white);
+  color: var(--on-hdr);
   border-radius: 0 0 var(--r-header) var(--r-header);
   padding-block: calc(0.75rem + env(safe-area-inset-top)) 1rem;
   /* The gradient turns light towards the lower edge, where white text is under 4.5:1: a soft
@@ -1151,7 +1185,7 @@ html:has(.bottom-nav) {
 }
 
 .round-picker-row[aria-current='true'] .badge {
-  background: var(--white);
+  background: var(--card);
 }
 
 .round-picker-row .badge {
