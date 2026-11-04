@@ -1123,6 +1123,7 @@ describe('RoundsScreen', () => {
       const { props } = fakeStopActions({ kind: 'stale', message: ROUND_MESSAGES.stopHandled });
       await renderLoaded({ loadRounds: rounds.load, ...props });
 
+      fireEvent.click(screen.getByRole('button', { name: 'עוד פעולות, דנה כהן' }));
       fireEvent.click(screen.getByRole('button', { name: 'לא נמצא, דנה כהן' }));
       fireEvent.click(screen.getByRole('button', { name: 'כן, לא נמצא' }));
 

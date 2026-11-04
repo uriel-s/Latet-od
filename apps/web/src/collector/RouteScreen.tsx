@@ -1,8 +1,9 @@
 // The route of one routed round (spec §3.6 step 2, "מסלול"): its stops as StopCards, still to
 // collect in driving order and handled ones at the end, and every request a card asks for: the
-// arrows (moveStop), "אספתי" (collectStop) and "לא נמצא" (markStopNotFound). At the top, two plain
-// links built in the browser (ADR-0007): a big Waze button to the next stop still to collect (the
-// drop-off once none is left) and "כל המסלול ב-Google Maps". Part of the "סבבים"
+// arrows (moveStop), "אספתי" (collectStop) and "לא נמצא" (markStopNotFound). At the top, a progress
+// card ("עצירה N מתוך M" and one segment per stop); the first stop to collect is the big "העצירה
+// הבאה" card whose "נווט" is the ADR-0007 Waze link (the drop-off card once none is left); after
+// the list, the secondary link "כל המסלול ב-Google Maps". Part of the "סבבים"
 // tab, not a page of its own: RoundsScreen owns the rounds, renders this under the round's <h2>
 // once its phase is `routed`, swaps in every view a saved action answers, and reloads when this
 // part says the screen is out of date.
@@ -14,15 +15,16 @@ import {
   moveStop as apiMoveStop,
   type StopActionOutcome,
 } from '../api.ts';
+import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 import {
   dropOffWazeUrl,
   googleMapsRouteUrl,
+  isStopHandled,
   keepThankYouRows,
   nextStopToCollect,
   screenOrderOfStops,
   storedMovesFor,
-  wazeUrl,
 } from './routeStops.ts';
 import type { SendListProps } from './SendList.tsx';
 import { StopCard } from './StopCard.tsx';
@@ -39,8 +41,14 @@ export const STOP_ACTION_FAILED_MESSAGE = 'לא הצלחנו לשמור. נא ל
 /** A stop action answered 404: the round is gone, or the order is no longer a stop of its route. */
 export const STOP_LEFT_ROUTE_MESSAGE = 'העצירה כבר לא במסלול. נא לרענן את המסך.';
 
-/** The big button's text once no stop is left to collect (ADR-0007). */
+/** The drop-off card's button text once no stop is left to collect (ADR-0007). */
 export const NAVIGATE_TO_DROP_OFF_TEXT = 'נווט לנקודת הפריקה';
+
+/** The accessible name of the progress card at the top of the route. */
+const ROUTE_PROGRESS_LABEL = 'התקדמות המסלול';
+
+/** The progress card's title once no stop is left to collect. */
+export const ALL_STOPS_HANDLED_TEXT = 'כל העצירות טופלו';
 
 /** The secondary link to the whole route in Google Maps (ADR-0007). */
 export const GOOGLE_MAPS_ROUTE_TEXT = 'כל המסלול ב-Google Maps';
@@ -302,40 +310,61 @@ export function RouteScreen({
   const nextStop = nextStopToCollect(shownStops);
   const mapsUrl = googleMapsRouteUrl(shownStops);
 
+  // "עצירה N מתוך M": N counts the stops already handled (collected or not) plus the current one.
+  const handledCount = shownStops.filter((stop) => isStopHandled(stop.state)).length;
+  const currentOrderId = nextStop?.order.id;
+
   return (
     <>
-      {shownStops.length > 0 && (
-        <div className="route-navigation">
-          {/* Plain anchors, like the per-stop "נווט": Waze opens in its app or a new tab, and the
-              route stays here. noopener/noreferrer: the opened page gets no handle on this one. */}
+      {shownStops.length === 0 ? (
+        <p className="round-summary" aria-live="polite">
+          {routeSummary(screenStops)}
+        </p>
+      ) : (
+        <div className="card route-progress" role="group" aria-label={ROUTE_PROGRESS_LABEL}>
+          <p className="route-progress-title">
+            {nextStop === undefined
+              ? ALL_STOPS_HANDLED_TEXT
+              : `עצירה ${handledCount + 1} מתוך ${shownStops.length}`}
+          </p>
+          {/* One segment per stop: done, then the current one, then those still ahead. Decoration;
+              the words above and the summary below carry the meaning. */}
+          <div className="route-progress-bar" aria-hidden="true">
+            {shownStops.map((stop, index) => (
+              <i
+                key={stop.order.id}
+                className={
+                  index < handledCount
+                    ? 'route-progress-done'
+                    : index === handledCount && nextStop !== undefined
+                      ? 'route-progress-current'
+                      : undefined
+                }
+              />
+            ))}
+          </div>
+          {/* The accessible text of the same progress; a polite live region, so a screen reader
+              hears the new counts after each "אספתי". */}
+          <p className="round-summary" aria-live="polite">
+            {routeSummary(screenStops)}
+          </p>
+        </div>
+      )}
+      {nextStop === undefined && shownStops.length > 0 && (
+        // No stop left: the card Yoel taps to drive to the drop-off (ADR-0007). Plain anchor, like
+        // the per-stop "נווט": the app opens Waze in its app or a new tab, and the route stays here.
+        <div className="card route-drop-off">
           <a
-            className="button button-primary button-block"
-            href={nextStop === undefined ? dropOffWazeUrl() : wazeUrl(nextStop.order.address)}
+            className="button button-primary button-big button-block"
+            href={dropOffWazeUrl()}
             target="_blank"
             rel="noopener noreferrer"
           >
-            {nextStop === undefined
-              ? NAVIGATE_TO_DROP_OFF_TEXT
-              : `נווט לעצירה הבאה: ${nextStop.order.address.streetName} ${nextStop.order.address.houseNumber}`}
+            <Icon name="navigate" />
+            {NAVIGATE_TO_DROP_OFF_TEXT}
           </a>
-          {mapsUrl !== undefined && (
-            <>
-              <a
-                className="button button-secondary button-block"
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {GOOGLE_MAPS_ROUTE_TEXT}
-              </a>
-              <p className="round-hint">{GOOGLE_MAPS_ROUTE_HINT}</p>
-            </>
-          )}
         </div>
       )}
-      <p className="round-summary" aria-live="polite">
-        {routeSummary(screenStops)}
-      </p>
       {screenStops.length > 0 && (
         <>
           <p className="round-hint">{ROUTE_HINT}</p>
@@ -348,6 +377,7 @@ export function RouteScreen({
                   key={orderId}
                   stop={stop}
                   position={index + 1}
+                  current={orderId === currentOrderId}
                   canMoveUp={storedMovesFor(view.stops, orderId, 'up') > 0}
                   canMoveDown={storedMovesFor(view.stops, orderId, 'down') > 0}
                   busy={busyIds.has(orderId)}
@@ -365,6 +395,20 @@ export function RouteScreen({
             })}
           </ol>
         </>
+      )}
+      {/* Last: a secondary link, so the current stop stays near the top of the phone screen. */}
+      {mapsUrl !== undefined && (
+        <div className="route-navigation">
+          <a
+            className="button button-secondary button-block"
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {GOOGLE_MAPS_ROUTE_TEXT}
+          </a>
+          <p className="round-hint">{GOOGLE_MAPS_ROUTE_HINT}</p>
+        </div>
       )}
     </>
   );
