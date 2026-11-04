@@ -22,3 +22,13 @@ coverage/
 .dev-archive/
 .work-context.md
 .claude/settings.local.json
+
+# Initial planning & personal working notes
+מסמך אפיון-*.docx
+docs/friend-answers.md
+docs/questions-for-friend.md
+docs/prompts.md
+docs/reskills.md
+docs/setup-checklist.md
+docs/streets-todo.md
+

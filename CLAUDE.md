@@ -76,7 +76,7 @@ BottleRun/
 ├── scripts/                 # one-off Node scripts: geocode-streets, smoke (post-deploy check)
 ├── vercel.json              # build, rewrites (/api → function, rest → index.html), region iad1, headers
 ├── .github/workflows/       # backup.yml: weekly mongodump artifact
-├── docs/                    # spec.md, decisions/ (ADRs), deploy.md (manual deploy steps), prompts.md, spikes/
+├── docs/                    # spec.md, decisions/ (ADRs), deploy.md (manual deploy steps), spikes/
 ├── .claude/checks.sh        # THE definition of green (see below)
 ├── .githooks/pre-push       # refuses pushes to main
 ├── eslint.config.js         # lint + workspace boundaries
