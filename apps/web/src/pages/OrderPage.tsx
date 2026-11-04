@@ -7,25 +7,37 @@
 // ההזמנה" (with a question first). Every button is a POST or a PATCH, never a link to open:
 // WhatsApp's preview opens links. The page always draws the order the api answered with, not what
 // it expected the button to do.
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { flushSync } from 'react-dom';
 import {
-  BOTTLES_SPOT_LABELS,
   CUSTOMER_ORDER_MESSAGES,
-  ORDER_STATUS_LABELS,
+  DEFAULT_LANG,
+  findStreet,
   formatDayMonth,
   formatIsraeliMobileLocal,
   isLocationChange,
   isOpenStatus,
+  streetDisplayName,
+  t,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
+  type Lang,
+  type MessageKey,
 } from '@bottlerun/shared';
 import {
-  NETWORK_ERROR_MESSAGE,
   cancelCustomerOrder,
   confirmCustomerOrder,
   declineCustomerOrder,
   fetchCustomerOrder,
+  networkErrorMessage,
   updateCustomerOrder,
   type CustomerOrderOutcome,
   type CustomerOrderWriteOutcome,
@@ -33,71 +45,97 @@ import {
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import {
   NO_ERRORS,
-  SAVE_FAILED_MESSAGE,
   addressPlaceOf,
   validateCustomerChange,
   type FormErrors,
   type OrderFormValues,
 } from '../orderForm/formValues.ts';
+import { localizedFormErrors } from '../orderForm/formText.ts';
 import { OrderFields } from '../orderForm/OrderFields.tsx';
 import { formValuesFromPrefill, orderFormNavigationState } from '../orderForm/savedDetails.ts';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
+import { useDocumentLanguage } from '../useDocumentLanguage.ts';
+
+// The Hebrew texts of the page are exported for tests; they are the dictionary's (i18n.ts,
+// 'orderPage.*'), where the English ones live next to them.
 
 /** The page's `<h1>`, the same in every state. */
-export const ORDER_PAGE_HEADING = 'ההזמנה שלך';
+export const ORDER_PAGE_HEADING = t('he', 'orderPage.heading');
 
 /** Shown when the order got no usable answer (network error, 5xx, unreadable body). */
-export const ORDER_LOAD_FAILED_MESSAGE =
-  'לא הצלחנו לטעון את ההזמנה. נא לבדוק את החיבור לאינטרנט ולנסות שוב.';
+export const ORDER_LOAD_FAILED_MESSAGE = t('he', 'orderPage.loadFailed');
 
 /** Under the status of a waiting order: what happens next, in the thank-you screen's words. */
-export const WAITING_TEXT = 'נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.';
+export const WAITING_TEXT = t('he', 'orderPage.waiting');
 
 /** Under the status of a collected order. */
-export const COLLECTED_TEXT = 'ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!';
+export const COLLECTED_TEXT = t('he', 'orderPage.collected');
 
 /**
  * Under the status of a cancelled order: thanks (spec §3.3), and what the button under it does.
  * Not "ההזמנה בוטלה.": the status line already says it, and so does the message announced right
  * after the customer's own cancel.
  */
-export const CANCELLED_TEXT = 'תודה! אפשר להזמין איסוף חדש בכל עת.';
+export const CANCELLED_TEXT = t('he', 'orderPage.cancelled');
 
-/** What each request of the page announces once the api stored it. */
+/** What each request of the page announces once the api stored it (Hebrew; see {@link savedMessage}). */
 export const SAVED_MESSAGES = {
-  confirm: 'תודה! האיסוף אושר.',
-  decline: 'קיבלנו. נחזור אליך עם מועד חדש.',
-  cancel: 'ההזמנה בוטלה.',
-  change: 'השינויים נשמרו.',
+  confirm: t('he', 'orderPage.saved.confirm'),
+  decline: t('he', 'orderPage.saved.decline'),
+  cancel: t('he', 'orderPage.saved.cancel'),
+  change: t('he', 'orderPage.saved.change'),
 } as const;
 
 /**
  * Announced instead of {@link SAVED_MESSAGES}.change when a new street or house number took the
  * order out of its round (spec §3.3: "שינוי כתובת אחרי שההזמנה נכנסה לסבב מוציא אותה מהסבב").
  */
-export const LEFT_ROUND_MESSAGE = 'הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.';
+export const LEFT_ROUND_MESSAGE = t('he', 'orderPage.leftRound');
 
 /** Above the change form's fields: why the phone is not among them (spec §3.3). */
-export const PHONE_NOT_CHANGED_TEXT = 'את מספר הטלפון אי אפשר לשנות כאן.';
+export const PHONE_NOT_CHANGED_TEXT = t('he', 'orderPage.phoneNotChanged');
 
-// What the button really confirms: the customer puts the bottles out on the round's day (not "the
-// pickup", which Yoel does). ConfirmLabel appends the round's date when the api sent one.
-const CONFIRM_LABEL = 'כן, אוציא את הבקבוקים';
-const DECLINE_LABEL = 'לא מתאים הפעם';
-// A tap on "לא מתאים הפעם" sits just under the big "כן, אוציא את הבקבוקים" and takes the order out of the
-// round, so it asks first (elderly customers mis-tap).
-const DECLINE_QUESTION = 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.';
-const CONFIRM_DECLINE_LABEL = 'כן, לא מתאים';
-const SENDING_LABEL = 'שולח...';
-const CANCEL_ORDER_LABEL = 'ביטול ההזמנה';
-const CANCEL_QUESTION = 'לבטל את ההזמנה?';
-const NEW_ORDER_LABEL = 'הזמנה חדשה עם אותם פרטים';
-const CHANGE_LABEL = 'שינוי';
-const CHANGE_HEADING = 'שינוי פרטי ההזמנה';
-const SAVE_CHANGE_LABEL = 'שמירת השינויים';
-const SAVING_LABEL = 'שומר...';
-const KEEP_AS_IS_LABEL = 'בלי לשנות';
+/** The text of what `action` announces once saved, in `lang`. */
+function savedMessage(lang: Lang, action: keyof typeof SAVED_MESSAGES): string {
+  return t(lang, `orderPage.saved.${action}`);
+}
+
+/**
+ * The api's Hebrew refusal ("the order closed meanwhile") in `lang`; any other text is returned
+ * as it is.
+ */
+function closedMessageText(lang: Lang, message: string): string {
+  if (message === CUSTOMER_ORDER_MESSAGES.confirmationsClosed)
+    return t(lang, 'customerOrder.confirmationsClosed');
+  if (message === CUSTOMER_ORDER_MESSAGES.orderClosed) return t(lang, 'customerOrder.orderClosed');
+  if (message === CUSTOMER_ORDER_MESSAGES.orderNotFound)
+    return t(lang, 'customerOrder.orderNotFound');
+  return message;
+}
+
+/**
+ * `text` (from t(), written with a `{date}` placeholder) with the day set in a left-to-right
+ * `<bdi>`: DD/MM and "Nov 12" read left to right inside right-to-left text (CLAUDE.md).
+ */
+function withDay(text: string, day: string): ReactNode {
+  const [before = '', after = ''] = text.split(DAY_PLACEHOLDER);
+  return (
+    <>
+      {before}
+      <bdi dir="ltr">{day}</bdi>
+      {after}
+    </>
+  );
+}
+
+/** A `{date}` that t() leaves as it is when passed as its own value. */
+const DAY_PLACEHOLDER = '{date}';
+
+/** {@link t} with `{date}` left in the text, for {@link withDay}. */
+function tWithDay(lang: Lang, key: MessageKey, day: string): ReactNode {
+  return withDay(t(lang, key, { date: DAY_PLACEHOLDER }), day);
+}
 
 /** A request of the page, by what it asks the api to do. */
 type Action = keyof typeof SAVED_MESSAGES;
@@ -131,6 +169,11 @@ export interface OrderPageProps {
     token: string,
     request: CustomerUpdateOrderRequest,
   ) => Promise<CustomerOrderWriteOutcome>;
+  /**
+   * Told the language of the order once it is known (Hebrew until then), so the app's frame
+   * (the slogan in the header) speaks it too. The page sets the document's own language.
+   */
+  onLangChange?: (lang: Lang) => void;
 }
 
 /** What the page shows below its heading. */
@@ -170,8 +213,17 @@ export function OrderPage({
   declineOrder = declineCustomerOrder,
   cancelOrder = cancelCustomerOrder,
   updateOrder = updateCustomerOrder,
+  onLangChange,
 }: OrderPageProps) {
   const [state, setState] = useState<PageState>({ kind: 'loading' });
+  // The order's language, kept while the order reloads (a reload must not flash Hebrew). Hebrew
+  // until the first order arrives, and for a missing order.
+  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
+  useDocumentLanguage(lang);
+  useEffect(() => {
+    onLangChange?.(lang);
+    return () => onLangChange?.(DEFAULT_LANG);
+  }, [lang, onLangChange]);
   // Counts the loads asked for after the first ("לנסות שוב", a refused request): a new value runs
   // the load below again.
   const [attempt, setAttempt] = useState(0);
@@ -209,7 +261,7 @@ export function OrderPage({
       if (!current) return;
       switch (outcome.kind) {
         case 'loaded':
-          setState({ kind: 'loaded', order: outcome.order });
+          showOrder(outcome.order);
           return;
         case 'notFound':
           setState({ kind: 'notFound' });
@@ -234,6 +286,12 @@ export function OrderPage({
   useLayoutEffect(() => {
     if (notice?.focus) noticeRef.current?.focus();
   }, [notice]);
+
+  /** Draws `order` and switches the page to its language. */
+  function showOrder(order: CustomerOrder): void {
+    setLang(order.lang);
+    setState({ kind: 'loaded', order });
+  }
 
   function reload(): void {
     setState({ kind: 'loading' });
@@ -285,11 +343,11 @@ export function OrderPage({
 
     switch (outcome.kind) {
       case 'saved':
-        setState({ kind: 'loaded', order: outcome.order });
-        setNotice({ role: 'status', text: SAVED_MESSAGES[action], focus: true });
+        showOrder(outcome.order);
+        setNotice({ role: 'status', text: savedMessage(lang, action), focus: true });
         return;
       case 'closed':
-        showClosed(outcome.message);
+        showClosed(closedMessageText(lang, outcome.message));
         return;
       case 'notFound':
         setState({ kind: 'notFound' });
@@ -298,9 +356,9 @@ export function OrderPage({
       case 'invalid':
       case 'failed':
         // The page stays as it was, so the same button is one tap away from another try.
-        if (action === 'cancel') setCancelError(NETWORK_ERROR_MESSAGE);
-        else if (action === 'decline') setDeclineError(NETWORK_ERROR_MESSAGE);
-        else setNotice({ role: 'alert', text: NETWORK_ERROR_MESSAGE, focus: false });
+        if (action === 'cancel') setCancelError(networkErrorMessage(lang));
+        else if (action === 'decline') setDeclineError(networkErrorMessage(lang));
+        else setNotice({ role: 'alert', text: networkErrorMessage(lang), focus: false });
         return;
     }
   }
@@ -325,16 +383,16 @@ export function OrderPage({
         // The api decides whether the order left its round; the answer's status says it did.
         const leftRound = leavesRound && outcome.order.status === 'waiting';
         setChanging(false);
-        setState({ kind: 'loaded', order: outcome.order });
+        showOrder(outcome.order);
         setNotice({
           role: 'status',
-          text: leftRound ? LEFT_ROUND_MESSAGE : SAVED_MESSAGES.change,
+          text: leftRound ? t(lang, 'orderPage.leftRound') : savedMessage(lang, 'change'),
           focus: true,
         });
         return null;
       }
       case 'closed':
-        showClosed(outcome.message);
+        showClosed(closedMessageText(lang, outcome.message));
         return null;
       case 'notFound':
         setChanging(false);
@@ -343,10 +401,10 @@ export function OrderPage({
       case 'invalid':
         // Next to the fields the api named; a 400 with none (a body refused as a whole) is
         // already UNKNOWN_FIELD_ERROR in `other`, above the save button.
-        return outcome.errors;
+        return localizedFormErrors(lang, outcome.errors);
       case 'failed':
         // Nothing is retried on its own: the change may have arrived. Saving again is harmless.
-        return { byField: {}, other: SAVE_FAILED_MESSAGE };
+        return { byField: {}, other: t(lang, 'orderPage.saveFailed') };
     }
   }
 
@@ -369,7 +427,7 @@ export function OrderPage({
 
   return (
     <>
-      <h1>{ORDER_PAGE_HEADING}</h1>
+      <h1>{t(lang, 'orderPage.heading')}</h1>
 
       {notice !== null && (
         // tabIndex -1: focusable from code, but not a stop when tabbing through the page.
@@ -383,15 +441,15 @@ export function OrderPage({
         </p>
       )}
 
-      {state.kind === 'loading' && <p role="status">טוען...</p>}
+      {state.kind === 'loading' && <p role="status">{t(lang, 'orderPage.loading')}</p>}
 
       {state.kind === 'failed' && (
         <>
           <p className="form-alert" role="alert">
-            {ORDER_LOAD_FAILED_MESSAGE}
+            {t(lang, 'orderPage.loadFailed')}
           </p>
           <button type="button" className="button button-primary button-block" onClick={reload}>
-            לנסות שוב
+            {t(lang, 'orderPage.retry')}
           </button>
         </>
       )}
@@ -399,23 +457,24 @@ export function OrderPage({
       {state.kind === 'notFound' && (
         <>
           <p className="form-alert" role="alert">
-            {CUSTOMER_ORDER_MESSAGES.orderNotFound}
+            {t(lang, 'customerOrder.orderNotFound')}
           </p>
           <Link to="/" className="button button-primary button-block">
-            לטופס ההזמנה
+            {t(lang, 'orderPage.toForm')}
           </Link>
         </>
       )}
 
       {state.kind === 'loaded' && (
         <>
-          <OrderStatus order={state.order} />
+          <OrderStatus order={state.order} lang={lang} />
 
           {/* Only an open order can change (spec §3.3); a collected or cancelled one never
               shows the form, even if it closed while the form was open. */}
           {changing && isOpenStatus(state.order.status) ? (
             <ChangeOrderForm
               order={state.order}
+              lang={lang}
               saving={busy === 'change'}
               onSave={saveChange}
               onClose={closeChange}
@@ -434,17 +493,18 @@ export function OrderPage({
                     onClick={() => void press('confirm', confirmOrder)}
                   >
                     {busy === 'confirm' ? (
-                      SENDING_LABEL
+                      t(lang, 'orderPage.sending')
                     ) : (
-                      <ConfirmLabel round={state.order.round} />
+                      <ConfirmLabel round={state.order.round} lang={lang} />
                     )}
                   </button>
                   <CancelConfirm
                     inline
-                    buttonLabel={DECLINE_LABEL}
-                    question={DECLINE_QUESTION}
-                    confirmLabel={CONFIRM_DECLINE_LABEL}
-                    busyLabel={SENDING_LABEL}
+                    buttonLabel={t(lang, 'orderPage.decline')}
+                    question={t(lang, 'orderPage.declineQuestion')}
+                    confirmLabel={t(lang, 'orderPage.declineConfirm')}
+                    busyLabel={t(lang, 'orderPage.sending')}
+                    keepLabel={t(lang, 'orderPage.keep')}
                     cancelling={busy === 'decline'}
                     error={declineError}
                     onConfirm={() => void press('decline', declineOrder)}
@@ -457,13 +517,13 @@ export function OrderPage({
                 <button
                   type="button"
                   className="button button-primary button-block"
-                  onClick={() => startNewOrder(state.order)}
+                  onClick={() => startNewOrder(state.order, lang)}
                 >
-                  {NEW_ORDER_LABEL}
+                  {t(lang, 'orderPage.newOrder')}
                 </button>
               )}
 
-              <OrderDetails order={state.order} />
+              <OrderDetails order={state.order} lang={lang} />
 
               {/* Collected and cancelled are final (spec §4): nothing left to change or cancel. */}
               {isOpenStatus(state.order.status) && (
@@ -475,11 +535,14 @@ export function OrderPage({
                     aria-disabled={busy !== null ? true : undefined}
                     onClick={openChange}
                   >
-                    {CHANGE_LABEL}
+                    {t(lang, 'orderPage.change')}
                   </button>
                   <CancelConfirm
-                    buttonLabel={CANCEL_ORDER_LABEL}
-                    question={CANCEL_QUESTION}
+                    buttonLabel={t(lang, 'orderPage.cancelOrder')}
+                    question={t(lang, 'orderPage.cancelQuestion')}
+                    confirmLabel={t(lang, 'orderPage.cancelYes')}
+                    busyLabel={t(lang, 'orderPage.cancelling')}
+                    keepLabel={t(lang, 'orderPage.keep')}
                     cancelling={busy === 'cancel'}
                     error={cancelError}
                     onConfirm={() => void press('cancel', cancelOrder)}
@@ -499,6 +562,8 @@ export function OrderPage({
 interface ChangeOrderFormProps {
   /** The open order the form starts from. */
   order: CustomerOrder;
+  /** The order's language: the form speaks it. */
+  lang: Lang;
   /** True while the save is on its way: the save button reads "שומר...". */
   saving: boolean;
   /** Sends the validated change; resolves to the errors to show, or null (see saveChange). */
@@ -516,7 +581,7 @@ interface ChangeOrderFormProps {
  * from the stored one, a line above the save button says that saving takes the order out of the
  * round (the api's rule, shared `isLocationChange`), before the customer saves.
  */
-function ChangeOrderForm({ order, saving, onSave, onClose }: ChangeOrderFormProps) {
+function ChangeOrderForm({ order, lang, saving, onSave, onClose }: ChangeOrderFormProps) {
   const { values, errors, setErrors, setField, formRef, showErrors } = useOrderForm(() =>
     changeFormValues(order),
   );
@@ -540,7 +605,7 @@ function ChangeOrderForm({ order, saving, onSave, onClose }: ChangeOrderFormProp
     if (saving) return;
     const validation = validateCustomerChange(values);
     if (!validation.ok) {
-      showErrors(validation.errors);
+      showErrors(localizedFormErrors(lang, validation.errors));
       return;
     }
     setErrors(NO_ERRORS);
@@ -552,9 +617,9 @@ function ChangeOrderForm({ order, saving, onSave, onClose }: ChangeOrderFormProp
     <section aria-labelledby={headingId}>
       {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}
       <h2 id={headingId} ref={headingRef} tabIndex={-1}>
-        {CHANGE_HEADING}
+        {t(lang, 'orderPage.changeHeading')}
       </h2>
-      <p>{PHONE_NOT_CHANGED_TEXT}</p>
+      <p>{t(lang, 'orderPage.phoneNotChanged')}</p>
 
       {/* noValidate: the form shows its own Hebrew messages next to each field, not the
           browser's bubbles. */}
@@ -571,19 +636,14 @@ function ChangeOrderForm({ order, saving, onSave, onClose }: ChangeOrderFormProp
           errors={errors.byField}
           onFieldChange={setField}
           showContact={false}
+          lang={lang}
         />
 
         {leavesRound && (
           <p id={warningId} className="order-change-warning">
-            {order.round === undefined ? (
-              'שינוי הכתובת יוציא את ההזמנה מהסבב, ונחזור אליך עם מועד חדש.'
-            ) : (
-              <>
-                שינוי הכתובת יוציא את ההזמנה מהסבב ב-
-                {/* DD/MM reads left to right inside the right-to-left text (CLAUDE.md). */}
-                <bdi dir="ltr">{formatDayMonth(order.round.date)}</bdi>, ונחזור אליך עם מועד חדש.
-              </>
-            )}
+            {order.round === undefined
+              ? t(lang, 'orderPage.leavesRound')
+              : tWithDay(lang, 'orderPage.leavesRoundDate', formatDayMonth(order.round.date, lang))}
           </p>
         )}
 
@@ -602,7 +662,7 @@ function ChangeOrderForm({ order, saving, onSave, onClose }: ChangeOrderFormProp
             aria-disabled={saving ? true : undefined}
             aria-describedby={leavesRound ? warningId : undefined}
           >
-            {saving ? SAVING_LABEL : SAVE_CHANGE_LABEL}
+            {saving ? t(lang, 'orderPage.saving') : t(lang, 'orderPage.saveChange')}
           </button>
           <button
             type="button"
@@ -613,7 +673,7 @@ function ChangeOrderForm({ order, saving, onSave, onClose }: ChangeOrderFormProp
               if (!saving) onClose();
             }}
           >
-            {KEEP_AS_IS_LABEL}
+            {t(lang, 'orderPage.keepAsIs')}
           </button>
         </div>
       </form>
@@ -639,8 +699,9 @@ function changeFormValues(order: CustomerOrder): OrderFormValues {
  * address (savedDetails.ts reads them back). Never the number of bottles, which differs from one
  * order to the next. A new history entry, so "back" returns to this page.
  */
-function startNewOrder(order: CustomerOrder): void {
-  navigate('/', {
+function startNewOrder(order: CustomerOrder, lang: Lang): void {
+  // The booking form of the order's own language; the page itself has no language switch.
+  navigate(lang === 'en' ? '/en' : '/', {
     state: orderFormNavigationState({ contact: order.contact, address: order.address }),
   });
 }
@@ -650,23 +711,19 @@ function startNewOrder(order: CustomerOrder): void {
  * the right-to-left text (CLAUDE.md). A pending order whose round the api did not send gets the
  * text without a day.
  */
-function ConfirmLabel({ round }: { round: CustomerOrder['round'] }) {
-  if (round === undefined) return CONFIRM_LABEL;
-  return (
-    <>
-      {CONFIRM_LABEL} ב-<bdi dir="ltr">{formatDayMonth(round.date)}</bdi>
-    </>
-  );
+function ConfirmLabel({ round, lang }: { round: CustomerOrder['round']; lang: Lang }) {
+  if (round === undefined) return t(lang, 'orderPage.confirm');
+  return tWithDay(lang, 'orderPage.confirmDate', formatDayMonth(round.date, lang));
 }
 
 /** The status in plain words, and what it means for the customer now (spec §3.3). */
-function OrderStatus({ order }: { order: CustomerOrder }) {
+function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   return (
     <>
       <p className="order-status">
-        מצב ההזמנה: <strong>{ORDER_STATUS_LABELS[order.status]}</strong>
+        {t(lang, 'orderPage.status')} <strong>{t(lang, `orderStatus.${order.status}`)}</strong>
       </p>
-      <StatusText order={order} />
+      <StatusText order={order} lang={lang} />
     </>
   );
 }
@@ -675,80 +732,99 @@ function OrderStatus({ order }: { order: CustomerOrder }) {
  * The lines under the status. The round's date shows for a pending or confirmed order only, and
  * only when the api sent it: an order whose round is gone has no date to promise.
  */
-function StatusText({ order }: { order: CustomerOrder }) {
+function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   const { round } = order;
   switch (order.status) {
     case 'waiting':
-      return <p>{WAITING_TEXT}</p>;
+      return <p>{t(lang, 'orderPage.waiting')}</p>;
     case 'pending':
     case 'confirmed':
       if (round === undefined) return null;
       return (
         <>
           <p>
-            {order.status === 'pending' ? 'נעבור לאסוף ב-' : 'נתראה ב-'}
             {/* DD/MM and HH:MM read left to right inside the right-to-left text (CLAUDE.md). */}
-            <bdi dir="ltr">{formatDayMonth(round.date)}</bdi>.
+            {tWithDay(
+              lang,
+              order.status === 'pending' ? 'orderPage.pendingDate' : 'orderPage.confirmedDate',
+              formatDayMonth(round.date, lang),
+            )}
           </p>
           {round.pickupBy !== undefined && (
             <p>
-              {round.pickupFrom !== undefined ? (
-                <>
-                  נא להוציא את הבקבוקים בין השעות <bdi dir="ltr">{round.pickupFrom}</bdi> ל-
-                  <bdi dir="ltr">{round.pickupBy}</bdi>.
-                </>
-              ) : (
-                <>
-                  נא להוציא את הבקבוקים עד השעה <bdi dir="ltr">{round.pickupBy}</bdi>.
-                </>
-              )}
+              {round.pickupFrom !== undefined
+                ? timesText(t(lang, 'orderPage.pickupWindow', TIME_PLACEHOLDERS), [
+                    round.pickupFrom,
+                    round.pickupBy,
+                  ])
+                : timesText(t(lang, 'orderPage.pickupBy', TIME_PLACEHOLDERS), [round.pickupBy])}
             </p>
           )}
         </>
       );
     case 'collected':
-      return <p>{COLLECTED_TEXT}</p>;
+      return <p>{t(lang, 'orderPage.collected')}</p>;
     case 'cancelled':
-      return <p>{CANCELLED_TEXT}</p>;
+      return <p>{t(lang, 'orderPage.cancelled')}</p>;
   }
+}
+
+/** `{from}` and `{by}` left in the text by t(), for {@link timesText} to fill. */
+const TIME_PLACEHOLDERS = { from: '{from}', by: '{by}' } as const;
+
+/** `text` with each time (in the order they appear) set in a left-to-right `<bdi>`. */
+function timesText(text: string, times: readonly string[]): ReactNode {
+  const parts = text.split(/\{(?:from|by)\}/);
+  return parts.map((part, index) => (
+    // The parts never reorder, so the index is a stable key.
+    <Fragment key={index}>
+      {part}
+      {index < times.length && <bdi dir="ltr">{times[index]}</bdi>}
+    </Fragment>
+  ));
 }
 
 /**
  * The order's details as the customer gave them: only what the api sent, which is the order's
  * own (no id, no region, nothing of another customer).
  */
-function OrderDetails({ order }: { order: CustomerOrder }) {
+function OrderDetails({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   const headingId = useId();
   const { contact, address } = order;
   // Where at the address: the spot in the form's words, then the floor and apartment if given.
-  const spot = [BOTTLES_SPOT_LABELS[address.bottlesSpot], address.floorApt]
+  const spot = [t(lang, `bottlesSpot.${address.bottlesSpot}`), address.floorApt]
     .filter((part) => part !== undefined && part !== '')
     .join(' · ');
+  // A listed street reads in the page's language; a hand-written one stays as the customer typed it.
+  const listedStreet =
+    address.streetCode === undefined ? undefined : findStreet(address.streetCode);
+  const streetName =
+    listedStreet === undefined ? address.streetName : streetDisplayName(listedStreet, lang);
 
   return (
     <section className="order-details" aria-labelledby={headingId}>
-      <h2 id={headingId}>פרטי ההזמנה</h2>
+      <h2 id={headingId}>{t(lang, 'orderPage.details')}</h2>
       <dl>
-        <dt>שם</dt>
+        <dt>{t(lang, 'orderPage.detailName')}</dt>
         <dd>{contact.name}</dd>
-        <dt>טלפון</dt>
+        <dt>{t(lang, 'orderPage.detailPhone')}</dt>
         <dd>
           {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
           <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>
         </dd>
-        <dt>כתובת</dt>
+        <dt>{t(lang, 'orderPage.detailAddress')}</dt>
         <dd>
-          {address.streetName} {address.houseNumber}
+          {streetName} {address.houseNumber}
         </dd>
-        <dt>איפה הבקבוקים</dt>
+        <dt>{t(lang, 'orderPage.detailSpot')}</dt>
         <dd>{spot}</dd>
         {address.note !== undefined && address.note !== '' && (
           <>
-            <dt>הערה</dt>
+            <dt>{t(lang, 'orderPage.detailNote')}</dt>
             <dd>{address.note}</dd>
           </>
         )}
-        <dt>כמות בקבוקים</dt>
+        <dt>{t(lang, 'orderPage.detailBottles')}</dt>
         <dd>{order.bottlesEstimated}</dd>
       </dl>
     </section>

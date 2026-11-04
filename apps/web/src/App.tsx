@@ -1,7 +1,7 @@
 // The root component, and the single place routes are listed: the URL path picks a page
 // (router.tsx), and every page sits inside the shared Layout (header, main, OSM footer).
-import { useEffect, useRef, type ReactNode } from 'react';
-import { APP_NAME, DEFAULT_LANG } from '@bottlerun/shared';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { APP_NAME, DEFAULT_LANG, type Lang } from '@bottlerun/shared';
 import { CollectorApp } from './collector/CollectorApp.tsx';
 import { Layout } from './Layout.tsx';
 import { OrderFormPage } from './orderForm/OrderFormPage.tsx';
@@ -29,14 +29,18 @@ export function App() {
   }, [pathname]);
 
   const route = matchRoute(pathname);
-  const lang = route.name === 'orderFormEn' ? 'en' : DEFAULT_LANG;
+  // The customer page speaks its order's language, known only after the order loads: the page
+  // reports it (onLangChange) so the header's slogan follows.
+  const [orderPageLang, setOrderPageLang] = useState<Lang>(DEFAULT_LANG);
+  const lang =
+    route.name === 'orderFormEn' ? 'en' : route.name === 'orderPage' ? orderPageLang : DEFAULT_LANG;
   useDocumentLanguage(lang);
   return (
     <>
       {/* Only the collector app is installable; customers get a plain website (pwaHead.tsx). */}
       {isCollectorRoute(route) && <CollectorPwaHead />}
       <Layout lang={lang} collectorLink={route.name === 'orderForm'}>
-        {pageFor(route)}
+        {pageFor(route, setOrderPageLang)}
       </Layout>
     </>
   );
@@ -52,7 +56,7 @@ function isCollectorRoute(route: Route): boolean {
 }
 
 /** The page component for a route. Adding a route means a case here and in `matchRoute`. */
-function pageFor(route: Route): ReactNode {
+function pageFor(route: Route, onOrderPageLang: (lang: Lang) => void): ReactNode {
   switch (route.name) {
     case 'orderForm':
       return <OrderFormPage key="he" />;
@@ -60,7 +64,7 @@ function pageFor(route: Route): ReactNode {
       return <OrderFormPage key="en" lang="en" />;
     case 'orderPage':
       // `key`: another token is another order, so the page mounts anew and loads it.
-      return <OrderPage key={route.token} token={route.token} />;
+      return <OrderPage key={route.token} token={route.token} onLangChange={onOrderPageLang} />;
     case 'login':
       return <LoginPage />;
     case 'collector':
