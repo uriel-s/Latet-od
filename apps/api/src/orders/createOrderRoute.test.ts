@@ -234,6 +234,29 @@ describe('POST /api/orders: a valid booking', () => {
   });
 });
 
+describe('POST /api/orders: the order language', () => {
+  it('stores the lang sent', async () => {
+    const res = await postOrder(validBody({ lang: 'en' }));
+
+    expect(res.status).toBe(201);
+    expect((await storedOrder(createdBody(res).token)).lang).toBe('en');
+  });
+
+  it('stores Hebrew when no lang is sent', async () => {
+    const res = await postOrder(validBody());
+
+    expect(res.status).toBe(201);
+    expect((await storedOrder(createdBody(res).token)).lang).toBe('he');
+  });
+
+  it('refuses an unknown lang with 400, storing nothing', async () => {
+    const res = await postOrder({ ...validBody(), lang: 'fr' });
+
+    expect(res.status).toBe(400);
+    expect(await orders.list()).toEqual([]);
+  });
+});
+
 describe('POST /api/orders: an invalid booking', () => {
   it('refuses 19 bottles with 400 and the plain message, storing nothing', async () => {
     const res = await postOrder(validBody({ bottlesEstimated: 19 }));

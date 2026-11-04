@@ -22862,7 +22862,13 @@ function orderMessage(order, kind, options) {
   if (options.date !== void 0) vars.date = options.date;
   if (options.pickupBy !== void 0) vars.pickupBy = options.pickupBy;
   if (options.pickupFrom !== void 0) vars.pickupFrom = options.pickupFrom;
-  const message = { kind, orderId: order.id, to: order.contact.phone, vars };
+  const message = {
+    kind,
+    orderId: order.id,
+    to: order.contact.phone,
+    vars,
+    lang: order.lang
+  };
   if (kind === "confirmRequest" && options.personalText !== void 0) {
     message.personalText = options.personalText;
   }
