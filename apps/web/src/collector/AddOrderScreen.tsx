@@ -3,7 +3,7 @@
 // validateOrderDetails), without the parts only the public form has: no honeypot (the route is
 // behind the login) and no privacy line. The api stores the order with `source: 'collector'`.
 import { useEffect, useRef, useState } from 'react';
-import type { AddOrderRequest } from '@bottlerun/shared';
+import type { AddOrderRequest, Lang } from '@bottlerun/shared';
 import { addCollectorOrder, type CollectorOrderWriteOutcome } from '../api.ts';
 import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderForm/formValues.ts';
 import { OrderFields } from '../orderForm/OrderFields.tsx';
@@ -14,6 +14,12 @@ import { ORDERS_LIST_PATH, saveErrors } from './orderEditing.ts';
 
 const SAVE_LABEL = 'שמירת ההזמנה';
 const SAVING_LABEL = 'שומר...';
+
+/** The picker's choices, labelled in Hebrew like the rest of the collector app. */
+const CUSTOMER_LANGS: { lang: Lang; label: string }[] = [
+  { lang: 'he', label: 'עברית' },
+  { lang: 'en', label: 'אנגלית' },
+];
 
 /** Props of {@link AddOrderScreen}. */
 export interface AddOrderScreenProps {
@@ -30,6 +36,7 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
   const { values, errors, setErrors, setField, formRef, showErrors } =
     useOrderForm(emptyOrderFormValues);
   const [saving, setSaving] = useState(false);
+  const [customerLang, setCustomerLang] = useState<Lang>('he');
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
   // Enter that comes before it, so one phone call does not add two orders.
   const savingRef = useRef(false);
@@ -57,7 +64,7 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
     setErrors(NO_ERRORS);
     let outcome: CollectorOrderWriteOutcome;
     try {
-      outcome = await addOrder(validation.request);
+      outcome = await addOrder({ ...validation.request, lang: customerLang });
     } catch {
       // addCollectorOrder never rejects, but a rejection must not leave the button on "שומר...".
       outcome = { kind: 'failed' };
@@ -102,6 +109,26 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
         }}
       >
         <OrderFields values={values} errors={errors.byField} onFieldChange={setField} />
+
+        {/* The language of the customer's WhatsApp messages and page; the collector app itself
+            stays Hebrew. Hebrew is preselected, so an untouched picker sends `he`. */}
+        <fieldset className="field">
+          <legend className="field-label">שפת הלקוח</legend>
+          <div className="choice-list">
+            {CUSTOMER_LANGS.map(({ lang, label }) => (
+              <label key={lang} className="choice">
+                <input
+                  type="radio"
+                  name="customerLang"
+                  value={lang}
+                  checked={customerLang === lang}
+                  onChange={() => setCustomerLang(lang)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         {errors.other && (
           <p className="form-alert" role="alert">
