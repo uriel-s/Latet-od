@@ -37,6 +37,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     roundId: 'round-1',
     messages: [],
     source: 'form',
+    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: new Date('2026-10-12T10:00:00.000Z'),
     collectedAt: new Date('2026-10-12T10:00:00.000Z'),

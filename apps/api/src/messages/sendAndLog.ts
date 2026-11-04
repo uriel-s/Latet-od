@@ -61,7 +61,14 @@ export function orderMessage(
   if (options.pickupBy !== undefined) vars.pickupBy = options.pickupBy;
   if (options.pickupFrom !== undefined) vars.pickupFrom = options.pickupFrom;
 
-  const message: OutgoingMessage = { kind, orderId: order.id, to: order.contact.phone, vars };
+  // The order's own language, so the request and the thanks go out in the language it booked in.
+  const message: OutgoingMessage = {
+    kind,
+    orderId: order.id,
+    to: order.contact.phone,
+    vars,
+    lang: order.lang,
+  };
   if (kind === 'confirmRequest' && options.personalText !== undefined) {
     message.personalText = options.personalText;
   }

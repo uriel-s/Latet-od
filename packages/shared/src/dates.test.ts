@@ -4,6 +4,7 @@ import {
   addMonths,
   calendarMonthSchema,
   formatDayMonth,
+  formatPickupTime,
   monthInAppZone,
   monthRangeInAppZone,
 } from './dates.ts';
@@ -217,5 +218,75 @@ describe('addMonths', () => {
   it('throws a RangeError when the result leaves the four-digit years', () => {
     expect(() => addMonths('9999-12', 1)).toThrow(RangeError);
     expect(() => addMonths('0000-01', -1)).toThrow(RangeError);
+  });
+});
+
+describe('formatDayMonth by language', () => {
+  it('shows DD/MM when no language is given', () => {
+    expect(formatDayMonth('2026-11-04')).toBe('04/11');
+  });
+
+  it("shows DD/MM for 'he'", () => {
+    expect(formatDayMonth('2026-11-04', 'he')).toBe('04/11');
+    expect(formatDayMonth(new Date('2026-11-11T22:30:00Z'), 'he')).toBe('12/11');
+  });
+
+  it("shows a short month name and the day without a leading zero for 'en'", () => {
+    expect(formatDayMonth('2026-11-04', 'en')).toBe('Nov 4');
+    expect(formatDayMonth('2026-01-15', 'en')).toBe('Jan 15');
+    expect(formatDayMonth('2026-12-31', 'en')).toBe('Dec 31');
+  });
+
+  it("writes September as 'Sep', whatever the ICU build says", () => {
+    expect(formatDayMonth('2026-09-01', 'en')).toBe('Sep 1');
+  });
+
+  it("shows a Date's day in Israel for 'en' (UTC+2 in November)", () => {
+    // 22:30 UTC on 11/11 is 00:30 on 12/11 in Israel; 21:59 UTC is still 23:59 on 11/11.
+    expect(formatDayMonth(new Date('2026-11-11T22:30:00Z'), 'en')).toBe('Nov 12');
+    expect(formatDayMonth(new Date('2026-11-11T21:59:00Z'), 'en')).toBe('Nov 11');
+  });
+
+  it("throws a RangeError for invalid input in 'en', without the value", () => {
+    expect(() => formatDayMonth('2026-02-30', 'en')).toThrow(RangeError);
+    expect(() => formatDayMonth('04/11/2026', 'en')).toThrow(RangeError);
+    expect(() => formatDayMonth(new Date('not a date'), 'en')).toThrow(RangeError);
+    expect(errorMessageOf(() => formatDayMonth('04/11/2026', 'en'))).not.toContain('04/11/2026');
+  });
+});
+
+describe('formatPickupTime', () => {
+  it("returns the 24-hour time unchanged for 'he'", () => {
+    for (const time of ['08:00', '00:00', '00:30', '12:00', '12:45', '13:05', '23:59']) {
+      expect(formatPickupTime(time, 'he'), time).toBe(time);
+    }
+  });
+
+  it("shows a 12-hour time with AM/PM for 'en'", () => {
+    expect(formatPickupTime('08:00', 'en')).toBe('8:00 AM');
+    expect(formatPickupTime('13:05', 'en')).toBe('1:05 PM');
+    expect(formatPickupTime('23:59', 'en')).toBe('11:59 PM');
+  });
+
+  it("shows midnight as 12 AM for 'en'", () => {
+    expect(formatPickupTime('00:00', 'en')).toBe('12:00 AM');
+    expect(formatPickupTime('00:30', 'en')).toBe('12:30 AM');
+  });
+
+  it("shows noon as 12 PM for 'en'", () => {
+    expect(formatPickupTime('12:00', 'en')).toBe('12:00 PM');
+    expect(formatPickupTime('12:45', 'en')).toBe('12:45 PM');
+  });
+
+  it('throws a RangeError for a time that is not a strict HH:MM, in both languages', () => {
+    for (const lang of ['he', 'en'] as const) {
+      for (const time of ['8:00', '24:00', '', '08:60']) {
+        expect(() => formatPickupTime(time, lang), `${lang} ${time}`).toThrow(RangeError);
+      }
+    }
+  });
+
+  it('never puts the value in the error message', () => {
+    expect(errorMessageOf(() => formatPickupTime('24:00', 'en'))).not.toContain('24:00');
   });
 });

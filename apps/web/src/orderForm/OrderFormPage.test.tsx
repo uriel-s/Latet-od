@@ -141,6 +141,7 @@ describe('OrderFormPage', () => {
           bottlesSpot: 'privateHouse',
         },
         bottlesEstimated: 45,
+        lang: 'he',
         website: '',
       },
     ]);

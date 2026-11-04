@@ -15,11 +15,32 @@ import { buildRouteStops, moveStop } from './buildRoute.ts';
 // Made-up points on one line (lng is the position): start at 0, the end at 10.
 const START: GeoPoint = { lat: 31.7, lng: 0 };
 const END: GeoPoint = { lat: 31.7, lng: 10 };
-const NEAR_START: Street = { code: 1, name: 'ליד הבית', region: 'ramat', lat: 31.7, lng: 2 };
-const MIDDLE: Street = { code: 2, name: 'באמצע', region: 'ramat', lat: 31.7, lng: 5 };
-const NEAR_END: Street = { code: 3, name: 'ליד הפריקה', region: 'ramat', lat: 31.7, lng: 8 };
+const NEAR_START: Street = {
+  code: 1,
+  name: 'ליד הבית',
+  nameEn: 'Near Home',
+  region: 'ramat',
+  lat: 31.7,
+  lng: 2,
+};
+const MIDDLE: Street = {
+  code: 2,
+  name: 'באמצע',
+  nameEn: 'Middle',
+  region: 'ramat',
+  lat: 31.7,
+  lng: 5,
+};
+const NEAR_END: Street = {
+  code: 3,
+  name: 'ליד הפריקה',
+  nameEn: 'Near Drop-off',
+  region: 'ramat',
+  lat: 31.7,
+  lng: 8,
+};
 /** In the list, but with no point. */
-const NO_POINT: Street = { code: 4, name: 'בלי נקודה', region: 'ramat' };
+const NO_POINT: Street = { code: 4, name: 'בלי נקודה', nameEn: 'No Point', region: 'ramat' };
 
 const STREETS = new Map([NEAR_START, MIDDLE, NEAR_END, NO_POINT].map((s) => [s.code, s]));
 const lookup: StreetLookup = (code) => STREETS.get(code);

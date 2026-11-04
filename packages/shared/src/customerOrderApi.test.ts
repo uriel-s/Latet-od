@@ -7,7 +7,7 @@ import {
   toCustomerOrder,
   type CustomerUpdateOrderRequest,
 } from './customerOrderApi.ts';
-import { ORDER_FORM_ERRORS, type Address, type Order } from './order.ts';
+import { ORDER_FORM_ERRORS, orderSchema, type Address, type Order } from './order.ts';
 import { formFieldErrors } from './orderApi.ts';
 import type { Round } from './round.ts';
 import { STREETS, type Street } from './streets.ts';
@@ -60,6 +60,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
       },
     ],
     source: 'form',
+    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
     ...overrides,
@@ -97,6 +98,7 @@ describe('toCustomerOrder', () => {
       address: STORED_ADDRESS,
       bottlesEstimated: 45,
       status: 'pending',
+      lang: 'he',
       round: { date: '2026-11-05', pickupBy: '08:00' },
     });
   });
@@ -105,7 +107,7 @@ describe('toCustomerOrder', () => {
     const order = makeOrder({ bottlesCollected: 50, cancelledAt: CREATED_AT });
     const customerOrder = toCustomerOrder(order, makeRound());
     expect(Object.keys(customerOrder).sort()).toEqual(
-      ['address', 'bottlesEstimated', 'contact', 'round', 'status'].sort(),
+      ['address', 'bottlesEstimated', 'contact', 'lang', 'round', 'status'].sort(),
     );
     expect(Object.keys(customerOrder.contact).sort()).toEqual(['name', 'phone']);
     expect(customerOrder.address).not.toHaveProperty('nearStreetCode');
@@ -115,6 +117,19 @@ describe('toCustomerOrder', () => {
     for (const secret of [TOKEN, ORDER_ID, ROUND_ID, 'another-customer', 'round-0', 'wa.me']) {
       expect(json, secret).not.toContain(secret);
     }
+  });
+
+  it('carries the language the customer booked in, so the page can speak it', () => {
+    expect(toCustomerOrder(makeOrder({ lang: 'en' }), makeRound()).lang).toBe('en');
+  });
+
+  it('gives Hebrew for a stored order without a language', () => {
+    // An order stored before languages existed: read through orderSchema, as the repo reads it.
+    const withoutLang: Record<string, unknown> = { ...makeOrder() };
+    delete withoutLang.lang;
+    const stored = orderSchema.parse(withoutLang);
+
+    expect(toCustomerOrder(stored, makeRound()).lang).toBe('he');
   });
 
   it('gives a pending and a confirmed order in the round its date and pickup time', () => {

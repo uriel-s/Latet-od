@@ -1053,8 +1053,8 @@ function numKeys(data) {
   return keyCount;
 }
 var getParsedType = (data) => {
-  const t = typeof data;
-  switch (t) {
+  const t2 = typeof data;
+  switch (t2) {
     case "undefined":
       return "undefined";
     case "string":
@@ -1093,7 +1093,7 @@ var getParsedType = (data) => {
       }
       return "object";
     default:
-      throw new Error(`Unknown data type: ${t}`);
+      throw new Error(`Unknown data type: ${t2}`);
   }
 };
 var propertyKeyTypes = /* @__PURE__ */ new Set(["string", "number", "symbol"]);
@@ -1393,8 +1393,8 @@ function getLengthableOrigin(input2) {
   return "unknown";
 }
 function parsedType(data) {
-  const t = typeof data;
-  switch (t) {
+  const t2 = typeof data;
+  switch (t2) {
     case "number": {
       return Number.isNaN(data) ? "nan" : "number";
     }
@@ -1411,7 +1411,7 @@ function parsedType(data) {
       }
     }
   }
-  return t;
+  return t2;
 }
 function issue(...args) {
   const [iss, input2, inst] = args;
@@ -3635,7 +3635,7 @@ function handleCatchall(proms, input2, payload, ctx, def, inst, abortEarly) {
   const unrecognized = [];
   const keySet = def.keySet;
   const _catchall = def.catchall._zod;
-  const t = _catchall.def.type;
+  const t2 = _catchall.def.type;
   const optin = _catchall.optin;
   const optout = _catchall.optout;
   let seen = 0;
@@ -3648,11 +3648,11 @@ function handleCatchall(proms, input2, payload, ctx, def, inst, abortEarly) {
     if (keySet.has(key))
       continue;
     if (key === "__proto__") {
-      if (t === "never")
+      if (t2 === "never")
         unrecognized.push(key);
       continue;
     }
-    if (t === "never") {
+    if (t2 === "never") {
       unrecognized.push(key);
       continue;
     }
@@ -7888,16 +7888,16 @@ var error20 = () => {
     number: { unit: "", shortLabel: "\u05E7\u05D8\u05DF", longLabel: "\u05D2\u05D3\u05D5\u05DC" }
     // no unit
   };
-  const typeEntry = (t) => t ? TypeNames[t] : void 0;
-  const typeLabel = (t) => {
-    const e = typeEntry(t);
+  const typeEntry = (t2) => t2 ? TypeNames[t2] : void 0;
+  const typeLabel = (t2) => {
+    const e = typeEntry(t2);
     if (e)
       return e.label;
-    return t ?? TypeNames.unknown.label;
+    return t2 ?? TypeNames.unknown.label;
   };
-  const withDefinite = (t) => `\u05D4${typeLabel(t)}`;
-  const verbFor = (t) => {
-    const e = typeEntry(t);
+  const withDefinite = (t2) => `\u05D4${typeLabel(t2)}`;
+  const verbFor = (t2) => {
+    const e = typeEntry(t2);
     const gender = e?.gender ?? "m";
     return gender === "f" ? "\u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05D9\u05D5\u05EA" : "\u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA";
   };
@@ -16778,7 +16778,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
       json2 = { ...json2, [keyword]: mapped };
   }
   const types = Array.isArray(json2.type) ? json2.type : [json2.type];
-  const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+  const numericType = !types.includes("string") && types.some((t2) => t2 === "number" || t2 === "integer");
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
@@ -19281,8 +19281,8 @@ function convertBaseSchema(schema, ctx) {
   }
   const type = schema.type;
   if (Array.isArray(type)) {
-    const typeSchemas = type.map((t) => {
-      const typeSchema = { ...schema, type: t };
+    const typeSchemas = type.map((t2) => {
+      const typeSchema = { ...schema, type: t2 };
       return convertBaseSchema(typeSchema, ctx);
     });
     if (typeSchemas.length === 0) {
@@ -19866,474 +19866,770 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
+// packages/shared/src/i18n.ts
+var langSchema = external_exports.enum(["he", "en"]);
+var DEFAULT_LANG = "he";
+var PLACEHOLDER = /\{(\w+)\}/g;
+function translate(dictionary, lang, key, vars) {
+  const text = dictionary[lang][key];
+  if (vars === void 0) return text;
+  return text.replace(
+    PLACEHOLDER,
+    (placeholder, name) => (
+      // Object.hasOwn, not `name in vars`: `{toString}` must not pick up Object.prototype.toString.
+      Object.hasOwn(vars, name) ? String(vars[name]) : placeholder
+    )
+  );
+}
+var HE = {
+  // The slogan under the app's name (index.ts APP_SLOGAN).
+  appSlogan: "\u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD, \u05D4\u05EA\u05E4\u05D9\u05DC\u05D9\u05DF \u05E9\u05DC\u05D4\u05DD!",
+  // Booking-form field messages (order.ts ORDER_FORM_ERRORS). {min} is MIN_BOTTLES.
+  "formError.nameRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E9\u05DD",
+  "formError.nameTooLong": "\u05D4\u05E9\u05DD \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.streetRequired": "\u05E0\u05D0 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05E8\u05D7\u05D5\u05D1 \u05D0\u05D5 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05D5\u05EA\u05D5",
+  "formError.streetNotFound": "\u05D4\u05E8\u05D7\u05D5\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4",
+  "formError.streetTooLong": "\u05E9\u05DD \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.houseNumberRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA",
+  "formError.houseNumberInvalid": "\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D1\u05D9\u05EA \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05EA\u05D7\u05D9\u05DC \u05D1\u05E1\u05E4\u05E8\u05D4, \u05DC\u05DE\u05E9\u05DC 12 \u05D0\u05D5 12\u05D0",
+  "formError.houseNumberTooLong": "\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D1\u05D9\u05EA \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.bottlesSpotRequired": "\u05E0\u05D0 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05D0\u05D9\u05E4\u05D4 \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "formError.floorAptRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E7\u05D5\u05DE\u05D4 \u05D5\u05D3\u05D9\u05E8\u05D4",
+  "formError.floorAptTooLong": "\u05D4\u05D8\u05E7\u05E1\u05D8 \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.noteInvalid": "\u05D4\u05D4\u05E2\u05E8\u05D4 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4",
+  "formError.noteTooLong": "\u05D4\u05D4\u05E2\u05E8\u05D4 \u05D0\u05E8\u05D5\u05DB\u05D4 \u05DE\u05D3\u05D9",
+  "formError.bottlesRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DE\u05E1\u05E4\u05E8 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "formError.bottlesTooFew": "\u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05D7\u05D5\u05EA {min} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "formError.bottlesTooMany": "\u05D4\u05DE\u05E1\u05E4\u05E8 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9, \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7",
+  // Where the bottles wait (order.ts BOTTLES_SPOT_LABELS).
+  "bottlesSpot.privateHouse": "\u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05D9\u05EA \u05E4\u05E8\u05D8\u05D9",
+  "bottlesSpot.apartmentDoor": "\u05D1\u05D1\u05E0\u05D9\u05D9\u05DF - \u05DC\u05D9\u05D3 \u05D3\u05DC\u05EA \u05D4\u05D3\u05D9\u05E8\u05D4",
+  "bottlesSpot.buildingEntrance": "\u05DC\u05DE\u05D8\u05D4 \u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05E0\u05D9\u05D9\u05DF",
+  // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
+  "orderStatus.waiting": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05E1\u05D1\u05D1",
+  "orderStatus.pending": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8",
+  "orderStatus.confirmed": "\u05D0\u05D5\u05E9\u05E8\u05D4",
+  "orderStatus.collected": "\u05E0\u05D0\u05E1\u05E4\u05D4",
+  "orderStatus.cancelled": "\u05D1\u05D5\u05D8\u05DC\u05D4",
+  // POST /api/orders messages above the form (orderApi.ts CREATE_ORDER_MESSAGES).
+  "createOrder.duplicateOpenOrder": "\u05DB\u05D1\u05E8 \u05D9\u05E9 \u05D4\u05D6\u05DE\u05E0\u05D4 \u05E4\u05EA\u05D5\u05D7\u05D4 \u05DC\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D6\u05D4.",
+  "createOrder.rateLimited": "\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05E0\u05D9\u05E1\u05D9\u05D5\u05E0\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1 \u05DE\u05D0\u05D5\u05D7\u05E8 \u05D9\u05D5\u05EA\u05E8.",
+  // The customer's page (customerOrderApi.ts CUSTOMER_ORDER_MESSAGES).
+  "customerOrder.confirmationsClosed": "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E0\u05E1\u05D2\u05E8. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
+  "customerOrder.orderClosed": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D4, \u05D5\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D0\u05D5\u05EA\u05D4.",
+  "customerOrder.orderNotFound": "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05D9\u05D9\u05EA\u05DB\u05DF \u05E9\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05D4\u05D5\u05E2\u05EA\u05E7 \u05E2\u05D3 \u05D4\u05E1\u05D5\u05E3.",
+  // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
+  // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
+  // already formatted for the language. The Hebrew must stay exactly as sent before English
+  // existed: messages.test.ts compares whole messages char for char.
+  "whatsapp.greeting": "\u05E9\u05DC\u05D5\u05DD {name},",
+  "whatsapp.confirmRequest.date": "\u05D1-{date} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.",
+  "whatsapp.confirmRequest.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
+  "whatsapp.confirmRequest.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
+  "whatsapp.confirmRequest.confirmAtLink": "\u05E0\u05D0 \u05DC\u05D0\u05E9\u05E8 \u05D0\u05EA \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D9\u05E9\u05D5\u05E8:",
+  // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
+  "whatsapp.confirmRequest.signOff": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
+  // spec §6.1, word for word.
+  "whatsapp.thankYou.thanks": "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
+  "whatsapp.thankYou.orderAgain": "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:",
+  // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
+  // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
+  // {min} is MIN_BOTTLES.
+  "form.title": "\u05D4\u05D6\u05DE\u05E0\u05EA \u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.intro": "\u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD, \u05D5\u05D9\u05D5\u05D0\u05DC \u05D9\u05D1\u05D5\u05D0 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD.",
+  "form.privacy": "\u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05E9\u05DE\u05E9\u05D9\u05DD \u05E8\u05E7 \u05DC\u05EA\u05D9\u05D0\u05D5\u05DD \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3",
+  "form.submit": "\u05E9\u05DC\u05D9\u05D7\u05EA \u05D4\u05D6\u05DE\u05E0\u05D4",
+  "form.sending": "\u05E9\u05D5\u05DC\u05D7...",
+  "form.notEnoughBottles": "\u05DB\u05D3\u05D9 \u05DC\u05E9\u05DC\u05D5\u05D7 \u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05D7\u05D5\u05EA {min} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.honeypotLabel": "\u05D0\u05EA\u05E8 \u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8",
+  // The button that switches the form to the other language; each language names the other one.
+  "form.switchLanguage": "English",
+  "form.name": "\u05E9\u05DD",
+  "form.phone": "\u05D8\u05DC\u05E4\u05D5\u05DF \u05E0\u05D9\u05D9\u05D3",
+  "form.phoneExample": "\u05DC\u05DE\u05E9\u05DC",
+  // Copy of phone.ts PHONE_ERROR (kept out of ORDER_FORM_ERRORS, so formErrorText leaves it alone).
+  "form.phoneInvalid": "\u05DE\u05E1\u05E4\u05E8 \u05E0\u05D9\u05D9\u05D3 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05DC\u05DE\u05E9\u05DC: 050-1234567",
+  "form.street": "\u05E8\u05D7\u05D5\u05D1",
+  "form.houseNumber": "\u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA",
+  "form.bottlesSpot": "\u05D0\u05D9\u05E4\u05D4 \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.floorApt": "\u05E7\u05D5\u05DE\u05D4 \u05D5\u05D3\u05D9\u05E8\u05D4",
+  "form.floorAptHint": "\u05DC\u05DE\u05E9\u05DC: \u05DB\u05E0\u05D9\u05E1\u05D4 \u05D1', \u05E7\u05D5\u05DE\u05D4 3, \u05D3\u05D9\u05E8\u05D4 12",
+  "form.note": "\u05D4\u05E2\u05E8\u05D4 (\u05DC\u05D0 \u05D7\u05D5\u05D1\u05D4)",
+  "form.noteHint": "\u05DC\u05DE\u05E9\u05DC: \u05DC\u05D9\u05D3 \u05D4\u05E9\u05E2\u05E8, \u05E7\u05D5\u05D3 \u05DC\u05D1\u05E0\u05D9\u05D9\u05DF",
+  "form.bottles": "\u05DB\u05DE\u05D5\u05EA \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.bottlesHint": "\u05DC\u05E4\u05D7\u05D5\u05EA {min} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.unknownField": "\u05D9\u05E9 \u05E4\u05E8\u05D8 \u05E9\u05DC\u05D0 \u05DE\u05D5\u05DC\u05D0 \u05E0\u05DB\u05D5\u05DF. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D8\u05D5\u05E4\u05E1 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
+  "form.networkError": "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05E0\u05D5 \u05DC\u05E9\u05DC\u05D5\u05D7. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
+  // The street picker.
+  "street.freeTextLabel": "\u05E9\u05DD \u05D4\u05E8\u05D7\u05D5\u05D1",
+  "street.freeTextButton": "\u05D4\u05E8\u05D7\u05D5\u05D1 \u05E9\u05DC\u05D9 \u05DC\u05D0 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4",
+  "street.backToList": "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05E8\u05E9\u05D9\u05DE\u05EA \u05D4\u05E8\u05D7\u05D5\u05D1\u05D5\u05EA",
+  "street.resultsLabel": "\u05E8\u05D7\u05D5\u05D1\u05D5\u05EA \u05E9\u05DE\u05EA\u05D0\u05D9\u05DE\u05D9\u05DD \u05DC\u05D7\u05D9\u05E4\u05D5\u05E9",
+  "street.chosen": "\u05E0\u05D1\u05D7\u05E8: {name}",
+  "street.notFound": "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05E8\u05D7\u05D5\u05D1 \u05D1\u05E9\u05DD \u05D4\u05D6\u05D4. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD \u05D0\u05D7\u05E8\u05EA.",
+  "street.notFoundOrFreeText": '\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05E8\u05D7\u05D5\u05D1 \u05D1\u05E9\u05DD \u05D4\u05D6\u05D4. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD \u05D0\u05D7\u05E8\u05EA, \u05D0\u05D5 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC "{button}".',
+  "street.foundOne": "\u05E0\u05DE\u05E6\u05D0 \u05E8\u05D7\u05D5\u05D1 \u05D0\u05D7\u05D3. \u05E0\u05D0 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC\u05D9\u05D5.",
+  "street.foundMany": "\u05E0\u05DE\u05E6\u05D0\u05D5 {count} \u05E8\u05D7\u05D5\u05D1\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E0\u05DB\u05D5\u05DF.",
+  "street.foundTooMany": "\u05E0\u05DE\u05E6\u05D0\u05D5 \u05D4\u05E8\u05D1\u05D4 \u05E8\u05D7\u05D5\u05D1\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD, \u05D0\u05D5 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E0\u05DB\u05D5\u05DF.",
+  // The thank-you screen.
+  "thankYou.title": "\u05EA\u05D5\u05D3\u05D4!",
+  "thankYou.body": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.",
+  "thankYou.viewOrder": "\u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D0\u05D5 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC",
+  // The customer's own page (web: OrderPage). {date} is the round's day, {from}/{by} the times.
+  // The Hebrew is what the page showed before English existed.
+  "orderPage.heading": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05E9\u05DC\u05DA",
+  "orderPage.loading": "\u05D8\u05D5\u05E2\u05DF...",
+  "orderPage.loadFailed": "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05E0\u05D5 \u05DC\u05D8\u05E2\u05D5\u05DF \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
+  "orderPage.retry": "\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1",
+  "orderPage.toForm": "\u05DC\u05D8\u05D5\u05E4\u05E1 \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4",
+  "orderPage.status": "\u05DE\u05E6\u05D1 \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4:",
+  "orderPage.waiting": "\u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA.",
+  "orderPage.pendingDate": "\u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D1-{date}.",
+  "orderPage.confirmedDate": "\u05E0\u05EA\u05E8\u05D0\u05D4 \u05D1-{date}.",
+  "orderPage.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
+  "orderPage.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
+  "orderPage.collected": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05E0\u05D0\u05E1\u05E4\u05D4. \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
+  "orderPage.cancelled": "\u05EA\u05D5\u05D3\u05D4! \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05D6\u05DE\u05D9\u05DF \u05D0\u05D9\u05E1\u05D5\u05E3 \u05D7\u05D3\u05E9 \u05D1\u05DB\u05DC \u05E2\u05EA.",
+  "orderPage.saved.confirm": "\u05EA\u05D5\u05D3\u05D4! \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D0\u05D5\u05E9\u05E8.",
+  "orderPage.saved.decline": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
+  "orderPage.saved.cancel": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4.",
+  "orderPage.saved.change": "\u05D4\u05E9\u05D9\u05E0\u05D5\u05D9\u05D9\u05DD \u05E0\u05E9\u05DE\u05E8\u05D5.",
+  "orderPage.leftRound": "\u05D4\u05DB\u05EA\u05D5\u05D1\u05EA \u05E2\u05D5\u05D3\u05DB\u05E0\u05D4. \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D9\u05E6\u05D0\u05D4 \u05DE\u05D4\u05E1\u05D1\u05D1, \u05D5\u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
+  "orderPage.phoneNotChanged": "\u05D0\u05EA \u05DE\u05E1\u05E4\u05E8 \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05DB\u05D0\u05DF.",
+  "orderPage.confirm": "\u05DB\u05DF, \u05D0\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "orderPage.confirmDate": "\u05DB\u05DF, \u05D0\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1-{date}",
+  "orderPage.decline": "\u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD \u05D4\u05E4\u05E2\u05DD",
+  "orderPage.declineQuestion": "\u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD \u05DC\u05DA \u05D4\u05E4\u05E2\u05DD? \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05EA\u05D7\u05DB\u05D4 \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D1\u05D0.",
+  "orderPage.declineConfirm": "\u05DB\u05DF, \u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD",
+  "orderPage.sending": "\u05E9\u05D5\u05DC\u05D7...",
+  "orderPage.cancelOrder": "\u05D1\u05D9\u05D8\u05D5\u05DC \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4",
+  "orderPage.cancelQuestion": "\u05DC\u05D1\u05D8\u05DC \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4?",
+  "orderPage.cancelYes": "\u05DB\u05DF, \u05DC\u05D1\u05D8\u05DC",
+  "orderPage.cancelling": "\u05DE\u05D1\u05D8\u05DC...",
+  "orderPage.keep": "\u05DC\u05D0, \u05DC\u05D4\u05E9\u05D0\u05D9\u05E8",
+  "orderPage.newOrder": "\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D3\u05E9\u05D4 \u05E2\u05DD \u05D0\u05D5\u05EA\u05DD \u05E4\u05E8\u05D8\u05D9\u05DD",
+  "orderPage.change": "\u05E9\u05D9\u05E0\u05D5\u05D9",
+  "orderPage.changeHeading": "\u05E9\u05D9\u05E0\u05D5\u05D9 \u05E4\u05E8\u05D8\u05D9 \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4",
+  "orderPage.saveChange": "\u05E9\u05DE\u05D9\u05E8\u05EA \u05D4\u05E9\u05D9\u05E0\u05D5\u05D9\u05D9\u05DD",
+  "orderPage.saving": "\u05E9\u05D5\u05DE\u05E8...",
+  "orderPage.keepAsIs": "\u05D1\u05DC\u05D9 \u05DC\u05E9\u05E0\u05D5\u05EA",
+  "orderPage.saveFailed": "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05E0\u05D5 \u05DC\u05E9\u05DE\u05D5\u05E8. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
+  "orderPage.leavesRound": "\u05E9\u05D9\u05E0\u05D5\u05D9 \u05D4\u05DB\u05EA\u05D5\u05D1\u05EA \u05D9\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DE\u05D4\u05E1\u05D1\u05D1, \u05D5\u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
+  "orderPage.leavesRoundDate": "\u05E9\u05D9\u05E0\u05D5\u05D9 \u05D4\u05DB\u05EA\u05D5\u05D1\u05EA \u05D9\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DE\u05D4\u05E1\u05D1\u05D1 \u05D1-{date}, \u05D5\u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
+  "orderPage.details": "\u05E4\u05E8\u05D8\u05D9 \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4",
+  "orderPage.detailName": "\u05E9\u05DD",
+  "orderPage.detailPhone": "\u05D8\u05DC\u05E4\u05D5\u05DF",
+  "orderPage.detailAddress": "\u05DB\u05EA\u05D5\u05D1\u05EA",
+  "orderPage.detailSpot": "\u05D0\u05D9\u05E4\u05D4 \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "orderPage.detailNote": "\u05D4\u05E2\u05E8\u05D4",
+  "orderPage.detailBottles": "\u05DB\u05DE\u05D5\u05EA \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD"
+};
+var EN = {
+  appSlogan: "Your bottles, their tefillin!",
+  // Booking-form field messages.
+  "formError.nameRequired": "Please write your name",
+  "formError.nameTooLong": "The name is too long",
+  "formError.streetRequired": "Please choose a street or type it",
+  "formError.streetNotFound": "This street is not on the list",
+  "formError.streetTooLong": "The street name is too long",
+  "formError.houseNumberRequired": "Please write a house number",
+  "formError.houseNumberInvalid": "The house number should start with a digit, for example 12 or 12A",
+  "formError.houseNumberTooLong": "The house number is too long",
+  "formError.bottlesSpotRequired": "Please choose where the bottles are",
+  "formError.floorAptRequired": "Please write the floor and apartment",
+  "formError.floorAptTooLong": "The text is too long",
+  "formError.noteInvalid": "The note is not valid",
+  "formError.noteTooLong": "The note is too long",
+  "formError.bottlesRequired": "Please write the number of bottles",
+  "formError.bottlesTooFew": "At least {min} bottles are needed",
+  "formError.bottlesTooMany": "The number is too large, please check",
+  // Where the bottles wait.
+  "bottlesSpot.privateHouse": "At the entrance of a private house",
+  "bottlesSpot.apartmentDoor": "In a building - by the apartment door",
+  "bottlesSpot.buildingEntrance": "Downstairs at the building entrance",
+  // Order status names.
+  "orderStatus.waiting": "Waiting for a round",
+  "orderStatus.pending": "Waiting for confirmation",
+  "orderStatus.confirmed": "Confirmed",
+  "orderStatus.collected": "Collected",
+  "orderStatus.cancelled": "Cancelled",
+  // POST /api/orders messages above the form.
+  "createOrder.duplicateOpenOrder": "There is already an open order for this number.",
+  "createOrder.rateLimited": "Too many attempts. Please try again later.",
+  // The customer's page.
+  "customerOrder.confirmationsClosed": "Confirmation is closed. We will get back to you with a new date.",
+  "customerOrder.orderClosed": "This order is already closed and cannot be changed.",
+  "customerOrder.orderNotFound": "We could not find the order. The link may not have been copied in full.",
+  // WhatsApp messages. The brand name "לתת עוד" stays in Hebrew: it is the name the customer
+  // knows the project by, in either language.
+  "whatsapp.greeting": "Hello {name},",
+  "whatsapp.confirmRequest.date": "On {date} we will come to collect your bottles.",
+  "whatsapp.confirmRequest.pickupWindow": "Please put the bottles out between {from} and {by}.",
+  "whatsapp.confirmRequest.pickupBy": "Please put the bottles out by {by}.",
+  "whatsapp.confirmRequest.confirmAtLink": "Please confirm the pickup at this link:",
+  "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
+  "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
+  "whatsapp.thankYou.orderAgain": "To order again:",
+  // The booking form and its thank-you screen.
+  "form.title": "Book a bottle pickup",
+  "form.intro": "Fill in your details and Yoel will come to collect the bottles.",
+  "form.privacy": "Your details are used only to arrange the pickup",
+  "form.submit": "Send order",
+  "form.sending": "Sending...",
+  "form.notEnoughBottles": "To send, at least {min} bottles are needed",
+  "form.honeypotLabel": "Website",
+  "form.switchLanguage": "\u05E2\u05D1\u05E8\u05D9\u05EA",
+  "form.name": "Name",
+  "form.phone": "Mobile phone",
+  "form.phoneExample": "For example",
+  "form.phoneInvalid": "Invalid mobile number. For example: 050-1234567",
+  "form.street": "Street",
+  "form.houseNumber": "House number",
+  "form.bottlesSpot": "Where are the bottles",
+  "form.floorApt": "Floor and apartment",
+  "form.floorAptHint": "For example: entrance B, floor 3, apartment 12",
+  "form.note": "Note (optional)",
+  "form.noteHint": "For example: next to the gate, building code",
+  "form.bottles": "Number of bottles",
+  "form.bottlesHint": "At least {min} bottles",
+  "form.unknownField": "Something is not filled in correctly. Please check the form and try again.",
+  "form.networkError": "We could not send. Please check your internet connection and try again.",
+  // The street picker.
+  "street.freeTextLabel": "Street name",
+  "street.freeTextButton": "My street is not on the list",
+  "street.backToList": "Back to the list of streets",
+  "street.resultsLabel": "Streets that match the search",
+  "street.chosen": "Chosen: {name}",
+  "street.notFound": "We did not find a street with this name. You can type the name differently.",
+  "street.notFoundOrFreeText": 'We did not find a street with this name. You can type the name differently, or tap "{button}".',
+  "street.foundOne": "One street found. Please tap it.",
+  "street.foundMany": "{count} streets found. Please tap the right street.",
+  "street.foundTooMany": "Many streets found. Please keep typing the name, or tap the right street.",
+  // The thank-you screen.
+  "thankYou.title": "Thank you!",
+  "thankYou.body": "We received your order. Before the round in your area we will send you a WhatsApp message to confirm.",
+  "thankYou.viewOrder": "View or cancel the order",
+  // The customer's own page.
+  "orderPage.heading": "Your order",
+  "orderPage.loading": "Loading...",
+  "orderPage.loadFailed": "We could not load the order. Please check your internet connection and try again.",
+  "orderPage.retry": "Try again",
+  "orderPage.toForm": "To the order form",
+  "orderPage.status": "Order status:",
+  "orderPage.waiting": "We will send you a WhatsApp message before the round in your area.",
+  "orderPage.pendingDate": "We will come to collect on {date}.",
+  "orderPage.confirmedDate": "See you on {date}.",
+  "orderPage.pickupWindow": "Please put the bottles out between {from} and {by}.",
+  "orderPage.pickupBy": "Please put the bottles out by {by}.",
+  "orderPage.collected": "The order was collected. Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
+  "orderPage.cancelled": "Thank you! You can book a new pickup at any time.",
+  "orderPage.saved.confirm": "Thank you! The pickup is confirmed.",
+  "orderPage.saved.decline": "Got it. We will get back to you with a new date.",
+  "orderPage.saved.cancel": "The order was cancelled.",
+  "orderPage.saved.change": "The changes were saved.",
+  "orderPage.leftRound": "The address was updated. The order left the round, and we will get back to you with a new date.",
+  "orderPage.phoneNotChanged": "The phone number cannot be changed here.",
+  "orderPage.confirm": "Yes, I will put the bottles out",
+  "orderPage.confirmDate": "Yes, I will put the bottles out on {date}",
+  "orderPage.decline": "Not this time",
+  "orderPage.declineQuestion": "Not suitable this time? The order will wait for the next round.",
+  "orderPage.declineConfirm": "Yes, not suitable",
+  "orderPage.sending": "Sending...",
+  "orderPage.cancelOrder": "Cancel the order",
+  "orderPage.cancelQuestion": "Cancel the order?",
+  "orderPage.cancelYes": "Yes, cancel",
+  "orderPage.cancelling": "Cancelling...",
+  "orderPage.keep": "No, keep it",
+  "orderPage.newOrder": "New order with the same details",
+  "orderPage.change": "Change",
+  "orderPage.changeHeading": "Change the order details",
+  "orderPage.saveChange": "Save changes",
+  "orderPage.saving": "Saving...",
+  "orderPage.keepAsIs": "Keep as is",
+  "orderPage.saveFailed": "We could not save. Please check your internet connection and try again.",
+  "orderPage.leavesRound": "Changing the address will take the order out of the round, and we will get back to you with a new date.",
+  "orderPage.leavesRoundDate": "Changing the address will take the order out of the round on {date}, and we will get back to you with a new date.",
+  "orderPage.details": "Order details",
+  "orderPage.detailName": "Name",
+  "orderPage.detailPhone": "Phone",
+  "orderPage.detailAddress": "Address",
+  "orderPage.detailSpot": "Where are the bottles",
+  "orderPage.detailNote": "Note",
+  "orderPage.detailBottles": "Number of bottles"
+};
+var MESSAGES = { he: HE, en: EN };
+function t(lang, key, vars) {
+  return translate(MESSAGES, lang, key, vars);
+}
+
 // packages/shared/data/streets.json
 var streets_default = {
   attribution: "\xA9 OpenStreetMap contributors",
   license: "ODbL",
-  source: "Street codes and names: data.gov.il, resource 9ad3862c-8391-4b2f-84a4-2d4c68625f4b, locality code 2610 (Beit Shemesh). Points: OpenStreetMap via Nominatim, one point per street.",
-  updatedAt: "2026-10-21",
+  source: "Street codes and names: data.gov.il, resource 9ad3862c-8391-4b2f-84a4-2d4c68625f4b, locality code 2610 (Beit Shemesh). Points: OpenStreetMap via Nominatim, one point per street. English names: OpenStreetMap name:en via Overpass where present, else transliteration (scripts/english-street-names.ts).",
+  updatedAt: "2026-11-04",
   streets: [
-    { code: 101, name: "\u05D4\u05E8\u05E6\u05DC", region: "old", lat: 31.74919, lng: 34.99315 },
-    { code: 102, name: '\u05E9\u05D1\u05D9\u05DC \u05D4\u05DC"\u05D4', region: "old", lat: 31.75041, lng: 34.9963 },
-    { code: 103, name: "\u05D6'\u05D1\u05D5\u05D8\u05D9\u05E0\u05E1\u05E7\u05D9", region: "old", lat: 31.7528, lng: 34.99438 },
-    { code: 104, name: "\u05D4\u05D7\u05DC\u05D5\u05E6\u05D9\u05DD", region: "old", lat: 31.75402, lng: 34.9896 },
-    { code: 105, name: "\u05D4\u05E2\u05DC\u05D9\u05D4", region: "old", lat: 31.75488, lng: 34.9871 },
-    { code: 106, name: "\u05D4\u05D0\u05D5\u05DE\u05DF", region: "old", lat: 31.75391, lng: 34.99597 },
-    { code: 107, name: "\u05EA\u05D7\u05E0\u05EA \u05D4\u05E8\u05DB\u05D1\u05EA" },
-    { code: 108, name: "\u05DE\u05E9\u05D8\u05E8\u05EA \u05D4\u05E8\u05D8\u05D5\u05D1" },
-    { code: 109, name: "\u05D1\u05D9\u05D7\u05E8 \u05E9\u05DE\u05E9\u05D5\u05DF" },
-    { code: 110, name: "\u05D0\u05E8\u05DC\u05D5\u05D6\u05D5\u05E8\u05D5\u05D1", region: "old", lat: 31.75211, lng: 34.98964 },
-    { code: 111, name: "\u05D3\u05DD \u05D4\u05DE\u05DB\u05D1\u05D9\u05DD", region: "old", lat: 31.75187, lng: 34.98881 },
-    { code: 112, name: "\u05D4\u05DE\u05E9\u05DC\u05D8", region: "old", lat: 31.75087, lng: 34.99168 },
-    { code: 113, name: "\u05D4\u05E0\u05E9\u05D9\u05D0", region: "old", lat: 31.74732, lng: 34.98161 },
-    { code: 114, name: "\u05E2\u05DE\u05E7 \u05D4\u05D6\u05D9\u05EA\u05D9\u05DD" },
-    { code: 115, name: "\u05D4\u05D2\u05E4\u05DF", region: "old", lat: 31.74638, lng: 34.98803 },
-    { code: 116, name: "\u05D3\u05DC\u05D9\u05D4", region: "old", lat: 31.74783, lng: 34.9866 },
-    { code: 117, name: "\u05E1\u05DE\u05D3\u05E8", region: "old", lat: 31.7472, lng: 34.98859 },
-    { code: 118, name: "\u05DE\u05E0\u05D5\u05D7", region: "old", lat: 31.74758, lng: 34.97948 },
-    { code: 119, name: "\u05E9\u05D5\u05E2\u05DC\u05D9 \u05E9\u05DE\u05E9\u05D5\u05DF", region: "old", lat: 31.75003, lng: 34.98115 },
-    { code: 120, name: '\u05E8\u05DE\u05EA \u05DC\u05D7"\u05D9', region: "old", lat: 31.7493, lng: 34.98245 },
-    { code: 121, name: "\u05D4\u05DE\u05E2\u05E4\u05D9\u05DC\u05D9\u05DD", region: "old", lat: 31.75046, lng: 34.98591 },
-    { code: 122, name: "\u05D2\u05D5\u05E8 \u05D0\u05E8\u05D9\u05D4", region: "old", lat: 31.75135, lng: 34.98492 },
-    { code: 123, name: "\u05D1\u05D9\u05D0\u05DC\u05D9\u05E7", region: "old", lat: 31.75238, lng: 34.98341 },
-    { code: 124, name: "\u05D1\u05E0\u05D9 \u05D3\u05DF", region: "old", lat: 31.75035, lng: 34.98335 },
-    { code: 125, name: "\u05D4\u05D0\u05DC\u05D4", region: "old", lat: 31.75053, lng: 34.97925 },
-    { code: 126, name: "\u05D4\u05DE\u05DB\u05EA\u05E9", region: "old", lat: 31.75318, lng: 34.98145 },
-    { code: 127, name: "\u05D0\u05DC\u05D9\u05DB\u05D9\u05DF", region: "old", lat: 31.75204, lng: 34.98093 },
-    { code: 128, name: "\u05D1\u05D5\u05E1\u05E7\u05D9\u05DC\u05D4 \u05D9\u05D5\u05E1\u05E3", region: "old", lat: 31.74963, lng: 34.98354 },
-    { code: 129, name: "\u05D0\u05DC\u05E2\u05D6\u05E8\u05D9" },
-    { code: 130, name: "\u05D1\u05D9\u05EA \u05D2'\u05DE\u05D0\u05DC", region: "ramat", lat: 31.72529, lng: 34.97613 },
-    { code: 131, name: "\u05D4\u05E9\u05E7\u05D3", region: "old", lat: 31.74759, lng: 35.00393 },
-    { code: 132, name: "\u05DE\u05E2\u05DC\u05D4 \u05D3\u05D5\u05D3" },
-    { code: 133, name: "\u05DE\u05E2\u05DC\u05D4 \u05D4\u05E1\u05D9\u05D9\u05E8\u05D9\u05DD" },
-    { code: 134, name: "\u05DE\u05E2\u05DC\u05D4 \u05D4\u05E6\u05D5\u05E4\u05D9\u05DD" },
-    { code: 135, name: "\u05DE\u05E2\u05DC\u05D4 \u05D9\u05D0\u05D9\u05E8" },
-    { code: 136, name: "\u05D4\u05DE\u05D5\u05E8\u05D4 \u05D9\u05E2\u05E7\u05D1", region: "old", lat: 31.74788, lng: 34.98867 },
-    { code: 137, name: "\u05E1\u05D9\u05E0\u05D9", region: "old", lat: 31.7499, lng: 34.99791 },
-    { code: 138, name: '\u05D4\u05D0\u05E6"\u05DC' },
-    { code: 139, name: "\u05DE\u05E6\u05D3\u05D4", region: "old", lat: 31.74935, lng: 34.99728 },
-    { code: 140, name: '\u05E8\u05DE\u05D1"\u05DD', region: "old", lat: 31.7523, lng: 34.99237 },
-    { code: 141, name: "\u05D4\u05D1\u05E0\u05D0\u05D9", region: "old", lat: 31.75557, lng: 34.99285 },
-    { code: 142, name: "\u05D4\u05DE\u05E1\u05D2\u05E8", region: "old", lat: 31.75565, lng: 34.99484 },
-    { code: 143, name: '\u05E1\u05DE \u05D5\u05D9\u05E6"\u05D5', region: "old", lat: 31.74861, lng: 34.98549 },
-    { code: 144, name: "\u05D4\u05E9\u05D1\u05E2\u05D4", region: "old", lat: 31.75006, lng: 34.98259 },
-    { code: 145, name: "\u05D1\u05DF \u05E6\u05D1\u05D9", region: "old", lat: 31.74869, lng: 34.98938 },
-    { code: 147, name: "\u05E7\u05E8\u05DF \u05D4\u05D9\u05E1\u05D5\u05D3", region: "old", lat: 31.74968, lng: 34.9926 },
-    { code: 148, name: "\u05D0\u05DC\u05D5\u05DF \u05D9\u05D2\u05D0\u05DC", region: "old", lat: 31.75452, lng: 34.99343 },
-    { code: 149, name: "\u05D1\u05D9\u05EA \u05D6\u05D5\u05DC\u05D5\u05D8\u05D5\u05D1" },
-    { code: 150, name: "\u05D0\u05D5\u05DC\u05E4\u05DF \u05D4\u05DE\u05E9\u05D8\u05E8\u05D4" },
-    { code: 151, name: "\u05DE\u05E8\u05DB\u05D6 \u05E7\u05DC\u05D9\u05D8\u05D4" },
-    { code: 152, name: "\u05D4\u05D7\u05E8\u05E9", region: "old", lat: 31.75703, lng: 34.99086 },
-    { code: 153, name: "\u05DE\u05D5\u05E8\u05D3\u05D9 \u05D4\u05D2\u05D8\u05D0\u05D5\u05EA", region: "old", lat: 31.74801, lng: 34.99226 },
-    { code: 154, name: "\u05E1\u05DE \u05D4\u05D2\u05E4\u05DF", region: "old", lat: 31.74816, lng: 34.99023 },
-    { code: 155, name: "\u05D4\u05D5\u05EA\u05D9\u05E7\u05D9\u05DD" },
-    { code: 156, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05EA\u05DE\u05E8\u05D9\u05DD", region: "old", lat: 31.75379, lng: 34.98684 },
-    { code: 157, name: "\u05DE\u05D5\u05E8\u05D9 \u05D9\u05E2\u05E7\u05D1", region: "old", lat: 31.75083, lng: 34.98882 },
-    { code: 158, name: "\u05D1\u05DF \u05D2\u05E8\u05D0", region: "old", lat: 31.75205, lng: 34.98564 },
-    { code: 159, name: "\u05E8\u05D1\u05D9\u05E6\u05E7\u05D9", region: "old", lat: 31.75176, lng: 34.9943 },
-    { code: 160, name: "\u05EA\u05E4\u05D0\u05E8\u05EA \u05DE\u05E9\u05D4", region: "old", lat: 31.74974, lng: 34.99367 },
-    { code: 161, name: "\u05D0\u05DC\u05E0\u05E7\u05D5\u05D4 \u05E8\u05E4\u05D0\u05DC" },
-    { code: 162, name: "\u05E9\u05D3 \u05D4\u05D3\u05E7\u05DC", region: "old", lat: 31.73759, lng: 34.98537 },
-    { code: 163, name: "\u05D4\u05E1\u05D9\u05D2\u05DC\u05D9\u05EA", region: "old", lat: 31.74082, lng: 34.9817 },
-    { code: 164, name: "\u05D4\u05E8\u05E7\u05E4\u05EA", region: "old", lat: 31.73773, lng: 34.97711 },
-    { code: 165, name: "\u05D4\u05E0\u05D5\u05E8\u05D9\u05EA", region: "old", lat: 31.73836, lng: 34.98008 },
-    { code: 166, name: "\u05D4\u05D0\u05D9\u05E8\u05D9\u05E1", region: "old", lat: 31.73928, lng: 34.98164 },
-    { code: 167, name: "\u05D4\u05DB\u05DC\u05E0\u05D9\u05EA", region: "old", lat: 31.73904, lng: 34.97975 },
-    { code: 168, name: "\u05D4\u05E1\u05D1\u05D9\u05D5\u05DF", region: "old", lat: 31.73883, lng: 34.98189 },
-    { code: 169, name: "\u05D4\u05E0\u05E8\u05E7\u05D9\u05E1", region: "old", lat: 31.73858, lng: 34.97567 },
-    { code: 171, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05D0\u05E9\u05DC", region: "old", lat: 31.75343, lng: 34.99332 },
-    { code: 172, name: "\u05E9\u05E7\u05DE\u05D4" },
-    { code: 174, name: "\u05D4\u05D0\u05E8\u05D6\u05D9\u05DD", region: "old", lat: 31.74384, lng: 34.97544 },
-    { code: 175, name: "\u05EA\u05D3\u05D4\u05E8", region: "old", lat: 31.7426, lng: 34.97866 },
-    { code: 176, name: "\u05D4\u05D3\u05D5\u05D1\u05D3\u05D1\u05DF", region: "old", lat: 31.74425, lng: 34.97971 },
-    { code: 177, name: "\u05E4\u05E8\u05E1 \u05E8\u05D0\u05D5\u05D1\u05DF" },
-    { code: 178, name: "\u05E0\u05D5\u05E4\u05D9 \u05D4\u05D3\u05E8" },
-    { code: 179, name: "\u05D0\u05D1\u05D0 \u05E0\u05E2\u05DE\u05EA", region: "old", lat: 31.74966, lng: 34.98865 },
-    { code: 180, name: "\u05D9\u05D4\u05D5\u05D3\u05D4 \u05D4\u05DE\u05DB\u05D1\u05D9", region: "old", lat: 31.74847, lng: 34.98179 },
-    { code: 181, name: "\u05E1\u05DE \u05D4\u05D0\u05DC\u05D5\u05DF", region: "old", lat: 31.74766, lng: 34.98222 },
-    { code: 182, name: "\u05E8\u05D9\u05DE\u05D5\u05DF" },
-    { code: 183, name: "\u05D9\u05D5\u05E0\u05EA\u05DF \u05D1\u05DF \u05E2\u05D5\u05D6\u05D9\u05D0\u05DC" },
-    { code: 185, name: "\u05DB\u05D1\u05D9\u05E9 38", region: "old", lat: 31.75723, lng: 34.98588 },
-    { code: 186, name: '\u05D7\u05D9\u05D3"\u05D0', region: "old", lat: 31.74997, lng: 34.99903 },
-    { code: 187, name: "\u05D1\u05DF \u05E6\u05D9\u05D5\u05DF \u05D0\u05D1\u05D0 \u05E9\u05D0\u05D5\u05DC", region: "old", lat: 31.74781, lng: 35.00012 },
-    { code: 188, name: "\u05D4\u05D7\u05E4\u05E5 \u05D7\u05D9\u05D9\u05DD", region: "old", lat: 31.74871, lng: 34.99899 },
-    { code: 189, name: "\u05D1\u05DF \u05D0\u05D9\u05E9 \u05D7\u05D9", region: "old", lat: 31.75101, lng: 34.99926 },
-    { code: 190, name: "\u05D4\u05E9\u05D5\u05E9\u05DF", region: "old", lat: 31.73634, lng: 34.98254 },
-    { code: 191, name: "\u05D4\u05D7\u05E6\u05D1", region: "old", lat: 31.73673, lng: 34.982 },
-    { code: 192, name: "\u05D4\u05D7\u05E8\u05E6\u05D9\u05EA", region: "old", lat: 31.73577, lng: 34.98042 },
-    { code: 193, name: "\u05D4\u05D7\u05D1\u05E6\u05DC\u05EA", region: "old", lat: 31.73603, lng: 34.97915 },
-    { code: 194, name: "\u05D4\u05E6\u05D9\u05E4\u05D5\u05E8\u05DF", region: "old", lat: 31.73657, lng: 34.97662 },
-    { code: 195, name: "\u05D4\u05D9\u05E1\u05DE\u05D9\u05DF", region: "old", lat: 31.73882, lng: 34.97477 },
-    { code: 196, name: "\u05E0\u05EA\u05D9\u05D1 \u05DE\u05D0\u05D9\u05E8" },
-    { code: 197, name: "\u05E7\u05D0\u05E8\u05D5 \u05D9\u05D5\u05E1\u05E3", region: "old", lat: 31.74536, lng: 35.00094 },
-    { code: 198, name: "\u05E8\u05D1\u05D9 \u05E6\u05D3\u05E7\u05D4 \u05D9\u05D4\u05D5\u05D3\u05D4", region: "old", lat: 31.74465, lng: 34.99923 },
-    { code: 199, name: "\u05E1\u05DE \u05D1\u05DF \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", region: "old", lat: 31.74065, lng: 34.98393 },
-    { code: 200, name: "\u05E9\u05D3 \u05D1\u05DF \u05D2\u05D5\u05E8\u05D9\u05D5\u05DF", region: "old", lat: 31.74537, lng: 34.98121 },
-    { code: 201, name: "\u05E9\u05D3 \u05E0\u05D4\u05E8 \u05D4\u05D3\u05DF", region: "ramat", lat: 31.7194, lng: 34.98889 },
-    { code: 202, name: "\u05D1\u05DF \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", region: "old", lat: 31.74142, lng: 34.98304 },
-    { code: 203, name: "\u05D1\u05E8 \u05D0\u05D9\u05DC\u05DF", region: "old", lat: 31.74178, lng: 34.98916 },
-    { code: 204, name: "\u05D9\u05E6\u05D7\u05E7 \u05E9\u05D3\u05D4", region: "old", lat: 31.74346, lng: 34.98217 },
-    { code: 205, name: '\u05E8\u05E9"\u05D9', region: "old", lat: 31.7414, lng: 34.98798 },
-    { code: 206, name: "\u05E1\u05D9\u05EA\u05D5\u05D5\u05E0\u05D9\u05EA", region: "old", lat: 31.73613, lng: 34.98339 },
-    { code: 207, name: "\u05D5\u05E8\u05D3", region: "old", lat: 31.73636, lng: 34.98497 },
-    { code: 208, name: "\u05E1\u05D7\u05DC\u05D1", region: "old", lat: 31.73573, lng: 34.98608 },
-    { code: 209, name: "\u05D6\u05DB\u05E8\u05D5\u05DF \u05D9\u05E2\u05E7\u05D1" },
-    { code: 210, name: "\u05E1\u05D5\u05DC\u05DD \u05D9\u05E2\u05E7\u05D1" },
-    { code: 211, name: "\u05D0\u05DE\u05E8\u05D9 \u05D0\u05DE\u05EA", region: "old", lat: 31.74031, lng: 34.99289 },
-    { code: 212, name: "\u05D7\u05D6\u05D5\u05DF \u05D0\u05D9\u05E9", region: "old", lat: 31.73785, lng: 34.9937 },
-    { code: 213, name: "\u05D4\u05E8\u05D1 \u05DE\u05D1\u05E8\u05D9\u05E1\u05E7", region: "old", lat: 31.74003, lng: 34.99197 },
-    { code: 214, name: "\u05D4\u05E8\u05D1 \u05E1\u05E4\u05E7\u05D8\u05D5\u05E8", region: "old", lat: 31.73993, lng: 34.98536 },
-    { code: 215, name: "\u05D0\u05D4\u05D1\u05EA \u05D9\u05E9\u05E8\u05D0\u05DC", region: "old", lat: 31.74254, lng: 34.9806 },
-    { code: 216, name: "\u05D4\u05E8\u05D1 \u05D4\u05E8\u05E6\u05D5\u05D2", region: "old", lat: 31.73771, lng: 35.00115 },
-    { code: 217, name: "\u05E8\u05D1\u05E0\u05D5 \u05D7\u05D9\u05D9\u05DD \u05D4\u05DC\u05D5\u05D9", region: "old", lat: 31.73968, lng: 34.99665 },
-    { code: 218, name: "\u05E7\u05D4\u05D9\u05DC\u05EA \u05D9\u05E2\u05E7\u05D1", region: "old", lat: 31.73809, lng: 34.99643 },
-    { code: 219, name: "\u05E9\u05E4\u05EA \u05D0\u05DE\u05EA", region: "old", lat: 31.73933, lng: 34.99624 },
-    { code: 220, name: '\u05D4\u05DE\u05D4\u05E8\u05D9"\u05DC \u05D3\u05D9\u05E1\u05E7\u05D9\u05DF' },
-    { code: 221, name: "\u05DC\u05D1 \u05E9\u05DE\u05D7\u05D4", region: "old", lat: 31.73696, lng: 34.99528 },
-    { code: 222, name: "\u05D0\u05D5\u05E8 \u05D4\u05D7\u05D9\u05D9\u05DD", region: "old", lat: 31.73733, lng: 34.99387 },
-    { code: 223, name: "\u05D0\u05D7\u05D9\u05E2\u05D6\u05E8", region: "old", lat: 31.74118, lng: 34.99417 },
-    { code: 224, name: "\u05D0\u05D5\u05E8 \u05E9\u05DE\u05D7", region: "old", lat: 31.73906, lng: 34.99518 },
-    { code: 225, name: "\u05DE\u05E2\u05E9\u05D9 \u05D7\u05D9\u05D9\u05D0", region: "old", lat: 31.74146, lng: 34.99289 },
-    { code: 226, name: "\u05D1\u05D9\u05EA \u05D9\u05E9\u05E8\u05D0\u05DC", region: "old", lat: 31.7414, lng: 34.99338 },
-    { code: 227, name: "\u05E9\u05E2\u05E8 \u05D4\u05E9\u05DE\u05D9\u05D9\u05DD" },
-    { code: 228, name: "\u05DE\u05E0\u05D7\u05EA \u05D9\u05E6\u05D7\u05E7", region: "old", lat: 31.73905, lng: 34.99372 },
-    { code: 229, name: "\u05D1\u05E8\u05DB\u05EA \u05D0\u05D1\u05E8\u05D4\u05DD", region: "old", lat: 31.73884, lng: 34.99349 },
-    { code: 230, name: "\u05DE\u05E2\u05E4\u05D9\u05DC\u05D9 \u05D0\u05D2\u05D5\u05D6", region: "old", lat: 31.73892, lng: 34.99175 },
-    { code: 231, name: "\u05D0\u05E9\u05E8", region: "old", lat: 31.73799, lng: 34.99033 },
-    { code: 232, name: "\u05D2\u05D3", region: "old", lat: 31.73819, lng: 34.99106 },
-    { code: 233, name: "\u05E9\u05DE\u05E2\u05D5\u05DF", region: "old", lat: 31.73907, lng: 34.9873 },
-    { code: 234, name: "\u05E8\u05D0\u05D5\u05D1\u05DF", region: "old", lat: 31.73986, lng: 34.98797 },
-    { code: 235, name: "\u05DC\u05E0\u05E8 \u05D3\u05DF", region: "old", lat: 31.74213, lng: 34.99136 },
-    { code: 236, name: "\u05DE\u05D2\u05DF \u05E7\u05DC\u05DE\u05DF", region: "old", lat: 31.74205, lng: 34.99035 },
-    { code: 237, name: "\u05D0\u05D3\u05DD \u05D9\u05E7\u05D5\u05EA\u05D9\u05D0\u05DC", region: "old", lat: 31.74216, lng: 34.98957 },
-    { code: 238, name: "\u05DE\u05E0\u05D3\u05DC\u05E8 \u05D0\u05DC\u05D1\u05E8\u05D8", region: "old", lat: 31.7423, lng: 34.98872 },
-    { code: 239, name: "\u05DC\u05D5\u05D9\u05DF \u05D0\u05E8\u05D9\u05D4", region: "old", lat: 31.74201, lng: 34.9866 },
-    { code: 240, name: "\u05D2\u05D5\u05E0\u05DF \u05E9\u05DE\u05D5\u05D0\u05DC", region: "old", lat: 31.74254, lng: 34.98713 },
-    { code: 241, name: "\u05DC\u05E1\u05E7\u05D5\u05D1 \u05D7\u05D9\u05D9\u05DD", region: "old", lat: 31.74267, lng: 34.98642 },
-    { code: 242, name: "\u05D0\u05E9\u05DB\u05D5\u05DC \u05DC\u05D5\u05D9", region: "old", lat: 31.7445, lng: 34.99722 },
-    { code: 243, name: "\u05D2\u05DC\u05E2\u05D3", region: "old", lat: 31.74814, lng: 34.99517 },
-    { code: 244, name: "\u05D4\u05D0\u05E8\u05D1\u05DC", region: "old", lat: 31.74737, lng: 34.9964 },
-    { code: 245, name: "\u05D4\u05D7\u05E8\u05DE\u05D5\u05DF", region: "old", lat: 31.74652, lng: 34.99597 },
-    { code: 246, name: "\u05D4\u05EA\u05D1\u05D5\u05E8", region: "old", lat: 31.7462, lng: 34.99426 },
-    { code: 247, name: "\u05D3\u05E8\u05DA \u05E8\u05D1\u05D9\u05DF \u05D9\u05E6\u05D7\u05E7", region: "old", lat: 31.74777, lng: 34.99432 },
-    { code: 248, name: "\u05D4\u05D2\u05DC\u05D9\u05DC", region: "old", lat: 31.74616, lng: 34.99266 },
-    { code: 249, name: "\u05E1\u05DE \u05E2\u05DC\u05D9\u05EA \u05D4\u05E0\u05D5\u05E2\u05E8", region: "old", lat: 31.7456, lng: 34.99212 },
-    { code: 250, name: "\u05E2\u05DC\u05D9\u05EA \u05D4\u05E0\u05D5\u05E2\u05E8", region: "old", lat: 31.74633, lng: 34.99182 },
-    { code: 251, name: "\u05D4\u05D2\u05D5\u05DC\u05DF", region: "old", lat: 31.74451, lng: 34.99212 },
-    { code: 252, name: "\u05D1\u05DF \u05D6\u05D0\u05D1 \u05D9\u05D4\u05D5\u05D3\u05D4", region: "old", lat: 31.74276, lng: 34.98951 },
-    { code: 253, name: "\u05E0\u05E4\u05EA\u05DC\u05D9", region: "old", lat: 31.73816, lng: 34.98358 },
-    { code: 254, name: "\u05D1\u05DF \u05D2\u05D5\u05E8\u05D9\u05D5\u05DF \u05E4\u05D5\u05DC\u05D4" },
-    { code: 255, name: "\u05D9\u05D3\u05D9\u05DF \u05D9\u05D2\u05D0\u05DC", region: "old", lat: 31.74297, lng: 34.9846 },
-    { code: 256, name: "\u05DE\u05E7\u05DC\u05E3 \u05DE\u05E8\u05D3\u05DB\u05D9", region: "old", lat: 31.74319, lng: 34.984 },
-    { code: 257, name: "\u05D3\u05D5\u05E8\u05D9 \u05D9\u05E2\u05E7\u05D1", region: "old", lat: 31.74337, lng: 34.9831 },
-    { code: 258, name: "\u05E8\u05D6\u05D9\u05D0\u05DC \u05D3\u05D5\u05D3", region: "old", lat: 31.74264, lng: 34.98344 },
-    { code: 259, name: "\u05DE\u05E9\u05E2\u05D5\u05DC \u05D4\u05DE\u05EA\u05DE\u05D9\u05D3" },
-    { code: 260, name: "\u05D4\u05DE\u05D5\u05E8\u05D4 \u05E6\u05D1\u05D9" },
-    { code: 261, name: "\u05D4\u05E9\u05D9\u05D8\u05D4", region: "old", lat: 31.74461, lng: 34.97863 },
-    { code: 262, name: "\u05D4\u05EA\u05D0\u05E0\u05D4", region: "old", lat: 31.7452, lng: 34.97712 },
-    { code: 263, name: "\u05D4\u05D4\u05D3\u05E8", region: "old", lat: 31.74447, lng: 34.97699 },
-    { code: 264, name: "\u05D4\u05D7\u05E8\u05D5\u05D1\u05D9\u05DD", region: "old", lat: 31.74388, lng: 34.97733 },
-    { code: 265, name: "\u05D4\u05E2\u05E8\u05D1\u05D4", region: "old", lat: 31.74558, lng: 34.97507 },
-    { code: 266, name: "\u05D4\u05D1\u05E8\u05D5\u05E9", region: "old", lat: 31.74195, lng: 34.97945 },
-    { code: 267, name: "\u05EA\u05D0\u05E9\u05D5\u05E8", region: "old", lat: 31.74302, lng: 34.97788 },
-    { code: 268, name: "\u05D4\u05D0\u05D5\u05E8\u05DF", region: "old", lat: 31.74339, lng: 34.977 },
-    { code: 269, name: "\u05D4\u05D0\u05EA\u05E8\u05D5\u05D2", region: "old", lat: 31.74391, lng: 34.97608 },
-    { code: 270, name: "\u05D4\u05D4\u05D3\u05E1", region: "old", lat: 31.74361, lng: 34.97484 },
-    { code: 271, name: "\u05D4\u05EA\u05E4\u05D5\u05D7", region: "old", lat: 31.74577, lng: 34.97461 },
-    { code: 272, name: "\u05D4\u05D0\u05D2\u05E1", region: "old", lat: 31.74368, lng: 34.97888 },
-    { code: 273, name: "\u05D4\u05D0\u05E4\u05E8\u05E1\u05E7", region: "old", lat: 31.74407, lng: 34.97796 },
-    { code: 274, name: "\u05D4\u05D0\u05E8\u05D6", region: "old", lat: 31.74314, lng: 34.97571 },
-    { code: 275, name: "\u05D4\u05E2\u05E8\u05DE\u05D5\u05DF", region: "old", lat: 31.7427, lng: 34.9766 },
-    { code: 276, name: "\u05D4\u05E6\u05D0\u05DC\u05D4", region: "old", lat: 31.74223, lng: 34.97751 },
-    { code: 277, name: "\u05D4\u05E9\u05D9\u05D6\u05E3" },
-    { code: 278, name: "\u05D4\u05D3\u05D5\u05DC\u05D1" },
-    { code: 279, name: "\u05D4\u05E8\u05D8\u05D5\u05D1", region: "old", lat: 31.76471, lng: 34.99961 },
-    { code: 280, name: "\u05D0\u05D1\u05D9\u05D8\u05DC", region: "old", lat: 31.74377, lng: 34.99318 },
-    { code: 281, name: "\u05D0\u05D5\u05E8\u05D8\u05DC", region: "old", lat: 31.74397, lng: 34.99266 },
-    { code: 282, name: "\u05DE\u05D9\u05D8\u05DC", region: "old", lat: 31.74413, lng: 34.99213 },
-    { code: 283, name: "\u05E8\u05D5\u05D9\u05D8\u05DC", region: "old", lat: 31.74428, lng: 34.99161 },
-    { code: 284, name: "\u05D4\u05E8 \u05E0\u05D1\u05D5", region: "old", lat: 31.75153, lng: 34.997 },
-    { code: 285, name: "\u05D3\u05E8\u05DA \u05D4\u05D7\u05D9\u05D9\u05DD", region: "old", lat: 31.74495, lng: 34.99804 },
-    { code: 286, name: "\u05D4\u05E8 \u05D1\u05E9\u05DF", region: "old", lat: 31.74714, lng: 34.99741 },
-    { code: 287, name: "\u05D4\u05E8 \u05D4\u05DE\u05D5\u05E8\u05D9\u05D4" },
-    { code: 288, name: "\u05D4\u05E8 \u05DE\u05D9\u05E8\u05D5\u05DF", region: "old", lat: 31.74582, lng: 34.99704 },
-    { code: 289, name: "\u05D4\u05E8 \u05D2\u05D1\u05E0\u05D5\u05E0\u05D9\u05DD" },
-    { code: 293, name: "\u05D0\u05D1\u05DF \u05D2\u05D1\u05D9\u05E8\u05D5\u05DC", region: "old", lat: 31.75162, lng: 34.98074 },
-    { code: 294, name: "\u05D9\u05D4\u05D5\u05D3\u05D4 \u05D4\u05DC\u05D5\u05D9", region: "old", lat: 31.75142, lng: 34.98112 },
-    { code: 295, name: "\u05E0\u05E2\u05DE\u05D9 \u05E9\u05DE\u05E8", region: "old", lat: 31.75221, lng: 34.98033 },
-    { code: 296, name: "\u05DE\u05E0\u05D5\u05E8 \u05D0\u05D4\u05D5\u05D3", region: "old", lat: 31.75225, lng: 34.98058 },
-    { code: 297, name: "\u05D1\u05E0\u05D0\u05D9 \u05D9\u05D5\u05E1\u05D9", region: "old", lat: 31.7526, lng: 34.98012 },
-    { code: 298, name: "\u05E8\u05D7\u05DC \u05D4\u05DE\u05E9\u05D5\u05E8\u05E8\u05EA" },
-    { code: 299, name: "\u05D8\u05D5\u05E8\u05E7\u05D9\u05D6", region: "old", lat: 31.77377, lng: 34.99262 },
-    { code: 300, name: "\u05D4\u05E8 \u05D4\u05DB\u05E8\u05DE\u05DC" },
-    { code: 301, name: "\u05D4\u05D9\u05E6\u05D9\u05E8\u05D4", region: "old", lat: 31.73656, lng: 34.95874 },
-    { code: 302, name: "\u05D4\u05EA\u05E2\u05E9\u05D9\u05D4", region: "old", lat: 31.73452, lng: 34.95382 },
-    { code: 303, name: "\u05D4\u05E2\u05DE\u05DC", region: "old", lat: 31.73259, lng: 34.95511 },
-    { code: 304, name: "\u05D4\u05DE\u05DC\u05D0\u05DB\u05D4", region: "old", lat: 31.73007, lng: 34.95931 },
-    { code: 305, name: "\u05D4\u05D4\u05DB\u05E9\u05E8\u05D4", region: "old", lat: 31.73378, lng: 34.95333 },
-    { code: 306, name: "\u05D4\u05D7\u05E8\u05D5\u05E6\u05D9\u05DD", region: "old", lat: 31.73134, lng: 34.95865 },
-    { code: 307, name: "\u05D5\u05D9\u05E8\u05D2'\u05D9\u05E0\u05D9\u05D4", region: "old", lat: 31.74106, lng: 34.95629 },
-    { code: 308, name: "\u05D4\u05E1\u05D5\u05DC\u05DC\u05D4", region: "old", lat: 31.73338, lng: 34.95957 },
-    { code: 309, name: "\u05D7\u05D5\u05E9\u05DF" },
-    { code: 310, name: "\u05D4\u05E6\u05D1\u05E2", region: "old", lat: 31.75371, lng: 34.99492 },
-    { code: 311, name: "\u05D4\u05E0\u05D1\u05D9\u05D0 \u05E2\u05D5\u05D1\u05D3\u05D9\u05D4", region: "ramat", lat: 31.70012, lng: 34.99339 },
-    { code: 312, name: "\u05D4\u05E0\u05D1\u05D9\u05D0 \u05E2\u05DE\u05D5\u05E1", region: "ramat", lat: 31.70313, lng: 34.99063 },
-    { code: 313, name: "\u05E0\u05EA\u05DF \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70605, lng: 34.99294 },
-    { code: 314, name: "\u05D7\u05D5\u05DC\u05D3\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0\u05D4", region: "ramat", lat: 31.70472, lng: 34.99179 },
-    { code: 315, name: "\u05D3\u05DC\u05D5\u05DE\u05D9\u05D8" },
-    { code: 316, name: "\u05D2\u05E8\u05E0\u05D9\u05D8", region: "old", lat: 31.77166, lng: 34.99087 },
-    { code: 317, name: "\u05D9\u05D4\u05DC\u05D5\u05DD", region: "old", lat: 31.76793, lng: 34.99124 },
-    { code: 318, name: "\u05D0\u05D5\u05D3\u05DD", region: "old", lat: 31.77267, lng: 34.98956 },
-    { code: 319, name: "\u05D1\u05D6\u05DC\u05EA", region: "old", lat: 31.76916, lng: 34.99385 },
-    { code: 320, name: "\u05E1\u05E4\u05D9\u05E8", region: "old", lat: 31.76883, lng: 34.98898 },
-    { code: 321, name: "\u05D8\u05D5\u05E4\u05D6", region: "old", lat: 31.76459, lng: 34.99349 },
-    { code: 322, name: "\u05E1\u05DC\u05E2", region: "old", lat: 31.76517, lng: 34.99147 },
-    { code: 323, name: "\u05D1\u05E0\u05D9\u05DE\u05D9\u05DF", region: "old", lat: 31.73991, lng: 34.98601 },
-    { code: 324, name: "\u05E7\u05E8\u05D9\u05E1\u05D8\u05DC" },
-    { code: 325, name: "\u05D1\u05E2\u05DC \u05D4\u05E1\u05D5\u05DC\u05DD", region: "ramat", lat: 31.71852, lng: 34.98039 },
-    { code: 326, name: "\u05D0\u05D3\u05E8\u05EA \u05D0\u05DC\u05D9\u05D4\u05D5" },
-    { code: 331, name: "\u05E8\u05D1 \u05E9\u05E9\u05EA" },
-    { code: 332, name: "\u05E8\u05D1 \u05D0\u05D1\u05D4\u05D5" },
-    { code: 333, name: "\u05E9\u05D3' \u05D4\u05D0\u05DE\u05D5\u05E8\u05D0\u05D9\u05DD", region: "ramat", lat: 31.70159, lng: 34.97113 },
-    { code: 334, name: "\u05E8\u05D1\u05D9\u05E0\u05D0", region: "ramat", lat: 31.70336, lng: 34.97317 },
-    { code: 335, name: "\u05E8\u05D1 \u05EA\u05E0\u05D7\u05D5\u05DE\u05D0", region: "ramat", lat: 31.70478, lng: 34.97467 },
-    { code: 336, name: "\u05E8\u05D1 \u05E4\u05E4\u05D0", region: "ramat", lat: 31.70597, lng: 34.97326 },
-    { code: 337, name: "\u05E8\u05D1 \u05D6\u05D1\u05D9\u05D3", region: "ramat", lat: 31.70521, lng: 34.96962 },
-    { code: 338, name: "\u05E8\u05D1 \u05D0\u05DE\u05D9", region: "ramat", lat: 31.70614, lng: 34.96969 },
-    { code: 339, name: "\u05E8\u05D1 \u05D0\u05E9\u05D9", region: "ramat", lat: 31.70747, lng: 34.97084 },
-    { code: 340, name: "\u05D0\u05D1\u05D9\u05D9", region: "ramat", lat: 31.70291, lng: 34.97781 },
-    { code: 341, name: "\u05E8\u05D1 \u05E2\u05D5\u05DC\u05D0", region: "ramat", lat: 31.70569, lng: 34.97025 },
-    { code: 342, name: "\u05E8\u05D1 \u05D0\u05DE\u05D9\u05DE\u05E8", region: "ramat", lat: 31.70801, lng: 34.96909 },
-    { code: 343, name: "\u05E8\u05D1 \u05D6\u05D9\u05E8\u05D0", region: "ramat", lat: 31.70534, lng: 34.97397 },
-    { code: 344, name: "\u05E8\u05D1\u05D0", region: "ramat", lat: 31.70378, lng: 34.97366 },
-    { code: 345, name: "\u05E8\u05D1 \u05D7\u05E0\u05DF", region: "ramat", lat: 31.7109, lng: 34.96472 },
-    { code: 346, name: "\u05E8\u05D1 \u05E9\u05D9\u05DC\u05D0", region: "ramat", lat: 31.70934, lng: 34.96685 },
-    { code: 347, name: "\u05E8\u05D9\u05E9 \u05DC\u05E7\u05D9\u05E9", region: "ramat", lat: 31.7141, lng: 34.96506 },
-    { code: 348, name: "\u05E8\u05D1 \u05DE\u05E0\u05E9\u05D9\u05D0", region: "ramat", lat: 31.7088, lng: 34.96709 },
-    { code: 349, name: "\u05E8\u05D1 \u05D4\u05DE\u05E0\u05D5\u05E0\u05D0", region: "ramat", lat: 31.71295, lng: 34.96624 },
-    { code: 350, name: "\u05DE\u05E8 \u05E2\u05D5\u05E7\u05D1\u05D0", region: "ramat", lat: 31.70812, lng: 34.967 },
-    { code: 351, name: "\u05E0\u05D4\u05E8\u05D3\u05E2\u05D0", region: "ramat", lat: 31.70023, lng: 34.97253 },
-    { code: 352, name: "\u05EA\u05DC\u05DE\u05D5\u05D3 \u05D1\u05D1\u05DC\u05D9", region: "ramat", lat: 31.70166, lng: 34.96522 },
-    { code: 353, name: "\u05E8\u05D1 \u05DB\u05D4\u05E0\u05D0", region: "ramat", lat: 31.70271, lng: 34.96431 },
-    { code: 354, name: "\u05DE\u05E2\u05E8\u05D1\u05D0", region: "old", lat: 31.73352, lng: 34.95783 },
-    { code: 355, name: "\u05E4\u05D5\u05DE\u05E4\u05D3\u05D9\u05EA\u05D0", region: "ramat", lat: 31.70144, lng: 34.971 },
-    { code: 356, name: "\u05EA\u05DC\u05DE\u05D5\u05D3 \u05D9\u05E8\u05D5\u05E9\u05DC\u05DE\u05D9", region: "ramat", lat: 31.70221, lng: 34.97245 },
-    { code: 357, name: "\u05E8\u05D1 \u05D0\u05D1\u05D3\u05D9\u05DE\u05D9", region: "ramat", lat: 31.70339, lng: 34.96658 },
-    { code: 358, name: "\u05E8\u05D1 \u05E2\u05DE\u05E8\u05DD", region: "ramat", lat: 31.70381, lng: 34.96724 },
-    { code: 359, name: "\u05E8\u05D1 \u05DE\u05E8\u05D9", region: "ramat", lat: 31.69801, lng: 34.96779 },
-    { code: 360, name: "\u05E1\u05D5\u05E8\u05D0", region: "ramat", lat: 31.69875, lng: 34.97099 },
-    { code: 361, name: "\u05D1\u05E8 \u05E7\u05E4\u05E8\u05D0", region: "ramat", lat: 31.69766, lng: 34.97494 },
-    { code: 370, name: "\u05D0\u05D4\u05E8\u05D5\u05E0\u05E1\u05D5\u05DF", region: "ramat", lat: 31.70081, lng: 35.00039 },
-    { code: 371, name: "\u05D0\u05D4\u05E8\u05DF \u05E9\u05DE\u05D9" },
-    { code: 372, name: "\u05D8\u05E8\u05D5\u05DE\u05E4\u05DC\u05D3\u05D5\u05E8", region: "ramat", lat: 31.69898, lng: 35.00125 },
-    { code: 373, name: "\u05E8\u05D5\u05E2\u05D9 \u05E7\u05DC\u05D9\u05D9\u05DF" },
-    { code: 374, name: "\u05E4\u05E8\u05E0\u05E7", region: "ramat", lat: 31.7007, lng: 35.00371 },
-    { code: 375, name: "\u05E4\u05E8\u05E0\u05E7\u05DC", region: "ramat", lat: 31.70099, lng: 35.0044 },
-    { code: 376, name: "\u05D9\u05D5\u05E0\u05EA\u05DF", region: "ramat", lat: 31.70226, lng: 35.00434 },
-    { code: 377, name: "\u05D4\u05E9\u05DC\u05D5\u05E9\u05D4", region: "ramat", lat: 31.70285, lng: 35.00496 },
-    { code: 378, name: "\u05D9\u05D0\u05D9\u05E8", region: "ramat", lat: 31.69533, lng: 35.0022 },
-    { code: 379, name: "\u05D4\u05D0\u05D7\u05D9\u05DD", region: "ramat", lat: 31.69564, lng: 35.00507 },
-    { code: 380, name: "\u05D0\u05DC\u05D1\u05D6", region: "ramat", lat: 31.69619, lng: 35.00477 },
-    { code: 381, name: "\u05DE\u05E9\u05D4 \u05D0\u05E8\u05E0\u05E1", region: "ramat", lat: 31.69494, lng: 35.0048 },
-    { code: 382, name: "\u05D7\u05D1\u05D9\u05D1\u05D4 \u05E8\u05D9\u05D9\u05DA" },
-    { code: 383, name: "\u05E1\u05E0\u05E9", region: "ramat", lat: 31.69806, lng: 35.00108 },
-    { code: 384, name: "\u05D7\u05D2\u05D5\u05D0\u05DC", region: "ramat", lat: 31.70331, lng: 35.00105 },
-    { code: 400, name: "\u05E0\u05D7\u05DC \u05D3\u05D5\u05DC\u05D1", region: "ramat", lat: 31.71265, lng: 34.99954 },
-    { code: 401, name: "\u05E0\u05D7\u05DC \u05D9\u05E2\u05DC\u05D4", region: "ramat", lat: 31.71666, lng: 34.999 },
-    { code: 402, name: "\u05E0\u05D7\u05DC \u05DE\u05D0\u05D5\u05E8", region: "ramat", lat: 31.70941, lng: 35.00126 },
-    { code: 403, name: "\u05E0\u05D7\u05DC \u05DE\u05D8\u05E2", region: "ramat", lat: 31.71204, lng: 34.99866 },
-    { code: 404, name: "\u05E0\u05D7\u05DC \u05E7\u05D8\u05DC\u05D1", region: "ramat", lat: 31.7162, lng: 34.99658 },
-    { code: 405, name: "\u05E0\u05D7\u05DC \u05E8\u05D6\u05D9\u05D0\u05DC", region: "ramat", lat: 31.71057, lng: 35.00011 },
-    { code: 406, name: "\u05E0\u05D7\u05DC \u05E9\u05DE\u05E9\u05D5\u05DF", region: "ramat", lat: 31.71281, lng: 35.00063 },
-    { code: 407, name: "\u05E0\u05D7\u05DC \u05EA\u05DE\u05E0\u05E2", region: "ramat", lat: 31.7138, lng: 34.99874 },
-    { code: 408, name: "\u05E0\u05D7\u05DC \u05D0\u05DC\u05DB\u05E1\u05E0\u05D3\u05E8", region: "ramat", lat: 31.71195, lng: 35.00113 },
-    { code: 409, name: "\u05E0\u05D7\u05DC \u05D0\u05DC-\u05E2\u05DC", region: "ramat", lat: 31.7118, lng: 35.00072 },
-    { code: 410, name: "\u05E0\u05D4\u05E8 \u05D4\u05D9\u05E8\u05D3\u05DF", region: "ramat", lat: 31.71922, lng: 34.99818 },
-    { code: 411, name: "\u05E0\u05D7\u05DC \u05D0\u05D5\u05E8\u05D9\u05D4", region: "ramat", lat: 31.71775, lng: 34.99162 },
-    { code: 412, name: "\u05E0\u05D7\u05DC \u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", region: "ramat", lat: 31.71229, lng: 34.9949 },
-    { code: 413, name: "\u05E0\u05D7\u05DC \u05D2\u05D9\u05DC\u05D4", region: "ramat", lat: 31.71011, lng: 34.99338 },
-    { code: 414, name: "\u05E0\u05D7\u05DC \u05DC\u05D5\u05D6", region: "ramat", lat: 31.71073, lng: 34.99516 },
-    { code: 415, name: "\u05E0\u05D7\u05DC \u05DC\u05DB\u05D9\u05E9", region: "ramat", lat: 31.71307, lng: 34.99159 },
-    { code: 416, name: "\u05E0\u05D7\u05DC \u05DE\u05D9\u05DB\u05D4", region: "ramat", lat: 31.71748, lng: 34.99276 },
-    { code: 417, name: "\u05E0\u05D7\u05DC \u05E0\u05D7\u05E9\u05D5\u05DF", region: "ramat", lat: 31.71402, lng: 34.99325 },
-    { code: 418, name: "\u05E0\u05D7\u05DC \u05E0\u05D5\u05E2\u05DD", region: "ramat", lat: 31.71075, lng: 34.99203 },
-    { code: 419, name: "\u05E0\u05D7\u05DC \u05D4\u05E7\u05D9\u05E9\u05D5\u05DF", region: "ramat", lat: 31.71979, lng: 34.99403 },
-    { code: 420, name: "\u05E0\u05D4\u05E8 \u05D4\u05D9\u05E8\u05E7\u05D5\u05DF", region: "ramat", lat: 31.70849, lng: 34.99321 },
-    { code: 421, name: "\u05E0\u05D7\u05DC \u05E8\u05DE\u05D5\u05EA", region: "ramat", lat: 31.71084, lng: 34.99412 },
-    { code: 422, name: "\u05E0\u05D7\u05DC \u05E9\u05D5\u05E8\u05E7", region: "ramat", lat: 31.71401, lng: 34.99531 },
-    { code: 423, name: "\u05E0\u05D7\u05DC \u05E9\u05D7\u05DD", region: "ramat", lat: 31.71303, lng: 34.98994 },
-    { code: 424, name: "\u05E0\u05D7\u05DC \u05EA\u05DE\u05E8", region: "ramat", lat: 31.70962, lng: 34.9947 },
-    { code: 425, name: "\u05D0\u05D7\u05D9\u05D4 \u05D4\u05E9\u05D9\u05DC\u05D5\u05E0\u05D9", region: "ramat", lat: 31.70505, lng: 34.97911 },
-    { code: 426, name: "\u05D7\u05D2\u05D9 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70177, lng: 34.98152 },
-    { code: 427, name: "\u05D9\u05D5\u05E0\u05D4 \u05D1\u05DF \u05D0\u05DE\u05D9\u05EA\u05D9", region: "ramat", lat: 31.7055, lng: 34.98713 },
-    { code: 428, name: "\u05E0\u05D7\u05D5\u05DD \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70506, lng: 34.98413 },
-    { code: 429, name: "\u05E0\u05D7\u05DC \u05E9\u05E0\u05D9\u05E8", region: "ramat", lat: 31.70939, lng: 34.99166 },
-    { code: 430, name: "\u05E0\u05D7\u05DC \u05D6\u05D5\u05D9\u05EA\u05DF", region: "ramat", lat: 31.70962, lng: 34.99185 },
-    { code: 433, name: "\u05E0\u05D7\u05DC \u05D6\u05D5\u05D4\u05E8", region: "ramat", lat: 31.71434, lng: 34.98793 },
-    { code: 434, name: "\u05E0\u05D7\u05DC \u05D7\u05D1\u05E8", region: "ramat", lat: 31.71417, lng: 34.9823 },
-    { code: 435, name: "\u05E0\u05D7\u05DC \u05E2\u05D9\u05DF \u05D2\u05D3\u05D9", region: "ramat", lat: 31.71412, lng: 34.98461 },
-    { code: 436, name: "\u05E0\u05D7\u05DC \u05E2\u05E8\u05D5\u05D2\u05D5\u05EA", region: "ramat", lat: 31.71621, lng: 34.98767 },
-    { code: 437, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05D2\u05D9\u05D7\u05D5\u05DF", region: "ramat", lat: 31.71548, lng: 34.99985 },
-    { code: 438, name: "\u05E0\u05D7\u05DC \u05E8\u05E4\u05D0\u05D9\u05DD", region: "ramat", lat: 31.70999, lng: 35.00062 },
-    { code: 439, name: "\u05E0\u05D7\u05DC \u05D4\u05D1\u05E9\u05D5\u05E8", region: "ramat", lat: 31.70929, lng: 35.00036 },
-    { code: 440, name: "\u05E0\u05D7\u05DC \u05E8\u05D1\u05D9\u05D1\u05D9\u05DD", region: "ramat", lat: 31.71127, lng: 34.99457 },
-    { code: 441, name: "\u05E0\u05D7\u05DC \u05D0\u05DB\u05D6\u05D9\u05D1", region: "ramat", lat: 31.71119, lng: 34.99521 },
-    { code: 442, name: "\u05E0\u05D7\u05DC \u05DE\u05E9\u05DE\u05E8", region: "ramat", lat: 31.71529, lng: 34.99168 },
-    { code: 443, name: "\u05E0\u05D7\u05DC \u05E0\u05D9\u05E6\u05E0\u05D9\u05DD", region: "ramat", lat: 31.71428, lng: 34.9883 },
-    { code: 444, name: "\u05D7\u05E6\u05E8\u05D5\u05EA \u05E2\u05E8\u05D1\u05D9 \u05D4\u05E0\u05D7\u05DC" },
-    { code: 445, name: "\u05E0\u05D7\u05DC \u05E1\u05E0\u05E1\u05DF", region: "ramat", lat: 31.70899, lng: 34.9941 },
-    { code: 446, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05E0\u05D7\u05E9", region: "ramat", lat: 31.71602, lng: 34.98332 },
-    { code: 447, name: "\u05E0\u05E8\u05D9\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.7041, lng: 34.97792 },
-    { code: 448, name: "\u05D4\u05E6\u05D3\u05D9\u05E7 \u05DE\u05E9\u05D8\u05E4\u05E0\u05E9\u05D8", region: "ramat", lat: 31.71534, lng: 34.98868 },
-    { code: 449, name: "\u05D3\u05E8\u05DB\u05D9 \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8" },
-    { code: 450, name: "\u05D1\u05DF \u05E2\u05D6\u05D0\u05D9", region: "old", lat: 31.73756, lng: 34.99892 },
-    { code: 451, name: "\u05E8\u05D1\u05D9 \u05D9\u05D5\u05E1\u05D9 \u05D1\u05DF \u05E7\u05D9\u05E1\u05DE\u05D0", region: "old", lat: 31.73599, lng: 34.99778 },
-    { code: 452, name: "\u05E2\u05E7\u05D1\u05D9\u05D0 \u05D1\u05DF \u05DE\u05D4\u05DC\u05DC\u05D0\u05DC", region: "old", lat: 31.73596, lng: 34.99824 },
-    { code: 453, name: "\u05D3\u05D5\u05D1\u05E8 \u05E9\u05DC\u05D5\u05DD", region: "old", lat: 31.73653, lng: 34.99047 },
-    { code: 454, name: "\u05E8\u05D1\u05D9 \u05E4\u05E0\u05D7\u05E1 \u05D1\u05DF \u05D9\u05D0\u05D9\u05E8", region: "old", lat: 31.73506, lng: 34.99276 },
-    { code: 455, name: "\u05D0\u05D5\u05D4\u05DC \u05D9\u05D4\u05D5\u05E9\u05E2", region: "old", lat: 31.73533, lng: 34.98959 },
-    { code: 456, name: "\u05E8\u05D1\u05D9 \u05D9\u05E9\u05DE\u05E2\u05D0\u05DC" },
-    { code: 457, name: "\u05E7\u05D3\u05D5\u05E9\u05EA \u05D0\u05D4\u05E8\u05D5\u05DF", region: "old", lat: 31.73601, lng: 34.98696 },
-    { code: 458, name: "\u05E8\u05D1\u05D9 \u05D9\u05E0\u05D0\u05D9", region: "old", lat: 31.73693, lng: 34.98638 },
-    { code: 459, name: "\u05EA\u05DB\u05DC\u05EA \u05DE\u05E8\u05D3\u05DB\u05D9", region: "ramat", lat: 31.73293, lng: 34.98983 },
-    { code: 460, name: "\u05E8\u05D1\u05D9 \u05E2\u05E7\u05D9\u05D1\u05D0", region: "ramat", lat: 31.72851, lng: 34.99123 },
-    { code: 461, name: '\u05E8\u05E9\u05D1"\u05D2', region: "ramat", lat: 31.72925, lng: 34.99124 },
-    { code: 462, name: "\u05E8\u05D1\u05D9 \u05D9\u05D4\u05D5\u05E9\u05E2", region: "ramat", lat: 31.73104, lng: 34.99182 },
-    { code: 463, name: "\u05E8\u05D1\u05D9 \u05D9\u05D4\u05D5\u05D3\u05D4 \u05D4\u05E0\u05E9\u05D9\u05D0", region: "ramat", lat: 31.72978, lng: 34.9923 },
-    { code: 464, name: "\u05E8\u05D1\u05D9 \u05DC\u05D5\u05D9\u05D8\u05E1", region: "ramat", lat: 31.72797, lng: 34.9939 },
-    { code: 465, name: "\u05E8\u05D1\u05D9 \u05D0\u05DC\u05E2\u05D6\u05E8", region: "ramat", lat: 31.72744, lng: 34.99502 },
-    { code: 466, name: '\u05E8\u05E9\u05D1"\u05D9', region: "ramat", lat: 31.72939, lng: 34.99203 },
-    { code: 467, name: "\u05E8\u05D1\u05D9 \u05DE\u05D0\u05D9\u05E8 \u05D1\u05E2\u05DC \u05D4\u05E0\u05E1", region: "ramat", lat: 31.7256, lng: 34.99394 },
-    { code: 468, name: "\u05E8\u05D1\u05D9 \u05D8\u05E8\u05E4\u05D5\u05DF", region: "ramat", lat: 31.72454, lng: 34.99547 },
-    { code: 469, name: "\u05E8\u05D1\u05D9 \u05E6\u05D3\u05D5\u05E7", region: "ramat", lat: 31.72355, lng: 34.99507 },
-    { code: 470, name: '\u05E8\u05D9\u05D1"\u05DC', region: "ramat", lat: 31.72348, lng: 34.99137 },
-    { code: 471, name: "\u05E8\u05D1\u05DF \u05D9\u05D5\u05D7\u05E0\u05DF \u05D1\u05DF \u05D6\u05DB\u05D0\u05D9", region: "ramat", lat: 31.72266, lng: 34.99235 },
-    { code: 473, name: "\u05D0\u05DC\u05D9\u05D4\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70117, lng: 34.98396 },
-    { code: 474, name: "\u05D0\u05DC\u05D9\u05E9\u05E2 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70429, lng: 34.98894 },
-    { code: 476, name: "\u05D4\u05D5\u05E9\u05E2 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70623, lng: 34.98777 },
-    { code: 480, name: "\u05D6\u05DB\u05E8\u05D9\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70889, lng: 34.97796 },
-    { code: 481, name: "\u05D7\u05D1\u05E7\u05D5\u05E7 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70914, lng: 34.9804 },
-    { code: 484, name: "\u05D9\u05D5\u05D0\u05DC \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70574, lng: 34.98243 },
-    { code: 485, name: "\u05D7\u05D1\u05E8\u05D5\u05DF", region: "ramat", lat: 31.71404, lng: 34.98171 },
-    { code: 486, name: "\u05E7\u05E8\u05D9\u05D9\u05EA \u05D0\u05E8\u05D1\u05E2", region: "ramat", lat: 31.71376, lng: 34.98186 },
-    { code: 487, name: "\u05D1\u05D0\u05E8 \u05E9\u05D1\u05E2", region: "ramat", lat: 31.71309, lng: 34.98677 },
-    { code: 488, name: "\u05D8\u05D1\u05E8\u05D9\u05D4", region: "ramat", lat: 31.71358, lng: 34.98566 },
-    { code: 489, name: "\u05D9\u05D1\u05E0\u05D4", region: "ramat", lat: 31.71343, lng: 34.98457 },
-    { code: 490, name: "\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD", region: "ramat", lat: 31.71365, lng: 34.98363 },
-    { code: 491, name: "\u05E6\u05E4\u05EA", region: "ramat", lat: 31.71329, lng: 34.98568 },
-    { code: 492, name: "\u05E9\u05D3 \u05E0\u05D7\u05DC \u05E6\u05D0\u05DC\u05D9\u05DD", region: "ramat", lat: 31.71269, lng: 34.98755 },
-    { code: 493, name: "\u05E9\u05DE\u05D5\u05D0\u05DC \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70675, lng: 34.99272 },
-    { code: 494, name: '\u05DE\u05E6\u05E4\u05D4 \u05D4\u05E8\u05E9"\u05E4', region: "ramat", lat: 31.72996, lng: 34.99301 },
-    { code: 495, name: "\u05D4\u05DC\u05DC", region: "ramat", lat: 31.72794, lng: 34.99264 },
-    { code: 497, name: "\u05E4\u05E2\u05DE\u05D9 \u05DE\u05E9\u05D9\u05D7", region: "ramat", lat: 31.72963, lng: 34.99122 },
-    { code: 500, name: '\u05DE\u05E2\u05DC\u05D5\u05EA \u05D4\u05E8\u05DE"\u05D0' },
-    { code: 501, name: "\u05DE\u05D7\u05D6\u05D9\u05E7\u05D9 \u05D4\u05D3\u05EA", region: "ramat", lat: 31.73157, lng: 34.99111 },
-    { code: 502, name: '\u05D4\u05D0\u05D3\u05DE\u05D5"\u05E8 \u05DE\u05D1\u05E2\u05DC\u05D6\u05D0', region: "ramat", lat: 31.73178, lng: 34.99145 },
-    { code: 503, name: "\u05D0\u05D4\u05D1\u05EA \u05E9\u05DC\u05D5\u05DD", region: "ramat", lat: 31.7071, lng: 34.9874 },
-    { code: 504, name: "\u05D0\u05DE\u05E8\u05D9 \u05E0\u05D5\u05E2\u05DD", region: "ramat", lat: 31.70645, lng: 34.9877 },
-    { code: 505, name: "\u05D1\u05E2\u05DC \u05D4\u05EA\u05E0\u05D9\u05D0", region: "ramat", lat: 31.70819, lng: 34.99186 },
-    { code: 506, name: "\u05D4\u05D0\u05D3\u05DE\u05D5\u05E8 \u05DE\u05E8\u05D5\u05D6'\u05D9\u05DF", region: "ramat", lat: 31.70716, lng: 34.9974 },
-    { code: 507, name: '\u05D4\u05D0\u05D3\u05E8"\u05EA', region: "ramat", lat: 31.71126, lng: 35.00258 },
-    { code: 508, name: "\u05D4\u05D1\u05E2\u05DC \u05E9\u05DD \u05D8\u05D5\u05D1", region: "ramat", lat: 31.708, lng: 34.99537 },
-    { code: 509, name: "\u05D4\u05D2\u05D0\u05D5\u05DF \u05DE\u05D5\u05D9\u05DC\u05E0\u05D0", region: "ramat", lat: 31.70626, lng: 34.99887 },
-    { code: 510, name: "\u05E9\u05DC\u05DE\u05D4 \u05D4\u05DE\u05DC\u05DA", region: "ramat", lat: 31.70765, lng: 34.98291 },
-    { code: 511, name: "\u05D4\u05DE\u05DC\u05DA \u05D3\u05D5\u05D3", region: "ramat", lat: 31.70742, lng: 34.98338 },
-    { code: 512, name: "\u05E9\u05D0\u05D5\u05DC \u05D4\u05DE\u05DC\u05DA", region: "ramat", lat: 31.70921, lng: 34.98002 },
-    { code: 513, name: "\u05D0\u05E1\u05EA\u05E8", region: "ramat", lat: 31.70867, lng: 34.98043 },
-    { code: 514, name: "\u05E8\u05D5\u05EA", region: "ramat", lat: 31.70824, lng: 34.98088 },
-    { code: 515, name: "\u05D3\u05E0\u05D9\u05D0\u05DC", region: "ramat", lat: 31.70776, lng: 34.98131 },
-    { code: 516, name: "\u05E0\u05D7\u05DE\u05D9\u05D4", region: "ramat", lat: 31.7073, lng: 34.98174 },
-    { code: 517, name: "\u05E2\u05D6\u05E8\u05D0", region: "ramat", lat: 31.70652, lng: 34.98215 },
-    { code: 518, name: "\u05DE\u05DC\u05D0\u05DB\u05D9 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70577, lng: 34.98019 },
-    { code: 519, name: "\u05E2\u05D9\u05D3\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70366, lng: 34.98023 },
-    { code: 520, name: "\u05DE\u05E9\u05D4 \u05E8\u05D1\u05E0\u05D5", region: "ramat", lat: 31.70423, lng: 34.98304 },
-    { code: 521, name: "\u05D9\u05E9\u05E2\u05D9\u05D4\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70121, lng: 34.99111 },
-    { code: 522, name: "\u05DE\u05E8\u05D9\u05DD \u05D4\u05E0\u05D1\u05D9\u05D0\u05D4", region: "ramat", lat: 31.7011, lng: 34.99333 },
-    { code: 523, name: "\u05D9\u05D7\u05D6\u05E7\u05D0\u05DC \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.7026, lng: 34.98737 },
-    { code: 524, name: "\u05D9\u05E8\u05DE\u05D9\u05D4\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", region: "ramat", lat: 31.70168, lng: 34.98169 },
-    { code: 525, name: "\u05EA\u05E4\u05D0\u05E8\u05EA \u05E0\u05E4\u05EA\u05DC\u05D9", region: "ramat", lat: 31.70725, lng: 34.98945 },
-    { code: 526, name: "\u05D4\u05D7\u05D5\u05D6\u05D4 \u05DE\u05DC\u05D5\u05D1\u05DC\u05D9\u05DF", region: "ramat", lat: 31.70814, lng: 34.99489 },
-    { code: 527, name: "\u05D4\u05DE\u05D2\u05D9\u05D3 \u05DE\u05DE\u05E2\u05D6\u05E8\u05D9\u05D8\u05E9", region: "ramat", lat: 31.70795, lng: 34.99638 },
-    { code: 528, name: '\u05D4\u05E0\u05E6"\u05D9\u05D1', region: "ramat", lat: 31.71379, lng: 35.00338 },
-    { code: 529, name: "\u05D4\u05E0\u05D1\u05D9\u05D0 \u05E6\u05E4\u05E0\u05D9\u05D4", region: "ramat", lat: 31.70103, lng: 34.99283 },
-    { code: 530, name: "\u05E0\u05D7\u05DC \u05E4\u05D5\u05DC\u05D2", region: "ramat", lat: 31.71717, lng: 34.99998 },
-    { code: 531, name: '\u05D4\u05E8\u05D1 \u05D4\u05D0\u05D3\u05DE\u05D5"\u05E8 \u05D4\u05D7\u05DC\u05D5\u05E5' },
-    { code: 532, name: "\u05D4\u05E8\u05D1 \u05D2\u05E8\u05D9\u05D9\u05E0\u05D9\u05DE\u05DF" },
-    { code: 533, name: "\u05D4\u05E8\u05D1 \u05D9\u05D5\u05E1\u05E3 \u05E2\u05D6\u05E8\u05DF", region: "ramat", lat: 31.71124, lng: 34.98812 },
-    { code: 534, name: "\u05D4\u05E8\u05D1 \u05D0\u05DC\u05D9\u05E9\u05D9\u05D1", region: "ramat", lat: 31.70669, lng: 34.99944 },
-    { code: 535, name: "\u05D4\u05E8\u05D1 \u05D9\u05E2\u05E7\u05D1 \u05D9\u05D5\u05E1\u05E3", region: "ramat", lat: 31.71233, lng: 35.00268 },
-    { code: 536, name: "\u05D4\u05E8\u05D1 \u05D9\u05E6\u05D7\u05E7 \u05DB\u05D3\u05D5\u05E8\u05D9", region: "ramat", lat: 31.71533, lng: 35.00498 },
-    { code: 537, name: "\u05D4\u05E8\u05D1 \u05DE\u05E0\u05D7\u05DD \u05E4\u05E8\u05D5\u05E9", region: "ramat", lat: 31.71042, lng: 34.98942 },
-    { code: 538, name: "\u05D4\u05E8\u05D1 \u05DE\u05E8\u05D3\u05DB\u05D9 \u05E6\u05DE\u05D7 \u05D0\u05DC\u05D9\u05D4\u05D5" },
-    { code: 539, name: "\u05D4\u05E8\u05D1 \u05E7\u05D5\u05E7", region: "ramat", lat: 31.71366, lng: 35.0024 },
-    { code: 540, name: "\u05D4\u05E8\u05D1 \u05E9\u05DC\u05DE\u05D4 \u05DC\u05D5\u05E8\u05E0\u05D9\u05E5" },
-    { code: 541, name: "\u05D7\u05DC\u05E7\u05EA \u05D9\u05D4\u05D5\u05E9\u05E2", region: "ramat", lat: 31.70754, lng: 34.99642 },
-    { code: 542, name: "\u05D9\u05D5\u05DB\u05D1\u05D3", region: "ramat", lat: 31.70108, lng: 34.99498 },
-    { code: 543, name: "\u05E0\u05D7\u05DC \u05E7\u05D3\u05E8\u05D5\u05DF", region: "ramat", lat: 31.71651, lng: 35.00153 },
-    { code: 544, name: "\u05E0\u05D5\u05E2\u05DD \u05D0\u05DC\u05D9\u05DE\u05DC\u05DA", region: "ramat", lat: 31.70772, lng: 34.99775 },
-    { code: 545, name: "\u05EA\u05DE\u05E8", region: "ramat", lat: 31.70061, lng: 34.99398 },
-    { code: 546, name: "\u05D4\u05E8\u05D1 \u05E9\u05DC\u05DE\u05D4 \u05D6\u05DC\u05DE\u05DF", region: "ramat", lat: 31.70673, lng: 34.99783 },
-    { code: 547, name: '\u05D4\u05E8\u05E9"\u05E8 \u05D4\u05D9\u05E8\u05E9', region: "ramat", lat: 31.70932, lng: 35.00423 },
-    { code: 548, name: "\u05E0\u05D7\u05DC \u05E4\u05E8\u05EA", region: "ramat", lat: 31.71618, lng: 35.00084 },
-    { code: 549, name: "\u05E9\u05D3 \u05E0\u05D7\u05DC \u05E0\u05D5\u05D1\u05E2", region: "ramat", lat: 31.71482, lng: 34.9701 },
-    { code: 550, name: "\u05D3\u05D1\u05D5\u05E8\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0\u05D4", region: "ramat", lat: 31.70427, lng: 34.99206 },
-    { code: 551, name: "\u05D4\u05E8\u05D1 \u05D0\u05D1\u05E8\u05D4\u05DD \u05E9\u05E4\u05D9\u05E8\u05D0", region: "ramat", lat: 31.71191, lng: 34.98772 },
-    { code: 552, name: "\u05D3\u05E8\u05DB\u05D9 \u05D0\u05D9\u05E9", region: "ramat", lat: 31.7114, lng: 34.9896 },
-    { code: 553, name: "\u05D4\u05E8\u05D1 \u05D0\u05D9\u05D9\u05D3\u05DC\u05E9\u05D8\u05D9\u05D9\u05DF" },
-    { code: 554, name: "\u05D4\u05E8\u05D1 \u05D9\u05E9\u05E8\u05D0\u05DC \u05D2\u05E8\u05D5\u05E1\u05DE\u05DF", region: "ramat", lat: 31.71816, lng: 34.97648 },
-    { code: 555, name: "\u05D4\u05E8\u05D1 \u05DC\u05D9\u05E4\u05E7\u05D5\u05D1\u05D9\u05E5" },
-    { code: 556, name: "\u05D4\u05E8\u05D1 \u05D1\u05E8\u05D5\u05E7", region: "ramat", lat: 31.7089, lng: 35.00298 },
-    { code: 557, name: "\u05E8\u05D1\u05D9 \u05D1\u05E8\u05DB\u05D9\u05D4", region: "ramat", lat: 31.709, lng: 34.9623 },
-    { code: 558, name: "\u05E8\u05D1\u05D9 \u05D7\u05E0\u05D9\u05E0\u05D0", region: "ramat", lat: 31.7033, lng: 34.96324 },
-    { code: 559, name: "\u05E8\u05D1\u05D9 \u05D9\u05E6\u05D7\u05E7 \u05E0\u05E4\u05D7\u05D0", region: "ramat", lat: 31.70931, lng: 34.95979 },
-    { code: 560, name: "\u05DE\u05E8 \u05D6\u05D5\u05D8\u05E8\u05D0", region: "ramat", lat: 31.70821, lng: 34.95361 },
-    { code: 561, name: "\u05E8\u05D1 \u05D7\u05E1\u05D3\u05D0", region: "ramat", lat: 31.7041, lng: 34.95521 },
-    { code: 562, name: "\u05E8\u05D1\u05D9 \u05D7\u05D6\u05E7\u05D9\u05D4", region: "ramat", lat: 31.70437, lng: 34.96347 },
-    { code: 563, name: "\u05E8\u05D1 \u05D7\u05DC\u05E7\u05D9\u05D4 \u05D1\u05E8 \u05D8\u05D5\u05D1\u05D9", region: "ramat", lat: 31.70557, lng: 34.96088 },
-    { code: 564, name: "\u05DE\u05E8 \u05D9\u05E0\u05D5\u05E7\u05D0", region: "ramat", lat: 31.70785, lng: 34.95706 },
-    { code: 565, name: "\u05E8\u05D1 \u05D7\u05E0\u05E0\u05D0\u05DC", region: "ramat", lat: 31.70765, lng: 34.95618 },
-    { code: 566, name: "\u05E8\u05D1\u05D9 \u05E4\u05E8\u05D3\u05D0" },
-    { code: 567, name: "\u05E8\u05D1 \u05DE\u05E9\u05E8\u05E9\u05D9\u05D0", region: "ramat", lat: 31.7032, lng: 34.95318 },
-    { code: 568, name: "\u05D6\u05E2\u05D9\u05E8\u05D9" },
-    { code: 569, name: "\u05E8\u05D1 \u05D9\u05D9\u05D1\u05D0 \u05E1\u05D1\u05D0", region: "ramat", lat: 31.70362, lng: 34.95848 },
-    { code: 570, name: "\u05D0\u05D9\u05DC\u05E4\u05D0", region: "ramat", lat: 31.7044, lng: 34.95848 },
-    { code: 571, name: "\u05E8\u05D1\u05D9 \u05D7\u05DC\u05D1\u05D5", region: "ramat", lat: 31.70315, lng: 34.96074 },
-    { code: 6001, name: "\u05DB\u05DB\u05E8 \u05E0\u05D5\u05D9\u05DE\u05DF", region: "old", lat: 31.74901, lng: 34.98611 },
-    { code: 6500, name: "\u05D0\u05D6\u05D5\u05E8 \u05D4\u05EA\u05E2\u05E9\u05D9\u05D4 \u05E6\u05E4\u05D5\u05DF" },
-    { code: 6501, name: "\u05D2\u05D1\u05E2\u05EA \u05E9\u05E8\u05EA", region: "old", lat: 31.74079, lng: 34.9778 },
-    { code: 6502, name: "\u05D2\u05E0\u05D9 \u05E9\u05DE\u05E9", region: "ramat", lat: 31.70773, lng: 34.99631 },
-    { code: 6503, name: "\u05E9\u05DB \u05D4\u05D2\u05E4\u05DF" },
-    { code: 6504, name: "\u05E6\u05E8\u05D9\u05E4\u05D9\u05DD \u05D0\u05D3\u05D5\u05DE\u05D9\u05DD" },
-    { code: 6505, name: "\u05E9 \u05D5\u05EA\u05D9\u05E7\u05D9\u05DD" },
-    { code: 6506, name: "\u05E9 \u05D7\u05E6\u05E8\u05D5\u05EA" },
-    { code: 6507, name: "\u05D2\u05E0\u05D9 \u05D9\u05D4\u05D5\u05D3\u05D9\u05EA" },
-    { code: 6508, name: "\u05E9 \u05DE\u05E9\u05E7 \u05E2\u05D6\u05E8" },
-    { code: 6509, name: "\u05D1\u05D9\u05EA \u05E9\u05DE\u05E9 \u05D4\u05D5\u05EA\u05D9\u05E7\u05D4" },
-    { code: 6510, name: '\u05E9 \u05E8\u05DE\u05EA \u05DC\u05D7"\u05D9', region: "old", lat: 31.75081, lng: 34.9829 },
-    { code: 6511, name: "\u05D0\u05D6\u05D5\u05E8 \u05EA\u05E2\u05E9\u05D9\u05D4 \u05DE\u05E2\u05E8\u05D1\u05D9" },
-    { code: 6512, name: "\u05E9 \u05E7\u05D5\u05D8\u05D2'" },
-    { code: 6513, name: "\u05E9 160" },
-    { code: 6514, name: "\u05E9 144" },
-    { code: 6515, name: "\u05E9 116" },
-    { code: 6517, name: "\u05D2\u05D1\u05E2\u05EA \u05E1\u05D1\u05D9\u05D5\u05DF", region: "old", lat: 31.74418, lng: 34.97753 },
-    { code: 6518, name: "\u05E7\u05E8\u05D9\u05EA \u05D0\u05E8\u05D9\u05D4", region: "old", lat: 31.74054, lng: 34.98678 },
-    { code: 6519, name: "\u05E0\u05D5\u05D4 \u05E1\u05E4\u05D9\u05E8" },
-    { code: 6520, name: "\u05E7\u05E8\u05D9\u05EA \u05D4\u05E8\u05D1 \u05E0\u05D9\u05E1\u05D9\u05DD" },
-    { code: 6521, name: "\u05E7\u05E8\u05D9\u05EA \u05D1\u05DF \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", region: "old", lat: 31.74077, lng: 34.98344 },
-    { code: 6522, name: "\u05E4\u05E1\u05D2\u05D5\u05EA \u05D4\u05E9\u05D1\u05E2", region: "old", lat: 31.74786, lng: 34.99592 },
-    { code: 6523, name: "\u05E0\u05D5\u05E4\u05D9 \u05D0\u05D1\u05D9\u05D1", region: "old", lat: 31.73677, lng: 34.9778 },
-    { code: 6524, name: "\u05E9\u05DB \u05DE\u05D7\u05E1\u05D9\u05D4" },
-    { code: 6525, name: "\u05E8\u05DE\u05EA \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9", region: "ramat", lat: 31.71394, lng: 34.98851 },
-    { code: 6526, name: "\u05D2\u05D1\u05E2\u05EA \u05D5\u05D9\u05E6\u05DE\u05DF" },
-    { code: 6527, name: "\u05D2\u05D1\u05E2\u05EA \u05D1\u05DF \u05E6\u05D1\u05D9" },
-    { code: 6528, name: '\u05D2\u05D1\u05E2\u05EA \u05E9\u05D6"\u05E8' },
-    { code: 6529, name: "\u05E9\u05DB \u05D4\u05E9\u05D7\u05E8" },
-    { code: 6530, name: '\u05E7\u05E8\u05D9\u05EA \u05D4\u05E8\u05DE"\u05D0', region: "ramat", lat: 31.73066, lng: 34.99302 },
-    { code: 6531, name: "\u05E8\u05DE\u05EA \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9 \u05D1", region: "ramat", lat: 31.72724, lng: 34.99356 },
-    { code: 6532, name: "\u05E7\u05E8\u05D9\u05EA \u05D4\u05D7\u05D9\u05E0\u05D5\u05DA" },
-    { code: 6533, name: "\u05E9\u05DB \u05E8\u05DE\u05EA \u05D4\u05EA\u05E0\u05D0\u05D9\u05DD" },
-    { code: 6534, name: "\u05E9\u05DB \u05E7\u05E8\u05D9\u05EA \u05D7\u05D6\u05D5\u05DF \u05E2\u05D5\u05D1\u05D3\u05D9\u05D4", region: "ramat", lat: 31.70376, lng: 34.99421 },
-    { code: 9e3, name: "\u05D1\u05D9\u05EA \u05E9\u05DE\u05E9" }
+    { code: 101, name: "\u05D4\u05E8\u05E6\u05DC", nameEn: "Herzl", region: "old", lat: 31.74919, lng: 34.99315 },
+    { code: 102, name: '\u05E9\u05D1\u05D9\u05DC \u05D4\u05DC"\u05D4', nameEn: "Shvil HaLamed Hey", region: "old", lat: 31.75041, lng: 34.9963 },
+    { code: 103, name: "\u05D6'\u05D1\u05D5\u05D8\u05D9\u05E0\u05E1\u05E7\u05D9", nameEn: "Jabotinsky", region: "old", lat: 31.7528, lng: 34.99438 },
+    { code: 104, name: "\u05D4\u05D7\u05DC\u05D5\u05E6\u05D9\u05DD", nameEn: "HaHalutsim", region: "old", lat: 31.75402, lng: 34.9896 },
+    { code: 105, name: "\u05D4\u05E2\u05DC\u05D9\u05D4", nameEn: "HaAliya", region: "old", lat: 31.75488, lng: 34.9871 },
+    { code: 106, name: "\u05D4\u05D0\u05D5\u05DE\u05DF", nameEn: "HaOman", region: "old", lat: 31.75391, lng: 34.99597 },
+    { code: 107, name: "\u05EA\u05D7\u05E0\u05EA \u05D4\u05E8\u05DB\u05D1\u05EA", nameEn: "Tachanat HaRakevet" },
+    { code: 108, name: "\u05DE\u05E9\u05D8\u05E8\u05EA \u05D4\u05E8\u05D8\u05D5\u05D1", nameEn: "Mishteret Hartuv" },
+    { code: 109, name: "\u05D1\u05D9\u05D7\u05E8 \u05E9\u05DE\u05E9\u05D5\u05DF", nameEn: "Bichar Shimshon" },
+    { code: 110, name: "\u05D0\u05E8\u05DC\u05D5\u05D6\u05D5\u05E8\u05D5\u05D1", nameEn: "Arlosoroff", region: "old", lat: 31.75211, lng: 34.98964 },
+    { code: 111, name: "\u05D3\u05DD \u05D4\u05DE\u05DB\u05D1\u05D9\u05DD", nameEn: "Dam HaMacabim", region: "old", lat: 31.75187, lng: 34.98881 },
+    { code: 112, name: "\u05D4\u05DE\u05E9\u05DC\u05D8", nameEn: "HaMishlat", region: "old", lat: 31.75087, lng: 34.99168 },
+    { code: 113, name: "\u05D4\u05E0\u05E9\u05D9\u05D0", nameEn: "HaNasi", region: "old", lat: 31.74732, lng: 34.98161 },
+    { code: 114, name: "\u05E2\u05DE\u05E7 \u05D4\u05D6\u05D9\u05EA\u05D9\u05DD", nameEn: "Emek HaZeitim" },
+    { code: 115, name: "\u05D4\u05D2\u05E4\u05DF", nameEn: "HaGefen", region: "old", lat: 31.74638, lng: 34.98803 },
+    { code: 116, name: "\u05D3\u05DC\u05D9\u05D4", nameEn: "Daliya", region: "old", lat: 31.74783, lng: 34.9866 },
+    { code: 117, name: "\u05E1\u05DE\u05D3\u05E8", nameEn: "Smadar", region: "old", lat: 31.7472, lng: 34.98859 },
+    { code: 118, name: "\u05DE\u05E0\u05D5\u05D7", nameEn: "Manoh", region: "old", lat: 31.74758, lng: 34.97948 },
+    { code: 119, name: "\u05E9\u05D5\u05E2\u05DC\u05D9 \u05E9\u05DE\u05E9\u05D5\u05DF", nameEn: "Sualy Shimshon", region: "old", lat: 31.75003, lng: 34.98115 },
+    { code: 120, name: '\u05E8\u05DE\u05EA \u05DC\u05D7"\u05D9', nameEn: "Ramat Lehi", region: "old", lat: 31.7493, lng: 34.98245 },
+    { code: 121, name: "\u05D4\u05DE\u05E2\u05E4\u05D9\u05DC\u05D9\u05DD", nameEn: "HaMaapilim", region: "old", lat: 31.75046, lng: 34.98591 },
+    { code: 122, name: "\u05D2\u05D5\u05E8 \u05D0\u05E8\u05D9\u05D4", nameEn: "Gur Arye", region: "old", lat: 31.75135, lng: 34.98492 },
+    { code: 123, name: "\u05D1\u05D9\u05D0\u05DC\u05D9\u05E7", nameEn: "Bialik", region: "old", lat: 31.75238, lng: 34.98341 },
+    { code: 124, name: "\u05D1\u05E0\u05D9 \u05D3\u05DF", nameEn: "Bnei Dan", region: "old", lat: 31.75035, lng: 34.98335 },
+    { code: 125, name: "\u05D4\u05D0\u05DC\u05D4", nameEn: "HaEla", region: "old", lat: 31.75053, lng: 34.97925 },
+    { code: 126, name: "\u05D4\u05DE\u05DB\u05EA\u05E9", nameEn: "HaMachtesh", region: "old", lat: 31.75318, lng: 34.98145 },
+    { code: 127, name: "\u05D0\u05DC\u05D9\u05DB\u05D9\u05DF", nameEn: "Elyachin", region: "old", lat: 31.75204, lng: 34.98093 },
+    { code: 128, name: "\u05D1\u05D5\u05E1\u05E7\u05D9\u05DC\u05D4 \u05D9\u05D5\u05E1\u05E3", nameEn: "Buskila Yosef", region: "old", lat: 31.74963, lng: 34.98354 },
+    { code: 129, name: "\u05D0\u05DC\u05E2\u05D6\u05E8\u05D9", nameEn: "Elazari" },
+    { code: 130, name: "\u05D1\u05D9\u05EA \u05D2'\u05DE\u05D0\u05DC", nameEn: "Beit Jamal", region: "ramat", lat: 31.72529, lng: 34.97613 },
+    { code: 131, name: "\u05D4\u05E9\u05E7\u05D3", nameEn: "HaShaked", region: "old", lat: 31.74759, lng: 35.00393 },
+    { code: 132, name: "\u05DE\u05E2\u05DC\u05D4 \u05D3\u05D5\u05D3", nameEn: "Ma'ale David" },
+    { code: 133, name: "\u05DE\u05E2\u05DC\u05D4 \u05D4\u05E1\u05D9\u05D9\u05E8\u05D9\u05DD", nameEn: "Ma'ale HaSayarim" },
+    { code: 134, name: "\u05DE\u05E2\u05DC\u05D4 \u05D4\u05E6\u05D5\u05E4\u05D9\u05DD", nameEn: "Ma'ale HaTzofim" },
+    { code: 135, name: "\u05DE\u05E2\u05DC\u05D4 \u05D9\u05D0\u05D9\u05E8", nameEn: "Ma'ale Yair" },
+    { code: 136, name: "\u05D4\u05DE\u05D5\u05E8\u05D4 \u05D9\u05E2\u05E7\u05D1", nameEn: "HaMore Yaakov", region: "old", lat: 31.74788, lng: 34.98867 },
+    { code: 137, name: "\u05E1\u05D9\u05E0\u05D9", nameEn: "Sinai", region: "old", lat: 31.7499, lng: 34.99791 },
+    { code: 138, name: '\u05D4\u05D0\u05E6"\u05DC', nameEn: "HaEtzel" },
+    { code: 139, name: "\u05DE\u05E6\u05D3\u05D4", nameEn: "Masada", region: "old", lat: 31.74935, lng: 34.99728 },
+    { code: 140, name: '\u05E8\u05DE\u05D1"\u05DD', nameEn: "Rambam", region: "old", lat: 31.7523, lng: 34.99237 },
+    { code: 141, name: "\u05D4\u05D1\u05E0\u05D0\u05D9", nameEn: "HaBanay", region: "old", lat: 31.75557, lng: 34.99285 },
+    { code: 142, name: "\u05D4\u05DE\u05E1\u05D2\u05E8", nameEn: "HaMasger", region: "old", lat: 31.75565, lng: 34.99484 },
+    { code: 143, name: '\u05E1\u05DE \u05D5\u05D9\u05E6"\u05D5', nameEn: "Simtat WIZO", region: "old", lat: 31.74861, lng: 34.98549 },
+    { code: 144, name: "\u05D4\u05E9\u05D1\u05E2\u05D4", nameEn: "HaShiva", region: "old", lat: 31.75006, lng: 34.98259 },
+    { code: 145, name: "\u05D1\u05DF \u05E6\u05D1\u05D9", nameEn: "Ben Zvi", region: "old", lat: 31.74869, lng: 34.98938 },
+    { code: 147, name: "\u05E7\u05E8\u05DF \u05D4\u05D9\u05E1\u05D5\u05D3", nameEn: "Keren HaYesod", region: "old", lat: 31.74968, lng: 34.9926 },
+    { code: 148, name: "\u05D0\u05DC\u05D5\u05DF \u05D9\u05D2\u05D0\u05DC", nameEn: "Alon Yigal", region: "old", lat: 31.75452, lng: 34.99343 },
+    { code: 149, name: "\u05D1\u05D9\u05EA \u05D6\u05D5\u05DC\u05D5\u05D8\u05D5\u05D1", nameEn: "Beit Zolotov" },
+    { code: 150, name: "\u05D0\u05D5\u05DC\u05E4\u05DF \u05D4\u05DE\u05E9\u05D8\u05E8\u05D4", nameEn: "Ulpan HaMishtara" },
+    { code: 151, name: "\u05DE\u05E8\u05DB\u05D6 \u05E7\u05DC\u05D9\u05D8\u05D4", nameEn: "Merkaz Klita" },
+    { code: 152, name: "\u05D4\u05D7\u05E8\u05E9", nameEn: "HaHarash", region: "old", lat: 31.75703, lng: 34.99086 },
+    { code: 153, name: "\u05DE\u05D5\u05E8\u05D3\u05D9 \u05D4\u05D2\u05D8\u05D0\u05D5\u05EA", nameEn: "Mordei HaGetaot", region: "old", lat: 31.74801, lng: 34.99226 },
+    { code: 154, name: "\u05E1\u05DE \u05D4\u05D2\u05E4\u05DF", nameEn: "Simtat HaGefen", region: "old", lat: 31.74816, lng: 34.99023 },
+    { code: 155, name: "\u05D4\u05D5\u05EA\u05D9\u05E7\u05D9\u05DD", nameEn: "HaVatikim" },
+    { code: 156, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05EA\u05DE\u05E8\u05D9\u05DD", nameEn: "Shvil HaTmarim", region: "old", lat: 31.75379, lng: 34.98684 },
+    { code: 157, name: "\u05DE\u05D5\u05E8\u05D9 \u05D9\u05E2\u05E7\u05D1", nameEn: "Mori Yaakov", region: "old", lat: 31.75083, lng: 34.98882 },
+    { code: 158, name: "\u05D1\u05DF \u05D2\u05E8\u05D0", nameEn: "Ben Gera", region: "old", lat: 31.75205, lng: 34.98564 },
+    { code: 159, name: "\u05E8\u05D1\u05D9\u05E6\u05E7\u05D9", nameEn: "Ravitzki", region: "old", lat: 31.75176, lng: 34.9943 },
+    { code: 160, name: "\u05EA\u05E4\u05D0\u05E8\u05EA \u05DE\u05E9\u05D4", nameEn: "Tiferet Moshe", region: "old", lat: 31.74974, lng: 34.99367 },
+    { code: 161, name: "\u05D0\u05DC\u05E0\u05E7\u05D5\u05D4 \u05E8\u05E4\u05D0\u05DC", nameEn: "Alnakawa Refael" },
+    { code: 162, name: "\u05E9\u05D3 \u05D4\u05D3\u05E7\u05DC", nameEn: "HaDekel Avenue", region: "old", lat: 31.73759, lng: 34.98537 },
+    { code: 163, name: "\u05D4\u05E1\u05D9\u05D2\u05DC\u05D9\u05EA", nameEn: "HaSigalit", region: "old", lat: 31.74082, lng: 34.9817 },
+    { code: 164, name: "\u05D4\u05E8\u05E7\u05E4\u05EA", nameEn: "HaRakefet", region: "old", lat: 31.73773, lng: 34.97711 },
+    { code: 165, name: "\u05D4\u05E0\u05D5\u05E8\u05D9\u05EA", nameEn: "HaNurit", region: "old", lat: 31.73836, lng: 34.98008 },
+    { code: 166, name: "\u05D4\u05D0\u05D9\u05E8\u05D9\u05E1", nameEn: "HaIris", region: "old", lat: 31.73928, lng: 34.98164 },
+    { code: 167, name: "\u05D4\u05DB\u05DC\u05E0\u05D9\u05EA", nameEn: "HaKalanit", region: "old", lat: 31.73904, lng: 34.97975 },
+    { code: 168, name: "\u05D4\u05E1\u05D1\u05D9\u05D5\u05DF", nameEn: "HaSavyon", region: "old", lat: 31.73883, lng: 34.98189 },
+    { code: 169, name: "\u05D4\u05E0\u05E8\u05E7\u05D9\u05E1", nameEn: "HaNarkis", region: "old", lat: 31.73858, lng: 34.97567 },
+    { code: 171, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05D0\u05E9\u05DC", nameEn: "Shvil HaEshel", region: "old", lat: 31.75343, lng: 34.99332 },
+    { code: 172, name: "\u05E9\u05E7\u05DE\u05D4", nameEn: "Shikma" },
+    { code: 174, name: "\u05D4\u05D0\u05E8\u05D6\u05D9\u05DD", nameEn: "HaArazim", region: "old", lat: 31.74384, lng: 34.97544 },
+    { code: 175, name: "\u05EA\u05D3\u05D4\u05E8", nameEn: "Tidhar", region: "old", lat: 31.7426, lng: 34.97866 },
+    { code: 176, name: "\u05D4\u05D3\u05D5\u05D1\u05D3\u05D1\u05DF", nameEn: "HaDuvdevan", region: "old", lat: 31.74425, lng: 34.97971 },
+    { code: 177, name: "\u05E4\u05E8\u05E1 \u05E8\u05D0\u05D5\u05D1\u05DF", nameEn: "Peres Reuven" },
+    { code: 178, name: "\u05E0\u05D5\u05E4\u05D9 \u05D4\u05D3\u05E8", nameEn: "Nofei Hadar" },
+    { code: 179, name: "\u05D0\u05D1\u05D0 \u05E0\u05E2\u05DE\u05EA", nameEn: "Aba Naamat", region: "old", lat: 31.74966, lng: 34.98865 },
+    { code: 180, name: "\u05D9\u05D4\u05D5\u05D3\u05D4 \u05D4\u05DE\u05DB\u05D1\u05D9", nameEn: "Yehuda HaMaccabi", region: "old", lat: 31.74847, lng: 34.98179 },
+    { code: 181, name: "\u05E1\u05DE \u05D4\u05D0\u05DC\u05D5\u05DF", nameEn: "HaAlon Alley", region: "old", lat: 31.74766, lng: 34.98222 },
+    { code: 182, name: "\u05E8\u05D9\u05DE\u05D5\u05DF", nameEn: "Rimon" },
+    { code: 183, name: "\u05D9\u05D5\u05E0\u05EA\u05DF \u05D1\u05DF \u05E2\u05D5\u05D6\u05D9\u05D0\u05DC", nameEn: "Yonatan Ben Uziel" },
+    { code: 185, name: "\u05DB\u05D1\u05D9\u05E9 38", nameEn: "Kvish 38", region: "old", lat: 31.75723, lng: 34.98588 },
+    { code: 186, name: '\u05D7\u05D9\u05D3"\u05D0', nameEn: "Chida", region: "old", lat: 31.74997, lng: 34.99903 },
+    { code: 187, name: "\u05D1\u05DF \u05E6\u05D9\u05D5\u05DF \u05D0\u05D1\u05D0 \u05E9\u05D0\u05D5\u05DC", nameEn: "Ben Tzion Aba Shaul", region: "old", lat: 31.74781, lng: 35.00012 },
+    { code: 188, name: "\u05D4\u05D7\u05E4\u05E5 \u05D7\u05D9\u05D9\u05DD", nameEn: "HaChafetz Chaim", region: "old", lat: 31.74871, lng: 34.99899 },
+    { code: 189, name: "\u05D1\u05DF \u05D0\u05D9\u05E9 \u05D7\u05D9", nameEn: "Ben Ish Hai", region: "old", lat: 31.75101, lng: 34.99926 },
+    { code: 190, name: "\u05D4\u05E9\u05D5\u05E9\u05DF", nameEn: "HaShoshan", region: "old", lat: 31.73634, lng: 34.98254 },
+    { code: 191, name: "\u05D4\u05D7\u05E6\u05D1", nameEn: "HaHatsav", region: "old", lat: 31.73673, lng: 34.982 },
+    { code: 192, name: "\u05D4\u05D7\u05E8\u05E6\u05D9\u05EA", nameEn: "HaHartsit", region: "old", lat: 31.73577, lng: 34.98042 },
+    { code: 193, name: "\u05D4\u05D7\u05D1\u05E6\u05DC\u05EA", nameEn: "HaHavatselet", region: "old", lat: 31.73603, lng: 34.97915 },
+    { code: 194, name: "\u05D4\u05E6\u05D9\u05E4\u05D5\u05E8\u05DF", nameEn: "HaZiporen", region: "old", lat: 31.73657, lng: 34.97662 },
+    { code: 195, name: "\u05D4\u05D9\u05E1\u05DE\u05D9\u05DF", nameEn: "HaYasmin", region: "old", lat: 31.73882, lng: 34.97477 },
+    { code: 196, name: "\u05E0\u05EA\u05D9\u05D1 \u05DE\u05D0\u05D9\u05E8", nameEn: "Netiv Meir" },
+    { code: 197, name: "\u05E7\u05D0\u05E8\u05D5 \u05D9\u05D5\u05E1\u05E3", nameEn: "Yosef Karo", region: "old", lat: 31.74536, lng: 35.00094 },
+    { code: 198, name: "\u05E8\u05D1\u05D9 \u05E6\u05D3\u05E7\u05D4 \u05D9\u05D4\u05D5\u05D3\u05D4", nameEn: "Rabbi Tzedaka Yehuda", region: "old", lat: 31.74465, lng: 34.99923 },
+    { code: 199, name: "\u05E1\u05DE \u05D1\u05DF \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", nameEn: "Simtat Ben-Eliezer", region: "old", lat: 31.74065, lng: 34.98393 },
+    { code: 200, name: "\u05E9\u05D3 \u05D1\u05DF \u05D2\u05D5\u05E8\u05D9\u05D5\u05DF", nameEn: "Sderot Ben Gurion", region: "old", lat: 31.74537, lng: 34.98121 },
+    { code: 201, name: "\u05E9\u05D3 \u05E0\u05D4\u05E8 \u05D4\u05D3\u05DF", nameEn: "Sderot Nehar HaDan", region: "ramat", lat: 31.7194, lng: 34.98889 },
+    { code: 202, name: "\u05D1\u05DF \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", nameEn: "Ben-Eliezer", region: "old", lat: 31.74142, lng: 34.98304 },
+    { code: 203, name: "\u05D1\u05E8 \u05D0\u05D9\u05DC\u05DF", nameEn: "Bar Ilan", region: "old", lat: 31.74178, lng: 34.98916 },
+    { code: 204, name: "\u05D9\u05E6\u05D7\u05E7 \u05E9\u05D3\u05D4", nameEn: "Yitzhak Sadeh", region: "old", lat: 31.74346, lng: 34.98217 },
+    { code: 205, name: '\u05E8\u05E9"\u05D9', nameEn: "Rashi", region: "old", lat: 31.7414, lng: 34.98798 },
+    { code: 206, name: "\u05E1\u05D9\u05EA\u05D5\u05D5\u05E0\u05D9\u05EA", nameEn: "Sitvanit", region: "old", lat: 31.73613, lng: 34.98339 },
+    { code: 207, name: "\u05D5\u05E8\u05D3", nameEn: "Vered", region: "old", lat: 31.73636, lng: 34.98497 },
+    { code: 208, name: "\u05E1\u05D7\u05DC\u05D1", nameEn: "Sachlav", region: "old", lat: 31.73573, lng: 34.98608 },
+    { code: 209, name: "\u05D6\u05DB\u05E8\u05D5\u05DF \u05D9\u05E2\u05E7\u05D1", nameEn: "Zichron Yaakov" },
+    { code: 210, name: "\u05E1\u05D5\u05DC\u05DD \u05D9\u05E2\u05E7\u05D1", nameEn: "Sulam Yaakov" },
+    { code: 211, name: "\u05D0\u05DE\u05E8\u05D9 \u05D0\u05DE\u05EA", nameEn: "Emrey Emet", region: "old", lat: 31.74031, lng: 34.99289 },
+    { code: 212, name: "\u05D7\u05D6\u05D5\u05DF \u05D0\u05D9\u05E9", nameEn: "Hazon Ish", region: "old", lat: 31.73785, lng: 34.9937 },
+    { code: 213, name: "\u05D4\u05E8\u05D1 \u05DE\u05D1\u05E8\u05D9\u05E1\u05E7", nameEn: "HaRav Mebrisk", region: "old", lat: 31.74003, lng: 34.99197 },
+    { code: 214, name: "\u05D4\u05E8\u05D1 \u05E1\u05E4\u05E7\u05D8\u05D5\u05E8", nameEn: "HaRav Spektor", region: "old", lat: 31.73993, lng: 34.98536 },
+    { code: 215, name: "\u05D0\u05D4\u05D1\u05EA \u05D9\u05E9\u05E8\u05D0\u05DC", nameEn: "Ahavat Israel", region: "old", lat: 31.74254, lng: 34.9806 },
+    { code: 216, name: "\u05D4\u05E8\u05D1 \u05D4\u05E8\u05E6\u05D5\u05D2", nameEn: "HaRav Herzog", region: "old", lat: 31.73771, lng: 35.00115 },
+    { code: 217, name: "\u05E8\u05D1\u05E0\u05D5 \u05D7\u05D9\u05D9\u05DD \u05D4\u05DC\u05D5\u05D9", nameEn: "Hayim Halevi", region: "old", lat: 31.73968, lng: 34.99665 },
+    { code: 218, name: "\u05E7\u05D4\u05D9\u05DC\u05EA \u05D9\u05E2\u05E7\u05D1", nameEn: "Kehilat YaAkov", region: "old", lat: 31.73809, lng: 34.99643 },
+    { code: 219, name: "\u05E9\u05E4\u05EA \u05D0\u05DE\u05EA", nameEn: "Sfat Emet", region: "old", lat: 31.73933, lng: 34.99624 },
+    { code: 220, name: '\u05D4\u05DE\u05D4\u05E8\u05D9"\u05DC \u05D3\u05D9\u05E1\u05E7\u05D9\u05DF', nameEn: "HaMaharil Diskin" },
+    { code: 221, name: "\u05DC\u05D1 \u05E9\u05DE\u05D7\u05D4", nameEn: "Lev Simha", region: "old", lat: 31.73696, lng: 34.99528 },
+    { code: 222, name: "\u05D0\u05D5\u05E8 \u05D4\u05D7\u05D9\u05D9\u05DD", nameEn: "Or HaHayim", region: "old", lat: 31.73733, lng: 34.99387 },
+    { code: 223, name: "\u05D0\u05D7\u05D9\u05E2\u05D6\u05E8", nameEn: "Ahiezer", region: "old", lat: 31.74118, lng: 34.99417 },
+    { code: 224, name: "\u05D0\u05D5\u05E8 \u05E9\u05DE\u05D7", nameEn: "Or Sameah", region: "old", lat: 31.73906, lng: 34.99518 },
+    { code: 225, name: "\u05DE\u05E2\u05E9\u05D9 \u05D7\u05D9\u05D9\u05D0", nameEn: "Maasei Chiyah", region: "old", lat: 31.74146, lng: 34.99289 },
+    { code: 226, name: "\u05D1\u05D9\u05EA \u05D9\u05E9\u05E8\u05D0\u05DC", nameEn: "Beit Israel", region: "old", lat: 31.7414, lng: 34.99338 },
+    { code: 227, name: "\u05E9\u05E2\u05E8 \u05D4\u05E9\u05DE\u05D9\u05D9\u05DD", nameEn: "Sha'ar HaShamayim" },
+    { code: 228, name: "\u05DE\u05E0\u05D7\u05EA \u05D9\u05E6\u05D7\u05E7", nameEn: "Minhat Yitzhak", region: "old", lat: 31.73905, lng: 34.99372 },
+    { code: 229, name: "\u05D1\u05E8\u05DB\u05EA \u05D0\u05D1\u05E8\u05D4\u05DD", nameEn: "Birkat Abraham", region: "old", lat: 31.73884, lng: 34.99349 },
+    { code: 230, name: "\u05DE\u05E2\u05E4\u05D9\u05DC\u05D9 \u05D0\u05D2\u05D5\u05D6", nameEn: "Maapilei Egoz", region: "old", lat: 31.73892, lng: 34.99175 },
+    { code: 231, name: "\u05D0\u05E9\u05E8", nameEn: "Asher", region: "old", lat: 31.73799, lng: 34.99033 },
+    { code: 232, name: "\u05D2\u05D3", nameEn: "Gad", region: "old", lat: 31.73819, lng: 34.99106 },
+    { code: 233, name: "\u05E9\u05DE\u05E2\u05D5\u05DF", nameEn: "Shimon", region: "old", lat: 31.73907, lng: 34.9873 },
+    { code: 234, name: "\u05E8\u05D0\u05D5\u05D1\u05DF", nameEn: "Reuven", region: "old", lat: 31.73986, lng: 34.98797 },
+    { code: 235, name: "\u05DC\u05E0\u05E8 \u05D3\u05DF", nameEn: "Dan Lener", region: "old", lat: 31.74213, lng: 34.99136 },
+    { code: 236, name: "\u05DE\u05D2\u05DF \u05E7\u05DC\u05DE\u05DF", nameEn: "Kalman Magen", region: "old", lat: 31.74205, lng: 34.99035 },
+    { code: 237, name: "\u05D0\u05D3\u05DD \u05D9\u05E7\u05D5\u05EA\u05D9\u05D0\u05DC", nameEn: "Adam Yekutiel", region: "old", lat: 31.74216, lng: 34.98957 },
+    { code: 238, name: "\u05DE\u05E0\u05D3\u05DC\u05E8 \u05D0\u05DC\u05D1\u05E8\u05D8", nameEn: "Albert Mendler", region: "old", lat: 31.7423, lng: 34.98872 },
+    { code: 239, name: "\u05DC\u05D5\u05D9\u05DF \u05D0\u05E8\u05D9\u05D4", nameEn: "Arye Levin", region: "old", lat: 31.74201, lng: 34.9866 },
+    { code: 240, name: "\u05D2\u05D5\u05E0\u05DF \u05E9\u05DE\u05D5\u05D0\u05DC", nameEn: "Shmuel Gonen", region: "old", lat: 31.74254, lng: 34.98713 },
+    { code: 241, name: "\u05DC\u05E1\u05E7\u05D5\u05D1 \u05D7\u05D9\u05D9\u05DD", nameEn: "Haim Laskov", region: "old", lat: 31.74267, lng: 34.98642 },
+    { code: 242, name: "\u05D0\u05E9\u05DB\u05D5\u05DC \u05DC\u05D5\u05D9", nameEn: "Eshkol Levi", region: "old", lat: 31.7445, lng: 34.99722 },
+    { code: 243, name: "\u05D2\u05DC\u05E2\u05D3", nameEn: "Gilad", region: "old", lat: 31.74814, lng: 34.99517 },
+    { code: 244, name: "\u05D4\u05D0\u05E8\u05D1\u05DC", nameEn: "HaArbel", region: "old", lat: 31.74737, lng: 34.9964 },
+    { code: 245, name: "\u05D4\u05D7\u05E8\u05DE\u05D5\u05DF", nameEn: "HaHermon", region: "old", lat: 31.74652, lng: 34.99597 },
+    { code: 246, name: "\u05D4\u05EA\u05D1\u05D5\u05E8", nameEn: "HaTavor", region: "old", lat: 31.7462, lng: 34.99426 },
+    { code: 247, name: "\u05D3\u05E8\u05DA \u05E8\u05D1\u05D9\u05DF \u05D9\u05E6\u05D7\u05E7", nameEn: "Derekh Rabin Yitzhak", region: "old", lat: 31.74777, lng: 34.99432 },
+    { code: 248, name: "\u05D4\u05D2\u05DC\u05D9\u05DC", nameEn: "HaGalil", region: "old", lat: 31.74616, lng: 34.99266 },
+    { code: 249, name: "\u05E1\u05DE \u05E2\u05DC\u05D9\u05EA \u05D4\u05E0\u05D5\u05E2\u05E8", nameEn: "Simtat Aliyat HaNo'ar", region: "old", lat: 31.7456, lng: 34.99212 },
+    { code: 250, name: "\u05E2\u05DC\u05D9\u05EA \u05D4\u05E0\u05D5\u05E2\u05E8", nameEn: "Aliyat HaNo'ar", region: "old", lat: 31.74633, lng: 34.99182 },
+    { code: 251, name: "\u05D4\u05D2\u05D5\u05DC\u05DF", nameEn: "HaGolan", region: "old", lat: 31.74451, lng: 34.99212 },
+    { code: 252, name: "\u05D1\u05DF \u05D6\u05D0\u05D1 \u05D9\u05D4\u05D5\u05D3\u05D4", nameEn: "Sderot Yehuda Ben Zeev", region: "old", lat: 31.74276, lng: 34.98951 },
+    { code: 253, name: "\u05E0\u05E4\u05EA\u05DC\u05D9", nameEn: "Naftali", region: "old", lat: 31.73816, lng: 34.98358 },
+    { code: 254, name: "\u05D1\u05DF \u05D2\u05D5\u05E8\u05D9\u05D5\u05DF \u05E4\u05D5\u05DC\u05D4", nameEn: "Ben Gurion Paula" },
+    { code: 255, name: "\u05D9\u05D3\u05D9\u05DF \u05D9\u05D2\u05D0\u05DC", nameEn: "Yigael Yadin", region: "old", lat: 31.74297, lng: 34.9846 },
+    { code: 256, name: "\u05DE\u05E7\u05DC\u05E3 \u05DE\u05E8\u05D3\u05DB\u05D9", nameEn: "Mordechai Maklef", region: "old", lat: 31.74319, lng: 34.984 },
+    { code: 257, name: "\u05D3\u05D5\u05E8\u05D9 \u05D9\u05E2\u05E7\u05D1", nameEn: "Yaakov Dori", region: "old", lat: 31.74337, lng: 34.9831 },
+    { code: 258, name: "\u05E8\u05D6\u05D9\u05D0\u05DC \u05D3\u05D5\u05D3", nameEn: "David Raziel", region: "old", lat: 31.74264, lng: 34.98344 },
+    { code: 259, name: "\u05DE\u05E9\u05E2\u05D5\u05DC \u05D4\u05DE\u05EA\u05DE\u05D9\u05D3", nameEn: "Mishol HaMatmid" },
+    { code: 260, name: "\u05D4\u05DE\u05D5\u05E8\u05D4 \u05E6\u05D1\u05D9", nameEn: "HaMoreh Tzvi" },
+    { code: 261, name: "\u05D4\u05E9\u05D9\u05D8\u05D4", nameEn: "HaShita", region: "old", lat: 31.74461, lng: 34.97863 },
+    { code: 262, name: "\u05D4\u05EA\u05D0\u05E0\u05D4", nameEn: "HaTeena", region: "old", lat: 31.7452, lng: 34.97712 },
+    { code: 263, name: "\u05D4\u05D4\u05D3\u05E8", nameEn: "HaHadar", region: "old", lat: 31.74447, lng: 34.97699 },
+    { code: 264, name: "\u05D4\u05D7\u05E8\u05D5\u05D1\u05D9\u05DD", nameEn: "HaCharuvim", region: "old", lat: 31.74388, lng: 34.97733 },
+    { code: 265, name: "\u05D4\u05E2\u05E8\u05D1\u05D4", nameEn: "HaArava", region: "old", lat: 31.74558, lng: 34.97507 },
+    { code: 266, name: "\u05D4\u05D1\u05E8\u05D5\u05E9", nameEn: "HaBrosh", region: "old", lat: 31.74195, lng: 34.97945 },
+    { code: 267, name: "\u05EA\u05D0\u05E9\u05D5\u05E8", nameEn: "Teashur", region: "old", lat: 31.74302, lng: 34.97788 },
+    { code: 268, name: "\u05D4\u05D0\u05D5\u05E8\u05DF", nameEn: "HaOren", region: "old", lat: 31.74339, lng: 34.977 },
+    { code: 269, name: "\u05D4\u05D0\u05EA\u05E8\u05D5\u05D2", nameEn: "HaEtrog", region: "old", lat: 31.74391, lng: 34.97608 },
+    { code: 270, name: "\u05D4\u05D4\u05D3\u05E1", nameEn: "HaHadas", region: "old", lat: 31.74361, lng: 34.97484 },
+    { code: 271, name: "\u05D4\u05EA\u05E4\u05D5\u05D7", nameEn: "HaTapuakh", region: "old", lat: 31.74577, lng: 34.97461 },
+    { code: 272, name: "\u05D4\u05D0\u05D2\u05E1", nameEn: "Ha'agas", region: "old", lat: 31.74368, lng: 34.97888 },
+    { code: 273, name: "\u05D4\u05D0\u05E4\u05E8\u05E1\u05E7", nameEn: "HaAfarsek", region: "old", lat: 31.74407, lng: 34.97796 },
+    { code: 274, name: "\u05D4\u05D0\u05E8\u05D6", nameEn: "HaErez", region: "old", lat: 31.74314, lng: 34.97571 },
+    { code: 275, name: "\u05D4\u05E2\u05E8\u05DE\u05D5\u05DF", nameEn: "HaArmon", region: "old", lat: 31.7427, lng: 34.9766 },
+    { code: 276, name: "\u05D4\u05E6\u05D0\u05DC\u05D4", nameEn: "HaTseela", region: "old", lat: 31.74223, lng: 34.97751 },
+    { code: 277, name: "\u05D4\u05E9\u05D9\u05D6\u05E3", nameEn: "HaShizaf" },
+    { code: 278, name: "\u05D4\u05D3\u05D5\u05DC\u05D1", nameEn: "HaDolev" },
+    { code: 279, name: "\u05D4\u05E8\u05D8\u05D5\u05D1", nameEn: "Hartuv", region: "old", lat: 31.76471, lng: 34.99961 },
+    { code: 280, name: "\u05D0\u05D1\u05D9\u05D8\u05DC", nameEn: "Avital", region: "old", lat: 31.74377, lng: 34.99318 },
+    { code: 281, name: "\u05D0\u05D5\u05E8\u05D8\u05DC", nameEn: "Ortal", region: "old", lat: 31.74397, lng: 34.99266 },
+    { code: 282, name: "\u05DE\u05D9\u05D8\u05DC", nameEn: "Meytal", region: "old", lat: 31.74413, lng: 34.99213 },
+    { code: 283, name: "\u05E8\u05D5\u05D9\u05D8\u05DC", nameEn: "Revital", region: "old", lat: 31.74428, lng: 34.99161 },
+    { code: 284, name: "\u05D4\u05E8 \u05E0\u05D1\u05D5", nameEn: "Har Nevo", region: "old", lat: 31.75153, lng: 34.997 },
+    { code: 285, name: "\u05D3\u05E8\u05DA \u05D4\u05D7\u05D9\u05D9\u05DD", nameEn: "Derech HaHaim", region: "old", lat: 31.74495, lng: 34.99804 },
+    { code: 286, name: "\u05D4\u05E8 \u05D1\u05E9\u05DF", nameEn: "Har Bashan", region: "old", lat: 31.74714, lng: 34.99741 },
+    { code: 287, name: "\u05D4\u05E8 \u05D4\u05DE\u05D5\u05E8\u05D9\u05D4", nameEn: "Har HaMoriya" },
+    { code: 288, name: "\u05D4\u05E8 \u05DE\u05D9\u05E8\u05D5\u05DF", nameEn: "Har Meron", region: "old", lat: 31.74582, lng: 34.99704 },
+    { code: 289, name: "\u05D4\u05E8 \u05D2\u05D1\u05E0\u05D5\u05E0\u05D9\u05DD", nameEn: "Har Gavnunim" },
+    { code: 293, name: "\u05D0\u05D1\u05DF \u05D2\u05D1\u05D9\u05E8\u05D5\u05DC", nameEn: "Ibn Gabirol", region: "old", lat: 31.75162, lng: 34.98074 },
+    { code: 294, name: "\u05D9\u05D4\u05D5\u05D3\u05D4 \u05D4\u05DC\u05D5\u05D9", nameEn: "Yehuda HaLevi", region: "old", lat: 31.75142, lng: 34.98112 },
+    { code: 295, name: "\u05E0\u05E2\u05DE\u05D9 \u05E9\u05DE\u05E8", nameEn: "Naomi Shemer", region: "old", lat: 31.75221, lng: 34.98033 },
+    { code: 296, name: "\u05DE\u05E0\u05D5\u05E8 \u05D0\u05D4\u05D5\u05D3", nameEn: "Ehud Manor", region: "old", lat: 31.75225, lng: 34.98058 },
+    { code: 297, name: "\u05D1\u05E0\u05D0\u05D9 \u05D9\u05D5\u05E1\u05D9", nameEn: "Yossi Banai", region: "old", lat: 31.7526, lng: 34.98012 },
+    { code: 298, name: "\u05E8\u05D7\u05DC \u05D4\u05DE\u05E9\u05D5\u05E8\u05E8\u05EA", nameEn: "Rachel HaMeshoreret" },
+    { code: 299, name: "\u05D8\u05D5\u05E8\u05E7\u05D9\u05D6", nameEn: "Turkiz", region: "old", lat: 31.77377, lng: 34.99262 },
+    { code: 300, name: "\u05D4\u05E8 \u05D4\u05DB\u05E8\u05DE\u05DC", nameEn: "Har HaCarmel" },
+    { code: 301, name: "\u05D4\u05D9\u05E6\u05D9\u05E8\u05D4", nameEn: "HaYetsira", region: "old", lat: 31.73656, lng: 34.95874 },
+    { code: 302, name: "\u05D4\u05EA\u05E2\u05E9\u05D9\u05D4", nameEn: "HaTaasiya", region: "old", lat: 31.73452, lng: 34.95382 },
+    { code: 303, name: "\u05D4\u05E2\u05DE\u05DC", nameEn: "HaAmal", region: "old", lat: 31.73259, lng: 34.95511 },
+    { code: 304, name: "\u05D4\u05DE\u05DC\u05D0\u05DB\u05D4", nameEn: "HaMelakha", region: "old", lat: 31.73007, lng: 34.95931 },
+    { code: 305, name: "\u05D4\u05D4\u05DB\u05E9\u05E8\u05D4", nameEn: "HaHachshara", region: "old", lat: 31.73378, lng: 34.95333 },
+    { code: 306, name: "\u05D4\u05D7\u05E8\u05D5\u05E6\u05D9\u05DD", nameEn: "HaCharutzim", region: "old", lat: 31.73134, lng: 34.95865 },
+    { code: 307, name: "\u05D5\u05D9\u05E8\u05D2'\u05D9\u05E0\u05D9\u05D4", nameEn: "Virginia", region: "old", lat: 31.74106, lng: 34.95629 },
+    { code: 308, name: "\u05D4\u05E1\u05D5\u05DC\u05DC\u05D4", nameEn: "HaSolela", region: "old", lat: 31.73338, lng: 34.95957 },
+    { code: 309, name: "\u05D7\u05D5\u05E9\u05DF", nameEn: "Choshen" },
+    { code: 310, name: "\u05D4\u05E6\u05D1\u05E2", nameEn: "HaTzeva", region: "old", lat: 31.75371, lng: 34.99492 },
+    { code: 311, name: "\u05D4\u05E0\u05D1\u05D9\u05D0 \u05E2\u05D5\u05D1\u05D3\u05D9\u05D4", nameEn: "HaNavi Ovdia", region: "ramat", lat: 31.70012, lng: 34.99339 },
+    { code: 312, name: "\u05D4\u05E0\u05D1\u05D9\u05D0 \u05E2\u05DE\u05D5\u05E1", nameEn: "HaNavi Amos", region: "ramat", lat: 31.70313, lng: 34.99063 },
+    { code: 313, name: "\u05E0\u05EA\u05DF \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Natan HaNavi", region: "ramat", lat: 31.70605, lng: 34.99294 },
+    { code: 314, name: "\u05D7\u05D5\u05DC\u05D3\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0\u05D4", nameEn: "Hulda HaNavia", region: "ramat", lat: 31.70472, lng: 34.99179 },
+    { code: 315, name: "\u05D3\u05DC\u05D5\u05DE\u05D9\u05D8", nameEn: "Dolomit" },
+    { code: 316, name: "\u05D2\u05E8\u05E0\u05D9\u05D8", nameEn: "Granit", region: "old", lat: 31.77166, lng: 34.99087 },
+    { code: 317, name: "\u05D9\u05D4\u05DC\u05D5\u05DD", nameEn: "Yahalom", region: "old", lat: 31.76793, lng: 34.99124 },
+    { code: 318, name: "\u05D0\u05D5\u05D3\u05DD", nameEn: "Odem", region: "old", lat: 31.77267, lng: 34.98956 },
+    { code: 319, name: "\u05D1\u05D6\u05DC\u05EA", nameEn: "Bazelet", region: "old", lat: 31.76916, lng: 34.99385 },
+    { code: 320, name: "\u05E1\u05E4\u05D9\u05E8", nameEn: "Sapir", region: "old", lat: 31.76883, lng: 34.98898 },
+    { code: 321, name: "\u05D8\u05D5\u05E4\u05D6", nameEn: "Topaz", region: "old", lat: 31.76459, lng: 34.99349 },
+    { code: 322, name: "\u05E1\u05DC\u05E2", nameEn: "Sela", region: "old", lat: 31.76517, lng: 34.99147 },
+    { code: 323, name: "\u05D1\u05E0\u05D9\u05DE\u05D9\u05DF", nameEn: "Binyamin", region: "old", lat: 31.73991, lng: 34.98601 },
+    { code: 324, name: "\u05E7\u05E8\u05D9\u05E1\u05D8\u05DC", nameEn: "Kristal" },
+    { code: 325, name: "\u05D1\u05E2\u05DC \u05D4\u05E1\u05D5\u05DC\u05DD", nameEn: "Ba'al HaSulam", region: "ramat", lat: 31.71852, lng: 34.98039 },
+    { code: 326, name: "\u05D0\u05D3\u05E8\u05EA \u05D0\u05DC\u05D9\u05D4\u05D5", nameEn: "Aderet Eliyahu" },
+    { code: 331, name: "\u05E8\u05D1 \u05E9\u05E9\u05EA", nameEn: "Rav Sheshet" },
+    { code: 332, name: "\u05E8\u05D1 \u05D0\u05D1\u05D4\u05D5", nameEn: "Rav Abahu" },
+    { code: 333, name: "\u05E9\u05D3' \u05D4\u05D0\u05DE\u05D5\u05E8\u05D0\u05D9\u05DD", nameEn: "Sderot HaAmoraim", region: "ramat", lat: 31.70159, lng: 34.97113 },
+    { code: 334, name: "\u05E8\u05D1\u05D9\u05E0\u05D0", nameEn: "Ravina", region: "ramat", lat: 31.70336, lng: 34.97317 },
+    { code: 335, name: "\u05E8\u05D1 \u05EA\u05E0\u05D7\u05D5\u05DE\u05D0", nameEn: "Rav Tanhuma", region: "ramat", lat: 31.70478, lng: 34.97467 },
+    { code: 336, name: "\u05E8\u05D1 \u05E4\u05E4\u05D0", nameEn: "Rav Papa", region: "ramat", lat: 31.70597, lng: 34.97326 },
+    { code: 337, name: "\u05E8\u05D1 \u05D6\u05D1\u05D9\u05D3", nameEn: "Rav Zvid", region: "ramat", lat: 31.70521, lng: 34.96962 },
+    { code: 338, name: "\u05E8\u05D1 \u05D0\u05DE\u05D9", nameEn: "Rav Ami", region: "ramat", lat: 31.70614, lng: 34.96969 },
+    { code: 339, name: "\u05E8\u05D1 \u05D0\u05E9\u05D9", nameEn: "Rav Ashi", region: "ramat", lat: 31.70747, lng: 34.97084 },
+    { code: 340, name: "\u05D0\u05D1\u05D9\u05D9", nameEn: "Abaye", region: "ramat", lat: 31.70291, lng: 34.97781 },
+    { code: 341, name: "\u05E8\u05D1 \u05E2\u05D5\u05DC\u05D0", nameEn: "Rav Ula", region: "ramat", lat: 31.70569, lng: 34.97025 },
+    { code: 342, name: "\u05E8\u05D1 \u05D0\u05DE\u05D9\u05DE\u05E8", nameEn: "Rav Amemar", region: "ramat", lat: 31.70801, lng: 34.96909 },
+    { code: 343, name: "\u05E8\u05D1 \u05D6\u05D9\u05E8\u05D0", nameEn: "Rav Zera", region: "ramat", lat: 31.70534, lng: 34.97397 },
+    { code: 344, name: "\u05E8\u05D1\u05D0", nameEn: "Rava", region: "ramat", lat: 31.70378, lng: 34.97366 },
+    { code: 345, name: "\u05E8\u05D1 \u05D7\u05E0\u05DF", nameEn: "Rav Hanan", region: "ramat", lat: 31.7109, lng: 34.96472 },
+    { code: 346, name: "\u05E8\u05D1 \u05E9\u05D9\u05DC\u05D0", nameEn: "Rav Shila", region: "ramat", lat: 31.70934, lng: 34.96685 },
+    { code: 347, name: "\u05E8\u05D9\u05E9 \u05DC\u05E7\u05D9\u05E9", nameEn: "Resh Lakish", region: "ramat", lat: 31.7141, lng: 34.96506 },
+    { code: 348, name: "\u05E8\u05D1 \u05DE\u05E0\u05E9\u05D9\u05D0", nameEn: "Rav Menashya", region: "ramat", lat: 31.7088, lng: 34.96709 },
+    { code: 349, name: "\u05E8\u05D1 \u05D4\u05DE\u05E0\u05D5\u05E0\u05D0", nameEn: "Rav Hamnuna", region: "ramat", lat: 31.71295, lng: 34.96624 },
+    { code: 350, name: "\u05DE\u05E8 \u05E2\u05D5\u05E7\u05D1\u05D0", nameEn: "Mar Ukva", region: "ramat", lat: 31.70812, lng: 34.967 },
+    { code: 351, name: "\u05E0\u05D4\u05E8\u05D3\u05E2\u05D0", nameEn: "Neharde'a", region: "ramat", lat: 31.70023, lng: 34.97253 },
+    { code: 352, name: "\u05EA\u05DC\u05DE\u05D5\u05D3 \u05D1\u05D1\u05DC\u05D9", nameEn: "Talmud Bavli", region: "ramat", lat: 31.70166, lng: 34.96522 },
+    { code: 353, name: "\u05E8\u05D1 \u05DB\u05D4\u05E0\u05D0", nameEn: "Rav Kahana", region: "ramat", lat: 31.70271, lng: 34.96431 },
+    { code: 354, name: "\u05DE\u05E2\u05E8\u05D1\u05D0", nameEn: "Ma'arava", region: "old", lat: 31.73352, lng: 34.95783 },
+    { code: 355, name: "\u05E4\u05D5\u05DE\u05E4\u05D3\u05D9\u05EA\u05D0", nameEn: "Pumbedita", region: "ramat", lat: 31.70144, lng: 34.971 },
+    { code: 356, name: "\u05EA\u05DC\u05DE\u05D5\u05D3 \u05D9\u05E8\u05D5\u05E9\u05DC\u05DE\u05D9", nameEn: "Talmud Yerushalmi", region: "ramat", lat: 31.70221, lng: 34.97245 },
+    { code: 357, name: "\u05E8\u05D1 \u05D0\u05D1\u05D3\u05D9\u05DE\u05D9", nameEn: "Rav Avdimi", region: "ramat", lat: 31.70339, lng: 34.96658 },
+    { code: 358, name: "\u05E8\u05D1 \u05E2\u05DE\u05E8\u05DD", nameEn: "Rav Amram", region: "ramat", lat: 31.70381, lng: 34.96724 },
+    { code: 359, name: "\u05E8\u05D1 \u05DE\u05E8\u05D9", nameEn: "Rav Mari", region: "ramat", lat: 31.69801, lng: 34.96779 },
+    { code: 360, name: "\u05E1\u05D5\u05E8\u05D0", nameEn: "Sura", region: "ramat", lat: 31.69875, lng: 34.97099 },
+    { code: 361, name: "\u05D1\u05E8 \u05E7\u05E4\u05E8\u05D0", nameEn: "Bar Kapara", region: "ramat", lat: 31.69766, lng: 34.97494 },
+    { code: 370, name: "\u05D0\u05D4\u05E8\u05D5\u05E0\u05E1\u05D5\u05DF", nameEn: "Aharonson", region: "ramat", lat: 31.70081, lng: 35.00039 },
+    { code: 371, name: "\u05D0\u05D4\u05E8\u05DF \u05E9\u05DE\u05D9", nameEn: "Aharon Shami" },
+    { code: 372, name: "\u05D8\u05E8\u05D5\u05DE\u05E4\u05DC\u05D3\u05D5\u05E8", nameEn: "Trumpeldor", region: "ramat", lat: 31.69898, lng: 35.00125 },
+    { code: 373, name: "\u05E8\u05D5\u05E2\u05D9 \u05E7\u05DC\u05D9\u05D9\u05DF", nameEn: "Roi Klein" },
+    { code: 374, name: "\u05E4\u05E8\u05E0\u05E7", nameEn: "Frank", region: "ramat", lat: 31.7007, lng: 35.00371 },
+    { code: 375, name: "\u05E4\u05E8\u05E0\u05E7\u05DC", nameEn: "Frankel", region: "ramat", lat: 31.70099, lng: 35.0044 },
+    { code: 376, name: "\u05D9\u05D5\u05E0\u05EA\u05DF", nameEn: "Yonatan", region: "ramat", lat: 31.70226, lng: 35.00434 },
+    { code: 377, name: "\u05D4\u05E9\u05DC\u05D5\u05E9\u05D4", nameEn: "HaShlosha", region: "ramat", lat: 31.70285, lng: 35.00496 },
+    { code: 378, name: "\u05D9\u05D0\u05D9\u05E8", nameEn: "Ya'ir", region: "ramat", lat: 31.69533, lng: 35.0022 },
+    { code: 379, name: "\u05D4\u05D0\u05D7\u05D9\u05DD", nameEn: "HaAhim", region: "ramat", lat: 31.69564, lng: 35.00507 },
+    { code: 380, name: "\u05D0\u05DC\u05D1\u05D6", nameEn: "Elbaz", region: "ramat", lat: 31.69619, lng: 35.00477 },
+    { code: 381, name: "\u05DE\u05E9\u05D4 \u05D0\u05E8\u05E0\u05E1", nameEn: "Moshe Arens", region: "ramat", lat: 31.69494, lng: 35.0048 },
+    { code: 382, name: "\u05D7\u05D1\u05D9\u05D1\u05D4 \u05E8\u05D9\u05D9\u05DA", nameEn: "Haviva Reich" },
+    { code: 383, name: "\u05E1\u05E0\u05E9", nameEn: "Szenes", region: "ramat", lat: 31.69806, lng: 35.00108 },
+    { code: 384, name: "\u05D7\u05D2\u05D5\u05D0\u05DC", nameEn: "Hachuel", region: "ramat", lat: 31.70331, lng: 35.00105 },
+    { code: 400, name: "\u05E0\u05D7\u05DC \u05D3\u05D5\u05DC\u05D1", nameEn: "Nahal Dolev", region: "ramat", lat: 31.71265, lng: 34.99954 },
+    { code: 401, name: "\u05E0\u05D7\u05DC \u05D9\u05E2\u05DC\u05D4", nameEn: "Nahal Yeela", region: "ramat", lat: 31.71666, lng: 34.999 },
+    { code: 402, name: "\u05E0\u05D7\u05DC \u05DE\u05D0\u05D5\u05E8", nameEn: "Nahal Maor", region: "ramat", lat: 31.70941, lng: 35.00126 },
+    { code: 403, name: "\u05E0\u05D7\u05DC \u05DE\u05D8\u05E2", nameEn: "Nahal Mata", region: "ramat", lat: 31.71204, lng: 34.99866 },
+    { code: 404, name: "\u05E0\u05D7\u05DC \u05E7\u05D8\u05DC\u05D1", nameEn: "Nahal Katlav", region: "ramat", lat: 31.7162, lng: 34.99658 },
+    { code: 405, name: "\u05E0\u05D7\u05DC \u05E8\u05D6\u05D9\u05D0\u05DC", nameEn: "Nahal Raziel", region: "ramat", lat: 31.71057, lng: 35.00011 },
+    { code: 406, name: "\u05E0\u05D7\u05DC \u05E9\u05DE\u05E9\u05D5\u05DF", nameEn: "Nahal Shimshon", region: "ramat", lat: 31.71281, lng: 35.00063 },
+    { code: 407, name: "\u05E0\u05D7\u05DC \u05EA\u05DE\u05E0\u05E2", nameEn: "Nahal Timna", region: "ramat", lat: 31.7138, lng: 34.99874 },
+    { code: 408, name: "\u05E0\u05D7\u05DC \u05D0\u05DC\u05DB\u05E1\u05E0\u05D3\u05E8", nameEn: "Nahal Alexander", region: "ramat", lat: 31.71195, lng: 35.00113 },
+    { code: 409, name: "\u05E0\u05D7\u05DC \u05D0\u05DC-\u05E2\u05DC", nameEn: "Nahal El-Al", region: "ramat", lat: 31.7118, lng: 35.00072 },
+    { code: 410, name: "\u05E0\u05D4\u05E8 \u05D4\u05D9\u05E8\u05D3\u05DF", nameEn: "Nahar HaYarden", region: "ramat", lat: 31.71922, lng: 34.99818 },
+    { code: 411, name: "\u05E0\u05D7\u05DC \u05D0\u05D5\u05E8\u05D9\u05D4", nameEn: "Nahal Uriya", region: "ramat", lat: 31.71775, lng: 34.99162 },
+    { code: 412, name: "\u05E0\u05D7\u05DC \u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", nameEn: "Nahal Ayalon", region: "ramat", lat: 31.71229, lng: 34.9949 },
+    { code: 413, name: "\u05E0\u05D7\u05DC \u05D2\u05D9\u05DC\u05D4", nameEn: "Nahal Gila", region: "ramat", lat: 31.71011, lng: 34.99338 },
+    { code: 414, name: "\u05E0\u05D7\u05DC \u05DC\u05D5\u05D6", nameEn: "Nahal Luz", region: "ramat", lat: 31.71073, lng: 34.99516 },
+    { code: 415, name: "\u05E0\u05D7\u05DC \u05DC\u05DB\u05D9\u05E9", nameEn: "Nahal Lakhish", region: "ramat", lat: 31.71307, lng: 34.99159 },
+    { code: 416, name: "\u05E0\u05D7\u05DC \u05DE\u05D9\u05DB\u05D4", nameEn: "Nahal Micha", region: "ramat", lat: 31.71748, lng: 34.99276 },
+    { code: 417, name: "\u05E0\u05D7\u05DC \u05E0\u05D7\u05E9\u05D5\u05DF", nameEn: "Nahal Nachshon", region: "ramat", lat: 31.71402, lng: 34.99325 },
+    { code: 418, name: "\u05E0\u05D7\u05DC \u05E0\u05D5\u05E2\u05DD", nameEn: "Nahal Noam", region: "ramat", lat: 31.71075, lng: 34.99203 },
+    { code: 419, name: "\u05E0\u05D7\u05DC \u05D4\u05E7\u05D9\u05E9\u05D5\u05DF", nameEn: "Nahal HaKishon Boulevard", region: "ramat", lat: 31.71979, lng: 34.99403 },
+    { code: 420, name: "\u05E0\u05D4\u05E8 \u05D4\u05D9\u05E8\u05E7\u05D5\u05DF", nameEn: "Nahar HaYarkon", region: "ramat", lat: 31.70849, lng: 34.99321 },
+    { code: 421, name: "\u05E0\u05D7\u05DC \u05E8\u05DE\u05D5\u05EA", nameEn: "Nahal Ramot", region: "ramat", lat: 31.71084, lng: 34.99412 },
+    { code: 422, name: "\u05E0\u05D7\u05DC \u05E9\u05D5\u05E8\u05E7", nameEn: "Nahal Sorek", region: "ramat", lat: 31.71401, lng: 34.99531 },
+    { code: 423, name: "\u05E0\u05D7\u05DC \u05E9\u05D7\u05DD", nameEn: "Nahal Shaham", region: "ramat", lat: 31.71303, lng: 34.98994 },
+    { code: 424, name: "\u05E0\u05D7\u05DC \u05EA\u05DE\u05E8", nameEn: "Nahal Tamar", region: "ramat", lat: 31.70962, lng: 34.9947 },
+    { code: 425, name: "\u05D0\u05D7\u05D9\u05D4 \u05D4\u05E9\u05D9\u05DC\u05D5\u05E0\u05D9", nameEn: "Ahiya Hashiloni", region: "ramat", lat: 31.70505, lng: 34.97911 },
+    { code: 426, name: "\u05D7\u05D2\u05D9 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Haggai HaNavi", region: "ramat", lat: 31.70177, lng: 34.98152 },
+    { code: 427, name: "\u05D9\u05D5\u05E0\u05D4 \u05D1\u05DF \u05D0\u05DE\u05D9\u05EA\u05D9", nameEn: "Yonah Ben Amitai", region: "ramat", lat: 31.7055, lng: 34.98713 },
+    { code: 428, name: "\u05E0\u05D7\u05D5\u05DD \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Nahum HaNavi", region: "ramat", lat: 31.70506, lng: 34.98413 },
+    { code: 429, name: "\u05E0\u05D7\u05DC \u05E9\u05E0\u05D9\u05E8", nameEn: "Nahal Snir", region: "ramat", lat: 31.70939, lng: 34.99166 },
+    { code: 430, name: "\u05E0\u05D7\u05DC \u05D6\u05D5\u05D9\u05EA\u05DF", nameEn: "Nahal Zavitan", region: "ramat", lat: 31.70962, lng: 34.99185 },
+    { code: 433, name: "\u05E0\u05D7\u05DC \u05D6\u05D5\u05D4\u05E8", nameEn: "Nahal Zohar", region: "ramat", lat: 31.71434, lng: 34.98793 },
+    { code: 434, name: "\u05E0\u05D7\u05DC \u05D7\u05D1\u05E8", nameEn: "Nahal Hever", region: "ramat", lat: 31.71417, lng: 34.9823 },
+    { code: 435, name: "\u05E0\u05D7\u05DC \u05E2\u05D9\u05DF \u05D2\u05D3\u05D9", nameEn: "Nahal Eyn Gedi", region: "ramat", lat: 31.71412, lng: 34.98461 },
+    { code: 436, name: "\u05E0\u05D7\u05DC \u05E2\u05E8\u05D5\u05D2\u05D5\u05EA", nameEn: "Nahal Arugot", region: "ramat", lat: 31.71621, lng: 34.98767 },
+    { code: 437, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05D2\u05D9\u05D7\u05D5\u05DF", nameEn: "Svil HaGihon", region: "ramat", lat: 31.71548, lng: 34.99985 },
+    { code: 438, name: "\u05E0\u05D7\u05DC \u05E8\u05E4\u05D0\u05D9\u05DD", nameEn: "Nahal Refaim", region: "ramat", lat: 31.70999, lng: 35.00062 },
+    { code: 439, name: "\u05E0\u05D7\u05DC \u05D4\u05D1\u05E9\u05D5\u05E8", nameEn: "Nahal HaBsor", region: "ramat", lat: 31.70929, lng: 35.00036 },
+    { code: 440, name: "\u05E0\u05D7\u05DC \u05E8\u05D1\u05D9\u05D1\u05D9\u05DD", nameEn: "Nahal Revivim", region: "ramat", lat: 31.71127, lng: 34.99457 },
+    { code: 441, name: "\u05E0\u05D7\u05DC \u05D0\u05DB\u05D6\u05D9\u05D1", nameEn: "Nahal Achziv", region: "ramat", lat: 31.71119, lng: 34.99521 },
+    { code: 442, name: "\u05E0\u05D7\u05DC \u05DE\u05E9\u05DE\u05E8", nameEn: "Nahal Mishmar", region: "ramat", lat: 31.71529, lng: 34.99168 },
+    { code: 443, name: "\u05E0\u05D7\u05DC \u05E0\u05D9\u05E6\u05E0\u05D9\u05DD", nameEn: "Nahal Nitsanim", region: "ramat", lat: 31.71428, lng: 34.9883 },
+    { code: 444, name: "\u05D7\u05E6\u05E8\u05D5\u05EA \u05E2\u05E8\u05D1\u05D9 \u05D4\u05E0\u05D7\u05DC", nameEn: "Chatzrot Arvei HaNahal" },
+    { code: 445, name: "\u05E0\u05D7\u05DC \u05E1\u05E0\u05E1\u05DF", nameEn: "Nahal Sansan", region: "ramat", lat: 31.70899, lng: 34.9941 },
+    { code: 446, name: "\u05E9\u05D1\u05D9\u05DC \u05D4\u05E0\u05D7\u05E9", nameEn: "Shvil HaNachash", region: "ramat", lat: 31.71602, lng: 34.98332 },
+    { code: 447, name: "\u05E0\u05E8\u05D9\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Neriah HaNavi", region: "ramat", lat: 31.7041, lng: 34.97792 },
+    { code: 448, name: "\u05D4\u05E6\u05D3\u05D9\u05E7 \u05DE\u05E9\u05D8\u05E4\u05E0\u05E9\u05D8", nameEn: "HaTzadik MiShtefenesht", region: "ramat", lat: 31.71534, lng: 34.98868 },
+    { code: 449, name: "\u05D3\u05E8\u05DB\u05D9 \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", nameEn: "Darkei Eliezer" },
+    { code: 450, name: "\u05D1\u05DF \u05E2\u05D6\u05D0\u05D9", nameEn: "Ben Azay", region: "old", lat: 31.73756, lng: 34.99892 },
+    { code: 451, name: "\u05E8\u05D1\u05D9 \u05D9\u05D5\u05E1\u05D9 \u05D1\u05DF \u05E7\u05D9\u05E1\u05DE\u05D0", nameEn: "Rabi Yossi Ben Kisma", region: "old", lat: 31.73599, lng: 34.99778 },
+    { code: 452, name: "\u05E2\u05E7\u05D1\u05D9\u05D0 \u05D1\u05DF \u05DE\u05D4\u05DC\u05DC\u05D0\u05DC", nameEn: "Akavya Ben Mahalalel", region: "old", lat: 31.73596, lng: 34.99824 },
+    { code: 453, name: "\u05D3\u05D5\u05D1\u05E8 \u05E9\u05DC\u05D5\u05DD", nameEn: "Dover Shalom", region: "old", lat: 31.73653, lng: 34.99047 },
+    { code: 454, name: "\u05E8\u05D1\u05D9 \u05E4\u05E0\u05D7\u05E1 \u05D1\u05DF \u05D9\u05D0\u05D9\u05E8", nameEn: "Rabi Pinhas Ben Yaeir", region: "old", lat: 31.73506, lng: 34.99276 },
+    { code: 455, name: "\u05D0\u05D5\u05D4\u05DC \u05D9\u05D4\u05D5\u05E9\u05E2", nameEn: "Oel Yehoshua", region: "old", lat: 31.73533, lng: 34.98959 },
+    { code: 456, name: "\u05E8\u05D1\u05D9 \u05D9\u05E9\u05DE\u05E2\u05D0\u05DC", nameEn: "Rabbi Yishmael" },
+    { code: 457, name: "\u05E7\u05D3\u05D5\u05E9\u05EA \u05D0\u05D4\u05E8\u05D5\u05DF", nameEn: "Kedushat Aharon", region: "old", lat: 31.73601, lng: 34.98696 },
+    { code: 458, name: "\u05E8\u05D1\u05D9 \u05D9\u05E0\u05D0\u05D9", nameEn: "Rabbi Yanai", region: "old", lat: 31.73693, lng: 34.98638 },
+    { code: 459, name: "\u05EA\u05DB\u05DC\u05EA \u05DE\u05E8\u05D3\u05DB\u05D9", nameEn: "Tchelet Mordechai", region: "ramat", lat: 31.73293, lng: 34.98983 },
+    { code: 460, name: "\u05E8\u05D1\u05D9 \u05E2\u05E7\u05D9\u05D1\u05D0", nameEn: "Rabbi Akiva", region: "ramat", lat: 31.72851, lng: 34.99123 },
+    { code: 461, name: '\u05E8\u05E9\u05D1"\u05D2', nameEn: "Rashbag", region: "ramat", lat: 31.72925, lng: 34.99124 },
+    { code: 462, name: "\u05E8\u05D1\u05D9 \u05D9\u05D4\u05D5\u05E9\u05E2", nameEn: "Rabi Yehoshua", region: "ramat", lat: 31.73104, lng: 34.99182 },
+    { code: 463, name: "\u05E8\u05D1\u05D9 \u05D9\u05D4\u05D5\u05D3\u05D4 \u05D4\u05E0\u05E9\u05D9\u05D0", nameEn: "Sderot Rabbi Yehuda HaNasi", region: "ramat", lat: 31.72978, lng: 34.9923 },
+    { code: 464, name: "\u05E8\u05D1\u05D9 \u05DC\u05D5\u05D9\u05D8\u05E1", nameEn: "Rabi Levits", region: "ramat", lat: 31.72797, lng: 34.9939 },
+    { code: 465, name: "\u05E8\u05D1\u05D9 \u05D0\u05DC\u05E2\u05D6\u05E8", nameEn: "Rabi Elazar", region: "ramat", lat: 31.72744, lng: 34.99502 },
+    { code: 466, name: '\u05E8\u05E9\u05D1"\u05D9', nameEn: "Rabi Shimon Bar Yohay", region: "ramat", lat: 31.72939, lng: 34.99203 },
+    { code: 467, name: "\u05E8\u05D1\u05D9 \u05DE\u05D0\u05D9\u05E8 \u05D1\u05E2\u05DC \u05D4\u05E0\u05E1", nameEn: "Sderot Rabi Meir BaAl Hanes", region: "ramat", lat: 31.7256, lng: 34.99394 },
+    { code: 468, name: "\u05E8\u05D1\u05D9 \u05D8\u05E8\u05E4\u05D5\u05DF", nameEn: "Rabi Tarfon", region: "ramat", lat: 31.72454, lng: 34.99547 },
+    { code: 469, name: "\u05E8\u05D1\u05D9 \u05E6\u05D3\u05D5\u05E7", nameEn: "Rabi Tzadok", region: "ramat", lat: 31.72355, lng: 34.99507 },
+    { code: 470, name: '\u05E8\u05D9\u05D1"\u05DC', nameEn: "Rival", region: "ramat", lat: 31.72348, lng: 34.99137 },
+    { code: 471, name: "\u05E8\u05D1\u05DF \u05D9\u05D5\u05D7\u05E0\u05DF \u05D1\u05DF \u05D6\u05DB\u05D0\u05D9", nameEn: "Rabban Yochanan Ben Zakai", region: "ramat", lat: 31.72266, lng: 34.99235 },
+    { code: 473, name: "\u05D0\u05DC\u05D9\u05D4\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Eliyahu HaNavi", region: "ramat", lat: 31.70117, lng: 34.98396 },
+    { code: 474, name: "\u05D0\u05DC\u05D9\u05E9\u05E2 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Elisha HaNavi", region: "ramat", lat: 31.70429, lng: 34.98894 },
+    { code: 476, name: "\u05D4\u05D5\u05E9\u05E2 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Hoshea HaNavi", region: "ramat", lat: 31.70623, lng: 34.98777 },
+    { code: 480, name: "\u05D6\u05DB\u05E8\u05D9\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Zecharya HaNavi", region: "ramat", lat: 31.70889, lng: 34.97796 },
+    { code: 481, name: "\u05D7\u05D1\u05E7\u05D5\u05E7 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Havakuk HaNavi", region: "ramat", lat: 31.70914, lng: 34.9804 },
+    { code: 484, name: "\u05D9\u05D5\u05D0\u05DC \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Yoel HaNavi", region: "ramat", lat: 31.70574, lng: 34.98243 },
+    { code: 485, name: "\u05D7\u05D1\u05E8\u05D5\u05DF", nameEn: "Hevron", region: "ramat", lat: 31.71404, lng: 34.98171 },
+    { code: 486, name: "\u05E7\u05E8\u05D9\u05D9\u05EA \u05D0\u05E8\u05D1\u05E2", nameEn: "Kiryat Arba", region: "ramat", lat: 31.71376, lng: 34.98186 },
+    { code: 487, name: "\u05D1\u05D0\u05E8 \u05E9\u05D1\u05E2", nameEn: "Be'er Sheva", region: "ramat", lat: 31.71309, lng: 34.98677 },
+    { code: 488, name: "\u05D8\u05D1\u05E8\u05D9\u05D4", nameEn: "Tveria", region: "ramat", lat: 31.71358, lng: 34.98566 },
+    { code: 489, name: "\u05D9\u05D1\u05E0\u05D4", nameEn: "Yavne", region: "ramat", lat: 31.71343, lng: 34.98457 },
+    { code: 490, name: "\u05D9\u05E8\u05D5\u05E9\u05DC\u05D9\u05DD", nameEn: "Jerusalem", region: "ramat", lat: 31.71365, lng: 34.98363 },
+    { code: 491, name: "\u05E6\u05E4\u05EA", nameEn: "Tzfat", region: "ramat", lat: 31.71329, lng: 34.98568 },
+    { code: 492, name: "\u05E9\u05D3 \u05E0\u05D7\u05DC \u05E6\u05D0\u05DC\u05D9\u05DD", nameEn: "Nahal Tseelim Boulevard", region: "ramat", lat: 31.71269, lng: 34.98755 },
+    { code: 493, name: "\u05E9\u05DE\u05D5\u05D0\u05DC \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Shmuel HaNavi", region: "ramat", lat: 31.70675, lng: 34.99272 },
+    { code: 494, name: '\u05DE\u05E6\u05E4\u05D4 \u05D4\u05E8\u05E9"\u05E4', nameEn: "Mitzpe Harashp", region: "ramat", lat: 31.72996, lng: 34.99301 },
+    { code: 495, name: "\u05D4\u05DC\u05DC", nameEn: "Hillel", region: "ramat", lat: 31.72794, lng: 34.99264 },
+    { code: 497, name: "\u05E4\u05E2\u05DE\u05D9 \u05DE\u05E9\u05D9\u05D7", nameEn: "Peamey Mashiah", region: "ramat", lat: 31.72963, lng: 34.99122 },
+    { code: 500, name: '\u05DE\u05E2\u05DC\u05D5\u05EA \u05D4\u05E8\u05DE"\u05D0', nameEn: "Ma'alot HaRema" },
+    { code: 501, name: "\u05DE\u05D7\u05D6\u05D9\u05E7\u05D9 \u05D4\u05D3\u05EA", nameEn: "Mahazikey Hadat", region: "ramat", lat: 31.73157, lng: 34.99111 },
+    { code: 502, name: '\u05D4\u05D0\u05D3\u05DE\u05D5"\u05E8 \u05DE\u05D1\u05E2\u05DC\u05D6\u05D0', nameEn: "HaAdmor MiBelz", region: "ramat", lat: 31.73178, lng: 34.99145 },
+    { code: 503, name: "\u05D0\u05D4\u05D1\u05EA \u05E9\u05DC\u05D5\u05DD", nameEn: "Ahavat Shalom", region: "ramat", lat: 31.7071, lng: 34.9874 },
+    { code: 504, name: "\u05D0\u05DE\u05E8\u05D9 \u05E0\u05D5\u05E2\u05DD", nameEn: "Imrei Noam", region: "ramat", lat: 31.70645, lng: 34.9877 },
+    { code: 505, name: "\u05D1\u05E2\u05DC \u05D4\u05EA\u05E0\u05D9\u05D0", nameEn: "Baal HaTanya", region: "ramat", lat: 31.70819, lng: 34.99186 },
+    { code: 506, name: "\u05D4\u05D0\u05D3\u05DE\u05D5\u05E8 \u05DE\u05E8\u05D5\u05D6'\u05D9\u05DF", nameEn: "HaAdmor MiRuzhin", region: "ramat", lat: 31.70716, lng: 34.9974 },
+    { code: 507, name: '\u05D4\u05D0\u05D3\u05E8"\u05EA', nameEn: "Haaderet", region: "ramat", lat: 31.71126, lng: 35.00258 },
+    { code: 508, name: "\u05D4\u05D1\u05E2\u05DC \u05E9\u05DD \u05D8\u05D5\u05D1", nameEn: "HaBa'al Shem Tov", region: "ramat", lat: 31.708, lng: 34.99537 },
+    { code: 509, name: "\u05D4\u05D2\u05D0\u05D5\u05DF \u05DE\u05D5\u05D9\u05DC\u05E0\u05D0", nameEn: "HaGoan MiVilna", region: "ramat", lat: 31.70626, lng: 34.99887 },
+    { code: 510, name: "\u05E9\u05DC\u05DE\u05D4 \u05D4\u05DE\u05DC\u05DA", nameEn: "Shlomo HaMelekh", region: "ramat", lat: 31.70765, lng: 34.98291 },
+    { code: 511, name: "\u05D4\u05DE\u05DC\u05DA \u05D3\u05D5\u05D3", nameEn: "David HaMelekh", region: "ramat", lat: 31.70742, lng: 34.98338 },
+    { code: 512, name: "\u05E9\u05D0\u05D5\u05DC \u05D4\u05DE\u05DC\u05DA", nameEn: "Shaul HaMelech", region: "ramat", lat: 31.70921, lng: 34.98002 },
+    { code: 513, name: "\u05D0\u05E1\u05EA\u05E8", nameEn: "Ester", region: "ramat", lat: 31.70867, lng: 34.98043 },
+    { code: 514, name: "\u05E8\u05D5\u05EA", nameEn: "Rut", region: "ramat", lat: 31.70824, lng: 34.98088 },
+    { code: 515, name: "\u05D3\u05E0\u05D9\u05D0\u05DC", nameEn: "Daniel", region: "ramat", lat: 31.70776, lng: 34.98131 },
+    { code: 516, name: "\u05E0\u05D7\u05DE\u05D9\u05D4", nameEn: "Nechmiah", region: "ramat", lat: 31.7073, lng: 34.98174 },
+    { code: 517, name: "\u05E2\u05D6\u05E8\u05D0", nameEn: "Ezra", region: "ramat", lat: 31.70652, lng: 34.98215 },
+    { code: 518, name: "\u05DE\u05DC\u05D0\u05DB\u05D9 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Malachi HaNavi", region: "ramat", lat: 31.70577, lng: 34.98019 },
+    { code: 519, name: "\u05E2\u05D9\u05D3\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Iddo Hanavi", region: "ramat", lat: 31.70366, lng: 34.98023 },
+    { code: 520, name: "\u05DE\u05E9\u05D4 \u05E8\u05D1\u05E0\u05D5", nameEn: "Moshe Rabenu", region: "ramat", lat: 31.70423, lng: 34.98304 },
+    { code: 521, name: "\u05D9\u05E9\u05E2\u05D9\u05D4\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Yeshayahu HaNavi", region: "ramat", lat: 31.70121, lng: 34.99111 },
+    { code: 522, name: "\u05DE\u05E8\u05D9\u05DD \u05D4\u05E0\u05D1\u05D9\u05D0\u05D4", nameEn: "Miriam HaNevia", region: "ramat", lat: 31.7011, lng: 34.99333 },
+    { code: 523, name: "\u05D9\u05D7\u05D6\u05E7\u05D0\u05DC \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Yehezkel HaNavi", region: "ramat", lat: 31.7026, lng: 34.98737 },
+    { code: 524, name: "\u05D9\u05E8\u05DE\u05D9\u05D4\u05D5 \u05D4\u05E0\u05D1\u05D9\u05D0", nameEn: "Yirmiyahu HaNavi", region: "ramat", lat: 31.70168, lng: 34.98169 },
+    { code: 525, name: "\u05EA\u05E4\u05D0\u05E8\u05EA \u05E0\u05E4\u05EA\u05DC\u05D9", nameEn: "Taferat Naftali", region: "ramat", lat: 31.70725, lng: 34.98945 },
+    { code: 526, name: "\u05D4\u05D7\u05D5\u05D6\u05D4 \u05DE\u05DC\u05D5\u05D1\u05DC\u05D9\u05DF", nameEn: "HaHoze MeLublin", region: "ramat", lat: 31.70814, lng: 34.99489 },
+    { code: 527, name: "\u05D4\u05DE\u05D2\u05D9\u05D3 \u05DE\u05DE\u05E2\u05D6\u05E8\u05D9\u05D8\u05E9", nameEn: "HaMagid MeMezritch", region: "ramat", lat: 31.70795, lng: 34.99638 },
+    { code: 528, name: '\u05D4\u05E0\u05E6"\u05D9\u05D1', nameEn: "HaNatsiv", region: "ramat", lat: 31.71379, lng: 35.00338 },
+    { code: 529, name: "\u05D4\u05E0\u05D1\u05D9\u05D0 \u05E6\u05E4\u05E0\u05D9\u05D4", nameEn: "Tzefania Hanavi", region: "ramat", lat: 31.70103, lng: 34.99283 },
+    { code: 530, name: "\u05E0\u05D7\u05DC \u05E4\u05D5\u05DC\u05D2", nameEn: "Nahal Poleg", region: "ramat", lat: 31.71717, lng: 34.99998 },
+    { code: 531, name: '\u05D4\u05E8\u05D1 \u05D4\u05D0\u05D3\u05DE\u05D5"\u05E8 \u05D4\u05D7\u05DC\u05D5\u05E5', nameEn: "HaRav HaAdmor HaChalutz" },
+    { code: 532, name: "\u05D4\u05E8\u05D1 \u05D2\u05E8\u05D9\u05D9\u05E0\u05D9\u05DE\u05DF", nameEn: "HaRav Greineman" },
+    { code: 533, name: "\u05D4\u05E8\u05D1 \u05D9\u05D5\u05E1\u05E3 \u05E2\u05D6\u05E8\u05DF", nameEn: "HaRav Yosef Ezran", region: "ramat", lat: 31.71124, lng: 34.98812 },
+    { code: 534, name: "\u05D4\u05E8\u05D1 \u05D0\u05DC\u05D9\u05E9\u05D9\u05D1", nameEn: "HaRav Eliyashiv", region: "ramat", lat: 31.70669, lng: 34.99944 },
+    { code: 535, name: "\u05D4\u05E8\u05D1 \u05D9\u05E2\u05E7\u05D1 \u05D9\u05D5\u05E1\u05E3", nameEn: "Harav Yaakov Yosef", region: "ramat", lat: 31.71233, lng: 35.00268 },
+    { code: 536, name: "\u05D4\u05E8\u05D1 \u05D9\u05E6\u05D7\u05E7 \u05DB\u05D3\u05D5\u05E8\u05D9", nameEn: "HaRav Yitshak Kaduri", region: "ramat", lat: 31.71533, lng: 35.00498 },
+    { code: 537, name: "\u05D4\u05E8\u05D1 \u05DE\u05E0\u05D7\u05DD \u05E4\u05E8\u05D5\u05E9", nameEn: "HaRav Menahem Porush", region: "ramat", lat: 31.71042, lng: 34.98942 },
+    { code: 538, name: "\u05D4\u05E8\u05D1 \u05DE\u05E8\u05D3\u05DB\u05D9 \u05E6\u05DE\u05D7 \u05D0\u05DC\u05D9\u05D4\u05D5", nameEn: "HaRav Mordechai Tzemach Eliyahu" },
+    { code: 539, name: "\u05D4\u05E8\u05D1 \u05E7\u05D5\u05E7", nameEn: "HaRav Kook", region: "ramat", lat: 31.71366, lng: 35.0024 },
+    { code: 540, name: "\u05D4\u05E8\u05D1 \u05E9\u05DC\u05DE\u05D4 \u05DC\u05D5\u05E8\u05E0\u05D9\u05E5", nameEn: "HaRav Shlomo Lorincz" },
+    { code: 541, name: "\u05D7\u05DC\u05E7\u05EA \u05D9\u05D4\u05D5\u05E9\u05E2", nameEn: "Helhat Yehoshua", region: "ramat", lat: 31.70754, lng: 34.99642 },
+    { code: 542, name: "\u05D9\u05D5\u05DB\u05D1\u05D3", nameEn: "Yocheved", region: "ramat", lat: 31.70108, lng: 34.99498 },
+    { code: 543, name: "\u05E0\u05D7\u05DC \u05E7\u05D3\u05E8\u05D5\u05DF", nameEn: "Nahal Kidron", region: "ramat", lat: 31.71651, lng: 35.00153 },
+    { code: 544, name: "\u05E0\u05D5\u05E2\u05DD \u05D0\u05DC\u05D9\u05DE\u05DC\u05DA", nameEn: "Noam Elimelech", region: "ramat", lat: 31.70772, lng: 34.99775 },
+    { code: 545, name: "\u05EA\u05DE\u05E8", nameEn: "Tamar", region: "ramat", lat: 31.70061, lng: 34.99398 },
+    { code: 546, name: "\u05D4\u05E8\u05D1 \u05E9\u05DC\u05DE\u05D4 \u05D6\u05DC\u05DE\u05DF", nameEn: "HaRav Shlomo Zalman", region: "ramat", lat: 31.70673, lng: 34.99783 },
+    { code: 547, name: '\u05D4\u05E8\u05E9"\u05E8 \u05D4\u05D9\u05E8\u05E9', nameEn: "Harav Shimshom Refoel Hirsh", region: "ramat", lat: 31.70932, lng: 35.00423 },
+    { code: 548, name: "\u05E0\u05D7\u05DC \u05E4\u05E8\u05EA", nameEn: "Nahal Prat", region: "ramat", lat: 31.71618, lng: 35.00084 },
+    { code: 549, name: "\u05E9\u05D3 \u05E0\u05D7\u05DC \u05E0\u05D5\u05D1\u05E2", nameEn: "Sderot Nahal Novaya", region: "ramat", lat: 31.71482, lng: 34.9701 },
+    { code: 550, name: "\u05D3\u05D1\u05D5\u05E8\u05D4 \u05D4\u05E0\u05D1\u05D9\u05D0\u05D4", nameEn: "Dvora HaNevia", region: "ramat", lat: 31.70427, lng: 34.99206 },
+    { code: 551, name: "\u05D4\u05E8\u05D1 \u05D0\u05D1\u05E8\u05D4\u05DD \u05E9\u05E4\u05D9\u05E8\u05D0", nameEn: "HaRav Avraham Shapira", region: "ramat", lat: 31.71191, lng: 34.98772 },
+    { code: 552, name: "\u05D3\u05E8\u05DB\u05D9 \u05D0\u05D9\u05E9", nameEn: "Darchei Ish", region: "ramat", lat: 31.7114, lng: 34.9896 },
+    { code: 553, name: "\u05D4\u05E8\u05D1 \u05D0\u05D9\u05D9\u05D3\u05DC\u05E9\u05D8\u05D9\u05D9\u05DF", nameEn: "HaRav Edelstein" },
+    { code: 554, name: "\u05D4\u05E8\u05D1 \u05D9\u05E9\u05E8\u05D0\u05DC \u05D2\u05E8\u05D5\u05E1\u05DE\u05DF", nameEn: "HaRav Yisra'el Grosman", region: "ramat", lat: 31.71816, lng: 34.97648 },
+    { code: 555, name: "\u05D4\u05E8\u05D1 \u05DC\u05D9\u05E4\u05E7\u05D5\u05D1\u05D9\u05E5", nameEn: "HaRav Lefkowitz" },
+    { code: 556, name: "\u05D4\u05E8\u05D1 \u05D1\u05E8\u05D5\u05E7", nameEn: "HaRav Bruk", region: "ramat", lat: 31.7089, lng: 35.00298 },
+    { code: 557, name: "\u05E8\u05D1\u05D9 \u05D1\u05E8\u05DB\u05D9\u05D4", nameEn: "Rabi Berekhya", region: "ramat", lat: 31.709, lng: 34.9623 },
+    { code: 558, name: "\u05E8\u05D1\u05D9 \u05D7\u05E0\u05D9\u05E0\u05D0", nameEn: "Rav Hanina", region: "ramat", lat: 31.7033, lng: 34.96324 },
+    { code: 559, name: "\u05E8\u05D1\u05D9 \u05D9\u05E6\u05D7\u05E7 \u05E0\u05E4\u05D7\u05D0", nameEn: "Rabi Yitzhak Nafha", region: "ramat", lat: 31.70931, lng: 34.95979 },
+    { code: 560, name: "\u05DE\u05E8 \u05D6\u05D5\u05D8\u05E8\u05D0", nameEn: "Mar Zutra", region: "ramat", lat: 31.70821, lng: 34.95361 },
+    { code: 561, name: "\u05E8\u05D1 \u05D7\u05E1\u05D3\u05D0", nameEn: "Rav Chisda", region: "ramat", lat: 31.7041, lng: 34.95521 },
+    { code: 562, name: "\u05E8\u05D1\u05D9 \u05D7\u05D6\u05E7\u05D9\u05D4", nameEn: "Rabi Hizkiya", region: "ramat", lat: 31.70437, lng: 34.96347 },
+    { code: 563, name: "\u05E8\u05D1 \u05D7\u05DC\u05E7\u05D9\u05D4 \u05D1\u05E8 \u05D8\u05D5\u05D1\u05D9", nameEn: "Rav Hilkiya Bar Tovi", region: "ramat", lat: 31.70557, lng: 34.96088 },
+    { code: 564, name: "\u05DE\u05E8 \u05D9\u05E0\u05D5\u05E7\u05D0", nameEn: "Mar Yenuka", region: "ramat", lat: 31.70785, lng: 34.95706 },
+    { code: 565, name: "\u05E8\u05D1 \u05D7\u05E0\u05E0\u05D0\u05DC", nameEn: "Rav Chananel", region: "ramat", lat: 31.70765, lng: 34.95618 },
+    { code: 566, name: "\u05E8\u05D1\u05D9 \u05E4\u05E8\u05D3\u05D0", nameEn: "Rabbi Parda" },
+    { code: 567, name: "\u05E8\u05D1 \u05DE\u05E9\u05E8\u05E9\u05D9\u05D0", nameEn: "Rav Mesharshiya", region: "ramat", lat: 31.7032, lng: 34.95318 },
+    { code: 568, name: "\u05D6\u05E2\u05D9\u05E8\u05D9", nameEn: "Zeiri" },
+    { code: 569, name: "\u05E8\u05D1 \u05D9\u05D9\u05D1\u05D0 \u05E1\u05D1\u05D0", nameEn: "Rav Yeiva Saba", region: "ramat", lat: 31.70362, lng: 34.95848 },
+    { code: 570, name: "\u05D0\u05D9\u05DC\u05E4\u05D0", nameEn: "Ilfa", region: "ramat", lat: 31.7044, lng: 34.95848 },
+    { code: 571, name: "\u05E8\u05D1\u05D9 \u05D7\u05DC\u05D1\u05D5", nameEn: "Rabi Helvu", region: "ramat", lat: 31.70315, lng: 34.96074 },
+    { code: 6001, name: "\u05DB\u05DB\u05E8 \u05E0\u05D5\u05D9\u05DE\u05DF", nameEn: "Kikar Neumann", region: "old", lat: 31.74901, lng: 34.98611 },
+    { code: 6500, name: "\u05D0\u05D6\u05D5\u05E8 \u05D4\u05EA\u05E2\u05E9\u05D9\u05D4 \u05E6\u05E4\u05D5\u05DF", nameEn: "Ezor HaTa'asiya Tzafon" },
+    { code: 6501, name: "\u05D2\u05D1\u05E2\u05EA \u05E9\u05E8\u05EA", nameEn: "Givat Sharet", region: "old", lat: 31.74079, lng: 34.9778 },
+    { code: 6502, name: "\u05D2\u05E0\u05D9 \u05E9\u05DE\u05E9", nameEn: "Ganei Shemesh", region: "ramat", lat: 31.70773, lng: 34.99631 },
+    { code: 6503, name: "\u05E9\u05DB \u05D4\u05D2\u05E4\u05DF", nameEn: "Shkhunat HaGefen" },
+    { code: 6504, name: "\u05E6\u05E8\u05D9\u05E4\u05D9\u05DD \u05D0\u05D3\u05D5\u05DE\u05D9\u05DD", nameEn: "Tzrifim Adumim" },
+    { code: 6505, name: "\u05E9 \u05D5\u05EA\u05D9\u05E7\u05D9\u05DD", nameEn: "Shikun Vatikim" },
+    { code: 6506, name: "\u05E9 \u05D7\u05E6\u05E8\u05D5\u05EA", nameEn: "Shikun Chatzrot" },
+    { code: 6507, name: "\u05D2\u05E0\u05D9 \u05D9\u05D4\u05D5\u05D3\u05D9\u05EA", nameEn: "Ganei Yehudit" },
+    { code: 6508, name: "\u05E9 \u05DE\u05E9\u05E7 \u05E2\u05D6\u05E8", nameEn: "Shikun Meshek Ezer" },
+    { code: 6509, name: "\u05D1\u05D9\u05EA \u05E9\u05DE\u05E9 \u05D4\u05D5\u05EA\u05D9\u05E7\u05D4", nameEn: "Beit Shemesh HaVatika" },
+    { code: 6510, name: '\u05E9 \u05E8\u05DE\u05EA \u05DC\u05D7"\u05D9', nameEn: "Shikun Ramat Lehi", region: "old", lat: 31.75081, lng: 34.9829 },
+    { code: 6511, name: "\u05D0\u05D6\u05D5\u05E8 \u05EA\u05E2\u05E9\u05D9\u05D4 \u05DE\u05E2\u05E8\u05D1\u05D9", nameEn: "Ezor Ta'asiya Ma'aravi" },
+    { code: 6512, name: "\u05E9 \u05E7\u05D5\u05D8\u05D2'", nameEn: "Shikun Cottage" },
+    { code: 6513, name: "\u05E9 160", nameEn: "Shikun 160" },
+    { code: 6514, name: "\u05E9 144", nameEn: "Shikun 144" },
+    { code: 6515, name: "\u05E9 116", nameEn: "Shikun 116" },
+    { code: 6517, name: "\u05D2\u05D1\u05E2\u05EA \u05E1\u05D1\u05D9\u05D5\u05DF", nameEn: "Givat Savyon", region: "old", lat: 31.74418, lng: 34.97753 },
+    { code: 6518, name: "\u05E7\u05E8\u05D9\u05EA \u05D0\u05E8\u05D9\u05D4", nameEn: "Kiryat Arye", region: "old", lat: 31.74054, lng: 34.98678 },
+    { code: 6519, name: "\u05E0\u05D5\u05D4 \u05E1\u05E4\u05D9\u05E8", nameEn: "Neve Sapir" },
+    { code: 6520, name: "\u05E7\u05E8\u05D9\u05EA \u05D4\u05E8\u05D1 \u05E0\u05D9\u05E1\u05D9\u05DD", nameEn: "Kiryat HaRav Nissim" },
+    { code: 6521, name: "\u05E7\u05E8\u05D9\u05EA \u05D1\u05DF \u05D0\u05DC\u05D9\u05E2\u05D6\u05E8", nameEn: "Kiryat Ben Eliezer", region: "old", lat: 31.74077, lng: 34.98344 },
+    { code: 6522, name: "\u05E4\u05E1\u05D2\u05D5\u05EA \u05D4\u05E9\u05D1\u05E2", nameEn: "Pisgot HaSheva", region: "old", lat: 31.74786, lng: 34.99592 },
+    { code: 6523, name: "\u05E0\u05D5\u05E4\u05D9 \u05D0\u05D1\u05D9\u05D1", nameEn: "Nofey Aviv", region: "old", lat: 31.73677, lng: 34.9778 },
+    { code: 6524, name: "\u05E9\u05DB \u05DE\u05D7\u05E1\u05D9\u05D4", nameEn: "Shkhunat Machseya" },
+    { code: 6525, name: "\u05E8\u05DE\u05EA \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9", nameEn: "Ramat Bet Shemesh A", region: "ramat", lat: 31.71394, lng: 34.98851 },
+    { code: 6526, name: "\u05D2\u05D1\u05E2\u05EA \u05D5\u05D9\u05E6\u05DE\u05DF", nameEn: "Givat Weizmann" },
+    { code: 6527, name: "\u05D2\u05D1\u05E2\u05EA \u05D1\u05DF \u05E6\u05D1\u05D9", nameEn: "Givat Ben Tzvi" },
+    { code: 6528, name: '\u05D2\u05D1\u05E2\u05EA \u05E9\u05D6"\u05E8', nameEn: "Givat Shazar" },
+    { code: 6529, name: "\u05E9\u05DB \u05D4\u05E9\u05D7\u05E8", nameEn: "Shkhunat HaShachar" },
+    { code: 6530, name: '\u05E7\u05E8\u05D9\u05EA \u05D4\u05E8\u05DE"\u05D0', nameEn: "Kiryat HaRama", region: "ramat", lat: 31.73066, lng: 34.99302 },
+    { code: 6531, name: "\u05E8\u05DE\u05EA \u05D1\u05D9\u05EA \u05E9\u05DE\u05E9 \u05D1", nameEn: "Ramat Bet Shemesh B", region: "ramat", lat: 31.72724, lng: 34.99356 },
+    { code: 6532, name: "\u05E7\u05E8\u05D9\u05EA \u05D4\u05D7\u05D9\u05E0\u05D5\u05DA", nameEn: "Kiryat HaChinuch" },
+    { code: 6533, name: "\u05E9\u05DB \u05E8\u05DE\u05EA \u05D4\u05EA\u05E0\u05D0\u05D9\u05DD", nameEn: "Shkhunat Ramat HaTanaim" },
+    { code: 6534, name: "\u05E9\u05DB \u05E7\u05E8\u05D9\u05EA \u05D7\u05D6\u05D5\u05DF \u05E2\u05D5\u05D1\u05D3\u05D9\u05D4", nameEn: "Shkhunat Kiryat Chazon Ovadia", region: "ramat", lat: 31.70376, lng: 34.99421 },
+    { code: 9e3, name: "\u05D1\u05D9\u05EA \u05E9\u05DE\u05E9", nameEn: "Beit Shemesh" }
   ]
 };
 
@@ -20344,6 +20640,12 @@ var streetSchema = external_exports.strictObject({
   code: external_exports.int().positive(),
   /** Official Hebrew name, as written in the data.gov.il list. */
   name: external_exports.string().trim().min(1),
+  /**
+   * English name, for the English booking form. From OpenStreetMap `name:en` when OSM has one,
+   * else transliterateStreetName of `name` (scripts/english-street-names.ts). Required: an
+   * English-speaking customer must be able to find and read every street.
+   */
+  nameEn: external_exports.string().trim().min(1),
   region: regionSchema.optional(),
   lat: external_exports.number().min(-90).max(90).optional(),
   lng: external_exports.number().min(-180).max(180).optional()
@@ -20553,12 +20855,34 @@ var dayMonthInAppZone = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
   month: "2-digit"
 });
-function formatDayMonth(value) {
+var ENGLISH_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec"
+];
+function dayMonthIn(lang, day, month) {
+  if (lang === "en") {
+    const monthName = ENGLISH_MONTHS[Number(month) - 1];
+    if (monthName === void 0) throw new RangeError("formatDayMonth: month out of range");
+    return `${monthName} ${String(Number(day))}`;
+  }
+  return `${day}/${month}`;
+}
+function formatDayMonth(value, lang = "he") {
   if (typeof value === "string") {
     if (!isoCalendarDateSchema.safeParse(value).success) {
       throw new RangeError("formatDayMonth: expected a calendar date YYYY-MM-DD");
     }
-    return `${value.slice(8, 10)}/${value.slice(5, 7)}`;
+    return dayMonthIn(lang, value.slice(8, 10), value.slice(5, 7));
   }
   if (Number.isNaN(value.getTime())) {
     throw new RangeError("formatDayMonth: invalid Date");
@@ -20569,7 +20893,18 @@ function formatDayMonth(value) {
   if (day === void 0 || month === void 0) {
     throw new RangeError("formatDayMonth: Intl gave no day or month");
   }
-  return `${day}/${month}`;
+  return dayMonthIn(lang, day, month);
+}
+var pickupTimeSchema = external_exports.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "expected a time HH:MM, 00:00-23:59");
+function formatPickupTime(hhmm, lang) {
+  if (!pickupTimeSchema.safeParse(hhmm).success) {
+    throw new RangeError("formatPickupTime: expected a time HH:MM, 00:00-23:59");
+  }
+  if (lang !== "en") return hhmm;
+  const hour24 = Number(hhmm.slice(0, 2));
+  const minutes = hhmm.slice(3, 5);
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${String(hour12)}:${minutes} ${hour24 < 12 ? "AM" : "PM"}`;
 }
 var calendarMonthSchema = external_exports.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "expected YYYY-MM");
 var wallClockInAppZone = new Intl.DateTimeFormat("en-GB", {
@@ -20711,6 +21046,12 @@ var ORDER_FORM_ERRORS = {
   bottlesTooFew: `\u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05D7\u05D5\u05EA ${MIN_BOTTLES} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD`,
   bottlesTooMany: "\u05D4\u05DE\u05E1\u05E4\u05E8 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9, \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7"
 };
+var FORM_ERROR_KEY_BY_MESSAGE = new Map(
+  Object.keys(ORDER_FORM_ERRORS).map((key) => [
+    ORDER_FORM_ERRORS[key],
+    key
+  ])
+);
 var bottlesSpotSchema = external_exports.enum(["privateHouse", "apartmentDoor", "buildingEntrance"]);
 var missReasonSchema = external_exports.enum([
   "notConfirmed",
@@ -20787,6 +21128,12 @@ var orderSchema = external_exports.object({
   lastMiss: lastMissSchema.optional(),
   messages: external_exports.array(messageLogEntrySchema),
   source: orderSourceSchema,
+  /**
+   * The language the customer booked in: the language of the texts and WhatsApp messages the
+   * order gets later. An order stored before languages existed has no `lang` and reads as
+   * Hebrew (the default), so no migration is needed. An unknown value ('fr') is rejected.
+   */
+  lang: langSchema.default(DEFAULT_LANG),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   collectedAt: timestampSchema.optional(),
@@ -20849,7 +21196,14 @@ var orderFormSchema = external_exports.object({
     phone: israeliMobileSchema
   }),
   address: addressInputSchema,
-  bottlesEstimated: bottlesEstimatedInputSchema
+  bottlesEstimated: bottlesEstimatedInputSchema,
+  /**
+   * The language the form was filled in, stored on the order (see {@link orderSchema}). Optional:
+   * a client that sends none (an older page, Yoel's "הוספת הזמנה") books in Hebrew. An unknown
+   * value is rejected with zod's own message: only a broken client sends one, and no field of the
+   * form shows it.
+   */
+  lang: langSchema.default(DEFAULT_LANG)
 });
 
 // packages/shared/src/orderApi.ts
@@ -20986,9 +21340,10 @@ var COLLECTOR_ORDER_MESSAGES = {
 };
 
 // packages/shared/src/messages.ts
-var pickupTimeSchema = external_exports.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "expected a time HH:MM, 00:00-23:59");
-var CONFIRM_REQUEST_SIGN_OFF = "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3";
-function confirmRequestLines(vars, personalText) {
+function greetingLine(vars, lang) {
+  return t(lang, "whatsapp.greeting", { name: vars.name.trim() });
+}
+function confirmRequestLines(vars, personalText, lang) {
   if (vars.date === void 0) {
     throw new RangeError("renderMessage: confirmRequest needs a date");
   }
@@ -21004,31 +21359,42 @@ function confirmRequestLines(vars, personalText) {
     }
   }
   const lines = [
-    `\u05E9\u05DC\u05D5\u05DD ${vars.name.trim()},`,
-    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD.
-    `\u05D1-${formatDayMonth(vars.date)} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.`
+    greetingLine(vars, lang),
+    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" in
+    // Hebrew, "Nov 5" in English.
+    t(lang, "whatsapp.confirmRequest.date", { date: formatDayMonth(vars.date, lang) })
   ];
   if (vars.pickupBy !== void 0 && vars.pickupFrom !== void 0) {
-    lines.push(`\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA ${vars.pickupFrom} \u05DC-${vars.pickupBy}.`);
+    lines.push(
+      t(lang, "whatsapp.confirmRequest.pickupWindow", {
+        from: formatPickupTime(vars.pickupFrom, lang),
+        by: formatPickupTime(vars.pickupBy, lang)
+      })
+    );
   } else if (vars.pickupBy !== void 0) {
-    lines.push(`\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 ${vars.pickupBy}.`);
+    lines.push(
+      t(lang, "whatsapp.confirmRequest.pickupBy", { by: formatPickupTime(vars.pickupBy, lang) })
+    );
   }
   const personal = personalText?.trim() ?? "";
   if (personal !== "") lines.push(personal);
-  lines.push("\u05E0\u05D0 \u05DC\u05D0\u05E9\u05E8 \u05D0\u05EA \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D9\u05E9\u05D5\u05E8:", vars.link, CONFIRM_REQUEST_SIGN_OFF);
+  lines.push(
+    t(lang, "whatsapp.confirmRequest.confirmAtLink"),
+    vars.link,
+    t(lang, "whatsapp.confirmRequest.signOff")
+  );
   return lines;
 }
-function thankYouLines(vars) {
+function thankYouLines(vars, lang) {
   return [
-    `\u05E9\u05DC\u05D5\u05DD ${vars.name.trim()},`,
-    // spec §6.1, word for word.
-    "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
-    "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:",
+    greetingLine(vars, lang),
+    t(lang, "whatsapp.thankYou.thanks"),
+    t(lang, "whatsapp.thankYou.orderAgain"),
     vars.link
   ];
 }
-function renderMessage(kind, vars, personalText) {
-  const lines = kind === "confirmRequest" ? confirmRequestLines(vars, personalText) : thankYouLines(vars);
+function renderMessage(kind, vars, personalText, lang = DEFAULT_LANG) {
+  const lines = kind === "confirmRequest" ? confirmRequestLines(vars, personalText, lang) : thankYouLines(vars, lang);
   return lines.join("\n");
 }
 var manualLogEntrySchema = messageLogEntrySchema.options[1];
@@ -21323,6 +21689,11 @@ var ROUND_MESSAGES = {
 var customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, pickupFrom: true });
 var customerOrderSchema = orderSummarySchema.extend({
   status: orderSchema.shape.status,
+  /**
+   * The language the customer booked in, so the page shows its texts in that language. An order
+   * stored without one reads as Hebrew (see `orderSchema`).
+   */
+  lang: orderSchema.shape.lang,
   /**
    * The round the order is in, while the customer has something to do with it: present for a
    * `pending` order (the date to confirm) and a `confirmed` one ("נתראה ב-<תאריך>"), absent
@@ -21716,7 +22087,7 @@ var WaMeLinkSender = class {
 function waMeResult(message) {
   const phone = waMePhone(message.to);
   if (phone === null) return { mode: "failed", reason: "invalid_phone" };
-  const text = renderMessage(message.kind, message.vars, message.personalText);
+  const text = renderMessage(message.kind, message.vars, message.personalText, message.lang);
   return { mode: "manual", url: linkTo(phone, text) };
 }
 
@@ -22150,6 +22521,9 @@ function newOrderFromForm(form, options) {
     token: newOrderToken(),
     messages: [],
     source: options.source,
+    // The language the form was filled in (Hebrew when the client sent none): later texts and
+    // WhatsApp messages to this customer use it.
+    lang: form.lang,
     // Two copies, so a later change to one date (or to the caller's `now`) moves nothing else.
     createdAt: new Date(options.now),
     updatedAt: new Date(options.now)
@@ -22665,7 +23039,13 @@ function orderMessage(order, kind, options) {
   if (options.date !== void 0) vars.date = options.date;
   if (options.pickupBy !== void 0) vars.pickupBy = options.pickupBy;
   if (options.pickupFrom !== void 0) vars.pickupFrom = options.pickupFrom;
-  const message = { kind, orderId: order.id, to: order.contact.phone, vars };
+  const message = {
+    kind,
+    orderId: order.id,
+    to: order.contact.phone,
+    vars,
+    lang: order.lang
+  };
   if (kind === "confirmRequest" && options.personalText !== void 0) {
     message.personalText = options.personalText;
   }

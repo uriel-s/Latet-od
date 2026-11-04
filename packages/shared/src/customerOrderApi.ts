@@ -42,7 +42,8 @@ const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, picku
 /**
  * What the customer's own page sees of the order (spec §3.3). An allow-list, like
  * `orderSummarySchema` it extends: the thank-you screen's name, phone, address and bottles, plus
- * the status the page is drawn by and the round the order is in. zod objects strip unknown keys,
+ * the status the page is drawn by, the language the customer booked in (the page speaks it), and
+ * the round the order is in. zod objects strip unknown keys,
  * also inside `contact` and `address`, so parsing a whole stored order keeps only these fields.
  *
  * Never here: `id` (guessable; the page is reached by token only), `token` (the caller already
@@ -54,6 +55,11 @@ const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, picku
  */
 export const customerOrderSchema = orderSummarySchema.extend({
   status: orderSchema.shape.status,
+  /**
+   * The language the customer booked in, so the page shows its texts in that language. An order
+   * stored without one reads as Hebrew (see `orderSchema`).
+   */
+  lang: orderSchema.shape.lang,
   /**
    * The round the order is in, while the customer has something to do with it: present for a
    * `pending` order (the date to confirm) and a `confirmed` one ("נתראה ב-<תאריך>"), absent
@@ -170,7 +176,9 @@ export function isLocationChange(before: AddressPlace, after: AddressPlace): boo
 
 /**
  * Plain-Hebrew messages of the customer's page that the customer sees. A 400 is
- * `InvalidOrderErrorBody`, whose field messages are the booking form's own.
+ * `InvalidOrderErrorBody`, whose field messages are the booking form's own. The api always
+ * answers in this Hebrew; the English, and a copy of this Hebrew, are in i18n.ts under
+ * `customerOrder.*`: change both.
  */
 export const CUSTOMER_ORDER_MESSAGES = {
   /** "כן, אוציא את הבקבוקים" after Yoel closed the confirmations. Exactly the spec's text (§3.3). */

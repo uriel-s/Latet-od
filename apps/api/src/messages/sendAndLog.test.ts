@@ -111,6 +111,7 @@ describe('orderMessage', () => {
       kind: 'confirmRequest',
       orderId: order.id,
       to: PHONE_E164,
+      lang: 'he',
       vars: {
         name: NAME,
         link: `${FAKE_PUBLIC_BASE_URL}/o/${order.token}`,
@@ -149,8 +150,17 @@ describe('orderMessage', () => {
       kind: 'confirmRequest',
       orderId: order.id,
       to: PHONE_E164,
+      lang: 'he',
       vars: { name: NAME, link: `${FAKE_PUBLIC_BASE_URL}/o/${order.token}` },
     });
+  });
+
+  it('carries the order language, so the message goes out in it', async () => {
+    const order = await seed({ lang: 'en' });
+
+    const message = orderMessage(order, 'thankYou', { publicBaseUrl: FAKE_PUBLIC_BASE_URL });
+
+    expect(message.lang).toBe('en');
   });
 
   it('builds a thank-you without the personal text, even when one is given', async () => {
@@ -165,6 +175,7 @@ describe('orderMessage', () => {
       kind: 'thankYou',
       orderId: order.id,
       to: PHONE_E164,
+      lang: 'he',
       vars: { name: NAME, link: `${FAKE_PUBLIC_BASE_URL}/o/${order.token}` },
     });
   });

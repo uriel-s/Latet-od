@@ -1,11 +1,12 @@
-// Beit Shemesh street list: the official codes + names from data.gov.il, with one OpenStreetMap
-// point and a region per street (ADR-0005). The booking form's street picker searches it; the
-// point and region decide an order's region and the stop order of a route. No network call at
-// runtime: the list is a static file in the repo. The points come from OSM, so data/streets.json
-// is a Derivative Database under ODbL and every page that uses it credits
-// "© OpenStreetMap contributors".
+// Beit Shemesh street list: the official codes + Hebrew names from data.gov.il, an English name,
+// and one OpenStreetMap point and a region per street (ADR-0005). The booking form's street
+// picker searches it; the point and region decide an order's region and the stop order of a
+// route. No network call at runtime: the list is a static file in the repo. The points (and some
+// English names) come from OSM, so data/streets.json is a Derivative Database under ODbL and
+// every page that uses it credits "© OpenStreetMap contributors".
 import { z } from 'zod';
 import streetsJson from '../data/streets.json' with { type: 'json' };
+import type { Lang } from './i18n.ts';
 
 /**
  * Half of the city a round covers: `ramat` = רמת בית שמש, `old` = בית שמש הוותיקה.
@@ -24,6 +25,12 @@ export const streetSchema = z
     code: z.int().positive(),
     /** Official Hebrew name, as written in the data.gov.il list. */
     name: z.string().trim().min(1),
+    /**
+     * English name, for the English booking form. From OpenStreetMap `name:en` when OSM has one,
+     * else transliterateStreetName of `name` (scripts/english-street-names.ts). Required: an
+     * English-speaking customer must be able to find and read every street.
+     */
+    nameEn: z.string().trim().min(1),
     region: regionSchema.optional(),
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
@@ -88,6 +95,23 @@ export function findStreet(code: number): Street | undefined {
   return STREETS_BY_CODE.get(code);
 }
 
+// Which name each language shows. `satisfies Record<Lang, …>`: a third language added to Lang
+// without a name here is a type error, not a street shown with no name.
+const STREET_NAME_KEY_BY_LANG = { he: 'name', en: 'nameEn' } as const satisfies Record<
+  Lang,
+  'name' | 'nameEn'
+>;
+
+/**
+ * The street's name in the language the customer reads: `nameEn` for 'en', the official Hebrew
+ * `name` for 'he'. For what the customer sees only (the street picker, the customer page). The
+ * order always stores the street code and the official Hebrew `streetName`, and the collector
+ * app always shows Hebrew, so never use this for anything stored or for what Yoel sees.
+ */
+export function streetDisplayName(street: Street, lang: Lang): string {
+  return street[STREET_NAME_KEY_BY_LANG[lang]];
+}
+
 // Geresh / gershayim in every spelling: ASCII ' " and backtick, Hebrew ׳ ״, typographic ‘ ’ “ ”.
 // They are removed, not turned into a space: customers type "זבוטינסקי", "ז'בוטינסקי" and
 // "ז׳בוטינסקי" for the same street, and "רמבם" for רמב"ם.
@@ -105,15 +129,19 @@ function toSearchWords(text: string): string[] {
 }
 
 /**
- * Streets whose name matches what the customer typed, for the street picker.
+ * Streets whose Hebrew or English name matches what the customer typed, for the street picker.
  *
- * Matching is per word, in any order: every query word must be the start of some word of the
- * name. The official list writes some names surname-first ("דרך רבין יצחק"), so "רבין" and
- * "יצחק רבין" must both find it. An empty query (or only spaces / punctuation) returns no
+ * Each name is tested on its own, with the same normalisation and the same rule: every query
+ * word must be the start of some word of that name, in any order. The official list writes some
+ * names surname-first ("דרך רבין יצחק"), so "רבין" and "יצחק רבין" must both find it. The
+ * English name is searched because the English form's customers type Latin letters ("herzl",
+ * "ben-eliezer", "maale david"); the order still stores the street code and Hebrew name, only
+ * what the picker displays changes. An empty query (or only spaces / punctuation) returns no
  * streets: the picker stays empty until the customer types.
  *
- * Names that start with the query come first, then the rest; each group keeps the order of
- * `streets` (by code for the default list). Returns a new array and never mutates `streets`.
+ * Streets with a name (Hebrew or English) that starts with the query come first, then the rest;
+ * each group keeps the order of `streets` (by code for the default list). Returns a new array
+ * and never mutates `streets`.
  */
 export function searchStreets(query: string, streets: readonly Street[] = STREETS): Street[] {
   const queryWords = toSearchWords(query);
@@ -123,13 +151,18 @@ export function searchStreets(query: string, streets: readonly Street[] = STREET
   const startsWithQuery: Street[] = [];
   const containsQuery: Street[] = [];
   for (const street of streets) {
-    const nameWords = toSearchWords(street.name);
-    const matches = queryWords.every((queryWord) =>
-      nameWords.some((nameWord) => nameWord.startsWith(queryWord)),
+    const names = [toSearchWords(street.name), toSearchWords(street.nameEn)];
+    const matches = names.some((nameWords) =>
+      queryWords.every((queryWord) => nameWords.some((nameWord) => nameWord.startsWith(queryWord))),
     );
     if (!matches) continue;
-    if (nameWords.join(' ').startsWith(queryPhrase)) startsWithQuery.push(street);
-    else containsQuery.push(street);
+    // A name that starts with the query phrase also matches it word by word, so "either name
+    // starts with it" never ranks a street by a name that did not match.
+    if (names.some((nameWords) => nameWords.join(' ').startsWith(queryPhrase))) {
+      startsWithQuery.push(street);
+    } else {
+      containsQuery.push(street);
+    }
   }
   return [...startsWithQuery, ...containsQuery];
 }

@@ -46,6 +46,7 @@ const CANCELLED_ORDER_BODY: CustomerOrderResponse = {
     address: { streetName: 'הרימון', houseNumber: '7', bottlesSpot: 'privateHouse' },
     bottlesEstimated: 45,
     status: 'cancelled',
+    lang: 'he',
   },
 };
 

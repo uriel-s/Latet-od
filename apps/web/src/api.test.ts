@@ -2107,6 +2107,7 @@ const CUSTOMER_ORDER: CustomerOrder = {
   },
   bottlesEstimated: 45,
   status: 'pending',
+  lang: 'he',
   round: { date: '2026-11-12', pickupBy: '18:00' },
 };
 

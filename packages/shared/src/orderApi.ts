@@ -73,7 +73,11 @@ export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
 // Errors
 // ---------------------------------------------------------------------------------------------
 
-/** Plain-Hebrew messages of POST /api/orders that the customer sees, above the form. */
+/**
+ * Plain-Hebrew messages of POST /api/orders that the customer sees, above the form. The api
+ * always answers in this Hebrew; the English, and a copy of this Hebrew, are in i18n.ts under
+ * `createOrder.*`: change both.
+ */
 export const CREATE_ORDER_MESSAGES = {
   /** Exactly the spec's text (§3.1). */
   duplicateOpenOrder: 'כבר יש הזמנה פתוחה למספר הזה.',

@@ -5,11 +5,13 @@ import {
   STREETS_ATTRIBUTION,
   findStreet,
   searchStreets,
+  streetDisplayName,
   streetSchema,
   streetsFileSchema,
   type Street,
   type StreetsFile,
 } from './streets.ts';
+import { DEFAULT_LANG } from './i18n.ts';
 
 /** A valid streets file with two streets; override any header key or the street list. */
 function makeStreetsFile(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -19,8 +21,8 @@ function makeStreetsFile(overrides: Record<string, unknown> = {}): Record<string
     source: 'test',
     updatedAt: '2026-10-19',
     streets: [
-      { code: 101, name: 'הרצל', region: 'old', lat: 31.75, lng: 34.99 },
-      { code: 247, name: 'דרך רבין יצחק' },
+      { code: 101, name: 'הרצל', nameEn: 'Herzl', region: 'old', lat: 31.75, lng: 34.99 },
+      { code: 247, name: 'דרך רבין יצחק', nameEn: 'Derekh Rabin Yitzhak' },
     ],
     ...overrides,
   };
@@ -37,6 +39,15 @@ describe('data/streets.json', () => {
     expect(file.streets).toHaveLength(461);
   });
 
+  it('gives every street a non-empty English name', () => {
+    // Read from the raw JSON, not STREETS, so the check does not lean on the schema it guards.
+    const rawStreets: { code: number; nameEn?: unknown }[] = streetsJson.streets;
+    const withoutEnglish = rawStreets
+      .filter((street) => typeof street.nameEn !== 'string' || street.nameEn.trim() === '')
+      .map((street) => street.code);
+    expect(withoutEnglish).toEqual([]);
+  });
+
   it('has unique street codes, sorted ascending', () => {
     const codes = STREETS.map((street) => street.code);
     expect(new Set(codes).size).toBe(codes.length);
@@ -49,47 +60,84 @@ describe('data/streets.json', () => {
 });
 
 describe('streetSchema', () => {
-  it('accepts a street with only code and name', () => {
-    expect(streetSchema.safeParse({ code: 103, name: "ז'בוטינסקי" }).success).toBe(true);
+  it('accepts a street with only code, name and nameEn', () => {
+    expect(
+      streetSchema.safeParse({ code: 103, name: "ז'בוטינסקי", nameEn: 'Jabotinsky' }).success,
+    ).toBe(true);
   });
 
   it('accepts a street with a point and a region', () => {
-    const street = { code: 101, name: 'הרצל', region: 'old', lat: 31.75, lng: 34.99 };
+    const street = {
+      code: 101,
+      name: 'הרצל',
+      nameEn: 'Herzl',
+      region: 'old',
+      lat: 31.75,
+      lng: 34.99,
+    };
     expect(streetSchema.parse(street)).toEqual(street);
   });
 
   it('rejects lat without lng', () => {
-    expect(streetSchema.safeParse({ code: 101, name: 'הרצל', lat: 31.75 }).success).toBe(false);
+    expect(
+      streetSchema.safeParse({ code: 101, name: 'הרצל', nameEn: 'Herzl', lat: 31.75 }).success,
+    ).toBe(false);
   });
 
   it('rejects lng without lat', () => {
-    expect(streetSchema.safeParse({ code: 101, name: 'הרצל', lng: 34.99 }).success).toBe(false);
+    expect(
+      streetSchema.safeParse({ code: 101, name: 'הרצל', nameEn: 'Herzl', lng: 34.99 }).success,
+    ).toBe(false);
   });
 
   it('rejects an unknown key such as a "lon" typo', () => {
-    const result = streetSchema.safeParse({ code: 101, name: 'הרצל', lat: 31.75, lon: 34.99 });
+    const result = streetSchema.safeParse({
+      code: 101,
+      name: 'הרצל',
+      nameEn: 'Herzl',
+      lat: 31.75,
+      lon: 34.99,
+    });
     expect(result.success).toBe(false);
   });
 
   it('rejects an unknown region', () => {
-    expect(streetSchema.safeParse({ code: 101, name: 'הרצל', region: 'north' }).success).toBe(
-      false,
-    );
+    expect(
+      streetSchema.safeParse({ code: 101, name: 'הרצל', nameEn: 'Herzl', region: 'north' }).success,
+    ).toBe(false);
   });
 
   it('rejects an empty name', () => {
-    expect(streetSchema.safeParse({ code: 101, name: '  ' }).success).toBe(false);
+    expect(streetSchema.safeParse({ code: 101, name: '  ', nameEn: 'Herzl' }).success).toBe(false);
+  });
+
+  it('rejects a street without nameEn', () => {
+    expect(streetSchema.safeParse({ code: 101, name: 'הרצל' }).success).toBe(false);
+  });
+
+  it('rejects an empty or whitespace-only nameEn', () => {
+    for (const nameEn of ['', '   ', '	']) {
+      const result = streetSchema.safeParse({ code: 101, name: 'הרצל', nameEn });
+      expect(result.success, JSON.stringify(nameEn)).toBe(false);
+    }
+  });
+
+  it('trims nameEn', () => {
+    expect(streetSchema.parse({ code: 101, name: 'הרצל', nameEn: ' Herzl ' }).nameEn).toBe('Herzl');
   });
 
   it('rejects a code that is not a positive integer', () => {
-    expect(streetSchema.safeParse({ code: 0, name: 'הרצל' }).success).toBe(false);
-    expect(streetSchema.safeParse({ code: 10.5, name: 'הרצל' }).success).toBe(false);
+    expect(streetSchema.safeParse({ code: 0, name: 'הרצל', nameEn: 'Herzl' }).success).toBe(false);
+    expect(streetSchema.safeParse({ code: 10.5, name: 'הרצל', nameEn: 'Herzl' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects a point outside the globe', () => {
-    expect(streetSchema.safeParse({ code: 101, name: 'הרצל', lat: 91, lng: 34.99 }).success).toBe(
-      false,
-    );
+    expect(
+      streetSchema.safeParse({ code: 101, name: 'הרצל', nameEn: 'Herzl', lat: 91, lng: 34.99 })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -102,8 +150,8 @@ describe('streetsFileSchema', () => {
     const result = streetsFileSchema.safeParse(
       makeStreetsFile({
         streets: [
-          { code: 101, name: 'הרצל' },
-          { code: 101, name: 'החלוצים' },
+          { code: 101, name: 'הרצל', nameEn: 'Herzl' },
+          { code: 101, name: 'החלוצים', nameEn: 'HaChalutzim' },
         ],
       }),
     );
@@ -137,13 +185,37 @@ describe('streetsFileSchema', () => {
 
 describe('findStreet', () => {
   it('returns the street for a known code', () => {
-    // Only code and name: the point and region come from the geocoded data and may change
-    // whenever the script runs again or the region line moves.
+    // Only code and name: the point, region and English name come from OSM and may change
+    // whenever the scripts run again or the region line moves.
     expect(findStreet(103)).toMatchObject({ code: 103, name: "ז'בוטינסקי" });
   });
 
   it('returns undefined for an unknown code', () => {
     expect(findStreet(999_999)).toBeUndefined();
+  });
+});
+
+describe('streetDisplayName', () => {
+  const street: Street = { code: 103, name: "ז'בוטינסקי", nameEn: 'Jabotinsky' };
+
+  it('returns the official Hebrew name for he', () => {
+    expect(streetDisplayName(street, 'he')).toBe("ז'בוטינסקי");
+  });
+
+  it('returns the English name for en', () => {
+    expect(streetDisplayName(street, 'en')).toBe('Jabotinsky');
+  });
+
+  it('returns the Hebrew name for DEFAULT_LANG', () => {
+    expect(streetDisplayName(street, DEFAULT_LANG)).toBe("ז'בוטינסקי");
+  });
+
+  it('names a street of the real list in both languages', () => {
+    const herzl = findStreet(101);
+    expect(herzl).toBeDefined();
+    if (herzl === undefined) return;
+    expect(streetDisplayName(herzl, 'he')).toBe('הרצל');
+    expect(streetDisplayName(herzl, 'en')).toBe('Herzl');
   });
 });
 
@@ -197,28 +269,70 @@ describe('searchStreets', () => {
 
   it('lists names that start with the query first, then the rest, each in input order', () => {
     const streets: Street[] = [
-      { code: 1, name: 'דרך רבין יצחק' },
-      { code: 2, name: 'רביצקי' },
-      { code: 3, name: 'הרב קוק' },
-      { code: 4, name: 'רבי עקיבא' },
-      { code: 5, name: 'שד רבי טרפון' },
+      { code: 1, name: 'דרך רבין יצחק', nameEn: 'Derekh Rabin Yitzhak' },
+      { code: 2, name: 'רביצקי', nameEn: 'Ravitzky' },
+      { code: 3, name: 'הרב קוק', nameEn: 'HaRav Kook' },
+      { code: 4, name: 'רבי עקיבא', nameEn: 'Rabbi Akiva' },
+      { code: 5, name: 'שד רבי טרפון', nameEn: 'Sderot Rabbi Tarfon' },
     ];
     expect(searchCodes('רבי', streets)).toEqual([2, 4, 1, 5]);
   });
 
   it('counts a multi-word query as a start only when the name starts with those words', () => {
     const streets: Street[] = [
-      { code: 1, name: 'גבעת נחל שורק' },
-      { code: 2, name: 'נחל שורק' },
+      { code: 1, name: 'גבעת נחל שורק', nameEn: 'Givat Nahal Sorek' },
+      { code: 2, name: 'נחל שורק', nameEn: 'Nahal Sorek' },
     ];
     expect(searchCodes('נחל ש', streets)).toEqual([2, 1]);
+  });
+
+  it('finds a street by its English name, in any letter case', () => {
+    for (const query of ['herzl', 'Herzl', 'HERZL']) {
+      expect(searchCodes(query), query).toEqual([101]);
+    }
+  });
+
+  it('finds a street by the start of a word of its English name', () => {
+    expect(searchCodes('jabot')).toEqual([103]);
+    expect(searchCodes('rambam')).toEqual([140]);
+  });
+
+  it('matches no street for Latin letters that are no word start of any name', () => {
+    expect(searchStreets('xyzzy')).toEqual([]);
+    // Inside "Herzl" and "Jabotinsky", but not at the start of a word.
+    expect(searchStreets('rzl')).toEqual([]);
+    expect(searchStreets('botinsky')).toEqual([]);
+  });
+
+  it('treats a hyphen in an English name like a space', () => {
+    // Also Simtat Ben-Eliezer and Kiryat Ben Eliezer; the street named just that comes first.
+    for (const query of ['ben eliezer', 'ben-eliezer', 'Ben-Eliezer']) {
+      const codes = searchCodes(query);
+      expect(codes[0], query).toBe(202);
+    }
+  });
+
+  it('matches an English name with an apostrophe typed with or without it', () => {
+    for (const query of ['maale david', "ma'ale david", 'ma’ale david']) {
+      expect(searchCodes(query), query).toEqual([132]);
+    }
+  });
+
+  it('lists English names that start with the query before ones that only contain it', () => {
+    const streets: Street[] = [
+      { code: 1, name: 'דרך רבין יצחק', nameEn: 'Derekh Rabin Yitzhak' },
+      { code: 2, name: 'שד רבין', nameEn: 'Rabin Boulevard' },
+      { code: 3, name: 'כיכר רבין', nameEn: 'Kikar Rabin' },
+      { code: 4, name: 'רבין', nameEn: 'Rabin' },
+    ];
+    expect(searchCodes('rabin', streets)).toEqual([2, 4, 1, 3]);
   });
 
   it('does not mutate the list it searches', () => {
     // The result reorders these two (starts-with first); the input must keep its order.
     const streets: readonly Street[] = Object.freeze([
-      { code: 1, name: 'דרך רבין יצחק' },
-      { code: 2, name: 'רביצקי' },
+      { code: 1, name: 'דרך רבין יצחק', nameEn: 'Derekh Rabin Yitzhak' },
+      { code: 2, name: 'רביצקי', nameEn: 'Ravitzky' },
     ]);
     const result = searchStreets('רבי', streets);
     expect(result.map((street) => street.code)).toEqual([2, 1]);

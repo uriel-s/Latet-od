@@ -3,7 +3,7 @@
 // readable; the rules for planning one (at most 25 orders, all waiting) live in roundsApi.ts and
 // the api.
 import { z } from 'zod';
-import { pickupTimeSchema } from './messages.ts';
+import { pickupTimeSchema } from './dates.ts';
 import { timestampSchema } from './order.ts';
 import { regionSchema } from './streets.ts';
 

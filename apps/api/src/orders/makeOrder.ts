@@ -11,7 +11,7 @@ let madeOrders = 0;
 
 /**
  * A valid new order (it passes `orderSchema` once a repo gives it an id): `waiting`, from the
- * form, WhatsApp contact, 40 bottles, a free-text street with no region yet, no messages, and
+ * form, in Hebrew, WhatsApp contact, 40 bottles, a free-text street with no region yet, no messages, and
  * fixed `createdAt` / `updatedAt` ({@link MADE_ORDER_CREATED_AT}).
  *
  * Every call has a different phone (`+9725` + 8 digits) and a different token (43 base64url
@@ -33,6 +33,7 @@ export function makeNewOrder(overrides: Partial<NewOrder> = {}): NewOrder {
     token: `test-token-${String(madeOrders).padStart(32, '0')}`,
     messages: [],
     source: 'form',
+    lang: 'he',
     createdAt: new Date(MADE_ORDER_CREATED_AT),
     updatedAt: new Date(MADE_ORDER_CREATED_AT),
     ...overrides,

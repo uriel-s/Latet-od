@@ -3,9 +3,11 @@ import type { z } from 'zod';
 import {
   BOTTLES_SPOT_LABELS,
   MISS_REASON_LABELS,
+  MIN_BOTTLES,
   ORDER_FORM_ERRORS,
   ORDER_TOKEN_BYTES,
   bottlesSpotSchema,
+  formErrorText,
   missReasonSchema,
   orderFormSchema,
   orderSchema,
@@ -14,6 +16,7 @@ import {
   type Order,
   type OrderFormInput,
 } from './order.ts';
+import { t } from './i18n.ts';
 import { PHONE_ERROR } from './phone.ts';
 import { STREETS, type Street } from './streets.ts';
 
@@ -40,6 +43,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     token: TOKEN,
     messages: [],
     source: 'form',
+    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
     ...overrides,
@@ -118,6 +122,23 @@ describe('orderSchema', () => {
     const parsed = orderSchema.parse({ ...makeOrder(), _id: 'abc', extra: 1 });
     expect(parsed).not.toHaveProperty('_id');
     expect(parsed).not.toHaveProperty('extra');
+  });
+
+  describe('lang', () => {
+    it('reads an order stored without a language as Hebrew, with no migration', () => {
+      const stored: Record<string, unknown> = { ...makeOrder() };
+      delete stored.lang;
+
+      expect(orderSchema.parse(stored).lang).toBe('he');
+    });
+
+    it('keeps English', () => {
+      expect(orderSchema.parse(makeOrder({ lang: 'en' })).lang).toBe('en');
+    });
+
+    it('rejects a language the app does not speak', () => {
+      expect(orderSchema.safeParse({ ...makeOrder(), lang: 'fr' }).success).toBe(false);
+    });
   });
 
   it('accepts a free-text street with a near street and no region', () => {
@@ -218,6 +239,32 @@ describe('labels', () => {
 
   it('documents a token length that matches its random bytes', () => {
     expect(Math.ceil((ORDER_TOKEN_BYTES * 4) / 3)).toBe(TOKEN.length);
+  });
+});
+
+describe('formErrorText', () => {
+  it('returns every form message unchanged in Hebrew and as the dictionary English', () => {
+    for (const key of Object.keys(ORDER_FORM_ERRORS) as (keyof typeof ORDER_FORM_ERRORS)[]) {
+      const he = ORDER_FORM_ERRORS[key];
+      expect(formErrorText('he', he)).toBe(he);
+      expect(formErrorText('en', he)).toBe(t('en', `formError.${key}`, { min: MIN_BOTTLES }));
+    }
+  });
+
+  it('fills the minimum into the English of too few bottles', () => {
+    expect(formErrorText('en', ORDER_FORM_ERRORS.bottlesTooFew)).toBe(
+      `At least ${MIN_BOTTLES} bottles are needed`,
+    );
+    expect(formErrorText('en', ORDER_FORM_ERRORS.nameRequired)).toBe('Please write your name');
+  });
+
+  it('returns a message that is not a form message as is, in any language', () => {
+    for (const lang of ['he', 'en'] as const) {
+      expect(formErrorText(lang, PHONE_ERROR)).toBe(PHONE_ERROR);
+      expect(formErrorText(lang, 'Invalid input')).toBe('Invalid input');
+      expect(formErrorText(lang, 'toString')).toBe('toString');
+      expect(formErrorText(lang, '')).toBe('');
+    }
   });
 });
 
@@ -468,6 +515,21 @@ describe('orderFormSchema', () => {
     expect(form).not.toHaveProperty('region');
     expect(form).not.toHaveProperty('website');
     expect(form.address).not.toHaveProperty('nearStreetCode');
+  });
+
+  it('books in Hebrew when the client sends no language', () => {
+    expect(parseForm(makeFormInput()).lang).toBe('he');
+  });
+
+  it('keeps English', () => {
+    expect(parseForm({ ...makeFormInput(), lang: 'en' }).lang).toBe('en');
+  });
+
+  it('rejects a language the app does not speak, on the lang field', () => {
+    const result = orderFormSchema.safeParse({ ...makeFormInput(), lang: 'fr' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([['lang']]);
   });
 
   it('rejects a body that is not an object without throwing', () => {

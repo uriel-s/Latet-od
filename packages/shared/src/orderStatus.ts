@@ -20,7 +20,10 @@ export const ORDER_STATUSES = [
 export const orderStatusSchema = z.enum(ORDER_STATUSES);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
-/** Hebrew name of each status, as Yoel and the customer see it. */
+/**
+ * Hebrew name of each status, as Yoel and the customer see it. The English, and a copy of this
+ * Hebrew, are in i18n.ts under `orderStatus.*`: change both.
+ */
 export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
   waiting: 'ממתינה לסבב',
   pending: 'ממתינה לאישור',

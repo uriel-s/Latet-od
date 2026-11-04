@@ -26,6 +26,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { streetsFileSchema, type Region, type Street, type StreetsFile } from '@bottlerun/shared';
+import { transliterateStreetName } from './transliterateStreetName.ts';
 
 /** Absolute path of the committed street list, packages/shared/data/streets.json. */
 export const STREETS_FILE: string = fileURLToPath(
@@ -157,14 +158,15 @@ export function parseStreetList(json: unknown): StreetListEntry[] {
 }
 
 /**
- * A street with its keys in the file's order (code, name, region, lat, lng) and absent keys
- * left out, so serialized lines are stable and diffs stay one line per changed street.
+ * A street with its keys in the file's order (code, name, nameEn, region, lat, lng) and absent
+ * keys left out, so serialized lines are stable and diffs stay one line per changed street.
  */
 function orderedStreet(street: Street): Street {
-  const { code, name, region, lat, lng } = street;
+  const { code, name, nameEn, region, lat, lng } = street;
   return {
     code,
     name,
+    nameEn,
     ...(region === undefined ? {} : { region }),
     ...(lat === undefined ? {} : { lat }),
     ...(lng === undefined ? {} : { lng }),
@@ -177,6 +179,11 @@ function orderedStreet(street: Street): Street {
  * when its name changed: a renamed street is still the same road. Codes not in the list are
  * dropped, new codes are added without a point. Returns the new streets sorted by code plus what
  * changed, for the log.
+ *
+ * English names (`nameEn`): an unchanged street keeps its own, which may be OSM's `name:en` or a
+ * hand fix. A new code gets transliterateStreetName of its name, and so does a renamed street:
+ * its old English name described the old Hebrew name. Running scripts/english-street-names.ts
+ * afterwards replaces a transliteration with OSM's `name:en` where OSM has one.
  */
 export function mergeStreetList(
   current: readonly Street[],
@@ -196,7 +203,11 @@ export function mergeStreetList(
   const renamed: { code: number; from: string; to: string }[] = [];
   for (const entry of [...list].sort(byCode)) {
     const existing = currentByCode.get(entry.code);
-    const street = orderedStreet({ ...existing, code: entry.code, name: entry.name });
+    const nameEn =
+      existing !== undefined && existing.name === entry.name
+        ? existing.nameEn
+        : transliterateStreetName(entry.name);
+    const street = orderedStreet({ ...existing, code: entry.code, name: entry.name, nameEn });
     streets.push(street);
     if (existing === undefined) added.push(street);
     else if (existing.name !== entry.name) {
@@ -549,8 +560,8 @@ export function setStreetPoint(file: StreetsFile, code: number, point: LatLng): 
 
 /**
  * The file's exact text format: header keys indented 2 spaces, then each street on its own line
- * (4 spaces + compact JSON, keys code,name,region,lat,lng), sorted by code, LF, trailing newline.
- * One street per line keeps git diffs readable; prettier is told to leave the file alone.
+ * (4 spaces + compact JSON, keys code,name,nameEn,region,lat,lng), sorted by code, LF, trailing
+ * newline. One street per line keeps git diffs readable; prettier is told to leave the file alone.
  */
 export function serializeStreetsFile(file: StreetsFile): string {
   const header = [

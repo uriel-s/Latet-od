@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { israeliMobileSchema, e164MobileSchema } from './phone.ts';
 import { orderStatusSchema } from './orderStatus.ts';
 import { findStreet, regionSchema } from './streets.ts';
+import { DEFAULT_LANG, langSchema, t, type Lang } from './i18n.ts';
 
 // ---------------------------------------------------------------------------------------------
 // Limits and messages
@@ -34,6 +35,10 @@ export const FORM_TEXT_MAX_LENGTH = {
 /**
  * Plain-Hebrew messages of the booking form. Each is shown next to its field, so it says what to
  * do in a few words: most customers are elderly (spec §3.1, ת9).
+ *
+ * The api and zod answer in this Hebrew; the web shows a message in the customer's language with
+ * {@link formErrorText}. The English, and a copy of this Hebrew, are in i18n.ts under
+ * `formError.*`: change both.
  */
 export const ORDER_FORM_ERRORS = {
   nameRequired: 'נא לכתוב שם',
@@ -54,6 +59,34 @@ export const ORDER_FORM_ERRORS = {
   bottlesTooMany: 'המספר גדול מדי, נא לבדוק',
 } as const;
 
+/** A key of {@link ORDER_FORM_ERRORS}. */
+type OrderFormErrorKey = keyof typeof ORDER_FORM_ERRORS;
+
+/**
+ * Each Hebrew message of {@link ORDER_FORM_ERRORS} back to its key, built once at load. A Map, not
+ * an object: a message such as "toString" must not find Object.prototype's.
+ */
+const FORM_ERROR_KEY_BY_MESSAGE: ReadonlyMap<string, OrderFormErrorKey> = new Map(
+  (Object.keys(ORDER_FORM_ERRORS) as OrderFormErrorKey[]).map((key) => [
+    ORDER_FORM_ERRORS[key],
+    key,
+  ]),
+);
+
+/**
+ * A booking-form field message in `lang`. The api's 400 (`fieldErrors`) and zod both give the
+ * Hebrew of {@link ORDER_FORM_ERRORS}; this finds that message's key and returns the dictionary
+ * text `formError.<key>`, so the web shows it in English without the api changing.
+ *
+ * A message that is not one of ORDER_FORM_ERRORS (the phone's own message, zod's default text, '')
+ * is returned as is, in any language: better a Hebrew message than none.
+ */
+export function formErrorText(lang: Lang, message: string): string {
+  const key = FORM_ERROR_KEY_BY_MESSAGE.get(message);
+  if (key === undefined) return message;
+  return t(lang, `formError.${key}`, { min: MIN_BOTTLES });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------------------------
@@ -65,7 +98,10 @@ export const ORDER_FORM_ERRORS = {
 export const bottlesSpotSchema = z.enum(['privateHouse', 'apartmentDoor', 'buildingEntrance']);
 export type BottlesSpot = z.infer<typeof bottlesSpotSchema>;
 
-/** The form's answers to "איפה הבקבוקים", as the customer and Yoel see them. */
+/**
+ * The form's answers to "איפה הבקבוקים", as the customer and Yoel see them. The English, and a
+ * copy of this Hebrew, are in i18n.ts under `bottlesSpot.*`: change both.
+ */
 export const BOTTLES_SPOT_LABELS: Readonly<Record<BottlesSpot, string>> = {
   privateHouse: 'בכניסה לבית פרטי',
   // "בבניין" first: in the form this sits between a private house and the building's entrance,
@@ -231,6 +267,12 @@ export const orderSchema = z.object({
   lastMiss: lastMissSchema.optional(),
   messages: z.array(messageLogEntrySchema),
   source: orderSourceSchema,
+  /**
+   * The language the customer booked in: the language of the texts and WhatsApp messages the
+   * order gets later. An order stored before languages existed has no `lang` and reads as
+   * Hebrew (the default), so no migration is needed. An unknown value ('fr') is rejected.
+   */
+  lang: langSchema.default(DEFAULT_LANG),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   collectedAt: timestampSchema.optional(),
@@ -375,6 +417,13 @@ export const orderFormSchema = z.object({
   }),
   address: addressInputSchema,
   bottlesEstimated: bottlesEstimatedInputSchema,
+  /**
+   * The language the form was filled in, stored on the order (see {@link orderSchema}). Optional:
+   * a client that sends none (an older page, Yoel's "הוספת הזמנה") books in Hebrew. An unknown
+   * value is rejected with zod's own message: only a broken client sends one, and no field of the
+   * form shows it.
+   */
+  lang: langSchema.default(DEFAULT_LANG),
 });
 
 /** What the form sends: strings as typed, the number of bottles possibly as a string. */

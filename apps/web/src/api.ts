@@ -5,6 +5,7 @@ import {
   COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
   CUSTOMER_ORDER_MESSAGES,
+  DEFAULT_LANG,
   LOGIN_MESSAGES,
   ROUND_MESSAGES,
   collectorOrderResponseSchema,
@@ -16,6 +17,7 @@ import {
   messageOpenedResponseSchema,
   roundViewSchema,
   roundsResponseSchema,
+  t,
   type AddOrderRequest,
   type CollectStopRequest,
   type CollectorOrder,
@@ -24,6 +26,7 @@ import {
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
   type HistoryResponse,
+  type Lang,
   type LoginRequest,
   type MoveStopRequest,
   type OrderGroup,
@@ -46,7 +49,12 @@ const globalFetch: FetchFn = (input, init) => fetch(input, init);
  * Shown on a form when what it sent got no usable answer (the booking form's order, the planning
  * screen's round, a button of the customer's page), or its answer was not understood.
  */
-export const NETWORK_ERROR_MESSAGE = 'לא הצלחנו לשלוח. נא לבדוק את החיבור לאינטרנט ולנסות שוב.';
+export const NETWORK_ERROR_MESSAGE = networkErrorMessage(DEFAULT_LANG);
+
+/** {@link NETWORK_ERROR_MESSAGE} in `lang`, for the English booking form. */
+export function networkErrorMessage(lang: Lang): string {
+  return t(lang, 'form.networkError');
+}
 
 /**
  * Wakes the api when the form loads (ADR-0002, warm-up): `GET /api/health` starts the serverless

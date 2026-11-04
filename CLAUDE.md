@@ -141,13 +141,16 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 3. **Interfaces first.** Shared types / zod schemas in `packages/shared`, then the api, then the web UI.
 4. **Tests with every change.** Write or update the test next to the code (`foo.ts` → `foo.test.ts`).
 5. **Narrow check while working:** `bash .claude/checks.sh test <the test files you touched>` — explicit file paths only, never a bare `test` or a directory. Then `bash .claude/checks.sh lint`.
+   While iterating on a sub-task, lint only the files you touched (`npx eslint <files>`); the whole-repo `lint` takes ~90 s here, so run it once at the end, not after every small fix.
 6. **Full check before every commit you hand over:** `bash .claude/checks.sh all` must be green.
+   **Exception — under `/dev` or `/work --auto`:** do NOT run `all` inside the work phase. The caller's verify gate (Phase F) runs it right after you return; a second run is ~3 minutes of wasted time. This overrides the rule above.
+   **No python here.** Never run `python`, `python -`, pytest or ruff, not even to probe whether it exists. `python -` waits for stdin and hangs for the full 120 s tool timeout.
 7. **Commit** with explicit paths (`git add <files>`, never `git add -A` / `git add .`) and an English message in the imperative. Never commit `.env`, `.work-context.md`, or `.dev-*` files.
 8. **Never push or merge without the user's explicit approval.** Pushing `main` is blocked by the pre-push hook; open a PR (/pr).
 
 ## Rules
 
-- **Hebrew and RTL.** All UI text is Hebrew; `dir="rtl"` on the document. Phone numbers and digits render LTR inside the text (`<bdi>` / `dir="ltr"`). Dates `DD/MM`. Time zone `Asia/Jerusalem`, also for monthly statistics.
+- **Hebrew and RTL.** The collector app is Hebrew only, and so are the Open Graph tags. The booking form (`/` Hebrew, `/en` English) and the customer page `/o/<token>` follow the order's `lang` (`he`|`en`, ADR-0010): texts come from the `t()` dictionary in `packages/shared/src/i18n.ts`, no i18n library, and the document `lang`/`dir` switch with it (`rtl` for Hebrew). Hebrew pages use `dir="rtl"`. Phone numbers and digits render LTR inside the text (`<bdi>` / `dir="ltr"`). Dates `DD/MM`. Time zone `Asia/Jerusalem`, also for monthly statistics.
 - **Mobile first, built for elderly customers.** Single column, font ≥18px, tap targets ≥48px, WCAG AA contrast, numeric keyboard for phone and quantity, errors in plain words next to the field.
 - **No secrets in code.** Everything secret or private comes from env; `apps/api/.env.example` lists every variable with no real values; `.env` is git-ignored. Yoel's home address (`ROUTE_START`) counts as private.
 - **Every external call sits behind an interface with a fake for tests.** Today: WhatsApp → `MessageSender` (ADR-0003). Also MongoDB → repositories (`OrdersRepo`, `RoundsRepo`), rate-limit store → `AttemptStore` (ADR-0004), distances → `DistanceMatrix` (ADR-0005). Tests never touch the network or Atlas.
