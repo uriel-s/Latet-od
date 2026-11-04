@@ -33,6 +33,7 @@
   /* Not in ADR-0011, which names no error colour: the red the app already used, AA on --card. */
   --error: #b91c1c;
   --white: #ffffff; /* text on --brand and --brand-2 */
+  --peach: #f0c79f; /* the hint of dawn on the bunting; decoration only, never text */
 
   /* Spacing steps and corners, from the mockup. */
   --space-1: 4px;
@@ -43,6 +44,10 @@
   --r-sm: 12px;
   --r-md: 16px;
   --r-lg: 22px;
+  --r-header: 28px; /* the header's rounded bottom corners */
+  --r-nav: 24px; /* the floating bottom bar */
+  --nav-gap: 12px; /* space between the floating bar and the screen edge */
+  --nav-height: 4.5rem; /* the bar: icon over label, taller than --tap-target */
   --shadow-1: 0 1px 2px rgb(20 30 25 / 5%), 0 6px 18px rgb(20 30 25 / 7%); /* cards */
   --shadow-btn: 0 6px 16px rgb(20 40 32 / 28%); /* the primary button */
 
@@ -192,8 +197,22 @@ h1[tabindex='-1']:focus {
 /* The padding lives on the full-width header, not its .column, so the brand colour also fills
    the strip behind the status bar or notch at the top (viewport-fit=cover, index.html). */
 .site-header {
-  background: var(--color-accent);
-  padding-block: calc(0.75rem + env(safe-area-inset-top)) 0.75rem;
+  background: var(--hdr);
+  color: var(--white);
+  border-radius: 0 0 var(--r-header) var(--r-header);
+  padding-block: calc(0.75rem + env(safe-area-inset-top)) 1rem;
+  /* The gradient turns light towards the lower edge, where white text is under 4.5:1: a soft
+     shadow and the bold weight below keep the name and slogan readable (large bold text). */
+  text-shadow: 0 1px 3px rgb(23 37 54 / 45%);
+}
+
+/* Yoel's app: a thin strip with the slogan only, no app name and no bunting. */
+.site-header-compact {
+  padding-block: calc(0.5rem + env(safe-area-inset-top)) 0.625rem;
+}
+
+.site-header-compact .app-slogan {
+  font-weight: 700;
 }
 
 /* The name and slogan, and (booking form only) "כניסת מנהל" opposite them; the button drops under
@@ -214,6 +233,7 @@ h1[tabindex='-1']:focus {
    (--brand on it is AA too, styles.test.ts), or only its text would show ("כניסת מנהל"). */
 .site-header .button-secondary {
   background: var(--card);
+  text-shadow: none;
 }
 
 /* The flyer's garland of flags (components/Bunting.tsx), hanging from the header's lower edge onto
@@ -225,16 +245,22 @@ h1[tabindex='-1']:focus {
   pointer-events: none;
 }
 
+/* Soft blue, card white and a hint of peach: the dawn palette on the garland. */
 .bunting-flag-light {
-  fill: var(--color-accent);
+  fill: var(--brand-soft);
 }
 
 .bunting-flag-white {
-  fill: var(--color-white);
+  fill: var(--card);
+}
+
+.bunting-flag-peach {
+  fill: var(--peach);
 }
 
 .bunting-flag-light,
-.bunting-flag-white {
+.bunting-flag-white,
+.bunting-flag-peach {
   stroke: var(--color-text);
   stroke-opacity: 0.2;
   stroke-width: 1;
@@ -675,27 +701,31 @@ button.button-not-ready[aria-disabled='true'] {
 }
 
 /*
- * The bottom navigation (BottomNav.tsx): fixed to the bottom of the screen, full width, three
- * equal tabs. In the right-to-left row the first tab (הזמנות) is on the right. The padding keeps
- * the tabs above the iPhone's home bar and, in landscape, out from under the notch at the sides
- * (physical left/right, like env()); the white background still runs edge to edge.
+ * The bottom navigation (BottomNav.tsx): a floating bar with rounded corners and a shadow, lifted
+ * off the screen edge by --nav-gap plus the iPhone's home bar (env(safe-area-inset-bottom)), and
+ * kept off the sides (and out from under a landscape notch) by the same gap. Three equal tabs, an
+ * icon over each label; in the right-to-left row the first tab (הזמנות) is on the right.
  */
 .bottom-nav {
   position: fixed;
-  inset-inline: 0;
-  bottom: 0;
+  left: max(var(--nav-gap), env(safe-area-inset-left));
+  right: max(var(--nav-gap), env(safe-area-inset-right));
+  bottom: calc(var(--nav-gap) + env(safe-area-inset-bottom));
   z-index: 10;
-  border-block-start: 2px solid var(--color-text);
-  background: var(--color-white);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  max-width: 32rem;
+  margin-inline: auto;
+  border-radius: var(--r-nav);
+  background: var(--card);
+  box-shadow:
+    var(--shadow-1),
+    0 8px 24px rgb(20 40 60 / 18%);
+  padding: 0.25rem;
 }
 
 .bottom-nav-list {
   display: flex;
-  max-width: 32rem;
-  margin: 0 auto;
+  gap: 0.25rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -704,48 +734,44 @@ button.button-not-ready[aria-disabled='true'] {
   flex: 1;
 }
 
-/*
- * A whole tab is the tap target. The 4px bar on top is transparent until the tab is current:
- * reserved here, so the text does not move when it appears.
- */
+/* A whole tab is the tap target: the icon above the label, centred. */
 .bottom-nav-link {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: var(--tap-target);
+  gap: 0.125rem;
+  min-height: calc(var(--nav-height) - 0.5rem);
   padding: 0.25rem 0.5rem;
-  border-block-start: 4px solid transparent;
-  color: var(--color-text);
+  border-radius: calc(var(--r-nav) - 4px);
+  color: var(--muted);
   font-weight: 700;
   text-align: center;
   text-decoration: none;
 }
 
-/* The tabs touch each other and the screen edge, so the ring goes inside the tab, not around it. */
-.bottom-nav-link:focus-visible {
-  outline-offset: -5px;
-}
-
-/* The current tab: a bar, a background (--color-text on it is 6.5:1) and an underline, so it is
-   told apart by shape, not by colour alone. */
+/* The current tab: a --brand-soft pill with --brand text (AA, styles.test.ts) and an underline, so
+   it is told apart by shape and weight, not by colour alone. */
 .bottom-nav-link[aria-current='page'] {
-  border-block-start-color: var(--color-text);
-  background: var(--color-accent);
+  background: var(--brand-soft);
+  color: var(--brand);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
 /*
- * While the bottom navigation is on the page, the page ends with empty space as tall as the
- * navigation, so it never covers the end of a screen or the OSM credit in the footer. The same
+ * While the bottom navigation is on the page, the page ends with empty space as tall as the floating
+ * bar and its gaps, so it never covers the end of a screen or the OSM credit in the footer. The same
  * space is kept when the browser scrolls a focused field into view.
  */
 .layout:has(.bottom-nav) {
-  padding-block-end: calc(var(--tap-target) + 2px + env(safe-area-inset-bottom));
+  padding-block-end: calc(var(--nav-height) + 2 * var(--nav-gap) + env(safe-area-inset-bottom));
 }
 
 html:has(.bottom-nav) {
-  scroll-padding-block-end: calc(var(--tap-target) + 2px + env(safe-area-inset-bottom));
+  scroll-padding-block-end: calc(
+    var(--nav-height) + 2 * var(--nav-gap) + env(safe-area-inset-bottom)
+  );
 }
 
 /* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */

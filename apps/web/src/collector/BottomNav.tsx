@@ -1,7 +1,15 @@
 // The collector app's bottom navigation (spec §3): הזמנות | סבבים | היסטוריה. Fixed to the bottom
-// of the screen (styles.css `.bottom-nav`), so the tabs stay under Yoel's thumb on every screen.
+// of the screen as a floating rounded bar (styles.css `.bottom-nav`), so the tabs stay under Yoel's thumb on every screen.
+import { Icon, type IconName } from '../components/Icon.tsx';
 import { Link } from '../router.tsx';
 import { COLLECTOR_TABS, type CollectorTab } from './tabs.ts';
+
+// The icon above each tab's label (ADR-0011 item 4). Decoration: the text label stays the name.
+const TAB_ICONS: Record<CollectorTab, IconName> = {
+  orders: 'list',
+  rounds: 'route',
+  history: 'clock',
+};
 
 /**
  * The three tabs as links, in a `<nav>` that screen readers list as "ניווט באפליקציה". The link
@@ -19,7 +27,8 @@ export function BottomNav({ activeTab }: { activeTab: CollectorTab | null }) {
               className="bottom-nav-link"
               aria-current={tab === activeTab ? 'page' : undefined}
             >
-              {label}
+              <Icon name={TAB_ICONS[tab]} />
+              <span>{label}</span>
             </Link>
           </li>
         ))}

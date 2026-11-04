@@ -1,5 +1,5 @@
-// The frame around every page: the brand at the top (spec §3.1, colours in styles.css from
-// spec §7) with the flyer's garland of flags under it and, on the public booking form, the
+// The frame around every page: the brand at the top (spec §3.1, the dawn gradient of ADR-0011
+// in styles.css) with the flyer's garland of flags under it and, on the public booking form, the
 // collector's way in; the page itself in <main>; and a quiet footer with the OpenStreetMap credit
 // (ADR-0005: the street points come from OSM under ODbL, so the credit is on every page).
 import type { ReactNode } from 'react';
@@ -21,6 +21,11 @@ export interface LayoutProps {
    * only confuse an elderly customer.
    */
   collectorLink?: boolean;
+  /**
+   * Yoel's app: a thin header with the slogan only and no bunting. The app name and the garland
+   * are for the public pages; in the app they only take room from the work on the screen.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -31,13 +36,18 @@ export interface LayoutProps {
  * בקבוקים"). So a screen reader's heading list starts at what the page is about, and pages never
  * compete with the header for the `<h1>`.
  */
-export function Layout({ children, lang = DEFAULT_LANG, collectorLink = false }: LayoutProps) {
+export function Layout({
+  children,
+  lang = DEFAULT_LANG,
+  collectorLink = false,
+  compact = false,
+}: LayoutProps) {
   return (
     <div className="layout">
-      <header className="site-header">
+      <header className={compact ? 'site-header site-header-compact' : 'site-header'}>
         <div className="column site-header-inner">
           <div>
-            <p className="app-name">{APP_NAME}</p>
+            {!compact && <p className="app-name">{APP_NAME}</p>}
             <p className="app-slogan">{t(lang, 'appSlogan')}</p>
           </div>
           {/* Yoel logs in from the Hebrew page; the English form has no collector button. */}
@@ -48,7 +58,7 @@ export function Layout({ children, lang = DEFAULT_LANG, collectorLink = false }:
           )}
         </div>
       </header>
-      <Bunting />
+      {!compact && <Bunting />}
 
       <main className="column site-main">{children}</main>
 

@@ -40,4 +40,16 @@ describe('BottomNav', () => {
 
     expect(window.location.pathname).toBe('/app/rounds');
   });
+
+  it('draws an icon over each label, hidden from screen readers', () => {
+    render(<BottomNav activeTab="orders" />);
+
+    for (const link of tabLinks()) {
+      expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    }
+    // The accessible name stays the visible label.
+    expect(screen.getByRole('link', { name: 'הזמנות' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'סבבים' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'היסטוריה' })).toBeDefined();
+  });
 });
