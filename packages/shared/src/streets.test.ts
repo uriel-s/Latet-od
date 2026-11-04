@@ -260,6 +260,48 @@ describe('searchStreets', () => {
     expect(searchCodes('נחל ש', streets)).toEqual([2, 1]);
   });
 
+  it('finds a street by its English name, in any letter case', () => {
+    for (const query of ['herzl', 'Herzl', 'HERZL']) {
+      expect(searchCodes(query), query).toEqual([101]);
+    }
+  });
+
+  it('finds a street by the start of a word of its English name', () => {
+    expect(searchCodes('jabot')).toEqual([103]);
+    expect(searchCodes('rambam')).toEqual([140]);
+  });
+
+  it('matches no street for Latin letters that are no word start of any name', () => {
+    expect(searchStreets('xyzzy')).toEqual([]);
+    // Inside "Herzl" and "Jabotinsky", but not at the start of a word.
+    expect(searchStreets('rzl')).toEqual([]);
+    expect(searchStreets('botinsky')).toEqual([]);
+  });
+
+  it('treats a hyphen in an English name like a space', () => {
+    // Also Simtat Ben-Eliezer and Kiryat Ben Eliezer; the street named just that comes first.
+    for (const query of ['ben eliezer', 'ben-eliezer', 'Ben-Eliezer']) {
+      const codes = searchCodes(query);
+      expect(codes[0], query).toBe(202);
+    }
+  });
+
+  it('matches an English name with an apostrophe typed with or without it', () => {
+    for (const query of ['maale david', "ma'ale david", 'ma’ale david']) {
+      expect(searchCodes(query), query).toEqual([132]);
+    }
+  });
+
+  it('lists English names that start with the query before ones that only contain it', () => {
+    const streets: Street[] = [
+      { code: 1, name: 'דרך רבין יצחק', nameEn: 'Derekh Rabin Yitzhak' },
+      { code: 2, name: 'שד רבין', nameEn: 'Rabin Boulevard' },
+      { code: 3, name: 'כיכר רבין', nameEn: 'Kikar Rabin' },
+      { code: 4, name: 'רבין', nameEn: 'Rabin' },
+    ];
+    expect(searchCodes('rabin', streets)).toEqual([2, 4, 1, 3]);
+  });
+
   it('does not mutate the list it searches', () => {
     // The result reorders these two (starts-with first); the input must keep its order.
     const streets: readonly Street[] = Object.freeze([

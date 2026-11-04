@@ -111,15 +111,19 @@ function toSearchWords(text: string): string[] {
 }
 
 /**
- * Streets whose name matches what the customer typed, for the street picker.
+ * Streets whose Hebrew or English name matches what the customer typed, for the street picker.
  *
- * Matching is per word, in any order: every query word must be the start of some word of the
- * name. The official list writes some names surname-first ("דרך רבין יצחק"), so "רבין" and
- * "יצחק רבין" must both find it. An empty query (or only spaces / punctuation) returns no
+ * Each name is tested on its own, with the same normalisation and the same rule: every query
+ * word must be the start of some word of that name, in any order. The official list writes some
+ * names surname-first ("דרך רבין יצחק"), so "רבין" and "יצחק רבין" must both find it. The
+ * English name is searched because the English form's customers type Latin letters ("herzl",
+ * "ben-eliezer", "maale david"); the order still stores the street code and Hebrew name, only
+ * what the picker displays changes. An empty query (or only spaces / punctuation) returns no
  * streets: the picker stays empty until the customer types.
  *
- * Names that start with the query come first, then the rest; each group keeps the order of
- * `streets` (by code for the default list). Returns a new array and never mutates `streets`.
+ * Streets with a name (Hebrew or English) that starts with the query come first, then the rest;
+ * each group keeps the order of `streets` (by code for the default list). Returns a new array
+ * and never mutates `streets`.
  */
 export function searchStreets(query: string, streets: readonly Street[] = STREETS): Street[] {
   const queryWords = toSearchWords(query);
@@ -129,13 +133,18 @@ export function searchStreets(query: string, streets: readonly Street[] = STREET
   const startsWithQuery: Street[] = [];
   const containsQuery: Street[] = [];
   for (const street of streets) {
-    const nameWords = toSearchWords(street.name);
-    const matches = queryWords.every((queryWord) =>
-      nameWords.some((nameWord) => nameWord.startsWith(queryWord)),
+    const names = [toSearchWords(street.name), toSearchWords(street.nameEn)];
+    const matches = names.some((nameWords) =>
+      queryWords.every((queryWord) => nameWords.some((nameWord) => nameWord.startsWith(queryWord))),
     );
     if (!matches) continue;
-    if (nameWords.join(' ').startsWith(queryPhrase)) startsWithQuery.push(street);
-    else containsQuery.push(street);
+    // A name that starts with the query phrase also matches it word by word, so "either name
+    // starts with it" never ranks a street by a name that did not match.
+    if (names.some((nameWords) => nameWords.join(' ').startsWith(queryPhrase))) {
+      startsWithQuery.push(street);
+    } else {
+      containsQuery.push(street);
+    }
   }
   return [...startsWithQuery, ...containsQuery];
 }
