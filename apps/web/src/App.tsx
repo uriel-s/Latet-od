@@ -1,7 +1,7 @@
 // The root component, and the single place routes are listed: the URL path picks a page
 // (router.tsx), and every page sits inside the shared Layout (header, main, OSM footer).
 import { useEffect, useRef, type ReactNode } from 'react';
-import { APP_NAME } from '@bottlerun/shared';
+import { APP_NAME, DEFAULT_LANG } from '@bottlerun/shared';
 import { CollectorApp } from './collector/CollectorApp.tsx';
 import { Layout } from './Layout.tsx';
 import { OrderFormPage } from './orderForm/OrderFormPage.tsx';
@@ -11,6 +11,7 @@ import { OrderPage } from './pages/OrderPage.tsx';
 import { announcePageChange } from './pageChange.ts';
 import { CollectorPwaHead } from './pwaHead.tsx';
 import { matchRoute, useLocation, type Route } from './router.tsx';
+import { useDocumentLanguage } from './useDocumentLanguage.ts';
 
 /** The whole web app: public form, customer page and collector app, chosen by the URL. */
 export function App() {
@@ -28,11 +29,15 @@ export function App() {
   }, [pathname]);
 
   const route = matchRoute(pathname);
+  const lang = route.name === 'orderFormEn' ? 'en' : DEFAULT_LANG;
+  useDocumentLanguage(lang);
   return (
     <>
       {/* Only the collector app is installable; customers get a plain website (pwaHead.tsx). */}
       {isCollectorRoute(route) && <CollectorPwaHead />}
-      <Layout collectorLink={route.name === 'orderForm'}>{pageFor(route)}</Layout>
+      <Layout lang={lang} collectorLink={route.name === 'orderForm'}>
+        {pageFor(route)}
+      </Layout>
     </>
   );
 }
@@ -50,7 +55,9 @@ function isCollectorRoute(route: Route): boolean {
 function pageFor(route: Route): ReactNode {
   switch (route.name) {
     case 'orderForm':
-      return <OrderFormPage />;
+      return <OrderFormPage key="he" />;
+    case 'orderFormEn':
+      return <OrderFormPage key="en" lang="en" />;
     case 'orderPage':
       // `key`: another token is another order, so the page mounts anew and loads it.
       return <OrderPage key={route.token} token={route.token} />;

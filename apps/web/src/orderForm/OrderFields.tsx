@@ -5,10 +5,12 @@
 // its state (useOrderForm), the honeypot and the submit button.
 import { useId } from 'react';
 import {
-  BOTTLES_SPOT_LABELS,
+  DEFAULT_LANG,
   FORM_TEXT_MAX_LENGTH,
   MIN_BOTTLES,
   bottlesSpotSchema,
+  t,
+  type Lang,
 } from '@bottlerun/shared';
 import { TextField } from '../components/TextField.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
@@ -27,6 +29,11 @@ export interface OrderFieldsProps {
    * name, so neither field is offered.
    */
   showContact?: boolean;
+  /**
+   * The language of labels, hints and answers. Default Hebrew; the English booking form passes
+   * 'en'. Error messages arrive already in the right language (`errors`).
+   */
+  lang?: Lang;
 }
 
 /**
@@ -44,6 +51,7 @@ export function OrderFields({
   errors,
   onFieldChange,
   showContact = true,
+  lang = DEFAULT_LANG,
 }: OrderFieldsProps) {
   const spotGroupName = useId();
   const spotErrorId = useId();
@@ -54,7 +62,7 @@ export function OrderFields({
       {showContact && (
         <>
           <TextField
-            label="שם"
+            label={t(lang, 'form.name')}
             value={values.name}
             onChange={(name) => onFieldChange('name', name)}
             error={errors.name}
@@ -63,7 +71,7 @@ export function OrderFields({
           />
 
           <TextField
-            label="טלפון נייד"
+            label={t(lang, 'form.phone')}
             type="tel"
             digits
             value={values.phone}
@@ -71,7 +79,7 @@ export function OrderFields({
             error={errors.phone}
             hint={
               <>
-                למשל <bdi dir="ltr">050-1234567</bdi>
+                {t(lang, 'form.phoneExample')} <bdi dir="ltr">050-1234567</bdi>
               </>
             }
             autoComplete="tel"
@@ -82,7 +90,8 @@ export function OrderFields({
       {/* The picker reads `value` once, when it mounts. A prefill exists before the first
           render, so the saved street shows without a remount `key`. */}
       <StreetPicker
-        label="רחוב"
+        label={t(lang, 'form.street')}
+        lang={lang}
         value={values.street}
         onChange={(street) => onFieldChange('street', street)}
         error={errors.street}
@@ -90,7 +99,7 @@ export function OrderFields({
 
       <TextField
         // Not numeric: a house number may carry a letter ("12א").
-        label="מספר בית"
+        label={t(lang, 'form.houseNumber')}
         value={values.houseNumber}
         onChange={(houseNumber) => onFieldChange('houseNumber', houseNumber)}
         error={errors.houseNumber}
@@ -101,7 +110,7 @@ export function OrderFields({
       />
 
       <fieldset className="field" aria-describedby={spotError ? spotErrorId : undefined}>
-        <legend className="field-label">איפה הבקבוקים</legend>
+        <legend className="field-label">{t(lang, 'form.bottlesSpot')}</legend>
         <div className="choice-list">
           {bottlesSpotSchema.options.map((spot) => (
             <label key={spot} className="choice">
@@ -113,7 +122,7 @@ export function OrderFields({
                 onChange={() => onFieldChange('bottlesSpot', spot)}
                 aria-invalid={spotError ? true : undefined}
               />
-              {BOTTLES_SPOT_LABELS[spot]}
+              {t(lang, `bottlesSpot.${spot}`)}
             </label>
           ))}
         </div>
@@ -128,33 +137,33 @@ export function OrderFields({
           value stays in state but is not sent (validateOrderDetails). */}
       {values.bottlesSpot === 'apartmentDoor' && (
         <TextField
-          label="קומה ודירה"
+          label={t(lang, 'form.floorApt')}
           value={values.floorApt}
           onChange={(floorApt) => onFieldChange('floorApt', floorApt)}
           error={errors.floorApt}
-          hint="למשל: כניסה ב', קומה 3, דירה 12"
+          hint={t(lang, 'form.floorAptHint')}
           autoComplete="off"
           maxLength={FORM_TEXT_MAX_LENGTH.floorApt}
         />
       )}
 
       <TextField
-        label="הערה (לא חובה)"
+        label={t(lang, 'form.note')}
         value={values.note}
         onChange={(note) => onFieldChange('note', note)}
         error={errors.note}
-        hint="למשל: ליד השער, קוד לבניין"
+        hint={t(lang, 'form.noteHint')}
         autoComplete="off"
         maxLength={FORM_TEXT_MAX_LENGTH.note}
       />
 
       <TextField
-        label="כמות בקבוקים"
+        label={t(lang, 'form.bottles')}
         digits
         value={values.bottlesEstimated}
         onChange={(bottlesEstimated) => onFieldChange('bottlesEstimated', bottlesEstimated)}
         error={errors.bottlesEstimated}
-        hint={`לפחות ${MIN_BOTTLES} בקבוקים`}
+        hint={t(lang, 'form.bottlesHint', { min: MIN_BOTTLES })}
         autoComplete="off"
       />
     </>

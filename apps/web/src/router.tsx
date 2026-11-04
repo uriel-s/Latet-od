@@ -11,6 +11,8 @@ import { useSyncExternalStore, type MouseEvent, type ReactNode } from 'react';
 export type Route =
   /** `/`: the public booking form (spec §3.1). */
   | { name: 'orderForm' }
+  /** `/en`: the same booking form in English (left to right). A direct link, and a reload stays English. */
+  | { name: 'orderFormEn' }
   /** `/o/<token>`: the customer's own order page (spec §3.3, section 9). */
   | { name: 'orderPage'; token: string }
   /** `/login`: the collector's login (spec §3.4, section 5). */
@@ -32,6 +34,7 @@ const COLLECTOR_PATH = /^\/app(?:\/(.*))?$/;
 /** The page for a URL path (`location.pathname`, no query or hash). */
 export function matchRoute(pathname: string): Route {
   if (pathname === '/') return { name: 'orderForm' };
+  if (pathname === '/en' || pathname === '/en/') return { name: 'orderFormEn' };
 
   const orderPage = ORDER_PAGE_PATH.exec(pathname);
   if (orderPage?.[1] !== undefined) return { name: 'orderPage', token: orderPage[1] };
@@ -143,6 +146,8 @@ export interface LinkProps {
   /** History state for the target page; see {@link NavigateOptions.state}. */
   state?: unknown;
   className?: string;
+  /** The language of the link's text when it differs from the page's ("עברית" on the English page). */
+  lang?: string;
   /**
    * `'page'` on the link to the screen being shown, as in the collector app's bottom navigation:
    * screen readers announce it as the current page, and CSS styles it through the attribute.
@@ -157,7 +162,14 @@ export interface LinkProps {
  * {@link navigate}, with no reload; a click with a modifier key (new tab, new window, download)
  * is left to the browser.
  */
-export function Link({ to, state, className, 'aria-current': ariaCurrent, children }: LinkProps) {
+export function Link({
+  to,
+  state,
+  className,
+  lang,
+  'aria-current': ariaCurrent,
+  children,
+}: LinkProps) {
   function handleClick(event: MouseEvent<HTMLAnchorElement>): void {
     const isPlainLeftClick =
       event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -167,7 +179,7 @@ export function Link({ to, state, className, 'aria-current': ariaCurrent, childr
   }
 
   return (
-    <a href={to} className={className} aria-current={ariaCurrent} onClick={handleClick}>
+    <a href={to} className={className} lang={lang} aria-current={ariaCurrent} onClick={handleClick}>
       {children}
     </a>
   );

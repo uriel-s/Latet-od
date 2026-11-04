@@ -1280,3 +1280,14 @@ html:has(.bottom-nav) {
   height: 1px;
   overflow: hidden;
 }
+
+/* The language button at the top of the booking form ("English" / "עברית"): a full-width
+   secondary button, at least --tap-target tall (.button), with room before the heading. */
+.lang-switch {
+  margin-bottom: 1rem;
+}
+
+/* English pages read left to right: digit inputs (.ltr) then start at the left edge. */
+:root[dir='ltr'] .ltr {
+  text-align: left;
+}

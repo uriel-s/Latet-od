@@ -3,7 +3,7 @@
 // collector's way in; the page itself in <main>; and a quiet footer with the OpenStreetMap credit
 // (ADR-0005: the street points come from OSM under ODbL, so the credit is on every page).
 import type { ReactNode } from 'react';
-import { APP_NAME, APP_SLOGAN, STREETS_ATTRIBUTION } from '@bottlerun/shared';
+import { APP_NAME, DEFAULT_LANG, STREETS_ATTRIBUTION, t, type Lang } from '@bottlerun/shared';
 import { Bunting } from './components/Bunting.tsx';
 import { Link } from './router.tsx';
 
@@ -13,6 +13,8 @@ const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 /** Props of {@link Layout}. */
 export interface LayoutProps {
   children: ReactNode;
+  /** The language of the page's own texts (the slogan). Default Hebrew; the English form passes 'en'. */
+  lang?: Lang;
   /**
    * Adds the "כניסת מנהל" button to the header: a link to /login, for the public booking form
    * only. The customer's own page and Yoel's app do not need it, and an extra button there would
@@ -29,16 +31,17 @@ export interface LayoutProps {
  * בקבוקים"). So a screen reader's heading list starts at what the page is about, and pages never
  * compete with the header for the `<h1>`.
  */
-export function Layout({ children, collectorLink = false }: LayoutProps) {
+export function Layout({ children, lang = DEFAULT_LANG, collectorLink = false }: LayoutProps) {
   return (
     <div className="layout">
       <header className="site-header">
         <div className="column site-header-inner">
           <div>
             <p className="app-name">{APP_NAME}</p>
-            <p className="app-slogan">{APP_SLOGAN}</p>
+            <p className="app-slogan">{t(lang, 'appSlogan')}</p>
           </div>
-          {collectorLink && (
+          {/* Yoel logs in from the Hebrew page; the English form has no collector button. */}
+          {collectorLink && lang === DEFAULT_LANG && (
             <Link to="/login" className="button button-secondary header-login">
               כניסת מנהל
             </Link>

@@ -122,6 +122,53 @@ const HE = {
   // spec §6.1, word for word.
   'whatsapp.thankYou.thanks': 'הזמנתכם נאספה! תודה רבה שלקחתם חלק בלתת עוד!',
   'whatsapp.thankYou.orderAgain': 'להזמנה חוזרת:',
+
+  // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
+  // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
+  // {min} is MIN_BOTTLES.
+  'form.title': 'הזמנת איסוף בקבוקים',
+  'form.intro': 'ממלאים את הפרטים, ויואל יבוא לאסוף את הבקבוקים.',
+  'form.privacy': 'הפרטים משמשים רק לתיאום האיסוף',
+  'form.submit': 'שליחת הזמנה',
+  'form.sending': 'שולח...',
+  'form.notEnoughBottles': 'כדי לשלוח צריך לפחות {min} בקבוקים',
+  'form.honeypotLabel': 'אתר אינטרנט',
+  // The button that switches the form to the other language; each language names the other one.
+  'form.switchLanguage': 'English',
+  'form.name': 'שם',
+  'form.phone': 'טלפון נייד',
+  'form.phoneExample': 'למשל',
+  // Copy of phone.ts PHONE_ERROR (kept out of ORDER_FORM_ERRORS, so formErrorText leaves it alone).
+  'form.phoneInvalid': 'מספר נייד לא תקין. למשל: 050-1234567',
+  'form.street': 'רחוב',
+  'form.houseNumber': 'מספר בית',
+  'form.bottlesSpot': 'איפה הבקבוקים',
+  'form.floorApt': 'קומה ודירה',
+  'form.floorAptHint': "למשל: כניסה ב', קומה 3, דירה 12",
+  'form.note': 'הערה (לא חובה)',
+  'form.noteHint': 'למשל: ליד השער, קוד לבניין',
+  'form.bottles': 'כמות בקבוקים',
+  'form.bottlesHint': 'לפחות {min} בקבוקים',
+  'form.unknownField': 'יש פרט שלא מולא נכון. נא לבדוק את הטופס ולנסות שוב.',
+  'form.networkError': 'לא הצלחנו לשלוח. נא לבדוק את החיבור לאינטרנט ולנסות שוב.',
+
+  // The street picker.
+  'street.freeTextLabel': 'שם הרחוב',
+  'street.freeTextButton': 'הרחוב שלי לא ברשימה',
+  'street.backToList': 'חזרה לרשימת הרחובות',
+  'street.resultsLabel': 'רחובות שמתאימים לחיפוש',
+  'street.chosen': 'נבחר: {name}',
+  'street.notFound': 'לא מצאנו רחוב בשם הזה. אפשר לכתוב את השם אחרת.',
+  'street.notFoundOrFreeText':
+    'לא מצאנו רחוב בשם הזה. אפשר לכתוב את השם אחרת, או ללחוץ על "{button}".',
+  'street.foundOne': 'נמצא רחוב אחד. נא ללחוץ עליו.',
+  'street.foundMany': 'נמצאו {count} רחובות. נא ללחוץ על הרחוב הנכון.',
+  'street.foundTooMany': 'נמצאו הרבה רחובות. נא להמשיך לכתוב את השם, או ללחוץ על הרחוב הנכון.',
+
+  // The thank-you screen.
+  'thankYou.title': 'תודה!',
+  'thankYou.body': 'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp לאישור.',
+  'thankYou.viewOrder': 'לצפייה בהזמנה או לביטול',
 } as const satisfies Record<string, string>;
 
 /** A key of the app's dictionary. */
@@ -184,6 +231,51 @@ const EN = {
   'whatsapp.thankYou.thanks':
     'Your order has been collected! Thank you for taking part in לתת עוד!',
   'whatsapp.thankYou.orderAgain': 'To order again:',
+
+  // The booking form and its thank-you screen.
+  'form.title': 'Book a bottle pickup',
+  'form.intro': 'Fill in your details and Yoel will come to collect the bottles.',
+  'form.privacy': 'Your details are used only to arrange the pickup',
+  'form.submit': 'Send order',
+  'form.sending': 'Sending...',
+  'form.notEnoughBottles': 'To send, at least {min} bottles are needed',
+  'form.honeypotLabel': 'Website',
+  'form.switchLanguage': 'עברית',
+  'form.name': 'Name',
+  'form.phone': 'Mobile phone',
+  'form.phoneExample': 'For example',
+  'form.phoneInvalid': 'Invalid mobile number. For example: 050-1234567',
+  'form.street': 'Street',
+  'form.houseNumber': 'House number',
+  'form.bottlesSpot': 'Where are the bottles',
+  'form.floorApt': 'Floor and apartment',
+  'form.floorAptHint': 'For example: entrance B, floor 3, apartment 12',
+  'form.note': 'Note (optional)',
+  'form.noteHint': 'For example: next to the gate, building code',
+  'form.bottles': 'Number of bottles',
+  'form.bottlesHint': 'At least {min} bottles',
+  'form.unknownField': 'Something is not filled in correctly. Please check the form and try again.',
+  'form.networkError': 'We could not send. Please check your internet connection and try again.',
+
+  // The street picker.
+  'street.freeTextLabel': 'Street name',
+  'street.freeTextButton': 'My street is not on the list',
+  'street.backToList': 'Back to the list of streets',
+  'street.resultsLabel': 'Streets that match the search',
+  'street.chosen': 'Chosen: {name}',
+  'street.notFound': 'We did not find a street with this name. You can type the name differently.',
+  'street.notFoundOrFreeText':
+    'We did not find a street with this name. You can type the name differently, or tap "{button}".',
+  'street.foundOne': 'One street found. Please tap it.',
+  'street.foundMany': '{count} streets found. Please tap the right street.',
+  'street.foundTooMany':
+    'Many streets found. Please keep typing the name, or tap the right street.',
+
+  // The thank-you screen.
+  'thankYou.title': 'Thank you!',
+  'thankYou.body':
+    'We received your order. Before the round in your area we will send you a WhatsApp message to confirm.',
+  'thankYou.viewOrder': 'View or cancel the order',
 } as const satisfies Record<MessageKey, string>;
 
 /** The app's dictionary: every UI text in every {@link Lang}. Read it through {@link t}. */
