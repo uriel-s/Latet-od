@@ -1,6 +1,6 @@
 // The customer page for an English order (`order.lang === 'en'`): every text, the date and times,
 // the change form and the new-order link in English. The Hebrew page is tested in OrderPage.test.tsx.
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   findStreet,
@@ -86,8 +86,11 @@ describe('OrderPage in English', () => {
       />,
     );
     await screen.findByRole('heading', { level: 1, name: 'Your order' });
-    expect(document.documentElement.lang).toBe('en');
-    expect(document.documentElement.dir).toBe('ltr');
+    // The hook sets lang/dir in a passive effect, which can run after the heading is found.
+    await waitFor(() => {
+      expect(document.documentElement.lang).toBe('en');
+      expect(document.documentElement.dir).toBe('ltr');
+    });
 
     unmount();
 
