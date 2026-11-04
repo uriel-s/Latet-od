@@ -176,7 +176,9 @@ export function isLocationChange(before: AddressPlace, after: AddressPlace): boo
 
 /**
  * Plain-Hebrew messages of the customer's page that the customer sees. A 400 is
- * `InvalidOrderErrorBody`, whose field messages are the booking form's own.
+ * `InvalidOrderErrorBody`, whose field messages are the booking form's own. The api always
+ * answers in this Hebrew; the English, and a copy of this Hebrew, are in i18n.ts under
+ * `customerOrder.*`: change both.
  */
 export const CUSTOMER_ORDER_MESSAGES = {
   /** "כן, אוציא את הבקבוקים" after Yoel closed the confirmations. Exactly the spec's text (§3.3). */

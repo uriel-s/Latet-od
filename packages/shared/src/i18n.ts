@@ -55,17 +55,109 @@ export function translate<K extends string>(
 // HOW TO ADD A TEXT: add the key with its Hebrew text to HE, then the same key to EN. HE is the
 // source of the key list (MessageKey); EN must satisfy Record<MessageKey, string>, so forgetting
 // the English text, or an English-only key, fails `tsc`. Keep keys grouped by screen with a short
-// comment, e.g. `formTitle: 'הזמנת איסוף בקבוקים'`. Empty for now: sections add keys as they
-// translate their screens.
+// comment, e.g. `formTitle: 'הזמנת איסוף בקבוקים'`. Keys are dotted by group
+// (`formError.nameRequired`), so code can build a key from a value: `orderStatus.${status}`.
+//
+// Some Hebrew texts below are copies of older Hebrew constants that the api and zod still use
+// (APP_SLOGAN, ORDER_FORM_ERRORS, BOTTLES_SPOT_LABELS, ORDER_STATUS_LABELS, CREATE_ORDER_MESSAGES,
+// CUSTOMER_ORDER_MESSAGES). Copied, not imported: order.ts imports this module at load time, so
+// importing back from it would be circular. i18n.test.ts checks that every copy is identical to
+// its constant, so change both together.
 
 /** Hebrew texts. Its keys define {@link MessageKey}. */
-const HE = {} as const satisfies Record<string, string>;
+const HE = {
+  // The slogan under the app's name (index.ts APP_SLOGAN).
+  appSlogan: 'הבקבוקים שלכם, התפילין שלהם!',
+
+  // Booking-form field messages (order.ts ORDER_FORM_ERRORS). {min} is MIN_BOTTLES.
+  'formError.nameRequired': 'נא לכתוב שם',
+  'formError.nameTooLong': 'השם ארוך מדי',
+  'formError.streetRequired': 'נא לבחור רחוב או לכתוב אותו',
+  'formError.streetNotFound': 'הרחוב לא נמצא ברשימה',
+  'formError.streetTooLong': 'שם הרחוב ארוך מדי',
+  'formError.houseNumberRequired': 'נא לכתוב מספר בית',
+  'formError.houseNumberInvalid': 'מספר הבית צריך להתחיל בספרה, למשל 12 או 12א',
+  'formError.houseNumberTooLong': 'מספר הבית ארוך מדי',
+  'formError.bottlesSpotRequired': 'נא לבחור איפה הבקבוקים',
+  'formError.floorAptRequired': 'נא לכתוב קומה ודירה',
+  'formError.floorAptTooLong': 'הטקסט ארוך מדי',
+  'formError.noteInvalid': 'ההערה לא תקינה',
+  'formError.noteTooLong': 'ההערה ארוכה מדי',
+  'formError.bottlesRequired': 'נא לכתוב מספר בקבוקים',
+  'formError.bottlesTooFew': 'צריך לפחות {min} בקבוקים',
+  'formError.bottlesTooMany': 'המספר גדול מדי, נא לבדוק',
+
+  // Where the bottles wait (order.ts BOTTLES_SPOT_LABELS).
+  'bottlesSpot.privateHouse': 'בכניסה לבית פרטי',
+  'bottlesSpot.apartmentDoor': 'בבניין - ליד דלת הדירה',
+  'bottlesSpot.buildingEntrance': 'למטה בכניסה לבניין',
+
+  // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
+  'orderStatus.waiting': 'ממתינה לסבב',
+  'orderStatus.pending': 'ממתינה לאישור',
+  'orderStatus.confirmed': 'אושרה',
+  'orderStatus.collected': 'נאספה',
+  'orderStatus.cancelled': 'בוטלה',
+
+  // POST /api/orders messages above the form (orderApi.ts CREATE_ORDER_MESSAGES).
+  'createOrder.duplicateOpenOrder': 'כבר יש הזמנה פתוחה למספר הזה.',
+  'createOrder.rateLimited': 'יותר מדי ניסיונות. נא לנסות שוב מאוחר יותר.',
+
+  // The customer's page (customerOrderApi.ts CUSTOMER_ORDER_MESSAGES).
+  'customerOrder.confirmationsClosed': 'האישור נסגר. נחזור אליך עם מועד חדש.',
+  'customerOrder.orderClosed': 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
+  'customerOrder.orderNotFound': 'לא מצאנו את ההזמנה. ייתכן שהקישור לא הועתק עד הסוף.',
+} as const satisfies Record<string, string>;
 
 /** A key of the app's dictionary. */
 export type MessageKey = keyof typeof HE;
 
 /** English texts: the same keys as {@link HE}, no more and no fewer. */
-const EN = {} as const satisfies Record<MessageKey, string>;
+const EN = {
+  appSlogan: 'Your bottles, their tefillin!',
+
+  // Booking-form field messages.
+  'formError.nameRequired': 'Please write your name',
+  'formError.nameTooLong': 'The name is too long',
+  'formError.streetRequired': 'Please choose a street or type it',
+  'formError.streetNotFound': 'This street is not on the list',
+  'formError.streetTooLong': 'The street name is too long',
+  'formError.houseNumberRequired': 'Please write a house number',
+  'formError.houseNumberInvalid':
+    'The house number should start with a digit, for example 12 or 12A',
+  'formError.houseNumberTooLong': 'The house number is too long',
+  'formError.bottlesSpotRequired': 'Please choose where the bottles are',
+  'formError.floorAptRequired': 'Please write the floor and apartment',
+  'formError.floorAptTooLong': 'The text is too long',
+  'formError.noteInvalid': 'The note is not valid',
+  'formError.noteTooLong': 'The note is too long',
+  'formError.bottlesRequired': 'Please write the number of bottles',
+  'formError.bottlesTooFew': 'At least {min} bottles are needed',
+  'formError.bottlesTooMany': 'The number is too large, please check',
+
+  // Where the bottles wait.
+  'bottlesSpot.privateHouse': 'At the entrance of a private house',
+  'bottlesSpot.apartmentDoor': 'In a building - by the apartment door',
+  'bottlesSpot.buildingEntrance': 'Downstairs at the building entrance',
+
+  // Order status names.
+  'orderStatus.waiting': 'Waiting for a round',
+  'orderStatus.pending': 'Waiting for confirmation',
+  'orderStatus.confirmed': 'Confirmed',
+  'orderStatus.collected': 'Collected',
+  'orderStatus.cancelled': 'Cancelled',
+
+  // POST /api/orders messages above the form.
+  'createOrder.duplicateOpenOrder': 'There is already an open order for this number.',
+  'createOrder.rateLimited': 'Too many attempts. Please try again later.',
+
+  // The customer's page.
+  'customerOrder.confirmationsClosed':
+    'Confirmation is closed. We will get back to you with a new date.',
+  'customerOrder.orderClosed': 'This order is already closed and cannot be changed.',
+  'customerOrder.orderNotFound':
+    'We could not find the order. The link may not have been copied in full.',
+} as const satisfies Record<MessageKey, string>;
 
 /** The app's dictionary: every UI text in every {@link Lang}. Read it through {@link t}. */
 export const MESSAGES: Dictionary<MessageKey> = { he: HE, en: EN };
