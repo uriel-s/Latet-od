@@ -1782,3 +1782,79 @@ html:has(.bottom-nav) {
     animation: none;
   }
 }
+
+/* --- Booking form groups and bottlesSpot choice cards (ADR-0011) ------------------ */
+
+/* A titled group of fields on a .card; the cards stack with room between them. */
+.form-card {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+}
+
+.form-card-title {
+  margin: 0 0 var(--space-3);
+  color: var(--brand);
+  font-size: 1.25rem;
+}
+
+/* The three bottlesSpot choices: big cards, icon above the words. */
+.choice-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+/*
+ * One choice card: a real radio inside, visually hidden but still focusable, so keyboard and
+ * screen reader work as with any radio. The whole card is the tap target (well over 48px).
+ */
+.choice-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: max(88px, 5.5rem);
+  padding: var(--space-3);
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card);
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+}
+
+.choice-card svg {
+  width: 2rem;
+  height: 2rem;
+  color: var(--brand);
+}
+
+.choice-card input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.choice-card:has(input:focus-visible) {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The chosen card: thicker brand border plus soft fill and bold text, so not colour alone. */
+.choice-card:has(input:checked) {
+  border-color: var(--brand);
+  border-width: 3px;
+  padding: calc(var(--space-3) - 1px);
+  background: var(--brand-soft);
+  font-weight: 700;
+}
+
+.choice-card:has(input[aria-invalid='true']) {
+  border-color: var(--error);
+}

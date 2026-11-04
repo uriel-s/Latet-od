@@ -129,17 +129,19 @@ export function LoginPage({ submitLogin = login, browser = navigator }: LoginPag
           void send();
         }}
       >
-        <TextField
-          label="סיסמה"
-          type="password"
-          value={password}
-          onChange={changePassword}
-          error={fieldError}
-          // Lets the phone's password manager fill in the saved password.
-          autoComplete="current-password"
-          maxLength={LOGIN_PASSWORD_MAX_LENGTH}
-          inputRef={passwordRef}
-        />
+        <div className="card form-card">
+          <TextField
+            label="סיסמה"
+            type="password"
+            value={password}
+            onChange={changePassword}
+            error={fieldError}
+            // Lets the phone's password manager fill in the saved password.
+            autoComplete="current-password"
+            maxLength={LOGIN_PASSWORD_MAX_LENGTH}
+            inputRef={passwordRef}
+          />
+        </div>
 
         {formAlert && (
           <p className="form-alert" role="alert">
@@ -152,7 +154,7 @@ export function LoginPage({ submitLogin = login, browser = navigator }: LoginPag
             keeps focus and is announced as unavailable. sendingRef ignores the extra taps. */}
         <button
           type="submit"
-          className="button button-primary button-block"
+          className="button button-primary button-big button-block"
           aria-disabled={sending ? true : undefined}
         >
           {sending ? SENDING_LABEL : SUBMIT_LABEL}

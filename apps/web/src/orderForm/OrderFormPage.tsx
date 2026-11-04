@@ -208,7 +208,7 @@ export function OrderFormPage({
             extra taps while sending, and validation refuses too few bottles. */}
         <button
           type="submit"
-          className={`button button-primary button-block${notReady && !sending ? ' button-not-ready' : ''}`}
+          className={`button button-primary button-big button-block${notReady && !sending ? ' button-not-ready' : ''}`}
           aria-disabled={sending || notReady ? true : undefined}
           aria-describedby={notReady && !sending ? notReadyId : undefined}
         >
