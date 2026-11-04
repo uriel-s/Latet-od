@@ -2,8 +2,11 @@
 // inside the sheet), the two arrows that move the stop in the route, and "סגור". Same pattern as
 // RoundPickerSheet.tsx (RoundPicker): a modal dialog, focus moves in on open, Escape / "סגור" /
 // the dark background close it. Presentational: the card owns whether it is open and gives the
-// focus back to its "⋯" button after onClose; the route screen sends the requests.
+// focus back to its "⋯" button after onClose; the route screen sends the requests. On an upcoming
+// stop (compact timeline card, no buttons of its own) the sheet also carries "אספתי", "נווט" and
+// "חייג", so collecting out of order and every other action stay one tap away.
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { Icon } from '../components/Icon.tsx';
 
 /** The in-sheet question "לא נמצא" opens: a mistap would otherwise block "אספתי" (stop_handled). */
 export const NOT_FOUND_QUESTION = 'לסמן שהלקוח לא נמצא?';
@@ -27,6 +30,15 @@ export interface MoreActionsSheetProps {
   onMove: (direction: 'up' | 'down') => void;
   /** "כן, לא נמצא" in the sheet's question. */
   onNotFound: () => void;
+  /**
+   * Upcoming stops only: "אספתי" at the top of the sheet (Yoel collects out of order). The card
+   * closes the sheet and opens its quantity stepper. Left out, no "אספתי" shows.
+   */
+  onCollect?: () => void;
+  /** Upcoming stops only: the Waze link, shown as "נווט" in the sheet. */
+  navigateUrl?: string;
+  /** Upcoming stops only: the `tel:` link, shown as "חייג" in the sheet. */
+  phoneUrl?: string;
   /** Escape, "סגור", the background or an arrow: the card closes the sheet and refocuses "⋯". */
   onClose: () => void;
 }
@@ -39,6 +51,9 @@ export function MoreActionsSheet({
   busy,
   onMove,
   onNotFound,
+  onCollect,
+  navigateUrl,
+  phoneUrl,
   onClose,
 }: MoreActionsSheetProps) {
   const [asking, setAsking] = useState(false);
@@ -73,7 +88,7 @@ export function MoreActionsSheet({
     if (event.key !== 'Tab') return;
     const dialog = dialogRef.current;
     if (!dialog) return;
-    const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button'));
+    const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button, a[href]'));
     const first = controls[0];
     const last = controls[controls.length - 1];
     if (!first || !last) return;
@@ -138,6 +153,36 @@ export function MoreActionsSheet({
           </div>
         ) : (
           <div className="more-actions-list">
+            {onCollect !== undefined && (
+              <button
+                type="button"
+                className="button button-primary button-block"
+                aria-disabled={ariaBusy}
+                onClick={() => {
+                  if (!busy) onCollect();
+                }}
+              >
+                <Icon name="check" />
+                אספתי
+              </button>
+            )}
+            {navigateUrl !== undefined && (
+              <a
+                className="button button-secondary button-block"
+                href={navigateUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon name="navigate" />
+                נווט
+              </a>
+            )}
+            {phoneUrl !== undefined && (
+              <a className="button button-secondary button-block" href={phoneUrl}>
+                <Icon name="phone" />
+                חייג
+              </a>
+            )}
             <button
               type="button"
               className="button button-secondary button-block"

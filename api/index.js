@@ -21278,6 +21278,11 @@ var collectorOrderSchema = external_exports.object({
   lastMiss: orderSchema.shape.lastMiss,
   source: orderSchema.shape.source,
   createdAt: orderSchema.shape.createdAt,
+  /**
+   * The real count Yoel recorded at "אספתי"; set only once the order is collected. The route
+   * screen's donation line sums it (roundDonation, in the web app).
+   */
+  bottlesCollected: orderSchema.shape.bottlesCollected,
   /** Whether the address has a map point; false shows the "בלי מיקום" tag (ADR-0005). */
   hasLocation: external_exports.boolean(),
   /**

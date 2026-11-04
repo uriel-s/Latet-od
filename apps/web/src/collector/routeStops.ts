@@ -3,9 +3,10 @@
 // (handled stops drop to the end), how many stored moves one visible arrow tap needs, and keeping
 // a "שלח תודה" row already shown, and the navigation buttons of the screen's top (ADR-0007): the
 // next stop to collect, the Waze link to the drop-off and the one Google Maps link of the whole
-// route. Pure, so all of it is tested without rendering the screen.
+// route, and the round's donation sum. Pure, so all of it is tested without rendering the screen.
 import {
   BOTTLES_SPOT_LABELS,
+  BOTTLE_VALUE_AGOROT,
   DROP_OFF_ADDRESS,
   type Address,
   type MessageLink,
@@ -205,4 +206,26 @@ export function keepThankYouRows(
     const thankYou = previousThankYou.get(stop.order.id);
     return thankYou === undefined ? stop : { ...stop, thankYou };
   });
+}
+
+/** What a round has brought in so far; see {@link roundDonation}. */
+export interface RoundDonation {
+  /** The sum of the recorded `bottlesCollected` of the collected stops. */
+  bottles: number;
+  /** `bottles` × `BOTTLE_VALUE_AGOROT`, in whole agorot (formatShekels turns it into text). */
+  valueAgorot: number;
+}
+
+/**
+ * The donation line's numbers: the real counts Yoel recorded at the collected stops, times the
+ * bottle value. Only `collected` stops count; a stop not found, cancelled or that left the round
+ * brought nothing, and a collected one without a recorded count adds 0 (as the history totals do).
+ */
+export function roundDonation(
+  stops: readonly Pick<RouteStopView, 'state' | 'order'>[],
+): RoundDonation {
+  const bottles = stops
+    .filter((stop) => stop.state === 'collected')
+    .reduce((total, stop) => total + (stop.order.bottlesCollected ?? 0), 0);
+  return { bottles, valueAgorot: bottles * BOTTLE_VALUE_AGOROT };
 }
