@@ -87,6 +87,7 @@ function makeOrder(id: string, overrides: Partial<Order> = {}): Order {
     roundId: ROUND_ID,
     messages: [confirmLink(id)],
     source: 'form',
+    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
     ...overrides,

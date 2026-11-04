@@ -40,6 +40,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     token: TOKEN,
     messages: [],
     source: 'form',
+    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
     ...overrides,
@@ -118,6 +119,23 @@ describe('orderSchema', () => {
     const parsed = orderSchema.parse({ ...makeOrder(), _id: 'abc', extra: 1 });
     expect(parsed).not.toHaveProperty('_id');
     expect(parsed).not.toHaveProperty('extra');
+  });
+
+  describe('lang', () => {
+    it('reads an order stored without a language as Hebrew, with no migration', () => {
+      const stored: Record<string, unknown> = { ...makeOrder() };
+      delete stored.lang;
+
+      expect(orderSchema.parse(stored).lang).toBe('he');
+    });
+
+    it('keeps English', () => {
+      expect(orderSchema.parse(makeOrder({ lang: 'en' })).lang).toBe('en');
+    });
+
+    it('rejects a language the app does not speak', () => {
+      expect(orderSchema.safeParse({ ...makeOrder(), lang: 'fr' }).success).toBe(false);
+    });
   });
 
   it('accepts a free-text street with a near street and no region', () => {
@@ -468,6 +486,21 @@ describe('orderFormSchema', () => {
     expect(form).not.toHaveProperty('region');
     expect(form).not.toHaveProperty('website');
     expect(form.address).not.toHaveProperty('nearStreetCode');
+  });
+
+  it('books in Hebrew when the client sends no language', () => {
+    expect(parseForm(makeFormInput()).lang).toBe('he');
+  });
+
+  it('keeps English', () => {
+    expect(parseForm({ ...makeFormInput(), lang: 'en' }).lang).toBe('en');
+  });
+
+  it('rejects a language the app does not speak, on the lang field', () => {
+    const result = orderFormSchema.safeParse({ ...makeFormInput(), lang: 'fr' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([['lang']]);
   });
 
   it('rejects a body that is not an object without throwing', () => {

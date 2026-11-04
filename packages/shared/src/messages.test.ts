@@ -36,6 +36,7 @@ function makeOrder(messages: MessageLogEntry[]): Order {
     roundId: 'round-1',
     messages,
     source: 'form',
+    lang: 'he',
     createdAt: AT,
     updatedAt: AT,
   };

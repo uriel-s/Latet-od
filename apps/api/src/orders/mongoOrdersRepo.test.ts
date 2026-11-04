@@ -111,6 +111,16 @@ describe('toOrder', () => {
     expect(toOrder(toOrderDocument(order, _id))).toEqual({ ...order, id: _id.toHexString() });
   });
 
+  it('reads a document stored before languages existed (no lang) as Hebrew', () => {
+    const doc: Record<string, unknown> & { _id: ObjectId } = {
+      ...makeNewOrder(),
+      _id: new ObjectId(),
+    };
+    delete doc.lang;
+
+    expect(toOrder(doc).lang).toBe('he');
+  });
+
   it('rejects a document with null in an optional field', () => {
     const doc = { ...makeNewOrder(), _id: new ObjectId(), roundId: null };
 

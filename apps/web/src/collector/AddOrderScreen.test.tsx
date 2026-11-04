@@ -152,6 +152,7 @@ describe('AddOrderScreen', () => {
           bottlesSpot: 'privateHouse',
         },
         bottlesEstimated: 45,
+        lang: 'he',
       },
     ]);
     expect(requests[0] !== undefined && 'website' in requests[0]).toBe(false);
