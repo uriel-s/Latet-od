@@ -158,6 +158,26 @@ describe('AddOrderScreen', () => {
     expect(requests[0] !== undefined && 'website' in requests[0]).toBe(false);
   });
 
+  it('offers the customer language by a Hebrew label, Hebrew preselected', () => {
+    renderScreen();
+
+    expect(screen.getByRole('group', { name: 'שפת הלקוח' })).toBeDefined();
+    expect(input('עברית').checked).toBe(true);
+    expect(input('אנגלית').checked).toBe(false);
+  });
+
+  it('sends lang en when English is chosen', async () => {
+    const { requests } = renderScreen();
+
+    fillValidForm();
+    fireEvent.click(input('אנגלית'));
+    expect(input('אנגלית').checked).toBe(true);
+    save();
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]?.lang).toBe('en');
+  });
+
   it('shows each mistake next to its field, focuses the first, and sends nothing', () => {
     const { requests } = renderScreen();
 
