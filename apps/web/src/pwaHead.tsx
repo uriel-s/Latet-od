@@ -22,8 +22,8 @@ export const COLLECTOR_PWA_HEAD_TAGS: readonly HeadTag[] = [
   { tag: 'meta', attributes: { name: 'mobile-web-app-capable', content: 'yes' } },
   { tag: 'meta', attributes: { name: 'apple-mobile-web-app-capable', content: 'yes' } },
   { tag: 'meta', attributes: { name: 'apple-mobile-web-app-title', content: APP_NAME } },
-  // "default" keeps dark status-bar text over the light #DCEBF8 header; "black-translucent" would
-  // put white text on it.
+  // "default" keeps dark status-bar text over the light page (--bg, #edf3f9, the theme colour);
+  // "black-translucent" would put white text on it.
   {
     tag: 'meta',
     attributes: { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
