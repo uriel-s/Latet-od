@@ -35,6 +35,8 @@ export interface CancelConfirmProps {
   confirmLabel?: string;
   /** The confirm button while the request is on its way; default "מבטל...". */
   busyLabel?: string;
+  /** The button that closes the question; default "לא, להשאיר". */
+  keepLabel?: string;
   /**
    * True for a question that sits among other buttons (the customer page's "לא מתאים הפעם"):
    * without the gap and the line that set a cancel apart from the buttons above it.
@@ -58,6 +60,7 @@ export function CancelConfirm({
   onOpenChange,
   confirmLabel = CONFIRM_CANCEL_LABEL,
   busyLabel = CANCELLING_LABEL,
+  keepLabel = KEEP_LABEL,
   inline = false,
 }: CancelConfirmProps) {
   const [open, setOpen] = useState(false);
@@ -110,7 +113,7 @@ export function CancelConfirm({
                 if (!cancelling) showQuestion(false);
               }}
             >
-              {KEEP_LABEL}
+              {keepLabel}
             </button>
           </div>
         </div>

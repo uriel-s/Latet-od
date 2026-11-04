@@ -2,12 +2,13 @@
 // `formErrorText` knows the ORDER_FORM_ERRORS; the phone's own message (PHONE_ERROR) and the
 // form's "unknown field" line are handled here, so every message next to a field is translated.
 import { PHONE_ERROR, formErrorText, t, type Lang } from '@bottlerun/shared';
-import { UNKNOWN_FIELD_ERROR, type FormErrors } from './formValues.ts';
+import { SAVE_FAILED_MESSAGE, UNKNOWN_FIELD_ERROR, type FormErrors } from './formValues.ts';
 
 /** One field message in `lang`. Hebrew is returned unchanged. */
 export function localizedFormMessage(lang: Lang, message: string): string {
   if (message === PHONE_ERROR) return t(lang, 'form.phoneInvalid');
   if (message === UNKNOWN_FIELD_ERROR) return t(lang, 'form.unknownField');
+  if (message === SAVE_FAILED_MESSAGE) return t(lang, 'orderPage.saveFailed');
   return formErrorText(lang, message);
 }
 
