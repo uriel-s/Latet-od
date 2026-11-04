@@ -4,7 +4,7 @@
 // now or a Cloud API template later.
 import { z } from 'zod';
 import type { OrderNotFoundErrorBody } from './collectorOrdersApi.ts';
-import { formatDayMonth } from './dates.ts';
+import { formatDayMonth, pickupTimeSchema } from './dates.ts';
 import {
   messageKindSchema,
   messageLogEntrySchema,
@@ -17,14 +17,6 @@ import {
 // ---------------------------------------------------------------------------------------------
 // The outgoing message
 // ---------------------------------------------------------------------------------------------
-
-/**
- * "עד איזו שעה להוציא את הבקבוקים" (ADR-0003): an optional time of the round, `HH:MM` on a 24-hour
- * clock, two digits each (00:00-23:59). Strict, so the message never says "עד השעה 8:0".
- */
-export const pickupTimeSchema = z
-  .string()
-  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'expected a time HH:MM, 00:00-23:59');
 
 /** The values a message is filled with ({@link renderMessage}). */
 export interface MessageVars {

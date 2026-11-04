@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { pickupTimeSchema } from './dates.ts';
 import { APP_NAME } from './index.ts';
 import {
   messageLinkSchema,
   messageOpenedResponseSchema,
-  pickupTimeSchema,
   renderMessage,
   toMessageLink,
   type MessageVars,
