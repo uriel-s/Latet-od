@@ -7,6 +7,8 @@
 //    weaker shade fails here instead of on Yoel's phone in the sun.
 // 3. Tap targets: buttons stay at least --tap-target (48px+) tall, the big button at least 66px,
 //    and the press animation respects prefers-reduced-motion.
+// 4. Cards and badges: a .card keeps the dawn radius and shadow, every coloured badge sets both
+//    its text and its background, and badge text is never shrunk below 1rem.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -76,6 +78,7 @@ const TEXT_PAIRS: [foreground: string, background: string][] = [
   ['white', 'error'], // .button-danger
   ['ink', 'done'], // a disabled or busy .button, a handled stop card
   ['brand', 'card'], // .button-secondary in the site header
+  ['muted', 'done'], // .badge-gray
 ];
 
 describe('styles.css colour contrast', () => {
@@ -146,5 +149,28 @@ describe('styles.css tap targets', () => {
 
   it('turns the press animation off for prefers-reduced-motion', () => {
     expect(stylesCss).toContain('prefers-reduced-motion: reduce');
+  });
+});
+
+describe('styles.css cards and badges', () => {
+  it('rounds a .card with --r-lg and lifts it with --shadow-1', () => {
+    const card = ruleBody(stylesCss, '.card');
+    expect(card).toContain('border-radius: var(--r-lg);');
+    expect(card).toContain('box-shadow: var(--shadow-1);');
+  });
+
+  it.each(['.badge-green', '.badge-amber', '.badge-gray'])(
+    'gives %s both a text colour and a background',
+    (selector) => {
+      const badge = ruleBody(stylesCss, selector);
+      expect(badge).toMatch(/(^|[\s;])color:/);
+      expect(badge).toMatch(/(^|[\s;])background:/);
+    },
+  );
+
+  it('keeps .badge text at 1rem or larger (no text under 18px)', () => {
+    // A font-size on .badge, if any, must be exactly 1rem: the mockup's .9rem is too small.
+    const fontSize = /font-size:\s*([^;]+);/.exec(ruleBody(stylesCss, '.badge'))?.[1];
+    expect(fontSize ?? '1rem').toBe('1rem');
   });
 });

@@ -561,6 +561,55 @@ button.button-not-ready[aria-disabled='true'] {
   text-underline-offset: 0.15em;
 }
 
+/* --- Cards and badges ------------------------------------------------------------ */
+
+/*
+ * A white card on the page (ADR-0011): soft shadow, round corners, no border. Decoration only:
+ * nothing to tap depends on its edge, the buttons inside carry their own.
+ */
+.card {
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+/*
+ * A small rounded tag, e.g. an order's status (the mockup's .chip). Colour is never the only
+ * signal: a badge always carries its words, and StatusBadge adds an icon before them (hence the
+ * gap). The text stays at 1rem, not the mockup's .9rem: no text under 18px (CLAUDE.md).
+ * styles.test.ts checks every text/background pair below for WCAG AA.
+ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.75rem;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+/* Collected, confirmed. */
+.badge-green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+/* Waiting, needs attention. */
+.badge-amber {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+/* Quiet: a final or inactive state such as cancelled. */
+.badge-gray {
+  background: var(--done);
+  color: var(--muted);
+}
+
 /* --- Street picker (streetPicker/StreetPicker.tsx) ---------------------------------- */
 
 /* The streets that match the search, one under the other, right under the input. */
