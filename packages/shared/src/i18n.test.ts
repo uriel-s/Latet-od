@@ -13,6 +13,7 @@ import {
 import { APP_SLOGAN } from './index.ts';
 import { BOTTLES_SPOT_LABELS, MIN_BOTTLES, ORDER_FORM_ERRORS, bottlesSpotSchema } from './order.ts';
 import { CREATE_ORDER_MESSAGES } from './orderApi.ts';
+import { PHONE_ERROR } from './phone.ts';
 import { ORDER_STATUSES, ORDER_STATUS_LABELS, type OrderStatus } from './orderStatus.ts';
 
 /** A small dictionary for translate, independent of the app's own texts. */
@@ -115,6 +116,10 @@ describe('MESSAGES', () => {
         ).toBe(he);
       },
     );
+
+    it('has form.phoneInvalid as PHONE_ERROR', () => {
+      expect(t('he', 'form.phoneInvalid')).toBe(PHONE_ERROR);
+    });
 
     it.each(bottlesSpotSchema.options)('has bottlesSpot.%s as BOTTLES_SPOT_LABELS', (spot) => {
       expect(t('he', `bottlesSpot.${spot}`)).toBe(BOTTLES_SPOT_LABELS[spot]);

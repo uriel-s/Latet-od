@@ -8,19 +8,20 @@
 // short line in plain words that says what to do next.
 import { useId, useRef, useState, type JSX, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
-import { FORM_TEXT_MAX_LENGTH, STREETS, searchStreets, type Street } from '@bottlerun/shared';
+import {
+  DEFAULT_LANG,
+  FORM_TEXT_MAX_LENGTH,
+  STREETS,
+  searchStreets,
+  streetDisplayName,
+  t,
+  type Lang,
+  type Street,
+} from '@bottlerun/shared';
 import type { StreetChoice } from './streetChoice.ts';
 
 /** At most this many matches are shown: more would push the rest of the form off the screen. */
 export const MAX_STREET_RESULTS = 8;
-
-/** Label of the input in free-text mode (it replaces the field's own label there). */
-const FREE_TEXT_LABEL = 'שם הרחוב';
-const FREE_TEXT_BUTTON = 'הרחוב שלי לא ברשימה';
-const BACK_TO_LIST_BUTTON = 'חזרה לרשימת הרחובות';
-const RESULTS_LIST_LABEL = 'רחובות שמתאימים לחיפוש';
-const CHOSEN_STREET_PREFIX = 'נבחר:';
-const NOT_FOUND = 'לא מצאנו רחוב בשם הזה.';
 
 /** Props of {@link StreetPicker}. */
 export interface StreetPickerProps {
@@ -40,27 +41,45 @@ export interface StreetPickerProps {
   hint?: ReactNode;
   /** Streets to search; defaults to the shared STREETS (tests may pass a short list). */
   streets?: readonly Street[];
+  /**
+   * The language of the picker's texts and of the street names it shows (`streetDisplayName`).
+   * Default Hebrew. What `onChange` reports is always the official Hebrew name and code.
+   */
+  lang?: Lang;
 }
 
 type Mode = 'search' | 'freeText';
 
 /**
+ * What the input shows for a choice: a listed street in the picker's language (a saved Hebrew
+ * name reads in English on /en), a hand-written street as typed, nothing for no choice.
+ */
+function choiceText(value: StreetChoice | null, lang: Lang, streets: readonly Street[]): string {
+  if (value === null) return '';
+  if (value.kind === 'listed') {
+    const street = streets.find((candidate) => candidate.code === value.code);
+    return street === undefined ? value.name : streetDisplayName(street, lang);
+  }
+  return value.name;
+}
+
+/**
  * The line under the input in search mode: what the search found and what to do next. Empty
  * while there is nothing to say (no text yet, or the chosen street is already in the input).
  */
-function searchStatus(matchCount: number, allowFreeText: boolean): string {
+function searchStatus(matchCount: number, allowFreeText: boolean, lang: Lang): string {
   if (matchCount === 0) {
     return allowFreeText
-      ? `${NOT_FOUND} אפשר לכתוב את השם אחרת, או ללחוץ על "${FREE_TEXT_BUTTON}".`
-      : `${NOT_FOUND} אפשר לכתוב את השם אחרת.`;
+      ? t(lang, 'street.notFoundOrFreeText', { button: t(lang, 'street.freeTextButton') })
+      : t(lang, 'street.notFound');
   }
-  if (matchCount === 1) return 'נמצא רחוב אחד. נא ללחוץ עליו.';
+  if (matchCount === 1) return t(lang, 'street.foundOne');
   // Only the first MAX_STREET_RESULTS are shown, so a street further down the matches would
   // never appear: the customer has to narrow the search by typing more of the name.
   if (matchCount > MAX_STREET_RESULTS) {
-    return 'נמצאו הרבה רחובות. נא להמשיך לכתוב את השם, או ללחוץ על הרחוב הנכון.';
+    return t(lang, 'street.foundTooMany');
   }
-  return `נמצאו ${matchCount} רחובות. נא ללחוץ על הרחוב הנכון.`;
+  return t(lang, 'street.foundMany', { count: matchCount });
 }
 
 /**
@@ -88,12 +107,13 @@ export function StreetPicker({
   error,
   hint,
   streets = STREETS,
+  lang = DEFAULT_LANG,
 }: StreetPickerProps): JSX.Element {
   const [mode, setMode] = useState<Mode>(
     value?.kind === 'freeText' && allowFreeText ? 'freeText' : 'search',
   );
   // What the input shows: the search text in search mode, the street's name in free-text mode.
-  const [text, setText] = useState(value?.name ?? '');
+  const [text, setText] = useState(() => choiceText(value, lang, streets));
   // "נבחר: <רחוב>", told through the status line after a keyboard choice; cleared on the next edit.
   const [chosenNote, setChosenNote] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -108,10 +128,10 @@ export function StreetPicker({
       .join(' ') || undefined;
 
   // A street just chosen (or prefilled) is already in the input: its list has done its job.
-  const showsChosenStreet = value?.kind === 'listed' && value.name === text;
+  const showsChosenStreet = value?.kind === 'listed' && choiceText(value, lang, streets) === text;
   const searching = mode === 'search' && !showsChosenStreet && text.trim() !== '';
   const matches = searching ? searchStreets(text, streets) : [];
-  const status = searching ? searchStatus(matches.length, allowFreeText) : '';
+  const status = searching ? searchStatus(matches.length, allowFreeText, lang) : '';
 
   function handleTextChange(nextText: string): void {
     setText(nextText);
@@ -131,10 +151,10 @@ export function StreetPicker({
    * phone, focusing the input here would raise the keyboard again right after the choice.
    */
   function chooseStreet(street: Street, fromKeyboard: boolean): void {
-    setText(street.name);
+    setText(streetDisplayName(street, lang));
     onChange({ kind: 'listed', code: street.code, name: street.name });
     if (fromKeyboard) {
-      setChosenNote(`${CHOSEN_STREET_PREFIX} ${street.name}`);
+      setChosenNote(t(lang, 'street.chosen', { name: streetDisplayName(street, lang) }));
       inputRef.current?.focus();
     }
   }
@@ -167,7 +187,7 @@ export function StreetPicker({
   return (
     <div className="field street-picker">
       <label htmlFor={inputId} className="field-label">
-        {mode === 'search' ? label : FREE_TEXT_LABEL}
+        {mode === 'search' ? label : t(lang, 'street.freeTextLabel')}
       </label>
       {hasHint && (
         <p id={hintId} className="field-hint">
@@ -201,7 +221,7 @@ export function StreetPicker({
             {status || chosenNote}
           </p>
           {matches.length > 0 && (
-            <ul className="street-results" aria-label={RESULTS_LIST_LABEL}>
+            <ul className="street-results" aria-label={t(lang, 'street.resultsLabel')}>
               {matches.slice(0, MAX_STREET_RESULTS).map((street) => (
                 <li key={street.code}>
                   <button
@@ -209,7 +229,7 @@ export function StreetPicker({
                     className="street-result"
                     onClick={(event) => chooseStreet(street, event.detail === 0)}
                   >
-                    {street.name}
+                    {streetDisplayName(street, lang)}
                   </button>
                 </li>
               ))}
@@ -221,7 +241,7 @@ export function StreetPicker({
               className="link-button street-picker-switch"
               onClick={enterFreeText}
             >
-              {FREE_TEXT_BUTTON}
+              {t(lang, 'street.freeTextButton')}
             </button>
           )}
         </>
@@ -231,7 +251,7 @@ export function StreetPicker({
           className="button button-secondary street-picker-switch"
           onClick={backToSearch}
         >
-          {BACK_TO_LIST_BUTTON}
+          {t(lang, 'street.backToList')}
         </button>
       )}
     </div>

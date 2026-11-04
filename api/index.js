@@ -19931,7 +19931,50 @@ var HE = {
   "whatsapp.confirmRequest.signOff": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   // spec §6.1, word for word.
   "whatsapp.thankYou.thanks": "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
-  "whatsapp.thankYou.orderAgain": "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:"
+  "whatsapp.thankYou.orderAgain": "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:",
+  // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
+  // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
+  // {min} is MIN_BOTTLES.
+  "form.title": "\u05D4\u05D6\u05DE\u05E0\u05EA \u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.intro": "\u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD, \u05D5\u05D9\u05D5\u05D0\u05DC \u05D9\u05D1\u05D5\u05D0 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD.",
+  "form.privacy": "\u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05E9\u05DE\u05E9\u05D9\u05DD \u05E8\u05E7 \u05DC\u05EA\u05D9\u05D0\u05D5\u05DD \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3",
+  "form.submit": "\u05E9\u05DC\u05D9\u05D7\u05EA \u05D4\u05D6\u05DE\u05E0\u05D4",
+  "form.sending": "\u05E9\u05D5\u05DC\u05D7...",
+  "form.notEnoughBottles": "\u05DB\u05D3\u05D9 \u05DC\u05E9\u05DC\u05D5\u05D7 \u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05D7\u05D5\u05EA {min} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.honeypotLabel": "\u05D0\u05EA\u05E8 \u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8",
+  // The button that switches the form to the other language; each language names the other one.
+  "form.switchLanguage": "English",
+  "form.name": "\u05E9\u05DD",
+  "form.phone": "\u05D8\u05DC\u05E4\u05D5\u05DF \u05E0\u05D9\u05D9\u05D3",
+  "form.phoneExample": "\u05DC\u05DE\u05E9\u05DC",
+  // Copy of phone.ts PHONE_ERROR (kept out of ORDER_FORM_ERRORS, so formErrorText leaves it alone).
+  "form.phoneInvalid": "\u05DE\u05E1\u05E4\u05E8 \u05E0\u05D9\u05D9\u05D3 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05DC\u05DE\u05E9\u05DC: 050-1234567",
+  "form.street": "\u05E8\u05D7\u05D5\u05D1",
+  "form.houseNumber": "\u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA",
+  "form.bottlesSpot": "\u05D0\u05D9\u05E4\u05D4 \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.floorApt": "\u05E7\u05D5\u05DE\u05D4 \u05D5\u05D3\u05D9\u05E8\u05D4",
+  "form.floorAptHint": "\u05DC\u05DE\u05E9\u05DC: \u05DB\u05E0\u05D9\u05E1\u05D4 \u05D1', \u05E7\u05D5\u05DE\u05D4 3, \u05D3\u05D9\u05E8\u05D4 12",
+  "form.note": "\u05D4\u05E2\u05E8\u05D4 (\u05DC\u05D0 \u05D7\u05D5\u05D1\u05D4)",
+  "form.noteHint": "\u05DC\u05DE\u05E9\u05DC: \u05DC\u05D9\u05D3 \u05D4\u05E9\u05E2\u05E8, \u05E7\u05D5\u05D3 \u05DC\u05D1\u05E0\u05D9\u05D9\u05DF",
+  "form.bottles": "\u05DB\u05DE\u05D5\u05EA \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.bottlesHint": "\u05DC\u05E4\u05D7\u05D5\u05EA {min} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "form.unknownField": "\u05D9\u05E9 \u05E4\u05E8\u05D8 \u05E9\u05DC\u05D0 \u05DE\u05D5\u05DC\u05D0 \u05E0\u05DB\u05D5\u05DF. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D8\u05D5\u05E4\u05E1 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
+  "form.networkError": "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05E0\u05D5 \u05DC\u05E9\u05DC\u05D5\u05D7. \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05D4\u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
+  // The street picker.
+  "street.freeTextLabel": "\u05E9\u05DD \u05D4\u05E8\u05D7\u05D5\u05D1",
+  "street.freeTextButton": "\u05D4\u05E8\u05D7\u05D5\u05D1 \u05E9\u05DC\u05D9 \u05DC\u05D0 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4",
+  "street.backToList": "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05E8\u05E9\u05D9\u05DE\u05EA \u05D4\u05E8\u05D7\u05D5\u05D1\u05D5\u05EA",
+  "street.resultsLabel": "\u05E8\u05D7\u05D5\u05D1\u05D5\u05EA \u05E9\u05DE\u05EA\u05D0\u05D9\u05DE\u05D9\u05DD \u05DC\u05D7\u05D9\u05E4\u05D5\u05E9",
+  "street.chosen": "\u05E0\u05D1\u05D7\u05E8: {name}",
+  "street.notFound": "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05E8\u05D7\u05D5\u05D1 \u05D1\u05E9\u05DD \u05D4\u05D6\u05D4. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD \u05D0\u05D7\u05E8\u05EA.",
+  "street.notFoundOrFreeText": '\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05E8\u05D7\u05D5\u05D1 \u05D1\u05E9\u05DD \u05D4\u05D6\u05D4. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD \u05D0\u05D7\u05E8\u05EA, \u05D0\u05D5 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC "{button}".',
+  "street.foundOne": "\u05E0\u05DE\u05E6\u05D0 \u05E8\u05D7\u05D5\u05D1 \u05D0\u05D7\u05D3. \u05E0\u05D0 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC\u05D9\u05D5.",
+  "street.foundMany": "\u05E0\u05DE\u05E6\u05D0\u05D5 {count} \u05E8\u05D7\u05D5\u05D1\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E0\u05DB\u05D5\u05DF.",
+  "street.foundTooMany": "\u05E0\u05DE\u05E6\u05D0\u05D5 \u05D4\u05E8\u05D1\u05D4 \u05E8\u05D7\u05D5\u05D1\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD, \u05D0\u05D5 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E0\u05DB\u05D5\u05DF.",
+  // The thank-you screen.
+  "thankYou.title": "\u05EA\u05D5\u05D3\u05D4!",
+  "thankYou.body": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.",
+  "thankYou.viewOrder": "\u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D0\u05D5 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC"
 };
 var EN = {
   appSlogan: "Your bottles, their tefillin!",
@@ -19978,7 +20021,46 @@ var EN = {
   "whatsapp.confirmRequest.confirmAtLink": "Please confirm the pickup at this link:",
   "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
-  "whatsapp.thankYou.orderAgain": "To order again:"
+  "whatsapp.thankYou.orderAgain": "To order again:",
+  // The booking form and its thank-you screen.
+  "form.title": "Book a bottle pickup",
+  "form.intro": "Fill in your details and Yoel will come to collect the bottles.",
+  "form.privacy": "Your details are used only to arrange the pickup",
+  "form.submit": "Send order",
+  "form.sending": "Sending...",
+  "form.notEnoughBottles": "To send, at least {min} bottles are needed",
+  "form.honeypotLabel": "Website",
+  "form.switchLanguage": "\u05E2\u05D1\u05E8\u05D9\u05EA",
+  "form.name": "Name",
+  "form.phone": "Mobile phone",
+  "form.phoneExample": "For example",
+  "form.phoneInvalid": "Invalid mobile number. For example: 050-1234567",
+  "form.street": "Street",
+  "form.houseNumber": "House number",
+  "form.bottlesSpot": "Where are the bottles",
+  "form.floorApt": "Floor and apartment",
+  "form.floorAptHint": "For example: entrance B, floor 3, apartment 12",
+  "form.note": "Note (optional)",
+  "form.noteHint": "For example: next to the gate, building code",
+  "form.bottles": "Number of bottles",
+  "form.bottlesHint": "At least {min} bottles",
+  "form.unknownField": "Something is not filled in correctly. Please check the form and try again.",
+  "form.networkError": "We could not send. Please check your internet connection and try again.",
+  // The street picker.
+  "street.freeTextLabel": "Street name",
+  "street.freeTextButton": "My street is not on the list",
+  "street.backToList": "Back to the list of streets",
+  "street.resultsLabel": "Streets that match the search",
+  "street.chosen": "Chosen: {name}",
+  "street.notFound": "We did not find a street with this name. You can type the name differently.",
+  "street.notFoundOrFreeText": 'We did not find a street with this name. You can type the name differently, or tap "{button}".',
+  "street.foundOne": "One street found. Please tap it.",
+  "street.foundMany": "{count} streets found. Please tap the right street.",
+  "street.foundTooMany": "Many streets found. Please keep typing the name, or tap the right street.",
+  // The thank-you screen.
+  "thankYou.title": "Thank you!",
+  "thankYou.body": "We received your order. Before the round in your area we will send you a WhatsApp message to confirm.",
+  "thankYou.viewOrder": "View or cancel the order"
 };
 var MESSAGES = { he: HE, en: EN };
 function t(lang, key, vars) {

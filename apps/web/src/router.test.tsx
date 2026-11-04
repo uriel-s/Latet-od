@@ -36,6 +36,12 @@ describe('matchRoute', () => {
     expect(matchRoute('/')).toEqual({ name: 'orderForm' });
   });
 
+  it('sends /en, with or without a trailing slash, to the English order form', () => {
+    expect(matchRoute('/en')).toEqual({ name: 'orderFormEn' });
+    expect(matchRoute('/en/')).toEqual({ name: 'orderFormEn' });
+    expect(matchRoute('/english')).toEqual({ name: 'notFound' });
+  });
+
   it('sends /o/<token> to the order page with its token, with or without a trailing slash', () => {
     expect(matchRoute('/o/abc_DEF-123')).toEqual({ name: 'orderPage', token: 'abc_DEF-123' });
     expect(matchRoute('/o/abc_DEF-123/')).toEqual({ name: 'orderPage', token: 'abc_DEF-123' });

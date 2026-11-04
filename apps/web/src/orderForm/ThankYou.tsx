@@ -1,6 +1,7 @@
 // The thank-you screen (spec §3.2). OrderFormPage shows it in place of the form once the order is
 // in, at the same URL `/`; its one button leads to the customer's own page `/o/<token>` (§3.3).
 import { useEffect, useRef } from 'react';
+import { DEFAULT_LANG, t, type Lang } from '@bottlerun/shared';
 import { Link } from '../router.tsx';
 
 /**
@@ -9,8 +10,10 @@ import { Link } from '../router.tsx';
  * appears.
  *
  * @param token The order's secret from the 201 answer: the only way to reach `/o/<token>`.
+ * @param lang The language of the texts (the English form passes 'en'). The link leads to the
+ *   customer's page, which is Hebrew.
  */
-export function ThankYou({ token }: { token: string }) {
+export function ThankYou({ token, lang = DEFAULT_LANG }: { token: string; lang?: Lang }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // The form the customer just sent is gone, and with it the button that had focus. Focus moves
@@ -24,11 +27,11 @@ export function ThankYou({ token }: { token: string }) {
     <>
       {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}
       <h1 ref={headingRef} tabIndex={-1}>
-        תודה!
+        {t(lang, 'thankYou.title')}
       </h1>
-      <p>קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp לאישור.</p>
+      <p>{t(lang, 'thankYou.body')}</p>
       <Link to={`/o/${token}`} className="button button-primary button-block">
-        לצפייה בהזמנה או לביטול
+        {t(lang, 'thankYou.viewOrder')}
       </Link>
     </>
   );
