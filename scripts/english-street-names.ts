@@ -15,12 +15,15 @@
 // Names taken from OSM are ODbL data, covered by the file's existing "© OpenStreetMap
 // contributors" / ODbL header (the points already come from OSM).
 //
-// Last run (YYYY-MM-DD): N names from OSM, M from transliterateStreetName.
+// Last run (2026-11-04): Overpass answered (1679 objects with a Latin name:en); 325 streets
+// matched an OSM name. 5 of those are in OSM_NAME_REJECTED (wrong or misspelt in OSM), so the
+// file has 320 names from OSM and 141 from transliterateStreetName.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { streetsFileSchema, type StreetsFile } from '@bottlerun/shared';
+import { transliterateStreetName } from './transliterateStreetName.ts';
 import {
   STREETS_FILE,
   streetNameVariants,
@@ -239,12 +242,27 @@ export const SOURCE_SENTENCE =
   'English names: OpenStreetMap name:en via Overpass where present, else transliteration ' +
   '(scripts/english-street-names.ts).';
 
+/**
+ * Street codes whose OSM `name:en` is wrong or misspelt (checked by hand after the 2026-11-04
+ * run); they get transliterateStreetName instead, on every run, so a rerun does not bring the
+ * bad name back. Fixing the name in OSM itself is better still; then remove the code here.
+ *   198 רבי צדקה יהודה  OSM "Rabi Yehuda" drops the surname (another Rabbi Yehuda is street 463)
+ *   249 סמ עלית הנוער   OSM "Haliat Hanoar alley"
+ *   273 האפרסק          OSM "Ha'afasek" (typo, no r)
+ *   461 רשב"ג            OSM "RahaBag"
+ *   502 האדמו"ר מבעלזא   OSM "HaAdmor MebaAlza"
+ */
+export const OSM_NAME_REJECTED: ReadonlySet<number> = new Set([198, 249, 273, 461, 502]);
+
 /** What applyEnglishNames did, for the log. */
 export type EnglishNamesResult = {
   file: StreetsFile;
   /** Streets whose `nameEn` is OSM's `name:en`. */
   fromOsm: number;
-  /** Every other street: it kept its current `nameEn` (a transliteration, or a hand fix). */
+  /**
+   * Every other street: it kept its current `nameEn` (a transliteration, or a hand fix), or, if in
+   * OSM_NAME_REJECTED, got transliterateStreetName.
+   */
   fromTransliteration: number;
   /** The streets that got their name from OSM, in file order. */
   osmStreets: { code: number; name: string; nameEn: string }[];
@@ -256,7 +274,8 @@ export type EnglishNamesResult = {
  * it with transliterateStreetName for every new or renamed street. Keeping it (rather than
  * transliterating again) means a run while Overpass is down (`osmNames` undefined) never
  * overwrites names that came from OSM before, nor hand fixes. `source` gains SOURCE_SENTENCE
- * once; `updatedAt` is left to the caller. Never mutates `file`.
+ * once; `updatedAt` is left to the caller. A street in OSM_NAME_REJECTED always gets
+ * transliterateStreetName, whatever OSM says. Never mutates `file`.
  */
 export function applyEnglishNames(
   file: StreetsFile,
@@ -265,6 +284,9 @@ export function applyEnglishNames(
   const englishName = englishNameMatcher(osmNames ?? []);
   const osmStreets: EnglishNamesResult['osmStreets'] = [];
   const streets = file.streets.map((street) => {
+    if (OSM_NAME_REJECTED.has(street.code)) {
+      return { ...street, nameEn: transliterateStreetName(street.name) };
+    }
     const nameEn = englishName(street.name);
     if (nameEn === undefined) return { ...street };
     osmStreets.push({ code: street.code, name: street.name, nameEn });

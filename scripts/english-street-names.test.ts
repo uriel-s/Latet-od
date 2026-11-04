@@ -11,6 +11,7 @@ import {
   OVERPASS_URL,
   OVERPASS_USER_AGENT,
   SOURCE_SENTENCE,
+  OSM_NAME_REJECTED,
   applyEnglishNames,
   englishNameMatcher,
   fetchOsmEnglishNames,
@@ -195,6 +196,19 @@ describe('applyEnglishNames', () => {
     const once = applyEnglishNames(file, osm).file;
     expect(once.source).toBe(`Street codes and names: data.gov.il. ${SOURCE_SENTENCE}`);
     expect(applyEnglishNames(once, osm).file.source).toBe(once.source);
+  });
+
+  it('ignores OSM for a rejected code and transliterates it, with or without OSM', () => {
+    const rejected = makeFile([{ code: 198, name: 'רבי צדקה יהודה', nameEn: 'Rabi Yehuda' }]);
+    const badOsm: OsmName[] = [{ name: 'רבי צדקה יהודה', nameEn: 'Rabi Yehuda' }];
+    const expected = transliterateStreetName('רבי צדקה יהודה');
+    for (const osmNames of [badOsm, undefined]) {
+      const result = applyEnglishNames(rejected, osmNames);
+      expect(result.file.streets[0]?.nameEn).toBe(expected);
+      expect(result.fromOsm).toBe(0);
+      expect(result.fromTransliteration).toBe(1);
+    }
+    expect(OSM_NAME_REJECTED.has(198)).toBe(true);
   });
 
   it('never mutates its input', () => {
