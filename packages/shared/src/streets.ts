@@ -1,9 +1,9 @@
-// Beit Shemesh street list: the official codes + names from data.gov.il, with one OpenStreetMap
-// point and a region per street (ADR-0005). The booking form's street picker searches it; the
-// point and region decide an order's region and the stop order of a route. No network call at
-// runtime: the list is a static file in the repo. The points come from OSM, so data/streets.json
-// is a Derivative Database under ODbL and every page that uses it credits
-// "© OpenStreetMap contributors".
+// Beit Shemesh street list: the official codes + Hebrew names from data.gov.il, an English name,
+// and one OpenStreetMap point and a region per street (ADR-0005). The booking form's street
+// picker searches it; the point and region decide an order's region and the stop order of a
+// route. No network call at runtime: the list is a static file in the repo. The points (and some
+// English names) come from OSM, so data/streets.json is a Derivative Database under ODbL and
+// every page that uses it credits "© OpenStreetMap contributors".
 import { z } from 'zod';
 import streetsJson from '../data/streets.json' with { type: 'json' };
 
@@ -24,6 +24,12 @@ export const streetSchema = z
     code: z.int().positive(),
     /** Official Hebrew name, as written in the data.gov.il list. */
     name: z.string().trim().min(1),
+    /**
+     * English name, for the English booking form. From OpenStreetMap `name:en` when OSM has one,
+     * else transliterateStreetName of `name` (scripts/english-street-names.ts). Required: an
+     * English-speaking customer must be able to find and read every street.
+     */
+    nameEn: z.string().trim().min(1),
     region: regionSchema.optional(),
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),

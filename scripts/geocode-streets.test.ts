@@ -27,6 +27,7 @@ import {
   writeStreetsFile,
   type GeocodeDeps,
 } from './geocode-streets.ts';
+import { transliterateStreetName } from './transliterateStreetName.ts';
 
 const TEST_EMAIL = 'test@example.com';
 // Points Nominatim returns for Beit Shemesh: the city centre (old city) and one in Ramat Beit
@@ -319,14 +320,24 @@ describe('geocodeStreets', () => {
     const fake = fakeDeps((url) => ({
       body: url.searchParams.has('street') ? [] : [hit(CITY_CENTRE)],
     }));
-    const result = await geocodeStreets(makeFile([{ code: 1, name: 'שכ נוף' }]), fake.deps);
+    const result = await geocodeStreets(
+      makeFile([{ code: 1, name: 'שכ נוף', nameEn: 'Shkhunat Nof' }]),
+      fake.deps,
+    );
 
     expect(fake.requests.map((request) => describeRequest(request.url))).toEqual([
       'street:שכ נוף',
       'q:שכ נוף, בית שמש',
     ]);
     expect(result.streets).toEqual([
-      { code: 1, name: 'שכ נוף', region: 'old', lat: CITY_CENTRE.lat, lng: CITY_CENTRE.lng },
+      {
+        code: 1,
+        name: 'שכ נוף',
+        nameEn: 'Shkhunat Nof',
+        region: 'old',
+        lat: CITY_CENTRE.lat,
+        lng: CITY_CENTRE.lng,
+      },
     ]);
   });
 
@@ -334,22 +345,28 @@ describe('geocodeStreets', () => {
     const fake = fakeDeps(() => ({ body: [hit(CITY_CENTRE)] }));
     const result = await geocodeStreets(
       makeFile([
-        { code: 9000, name: 'בית שמש' },
-        { code: 101, name: 'הרצל' },
+        { code: 9000, name: 'בית שמש', nameEn: 'Beit Shemesh' },
+        { code: 101, name: 'הרצל', nameEn: 'Herzl' },
       ]),
       fake.deps,
     );
 
     expect(fake.requests.map((request) => describeRequest(request.url))).toEqual(['street:הרצל']);
-    expect(result.streets[0]).toEqual({ code: 9000, name: 'בית שמש' });
+    expect(result.streets[0]).toEqual({ code: 9000, name: 'בית שמש', nameEn: 'Beit Shemesh' });
     expect(fake.logs).toContain('skipped: 9000 "בית שמש": the locality itself, not a street');
   });
 
   it('sends no request for a street that already has a point (resume)', async () => {
-    const located = { code: 1, name: 'הרצל', region: 'old', ...CITY_CENTRE } as const;
+    const located = {
+      code: 1,
+      name: 'הרצל',
+      nameEn: 'Herzl',
+      region: 'old',
+      ...CITY_CENTRE,
+    } as const;
     const fake = fakeDeps(() => ({ body: [hit(RAMAT_POINT)] }));
     const result = await geocodeStreets(
-      makeFile([located, { code: 2, name: 'נהר הירדן' }]),
+      makeFile([located, { code: 2, name: 'נהר הירדן', nameEn: 'Nahar HaYarden' }]),
       fake.deps,
     );
 
@@ -363,19 +380,27 @@ describe('geocodeStreets', () => {
     const fake = fakeDeps((url) => ({
       body: url.searchParams.get('street') === 'רשבי' ? [hit(CITY_CENTRE)] : [],
     }));
-    const result = await geocodeStreets(makeFile([{ code: 1, name: 'רשב"י' }]), fake.deps);
+    const result = await geocodeStreets(
+      makeFile([{ code: 1, name: 'רשב"י', nameEn: 'Rashbi' }]),
+      fake.deps,
+    );
 
     expect(fake.requests.map((request) => describeRequest(request.url))).toEqual([
       'street:רשב"י',
       'street:רשבי',
     ]);
     expect(fake.events).toEqual(['fetch', `sleep ${MIN_REQUEST_INTERVAL_MS}`, 'fetch']);
-    expect(result.streets).toEqual([{ code: 1, name: 'רשב"י', region: 'old', ...CITY_CENTRE }]);
+    expect(result.streets).toEqual([
+      { code: 1, name: 'רשב"י', nameEn: 'Rashbi', region: 'old', ...CITY_CENTRE },
+    ]);
   });
 
   it('tries every spelling and then the free-form query for a street that none finds', async () => {
     const fake = fakeDeps(() => ({ body: [] }));
-    const result = await geocodeStreets(makeFile([{ code: 143, name: 'סמ ויצ"ו' }]), fake.deps);
+    const result = await geocodeStreets(
+      makeFile([{ code: 143, name: 'סמ ויצ"ו', nameEn: 'Simtat WIZO' }]),
+      fake.deps,
+    );
 
     expect(fake.requests.map((request) => describeRequest(request.url))).toEqual([
       'street:סמ ויצ"ו',
@@ -386,7 +411,7 @@ describe('geocodeStreets', () => {
     ]);
     const sleeps = fake.events.filter((event) => event.startsWith('sleep')).length;
     expect(sleeps).toBe(fake.requests.length - 1);
-    expect(result.streets).toEqual([{ code: 143, name: 'סמ ויצ"ו' }]);
+    expect(result.streets).toEqual([{ code: 143, name: 'סמ ויצ"ו', nameEn: 'Simtat WIZO' }]);
     expect(fake.saved).toEqual([]);
   });
 
@@ -399,9 +424,9 @@ describe('geocodeStreets', () => {
     });
     await geocodeStreets(
       makeFile([
-        { code: 1, name: 'א' },
-        { code: 2, name: 'ב' },
-        { code: 3, name: 'רשב"י' },
+        { code: 1, name: 'א', nameEn: 'Alef' },
+        { code: 2, name: 'ב', nameEn: 'Bet' },
+        { code: 3, name: 'רשב"י', nameEn: 'Rashbi' },
       ]),
       fake.deps,
     );
@@ -424,7 +449,7 @@ describe('geocodeStreets', () => {
 
   it('sends the identifying User-Agent with the contact mail on every request', async () => {
     const fake = fakeDeps(() => ({ body: [] }));
-    await geocodeStreets(makeFile([{ code: 1, name: 'א' }]), fake.deps);
+    await geocodeStreets(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]), fake.deps);
 
     expect(fake.requests).toHaveLength(2);
     for (const request of fake.requests) {
@@ -441,9 +466,9 @@ describe('geocodeStreets', () => {
     });
     const result = await geocodeStreets(
       makeFile([
-        { code: 1, name: 'א' },
-        { code: 2, name: 'בית לא ידוע' },
-        { code: 3, name: 'ג' },
+        { code: 1, name: 'א', nameEn: 'Alef' },
+        { code: 2, name: 'בית לא ידוע', nameEn: 'Beit Lo Yadua' },
+        { code: 3, name: 'ג', nameEn: 'Gimel' },
       ]),
       fake.deps,
     );
@@ -451,9 +476,9 @@ describe('geocodeStreets', () => {
     expect(fake.saved).toHaveLength(2);
     expect(fake.saved.at(-1)).toEqual(result);
     expect(result.streets).toEqual([
-      { code: 1, name: 'א', region: 'old', ...CITY_CENTRE },
-      { code: 2, name: 'בית לא ידוע' },
-      { code: 3, name: 'ג', region: 'ramat', ...RAMAT_POINT },
+      { code: 1, name: 'א', nameEn: 'Alef', region: 'old', ...CITY_CENTRE },
+      { code: 2, name: 'בית לא ידוע', nameEn: 'Beit Lo Yadua' },
+      { code: 3, name: 'ג', nameEn: 'Gimel', region: 'ramat', ...RAMAT_POINT },
     ]);
     expect(
       fake.logs.some((line) => line.includes('not found') && line.includes('בית לא ידוע')),
@@ -468,8 +493,8 @@ describe('geocodeStreets', () => {
     );
     const run = geocodeStreets(
       makeFile([
-        { code: 1, name: 'א' },
-        { code: 2, name: 'ב' },
+        { code: 1, name: 'א', nameEn: 'Alef' },
+        { code: 2, name: 'ב', nameEn: 'Bet' },
       ]),
       fake.deps,
     );
@@ -479,6 +504,7 @@ describe('geocodeStreets', () => {
     expect(fake.saved[0]?.streets[0]).toEqual({
       code: 1,
       name: 'א',
+      nameEn: 'Alef',
       region: 'old',
       ...CITY_CENTRE,
     });
@@ -486,15 +512,15 @@ describe('geocodeStreets', () => {
 
   it('rejects when Nominatim answers with an error object, naming the street', async () => {
     const fake = fakeDeps(() => ({ body: { error: 'Unable to geocode' } }));
-    await expect(geocodeStreets(makeFile([{ code: 7, name: 'א' }]), fake.deps)).rejects.toThrow(
-      /Unable to geocode.*7 "א"/,
-    );
+    await expect(
+      geocodeStreets(makeFile([{ code: 7, name: 'א', nameEn: 'Alef' }]), fake.deps),
+    ).rejects.toThrow(/Unable to geocode.*7 "א"/);
   });
 
   it('never mutates the input file', async () => {
     const input = makeFile([
-      { code: 1, name: 'א' },
-      { code: 2, name: 'ב' },
+      { code: 1, name: 'א', nameEn: 'Alef' },
+      { code: 2, name: 'ב', nameEn: 'Bet' },
     ]);
     const snapshot = structuredClone(input);
     const fake = fakeDeps(() => ({ body: [hit(CITY_CENTRE)] }));
@@ -561,10 +587,12 @@ describe('parseStreetList', () => {
 });
 
 describe('mergeStreetList', () => {
+  // 101's English name is OSM's `name:en`, not the transliteration ("Herzl"): an unchanged
+  // street must keep it.
   const current: Street[] = [
-    { code: 101, name: 'הרצל', region: 'old', ...CITY_CENTRE },
-    { code: 102, name: 'שם ישן', region: 'ramat', ...RAMAT_POINT },
-    { code: 103, name: 'נמחק' },
+    { code: 101, name: 'הרצל', nameEn: 'Herzl Street', region: 'old', ...CITY_CENTRE },
+    { code: 102, name: 'שם ישן', nameEn: 'Old Name', region: 'ramat', ...RAMAT_POINT },
+    { code: 103, name: 'נמחק', nameEn: 'Deleted' },
   ];
   // Unsorted on purpose: the merge sorts by code.
   const list = [
@@ -576,33 +604,58 @@ describe('mergeStreetList', () => {
   it('keeps points of existing codes (also when renamed), adds new codes, removes missing ones', () => {
     const merged = mergeStreetList(current, list);
     expect(merged.streets).toEqual([
-      { code: 101, name: 'הרצל', region: 'old', ...CITY_CENTRE },
-      { code: 102, name: 'שם חדש', region: 'ramat', ...RAMAT_POINT },
-      { code: 104, name: 'חדש' },
+      { code: 101, name: 'הרצל', nameEn: 'Herzl Street', region: 'old', ...CITY_CENTRE },
+      { code: 102, name: 'שם חדש', nameEn: 'Shem Chadash', region: 'ramat', ...RAMAT_POINT },
+      { code: 104, name: 'חדש', nameEn: 'Chadash' },
     ]);
-    expect(merged.added).toEqual([{ code: 104, name: 'חדש' }]);
-    expect(merged.removed).toEqual([{ code: 103, name: 'נמחק' }]);
+    expect(merged.added).toEqual([{ code: 104, name: 'חדש', nameEn: 'Chadash' }]);
+    expect(merged.removed).toEqual([{ code: 103, name: 'נמחק', nameEn: 'Deleted' }]);
     expect(merged.renamed).toEqual([{ code: 102, from: 'שם ישן', to: 'שם חדש' }]);
   });
 
-  it('writes the keys in the file order code, name, region, lat, lng', () => {
+  it('gives a new code the transliteration of its name', () => {
     const merged = mergeStreetList(current, list);
-    expect(Object.keys(merged.streets[1] ?? {})).toEqual(['code', 'name', 'region', 'lat', 'lng']);
+    expect(merged.added[0]?.nameEn).toBe(transliterateStreetName('חדש'));
+  });
+
+  it('re-transliterates a renamed street, since its old English name was for the old name', () => {
+    const merged = mergeStreetList(current, list);
+    const renamed = merged.streets.find((street) => street.code === 102);
+    expect(renamed?.nameEn).toBe(transliterateStreetName('שם חדש'));
+    expect(renamed?.nameEn).not.toBe('Old Name');
+  });
+
+  it('keeps the English name of an unchanged street, such as one from OpenStreetMap', () => {
+    const merged = mergeStreetList(current, list);
+    expect(merged.streets.find((street) => street.code === 101)?.nameEn).toBe('Herzl Street');
+  });
+
+  it('writes the keys in the file order code, name, nameEn, region, lat, lng', () => {
+    const merged = mergeStreetList(current, list);
+    expect(Object.keys(merged.streets[1] ?? {})).toEqual([
+      'code',
+      'name',
+      'nameEn',
+      'region',
+      'lat',
+      'lng',
+    ]);
+    expect(Object.keys(merged.streets[2] ?? {})).toEqual(['code', 'name', 'nameEn']);
   });
 });
 
 describe('recomputeRegions', () => {
   it('sets the region from the point, overwriting a hand-set one', () => {
-    const file = makeFile([{ code: 1, name: 'א', region: 'old', ...RAMAT_POINT }]);
+    const file = makeFile([{ code: 1, name: 'א', nameEn: 'Alef', region: 'old', ...RAMAT_POINT }]);
     expect(recomputeRegions(file).streets).toEqual([
-      { code: 1, name: 'א', region: 'ramat', ...RAMAT_POINT },
+      { code: 1, name: 'א', nameEn: 'Alef', region: 'ramat', ...RAMAT_POINT },
     ]);
     expect(file.streets[0]?.region).toBe('old');
   });
 
   it('leaves a street without a point without a region', () => {
-    const file = makeFile([{ code: 1, name: 'א' }]);
-    expect(recomputeRegions(file).streets).toEqual([{ code: 1, name: 'א' }]);
+    const file = makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]);
+    expect(recomputeRegions(file).streets).toEqual([{ code: 1, name: 'א', nameEn: 'Alef' }]);
   });
 });
 
@@ -633,27 +686,29 @@ describe('parsePointText', () => {
 describe('setStreetPoint', () => {
   it('sets the point and the region the point is in, keeping the file order', () => {
     const file = makeFile([
-      { code: 1, name: 'א' },
-      { code: 2, name: 'ב' },
+      { code: 1, name: 'א', nameEn: 'Alef' },
+      { code: 2, name: 'ב', nameEn: 'Bet' },
     ]);
     expect(setStreetPoint(file, 2, RAMAT_POINT).streets).toEqual([
-      { code: 1, name: 'א' },
-      { code: 2, name: 'ב', region: 'ramat', ...RAMAT_POINT },
+      { code: 1, name: 'א', nameEn: 'Alef' },
+      { code: 2, name: 'ב', nameEn: 'Bet', region: 'ramat', ...RAMAT_POINT },
     ]);
-    expect(file.streets[1]).toEqual({ code: 2, name: 'ב' });
+    expect(file.streets[1]).toEqual({ code: 2, name: 'ב', nameEn: 'Bet' });
   });
 
   it('replaces a point the street already had, region included', () => {
-    const file = makeFile([{ code: 1, name: 'א', region: 'ramat', ...RAMAT_POINT }]);
+    const file = makeFile([
+      { code: 1, name: 'א', nameEn: 'Alef', region: 'ramat', ...RAMAT_POINT },
+    ]);
     expect(setStreetPoint(file, 1, CITY_CENTRE).streets).toEqual([
-      { code: 1, name: 'א', region: 'old', ...CITY_CENTRE },
+      { code: 1, name: 'א', nameEn: 'Alef', region: 'old', ...CITY_CENTRE },
     ]);
   });
 
   it('throws for a code no street has', () => {
-    expect(() => setStreetPoint(makeFile([{ code: 1, name: 'א' }]), 9, RAMAT_POINT)).toThrow(
-      /no street has code 9/,
-    );
+    expect(() =>
+      setStreetPoint(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]), 9, RAMAT_POINT),
+    ).toThrow(/no street has code 9/);
   });
 });
 
@@ -665,17 +720,19 @@ describe('serializeStreetsFile', () => {
   });
 
   it('writes a geocoded street on one line, keys in file order', () => {
-    const file = makeFile([{ lng: 34.98, lat: 31.7, region: 'ramat', name: 'x', code: 1 }]);
+    const file = makeFile([
+      { lng: 34.98, lat: 31.7, region: 'ramat', nameEn: 'X', name: 'x', code: 1 },
+    ]);
     expect(serializeStreetsFile(file).split('\n')).toContain(
-      '    {"code":1,"name":"x","region":"ramat","lat":31.7,"lng":34.98}',
+      '    {"code":1,"name":"x","nameEn":"X","region":"ramat","lat":31.7,"lng":34.98}',
     );
   });
 
   it('sorts the streets by code', () => {
     const text = serializeStreetsFile(
       makeFile([
-        { code: 2, name: 'ב' },
-        { code: 1, name: 'א' },
+        { code: 2, name: 'ב', nameEn: 'Bet' },
+        { code: 1, name: 'א', nameEn: 'Alef' },
       ]),
     );
     expect(text.indexOf('"code":1')).toBeLessThan(text.indexOf('"code":2'));
@@ -713,7 +770,9 @@ describe('with a temp directory', () => {
   describe('writeStreetsFile', () => {
     it('writes the serialized file and leaves no .tmp behind', async () => {
       const target = path.join(tempDir, 'streets.json');
-      const file = makeFile([{ code: 1, name: 'א', region: 'old', ...CITY_CENTRE }]);
+      const file = makeFile([
+        { code: 1, name: 'א', nameEn: 'Alef', region: 'old', ...CITY_CENTRE },
+      ]);
       await writeStreetsFile(target, file);
 
       expect(await fs.readFile(target, 'utf8')).toBe(serializeStreetsFile(file));
@@ -722,12 +781,12 @@ describe('with a temp directory', () => {
 
     it('refuses an invalid file and leaves the existing one untouched', async () => {
       const target = path.join(tempDir, 'streets.json');
-      await writeStreetsFile(target, makeFile([{ code: 1, name: 'א' }]));
+      await writeStreetsFile(target, makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]));
       const before = await fs.readFile(target, 'utf8');
 
       const duplicateCodes = makeFile([
-        { code: 1, name: 'א' },
-        { code: 1, name: 'ב' },
+        { code: 1, name: 'א', nameEn: 'Alef' },
+        { code: 1, name: 'ב', nameEn: 'Bet' },
       ]);
       await expect(writeStreetsFile(target, duplicateCodes)).rejects.toThrow(/duplicate/);
       expect(await fs.readFile(target, 'utf8')).toBe(before);
@@ -758,8 +817,8 @@ describe('with a temp directory', () => {
     it('--regions recomputes regions without an email or any request', async () => {
       const streetsFile = await tempStreetsFile(
         makeFile([
-          { code: 1, name: 'א', region: 'old', ...RAMAT_POINT },
-          { code: 2, name: 'ב' },
+          { code: 1, name: 'א', nameEn: 'Alef', region: 'old', ...RAMAT_POINT },
+          { code: 2, name: 'ב', nameEn: 'Bet' },
         ]),
       );
       const network = forbiddenFetch();
@@ -781,8 +840,8 @@ describe('with a temp directory', () => {
       const written = streetsFileSchema.parse(JSON.parse(await fs.readFile(streetsFile, 'utf8')));
       expect(written.updatedAt).toBe('2026-10-19');
       expect(written.streets).toEqual([
-        { code: 1, name: 'א', region: 'ramat', ...RAMAT_POINT },
-        { code: 2, name: 'ב' },
+        { code: 1, name: 'א', nameEn: 'Alef', region: 'ramat', ...RAMAT_POINT },
+        { code: 2, name: 'ב', nameEn: 'Bet' },
       ]);
       expect(logs).toContain('  without a point: 1');
     });
@@ -790,8 +849,8 @@ describe('with a temp directory', () => {
     it('--point sets one street by hand, without an email or any request', async () => {
       const streetsFile = await tempStreetsFile(
         makeFile([
-          { code: 1, name: 'א' },
-          { code: 2, name: 'ב' },
+          { code: 1, name: 'א', nameEn: 'Alef' },
+          { code: 2, name: 'ב', nameEn: 'Bet' },
         ]),
       );
       const network = forbiddenFetch();
@@ -809,8 +868,8 @@ describe('with a temp directory', () => {
       const written = streetsFileSchema.parse(JSON.parse(await fs.readFile(streetsFile, 'utf8')));
       expect(written.updatedAt).toBe('2026-10-19');
       expect(written.streets).toEqual([
-        { code: 1, name: 'א' },
-        { code: 2, name: 'ב', region: 'ramat', ...RAMAT_POINT },
+        { code: 1, name: 'א', nameEn: 'Alef' },
+        { code: 2, name: 'ב', nameEn: 'Bet', region: 'ramat', ...RAMAT_POINT },
       ]);
       expect(logs).toEqual([
         `set: 2 "ב" ${RAMAT_POINT.lat},${RAMAT_POINT.lng} (ramat)`,
@@ -819,7 +878,7 @@ describe('with a temp directory', () => {
     });
 
     it('--point returns 1 and leaves the file as it was for a point outside the city', async () => {
-      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]));
       const before = await fs.readFile(streetsFile, 'utf8');
       const logs: string[] = [];
 
@@ -838,7 +897,7 @@ describe('with a temp directory', () => {
     });
 
     it('--point returns 1 for a code no street has', async () => {
-      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]));
       const logs: string[] = [];
 
       const exitCode = await main(
@@ -869,7 +928,7 @@ describe('with a temp directory', () => {
     });
 
     it('returns 1 without NOMINATIM_EMAIL, makes no request and leaves the file as it was', async () => {
-      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]));
       const before = await fs.readFile(streetsFile, 'utf8');
       const network = forbiddenFetch();
       const logs: string[] = [];
@@ -911,7 +970,7 @@ describe('with a temp directory', () => {
     });
 
     it('geocodes the missing points and saves them with a fresh updatedAt', async () => {
-      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]));
       const fake = fakeDeps(() => ({ body: [hit(CITY_CENTRE)] }));
 
       const exitCode = await main(
@@ -930,11 +989,13 @@ describe('with a temp directory', () => {
       expect(fake.requests[0]?.headers['User-Agent']).toContain(TEST_EMAIL);
       const written = streetsFileSchema.parse(JSON.parse(await fs.readFile(streetsFile, 'utf8')));
       expect(written.updatedAt).toBe('2026-10-19');
-      expect(written.streets).toEqual([{ code: 1, name: 'א', region: 'old', ...CITY_CENTRE }]);
+      expect(written.streets).toEqual([
+        { code: 1, name: 'א', nameEn: 'Alef', region: 'old', ...CITY_CENTRE },
+      ]);
     });
 
     it('returns 1 and tells how to continue when Nominatim throttles the run', async () => {
-      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א' }]));
+      const streetsFile = await tempStreetsFile(makeFile([{ code: 1, name: 'א', nameEn: 'Alef' }]));
       const fake = fakeDeps(() => ({ status: 429, body: 'Too Many Requests' }));
       const logs: string[] = [];
 
@@ -955,7 +1016,7 @@ describe('with a temp directory', () => {
 
     it('--refresh-list merges the data.gov.il list and saves it before asking for the email', async () => {
       const streetsFile = await tempStreetsFile(
-        makeFile([{ code: 101, name: 'הרצל', region: 'old', ...CITY_CENTRE }]),
+        makeFile([{ code: 101, name: 'הרצל', nameEn: 'Herzl', region: 'old', ...CITY_CENTRE }]),
       );
       const requests: URL[] = [];
       const fetch: GeocodeDeps['fetch'] = (url) => {
@@ -986,8 +1047,8 @@ describe('with a temp directory', () => {
       const written = streetsFileSchema.parse(JSON.parse(await fs.readFile(streetsFile, 'utf8')));
       expect(written.updatedAt).toBe('2026-10-19');
       expect(written.streets).toEqual([
-        { code: 101, name: 'הרצל', region: 'old', ...CITY_CENTRE },
-        { code: 102, name: 'חדש' },
+        { code: 101, name: 'הרצל', nameEn: 'Herzl', region: 'old', ...CITY_CENTRE },
+        { code: 102, name: 'חדש', nameEn: 'Chadash' },
       ]);
     });
   });
