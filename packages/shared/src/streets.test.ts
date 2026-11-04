@@ -5,11 +5,13 @@ import {
   STREETS_ATTRIBUTION,
   findStreet,
   searchStreets,
+  streetDisplayName,
   streetSchema,
   streetsFileSchema,
   type Street,
   type StreetsFile,
 } from './streets.ts';
+import { DEFAULT_LANG } from './i18n.ts';
 
 /** A valid streets file with two streets; override any header key or the street list. */
 function makeStreetsFile(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -193,6 +195,30 @@ describe('findStreet', () => {
   });
 });
 
+describe('streetDisplayName', () => {
+  const street: Street = { code: 103, name: "ז'בוטינסקי", nameEn: 'Jabotinsky' };
+
+  it('returns the official Hebrew name for he', () => {
+    expect(streetDisplayName(street, 'he')).toBe("ז'בוטינסקי");
+  });
+
+  it('returns the English name for en', () => {
+    expect(streetDisplayName(street, 'en')).toBe('Jabotinsky');
+  });
+
+  it('returns the Hebrew name for DEFAULT_LANG', () => {
+    expect(streetDisplayName(street, DEFAULT_LANG)).toBe("ז'בוטינסקי");
+  });
+
+  it('names a street of the real list in both languages', () => {
+    const herzl = findStreet(101);
+    expect(herzl).toBeDefined();
+    if (herzl === undefined) return;
+    expect(streetDisplayName(herzl, 'he')).toBe('הרצל');
+    expect(streetDisplayName(herzl, 'en')).toBe('Herzl');
+  });
+});
+
 describe('searchStreets', () => {
   it('finds a street by one word of its name', () => {
     expect(searchStreets('רבין').map((street) => street.name)).toEqual(['דרך רבין יצחק']);
@@ -258,6 +284,48 @@ describe('searchStreets', () => {
       { code: 2, name: 'נחל שורק', nameEn: 'Nahal Sorek' },
     ];
     expect(searchCodes('נחל ש', streets)).toEqual([2, 1]);
+  });
+
+  it('finds a street by its English name, in any letter case', () => {
+    for (const query of ['herzl', 'Herzl', 'HERZL']) {
+      expect(searchCodes(query), query).toEqual([101]);
+    }
+  });
+
+  it('finds a street by the start of a word of its English name', () => {
+    expect(searchCodes('jabot')).toEqual([103]);
+    expect(searchCodes('rambam')).toEqual([140]);
+  });
+
+  it('matches no street for Latin letters that are no word start of any name', () => {
+    expect(searchStreets('xyzzy')).toEqual([]);
+    // Inside "Herzl" and "Jabotinsky", but not at the start of a word.
+    expect(searchStreets('rzl')).toEqual([]);
+    expect(searchStreets('botinsky')).toEqual([]);
+  });
+
+  it('treats a hyphen in an English name like a space', () => {
+    // Also Simtat Ben-Eliezer and Kiryat Ben Eliezer; the street named just that comes first.
+    for (const query of ['ben eliezer', 'ben-eliezer', 'Ben-Eliezer']) {
+      const codes = searchCodes(query);
+      expect(codes[0], query).toBe(202);
+    }
+  });
+
+  it('matches an English name with an apostrophe typed with or without it', () => {
+    for (const query of ['maale david', "ma'ale david", 'ma’ale david']) {
+      expect(searchCodes(query), query).toEqual([132]);
+    }
+  });
+
+  it('lists English names that start with the query before ones that only contain it', () => {
+    const streets: Street[] = [
+      { code: 1, name: 'דרך רבין יצחק', nameEn: 'Derekh Rabin Yitzhak' },
+      { code: 2, name: 'שד רבין', nameEn: 'Rabin Boulevard' },
+      { code: 3, name: 'כיכר רבין', nameEn: 'Kikar Rabin' },
+      { code: 4, name: 'רבין', nameEn: 'Rabin' },
+    ];
+    expect(searchCodes('rabin', streets)).toEqual([2, 4, 1, 3]);
   });
 
   it('does not mutate the list it searches', () => {
