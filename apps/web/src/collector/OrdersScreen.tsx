@@ -15,6 +15,7 @@ import {
 } from '@bottlerun/shared';
 import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api.ts';
 import { Link, navigate } from '../router.tsx';
+import { StatusBadge } from '../components/StatusBadge.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
 import { orderTags } from './orderTags.ts';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
@@ -64,6 +65,19 @@ export function bottlesText(count: number): string {
 export function groupSummary(group: Pick<OrderGroup, 'orderCount' | 'bottlesTotal'>): string {
   if (group.orderCount === 0) return EMPTY_GROUP_TEXT;
   return `${ordersText(group.orderCount)} · ${bottlesText(group.bottlesTotal)}`;
+}
+
+/**
+ * The line at the top of the loaded list (ADR-0011): all waiting orders and the bottles in them,
+ * e.g. "12 ממתינות · כ־340 בקבוקים". Summed from the groups already loaded, so it costs no request.
+ * "כ־" because the bottle counts are estimates. {@link EMPTY_GROUP_TEXT} when no order waits.
+ */
+export function waitingSummary(groups: readonly OrderGroup[]): string {
+  const orders = groups.reduce((sum, group) => sum + group.orderCount, 0);
+  const bottles = groups.reduce((sum, group) => sum + group.bottlesTotal, 0);
+  if (orders === 0) return EMPTY_GROUP_TEXT;
+  const waiting = orders === 1 ? 'ממתינה אחת' : `${orders} ממתינות`;
+  return `${waiting} · כ־${bottlesText(bottles)}`;
 }
 
 /** Props of {@link OrdersScreen}. */
@@ -162,8 +176,14 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
         </>
       )}
 
-      {state.kind === 'loaded' &&
-        state.groups.map((group) => <OrderGroupSection key={group.key} group={group} />)}
+      {state.kind === 'loaded' && (
+        <>
+          <p className="orders-summary">{waitingSummary(state.groups)}</p>
+          {state.groups.map((group) => (
+            <OrderGroupSection key={group.key} group={group} />
+          ))}
+        </>
+      )}
     </>
   );
 }
@@ -209,8 +229,12 @@ function OrderCard({ order }: { order: CollectorOrder }) {
   const tags = orderTags(order);
 
   return (
-    <li className="order-card">
-      <h3 className="order-card-name">{contact.name}</h3>
+    <li className="card orders-card">
+      <div className="orders-card-head">
+        <h3 className="order-card-name">{contact.name}</h3>
+        {/* Every order in this list waits for a round; the badge makes the status readable. */}
+        <StatusBadge status={order.status} />
+      </div>
       <p>
         {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
         <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>

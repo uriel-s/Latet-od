@@ -3,7 +3,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
 import type { WaitingOrdersOutcome } from '../api.ts';
-import { ORDERS_LOAD_FAILED_MESSAGE, OrdersScreen, groupSummary } from './OrdersScreen.tsx';
+import {
+  ORDERS_LOAD_FAILED_MESSAGE,
+  OrdersScreen,
+  groupSummary,
+  waitingSummary,
+} from './OrdersScreen.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
 /** A waiting order on a listed street in רמת בית שמש, with a map point; overrides change it. */
@@ -127,7 +132,45 @@ describe('groupSummary', () => {
   });
 });
 
+describe('waitingSummary', () => {
+  it.each([
+    [3, 150, '3 ממתינות · כ־150 בקבוקים'],
+    [1, 30, 'ממתינה אחת · כ־30 בקבוקים'],
+    [12, 340, '12 ממתינות · כ־340 בקבוקים'],
+  ])('sums %i orders and %i bottles over the groups', (orderCount, bottlesTotal, expected) => {
+    const groups = [
+      { orderCount, bottlesTotal },
+      { orderCount: 0, bottlesTotal: 0 },
+    ];
+    expect(waitingSummary(groups as never)).toBe(expected);
+  });
+
+  it('says no order waits for an empty list', () => {
+    expect(waitingSummary([{ orderCount: 0, bottlesTotal: 0 }] as never)).toBe(
+      'אין הזמנות שממתינות',
+    );
+  });
+});
+
 describe('OrdersScreen', () => {
+  describe('the summary line and status badges', () => {
+    it('shows the waiting total of the loaded list above the groups', async () => {
+      await renderLoaded();
+      expect(screen.getByText('3 ממתינות · כ־150 בקבוקים')).toBeDefined();
+    });
+
+    it('shows the empty summary when no order waits', async () => {
+      renderScreen(fakeLoad({ kind: 'loaded', groups: groupWaitingOrders([]) }).load);
+      await screen.findByRole('region', { name: 'רמת בית שמש' });
+      expect(screen.getAllByText('אין הזמנות שממתינות')).toHaveLength(4);
+    });
+
+    it('shows each card a status badge', async () => {
+      await renderLoaded();
+      expect(within(cardOf('דנה כהן')).getByText('ממתינה לסבב')).toBeDefined();
+    });
+  });
+
   describe('the notice from the screen Yoel just left', () => {
     it('tells it under the heading, once', async () => {
       window.history.replaceState({ notice: 'ההזמנה נוספה.' }, '', '/app/orders');

@@ -844,6 +844,29 @@ html:has(.bottom-nav) {
   font-weight: 700;
 }
 
+/* Orders tab (ADR-0011): each order is a .card; name and status badge share its first row. */
+.orders-summary {
+  margin-block: 0 1rem;
+  font-weight: 700;
+}
+
+.orders-card p {
+  margin-block: 0 0.25rem;
+}
+
+.orders-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-block-end: 0.25rem;
+}
+
+.orders-card-head .order-card-name {
+  margin-block: 0;
+}
+
 /* "עריכה" at the end of the card; .button keeps it at least 48px tall, min-width as wide. */
 .order-card-edit {
   min-width: var(--tap-target);
