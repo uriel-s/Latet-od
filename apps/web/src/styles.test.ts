@@ -61,7 +61,17 @@ function contrastRatio(foreground: string, background: string): number {
 /** WCAG AA for normal-size text. */
 const AA_TEXT = 4.5;
 
+/** The tokens of the dark palette: the :root inside `@media (prefers-color-scheme: dark)`. */
+function darkBlock(css: string): string {
+  const match = /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\n {2}\}/.exec(
+    css,
+  );
+  if (!match?.[1]) throw new Error('styles.css has no dark-mode :root block');
+  return match[1];
+}
+
 const rootTokens = hexTokens(rootBlock(stylesCss));
+const darkTokens = hexTokens(darkBlock(stylesCss));
 
 /** Text colour on background colour, as token names, for every pair the screens use. */
 const TEXT_PAIRS: [foreground: string, background: string][] = [
@@ -95,6 +105,36 @@ describe('styles.css colour contrast', () => {
     expect(foregroundHex, `--${foreground} is a #rrggbb colour in :root`).toBeDefined();
     expect(backgroundHex, `--${background} is a #rrggbb colour in :root`).toBeDefined();
     expect(contrastRatio(foregroundHex ?? '', backgroundHex ?? '')).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
+  it.each(TEXT_PAIRS)('dark: --%s on --%s reaches WCAG AA (4.5:1)', (foreground, background) => {
+    const foregroundHex = darkTokens.get(foreground);
+    const backgroundHex = darkTokens.get(background);
+    expect(foregroundHex, `--${foreground} is a #rrggbb colour in the dark block`).toBeDefined();
+    expect(backgroundHex, `--${background} is a #rrggbb colour in the dark block`).toBeDefined();
+    expect(contrastRatio(foregroundHex ?? '', backgroundHex ?? '')).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
+  it('redefines every light colour token in the dark block, except the always-light ones', () => {
+    // A token left out would keep its light value on a dark page. --on-hdr stays light on purpose.
+    const missing = [...rootTokens.keys()].filter(
+      (name) => name !== 'on-hdr' && !darkTokens.has(name),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps the header text readable over the dark header gradient', () => {
+    const gradient = /--hdr:([^;]*);/.exec(darkBlock(stylesCss))?.[1] ?? '';
+    const stops = gradient.match(/#[0-9a-f]{6}/gi) ?? [];
+    expect(stops.length).toBeGreaterThan(1);
+    // Every stop but the last (the dim peach hint at 135%, mostly past the edge) sits under text.
+    for (const stop of stops.slice(0, -1)) {
+      expect(contrastRatio(rootTokens.get('on-hdr') ?? '', stop)).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it('declares color-scheme: light dark', () => {
+    expect(rootBlock(stylesCss)).toContain('color-scheme: light dark;');
   });
 
   it('keeps the old colour names as aliases of the dawn tokens', () => {

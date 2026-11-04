@@ -16,6 +16,15 @@
     --ink:#172536; --muted:#566475; --line:#d3dfeb; --done:#e0e9f2;
     --hdr:linear-gradient(165deg,#1f5c9e 0%,#4a95d0 62%,#f0c79f 135%); --green:#1f6b44; --green-soft:#d3ecdc; --amber:#8a4b0c; --amber-soft:#fbecc8;
   }
+  /* מצב כהה אוטומטי (ADR-0011): אותם טוקנים בלבד, כמו ב-apps/web/src/styles.css */
+  :root { color-scheme: light dark; --on-brand:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1a28; --card:#182638; --brand:#7db4ea; --brand-2:#5a9ad8; --brand-soft:#1f3a58;
+      --ink:#e8eff7; --muted:#a3b2c3; --line:#2b3d52; --done:#213246;
+      --hdr:linear-gradient(165deg,#173a63 0%,#2a6199 62%,#8f6d58 135%); --green:#7fd1a0; --green-soft:#17382a; --amber:#f0b86e; --amber-soft:#3d2e12; --on-brand:#0b1522;
+    }
+  }
   :root {
     --r-lg: 22px; --r-md: 16px; --r-sm: 12px;
     --shadow-1: 0 1px 2px rgba(20,30,25,.05), 0 6px 18px rgba(20,30,25,.07);
@@ -77,7 +86,7 @@
     background: var(--brand-soft); color: var(--brand); transition: transform .08s ease, filter .15s;
   }
   .btn:active { transform: scale(.97); filter: brightness(.95); }
-  .btn.primary { background: linear-gradient(160deg, var(--brand-2), var(--brand)); color: #fff; box-shadow: var(--shadow-btn); }
+  .btn.primary { background: linear-gradient(160deg, var(--brand-2), var(--brand)); color: var(--on-brand); box-shadow: var(--shadow-btn); }
   .btn.big { width: 100%; min-height: 66px; font-size: 1.25rem; border-radius: 18px; }
   .btn.big svg { width: 1.5em; height: 1.5em; }
   .btn.ghost { background: transparent; border: 2px solid var(--line); color: var(--ink); }
