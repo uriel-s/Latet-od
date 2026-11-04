@@ -63,6 +63,16 @@ const CREATED: CreateOrderOutcome = {
 };
 
 describe('the English booking form', () => {
+  it('groups the fields in cards titled in English and offers the spot as radios', () => {
+    renderEnglishForm(CREATED);
+    for (const name of ['Details', 'Address', 'Bottles']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeDefined();
+    }
+    expect(
+      screen.getByRole('radio', { name: 'Downstairs at the building entrance' }),
+    ).toBeDefined();
+  });
+
   it('sends a full order with lang en and confirms in English', async () => {
     const { requests } = renderEnglishForm(CREATED);
 

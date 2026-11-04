@@ -3,7 +3,7 @@
 // §3.5: the same form) and the customer's "שינוי" on their own page (spec §3.3, without the
 // contact), so all of them ask the same questions in the same words. The page owns the <form>,
 // its state (useOrderForm), the honeypot and the submit button.
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import {
   DEFAULT_LANG,
   FORM_TEXT_MAX_LENGTH,
@@ -12,6 +12,7 @@ import {
   t,
   type Lang,
 } from '@bottlerun/shared';
+import { Icon, type IconName } from '../components/Icon.tsx';
 import { TextField } from '../components/TextField.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import type { FormErrors, OrderFormField, OrderFormValues } from './formValues.ts';
@@ -38,7 +39,7 @@ export interface OrderFieldsProps {
 
 /**
  * The order's fields, in form order: שם and טלפון נייד (unless `showContact` is false), רחוב,
- * מספר בית, איפה הבקבוקים, קומה ודירה (only for the apartment door), הערה, כמות בקבוקים. A
+ * מספר בית, איפה הבקבוקים, קומה ודירה (only for the apartment door), כמות בקבוקים, הערה, in three titled cards (פרטים, כתובת, בקבוקים). A
  * fragment, to be placed inside the page's `<form>`. Every field shows its error next to it and carries aria-invalid while it has one,
  * which is how useOrderForm's `showErrors` finds the first wrong field.
  *
@@ -60,7 +61,7 @@ export function OrderFields({
   return (
     <>
       {showContact && (
-        <>
+        <FormCard title={t(lang, 'form.sectionDetails')}>
           <TextField
             label={t(lang, 'form.name')}
             value={values.name}
@@ -84,88 +85,113 @@ export function OrderFields({
             }
             autoComplete="tel"
           />
-        </>
+        </FormCard>
       )}
 
-      {/* The picker reads `value` once, when it mounts. A prefill exists before the first
+      <FormCard title={t(lang, 'form.sectionAddress')}>
+        {/* The picker reads `value` once, when it mounts. A prefill exists before the first
           render, so the saved street shows without a remount `key`. */}
-      <StreetPicker
-        label={t(lang, 'form.street')}
-        lang={lang}
-        value={values.street}
-        onChange={(street) => onFieldChange('street', street)}
-        error={errors.street}
-      />
-
-      <TextField
-        // Not numeric: a house number may carry a letter ("12א").
-        label={t(lang, 'form.houseNumber')}
-        value={values.houseNumber}
-        onChange={(houseNumber) => onFieldChange('houseNumber', houseNumber)}
-        error={errors.houseNumber}
-        // The street is a custom picker the browser cannot fill, so its address autofill would
-        // put a whole "street and number" line here, which the house number then rejects.
-        autoComplete="off"
-        maxLength={FORM_TEXT_MAX_LENGTH.houseNumber}
-      />
-
-      <fieldset className="field" aria-describedby={spotError ? spotErrorId : undefined}>
-        <legend className="field-label">{t(lang, 'form.bottlesSpot')}</legend>
-        <div className="choice-list">
-          {bottlesSpotSchema.options.map((spot) => (
-            <label key={spot} className="choice">
-              <input
-                type="radio"
-                name={spotGroupName}
-                value={spot}
-                checked={values.bottlesSpot === spot}
-                onChange={() => onFieldChange('bottlesSpot', spot)}
-                aria-invalid={spotError ? true : undefined}
-              />
-              {t(lang, `bottlesSpot.${spot}`)}
-            </label>
-          ))}
-        </div>
-        {spotError && (
-          <p id={spotErrorId} className="field-error">
-            {spotError}
-          </p>
-        )}
-      </fieldset>
-
-      {/* Only the apartment door needs a floor and apartment (Yoel goes up). When hidden, the
-          value stays in state but is not sent (validateOrderDetails). */}
-      {values.bottlesSpot === 'apartmentDoor' && (
-        <TextField
-          label={t(lang, 'form.floorApt')}
-          value={values.floorApt}
-          onChange={(floorApt) => onFieldChange('floorApt', floorApt)}
-          error={errors.floorApt}
-          hint={t(lang, 'form.floorAptHint')}
-          autoComplete="off"
-          maxLength={FORM_TEXT_MAX_LENGTH.floorApt}
+        <StreetPicker
+          label={t(lang, 'form.street')}
+          lang={lang}
+          value={values.street}
+          onChange={(street) => onFieldChange('street', street)}
+          error={errors.street}
         />
-      )}
 
-      <TextField
-        label={t(lang, 'form.note')}
-        value={values.note}
-        onChange={(note) => onFieldChange('note', note)}
-        error={errors.note}
-        hint={t(lang, 'form.noteHint')}
-        autoComplete="off"
-        maxLength={FORM_TEXT_MAX_LENGTH.note}
-      />
+        <TextField
+          // Not numeric: a house number may carry a letter ("12א").
+          label={t(lang, 'form.houseNumber')}
+          value={values.houseNumber}
+          onChange={(houseNumber) => onFieldChange('houseNumber', houseNumber)}
+          error={errors.houseNumber}
+          // The street is a custom picker the browser cannot fill, so its address autofill would
+          // put a whole "street and number" line here, which the house number then rejects.
+          autoComplete="off"
+          maxLength={FORM_TEXT_MAX_LENGTH.houseNumber}
+        />
 
-      <TextField
-        label={t(lang, 'form.bottles')}
-        digits
-        value={values.bottlesEstimated}
-        onChange={(bottlesEstimated) => onFieldChange('bottlesEstimated', bottlesEstimated)}
-        error={errors.bottlesEstimated}
-        hint={t(lang, 'form.bottlesHint', { min: MIN_BOTTLES })}
-        autoComplete="off"
-      />
+        <fieldset className="field" aria-describedby={spotError ? spotErrorId : undefined}>
+          <legend className="field-label">{t(lang, 'form.bottlesSpot')}</legend>
+          <div className="choice-cards">
+            {bottlesSpotSchema.options.map((spot) => (
+              <label key={spot} className="choice-card">
+                <input
+                  type="radio"
+                  name={spotGroupName}
+                  value={spot}
+                  checked={values.bottlesSpot === spot}
+                  onChange={() => onFieldChange('bottlesSpot', spot)}
+                  aria-invalid={spotError ? true : undefined}
+                />
+                <Icon name={SPOT_ICONS[spot]} />
+                <span>{t(lang, `bottlesSpot.${spot}`)}</span>
+              </label>
+            ))}
+          </div>
+          {spotError && (
+            <p id={spotErrorId} className="field-error">
+              {spotError}
+            </p>
+          )}
+        </fieldset>
+
+        {/* Only the apartment door needs a floor and apartment (Yoel goes up). When hidden, the
+          value stays in state but is not sent (validateOrderDetails). */}
+        {values.bottlesSpot === 'apartmentDoor' && (
+          <TextField
+            label={t(lang, 'form.floorApt')}
+            value={values.floorApt}
+            onChange={(floorApt) => onFieldChange('floorApt', floorApt)}
+            error={errors.floorApt}
+            hint={t(lang, 'form.floorAptHint')}
+            autoComplete="off"
+            maxLength={FORM_TEXT_MAX_LENGTH.floorApt}
+          />
+        )}
+      </FormCard>
+
+      <FormCard title={t(lang, 'form.sectionBottles')}>
+        <TextField
+          label={t(lang, 'form.bottles')}
+          digits
+          value={values.bottlesEstimated}
+          onChange={(bottlesEstimated) => onFieldChange('bottlesEstimated', bottlesEstimated)}
+          error={errors.bottlesEstimated}
+          hint={t(lang, 'form.bottlesHint', { min: MIN_BOTTLES })}
+          autoComplete="off"
+        />
+
+        <TextField
+          label={t(lang, 'form.note')}
+          value={values.note}
+          onChange={(note) => onFieldChange('note', note)}
+          error={errors.note}
+          hint={t(lang, 'form.noteHint')}
+          autoComplete="off"
+          maxLength={FORM_TEXT_MAX_LENGTH.note}
+        />
+      </FormCard>
     </>
+  );
+}
+
+// Which icon draws each bottlesSpot choice. A Record, so a new spot without an icon is a type error.
+const SPOT_ICONS: Record<(typeof bottlesSpotSchema.options)[number], IconName> = {
+  privateHouse: 'home',
+  apartmentDoor: 'door',
+  buildingEntrance: 'building',
+};
+
+/** One titled group of fields on a white card; the heading names the group for screen readers. */
+function FormCard({ title, children }: { title: string; children: ReactNode }) {
+  const headingId = useId();
+  return (
+    <section className="card form-card" aria-labelledby={headingId}>
+      <h2 id={headingId} className="form-card-title">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }
