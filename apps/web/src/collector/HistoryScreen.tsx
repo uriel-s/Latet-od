@@ -207,7 +207,7 @@ function MonthHistory({ history }: { history: HistoryResponse }) {
 /** One total: its name, and under it the number, large. */
 function HistoryTotal({ label, value }: { label: string; value: string }) {
   return (
-    <div className="history-total">
+    <div className="card history-total">
       <dt>{label}</dt>
       {/* Digits (and "9.60 ₪") read left to right inside the right-to-left page (CLAUDE.md). */}
       <dd>

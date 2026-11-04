@@ -1265,36 +1265,39 @@ html:has(.bottom-nav) {
 }
 
 /*
- * The month's three totals, one under the other (a single column, so a large value never
- * squeezes): the name on the right, the number on the left, framed like an .order-card.
+ * The month's three totals as stat tiles (ADR-0011): each a .card with the number large in --brand
+ * and its label under it in --muted (both AA on --card, styles.test.ts). The DOM keeps the label
+ * (dt) before the number (dd) so a screen reader hears the name first; column-reverse puts the
+ * number on top. Tiles wrap, so a long value never squeezes.
  */
 .history-totals {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
   margin: 0 0 1.5rem;
 }
 
 .history-total {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 1rem;
-  padding: 0.5rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  padding: 1rem;
+  text-align: center;
 }
 
 .history-total dt {
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .history-total dd {
   margin: 0;
-  font-size: 1.4rem;
-  font-weight: 700;
+  color: var(--brand);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 /* --- Route stops (collector/StopCard.tsx) ------------------------------------------ */
