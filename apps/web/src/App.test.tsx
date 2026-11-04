@@ -194,6 +194,23 @@ describe('App', () => {
     expect(requests).toEqual(['/api/o/abc']);
   });
 
+  it('hangs the bunting on the public order page', async () => {
+    renderAt('/o/abc');
+    await screen.findByRole('alert');
+
+    expect(document.querySelector('svg.bunting')).not.toBeNull();
+    expect(within(screen.getByRole('banner')).getByText('לתת עוד')).toBeDefined();
+  });
+
+  it('gives the collector app a thin header without the bunting', async () => {
+    renderAt('/app/rounds');
+    await screen.findByRole('heading', { level: 1, name: 'סבבים' });
+    await screen.findByText('אין סבב פתוח.');
+
+    expect(document.querySelector('svg.bunting')).toBeNull();
+    expect(within(screen.getByRole('banner')).queryByText('לתת עוד')).toBeNull();
+  });
+
   it('opens the booking form filled in from "הזמנה חדשה עם אותם פרטים" on the order page', async () => {
     renderAt(`/o/${CANCELLED_ORDER_TOKEN}`);
 
@@ -308,7 +325,8 @@ describe('App', () => {
     await renderSettledAt(path, heading);
 
     const header = screen.getByRole('banner');
-    expect(within(header).getByText('לתת עוד')).toBeDefined();
+    // Yoel's app has the thin header: the slogan only (Layout `compact`).
+    if (!path.startsWith('/app')) expect(within(header).getByText('לתת עוד')).toBeDefined();
     expect(within(header).getByText('הבקבוקים שלכם, התפילין שלהם!')).toBeDefined();
   });
 

@@ -39,7 +39,11 @@ export function App() {
     <>
       {/* Only the collector app is installable; customers get a plain website (pwaHead.tsx). */}
       {isCollectorRoute(route) && <CollectorPwaHead />}
-      <Layout lang={lang} collectorLink={route.name === 'orderForm'}>
+      <Layout
+        lang={lang}
+        collectorLink={route.name === 'orderForm'}
+        compact={route.name === 'collector'}
+      >
         {pageFor(route, setOrderPageLang)}
       </Layout>
     </>
