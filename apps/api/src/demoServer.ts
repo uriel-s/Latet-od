@@ -105,6 +105,7 @@ async function seedOrders(region: Region, customers: DemoCustomer[], firstPhone:
       token: newOrderToken(),
       messages: [],
       source: 'form',
+      lang: 'he',
       createdAt,
       updatedAt: createdAt,
     });

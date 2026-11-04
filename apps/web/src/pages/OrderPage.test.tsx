@@ -48,6 +48,7 @@ function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
     },
     bottlesEstimated: 40,
     status: 'waiting',
+    lang: 'he',
     ...overrides,
   };
 }

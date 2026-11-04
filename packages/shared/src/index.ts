@@ -13,6 +13,8 @@ export const APP_SLOGAN = 'הבקבוקים שלכם, התפילין שלהם!';
 
 // Settings kept in code, no settings screen: the bottle value (ADR-0005).
 export * from './config.ts';
+// UI language (he / en) and the dictionary of translated texts, read through t().
+export * from './i18n.ts';
 // Street list, search and region (ADR-0005).
 export * from './streets.ts';
 // An address's region and map point, from its street codes (ADR-0005).

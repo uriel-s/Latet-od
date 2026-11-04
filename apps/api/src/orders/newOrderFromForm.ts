@@ -49,6 +49,9 @@ export function newOrderFromForm(form: OrderForm, options: NewOrderOptions): New
     token: newOrderToken(),
     messages: [],
     source: options.source,
+    // The language the form was filled in (Hebrew when the client sent none): later texts and
+    // WhatsApp messages to this customer use it.
+    lang: form.lang,
     // Two copies, so a later change to one date (or to the caller's `now`) moves nothing else.
     createdAt: new Date(options.now),
     updatedAt: new Date(options.now),

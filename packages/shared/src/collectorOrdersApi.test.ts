@@ -64,6 +64,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
       },
     ],
     source: 'form',
+    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
     ...overrides,

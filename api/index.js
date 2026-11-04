@@ -19866,6 +19866,10 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
+// packages/shared/src/i18n.ts
+var langSchema = external_exports.enum(["he", "en"]);
+var DEFAULT_LANG = "he";
+
 // packages/shared/data/streets.json
 var streets_default = {
   attribution: "\xA9 OpenStreetMap contributors",
@@ -20553,12 +20557,34 @@ var dayMonthInAppZone = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
   month: "2-digit"
 });
-function formatDayMonth(value) {
+var ENGLISH_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec"
+];
+function dayMonthIn(lang, day, month) {
+  if (lang === "en") {
+    const monthName = ENGLISH_MONTHS[Number(month) - 1];
+    if (monthName === void 0) throw new RangeError("formatDayMonth: month out of range");
+    return `${monthName} ${String(Number(day))}`;
+  }
+  return `${day}/${month}`;
+}
+function formatDayMonth(value, lang = "he") {
   if (typeof value === "string") {
     if (!isoCalendarDateSchema.safeParse(value).success) {
       throw new RangeError("formatDayMonth: expected a calendar date YYYY-MM-DD");
     }
-    return `${value.slice(8, 10)}/${value.slice(5, 7)}`;
+    return dayMonthIn(lang, value.slice(8, 10), value.slice(5, 7));
   }
   if (Number.isNaN(value.getTime())) {
     throw new RangeError("formatDayMonth: invalid Date");
@@ -20569,8 +20595,9 @@ function formatDayMonth(value) {
   if (day === void 0 || month === void 0) {
     throw new RangeError("formatDayMonth: Intl gave no day or month");
   }
-  return `${day}/${month}`;
+  return dayMonthIn(lang, day, month);
 }
+var pickupTimeSchema = external_exports.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "expected a time HH:MM, 00:00-23:59");
 var calendarMonthSchema = external_exports.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "expected YYYY-MM");
 var wallClockInAppZone = new Intl.DateTimeFormat("en-GB", {
   timeZone: APP_TIME_ZONE,
@@ -20787,6 +20814,12 @@ var orderSchema = external_exports.object({
   lastMiss: lastMissSchema.optional(),
   messages: external_exports.array(messageLogEntrySchema),
   source: orderSourceSchema,
+  /**
+   * The language the customer booked in: the language of the texts and WhatsApp messages the
+   * order gets later. An order stored before languages existed has no `lang` and reads as
+   * Hebrew (the default), so no migration is needed. An unknown value ('fr') is rejected.
+   */
+  lang: langSchema.default(DEFAULT_LANG),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   collectedAt: timestampSchema.optional(),
@@ -20849,7 +20882,14 @@ var orderFormSchema = external_exports.object({
     phone: israeliMobileSchema
   }),
   address: addressInputSchema,
-  bottlesEstimated: bottlesEstimatedInputSchema
+  bottlesEstimated: bottlesEstimatedInputSchema,
+  /**
+   * The language the form was filled in, stored on the order (see {@link orderSchema}). Optional:
+   * a client that sends none (an older page, Yoel's "הוספת הזמנה") books in Hebrew. An unknown
+   * value is rejected with zod's own message: only a broken client sends one, and no field of the
+   * form shows it.
+   */
+  lang: langSchema.default(DEFAULT_LANG)
 });
 
 // packages/shared/src/orderApi.ts
@@ -20986,7 +21026,6 @@ var COLLECTOR_ORDER_MESSAGES = {
 };
 
 // packages/shared/src/messages.ts
-var pickupTimeSchema = external_exports.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "expected a time HH:MM, 00:00-23:59");
 var CONFIRM_REQUEST_SIGN_OFF = "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3";
 function confirmRequestLines(vars, personalText) {
   if (vars.date === void 0) {
@@ -21323,6 +21362,11 @@ var ROUND_MESSAGES = {
 var customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, pickupFrom: true });
 var customerOrderSchema = orderSummarySchema.extend({
   status: orderSchema.shape.status,
+  /**
+   * The language the customer booked in, so the page shows its texts in that language. An order
+   * stored without one reads as Hebrew (see `orderSchema`).
+   */
+  lang: orderSchema.shape.lang,
   /**
    * The round the order is in, while the customer has something to do with it: present for a
    * `pending` order (the date to confirm) and a `confirmed` one ("נתראה ב-<תאריך>"), absent
@@ -22150,6 +22194,9 @@ function newOrderFromForm(form, options) {
     token: newOrderToken(),
     messages: [],
     source: options.source,
+    // The language the form was filled in (Hebrew when the client sent none): later texts and
+    // WhatsApp messages to this customer use it.
+    lang: form.lang,
     // Two copies, so a later change to one date (or to the caller's `now`) moves nothing else.
     createdAt: new Date(options.now),
     updatedAt: new Date(options.now)

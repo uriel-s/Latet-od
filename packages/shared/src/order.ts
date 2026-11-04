@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { israeliMobileSchema, e164MobileSchema } from './phone.ts';
 import { orderStatusSchema } from './orderStatus.ts';
 import { findStreet, regionSchema } from './streets.ts';
+import { DEFAULT_LANG, langSchema } from './i18n.ts';
 
 // ---------------------------------------------------------------------------------------------
 // Limits and messages
@@ -231,6 +232,12 @@ export const orderSchema = z.object({
   lastMiss: lastMissSchema.optional(),
   messages: z.array(messageLogEntrySchema),
   source: orderSourceSchema,
+  /**
+   * The language the customer booked in: the language of the texts and WhatsApp messages the
+   * order gets later. An order stored before languages existed has no `lang` and reads as
+   * Hebrew (the default), so no migration is needed. An unknown value ('fr') is rejected.
+   */
+  lang: langSchema.default(DEFAULT_LANG),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   collectedAt: timestampSchema.optional(),
@@ -375,6 +382,13 @@ export const orderFormSchema = z.object({
   }),
   address: addressInputSchema,
   bottlesEstimated: bottlesEstimatedInputSchema,
+  /**
+   * The language the form was filled in, stored on the order (see {@link orderSchema}). Optional:
+   * a client that sends none (an older page, Yoel's "הוספת הזמנה") books in Hebrew. An unknown
+   * value is rejected with zod's own message: only a broken client sends one, and no field of the
+   * form shows it.
+   */
+  lang: langSchema.default(DEFAULT_LANG),
 });
 
 /** What the form sends: strings as typed, the number of bottles possibly as a string. */

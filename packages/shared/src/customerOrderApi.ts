@@ -42,7 +42,8 @@ const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, picku
 /**
  * What the customer's own page sees of the order (spec §3.3). An allow-list, like
  * `orderSummarySchema` it extends: the thank-you screen's name, phone, address and bottles, plus
- * the status the page is drawn by and the round the order is in. zod objects strip unknown keys,
+ * the status the page is drawn by, the language the customer booked in (the page speaks it), and
+ * the round the order is in. zod objects strip unknown keys,
  * also inside `contact` and `address`, so parsing a whole stored order keeps only these fields.
  *
  * Never here: `id` (guessable; the page is reached by token only), `token` (the caller already
@@ -54,6 +55,11 @@ const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, picku
  */
 export const customerOrderSchema = orderSummarySchema.extend({
   status: orderSchema.shape.status,
+  /**
+   * The language the customer booked in, so the page shows its texts in that language. An order
+   * stored without one reads as Hebrew (see `orderSchema`).
+   */
+  lang: orderSchema.shape.lang,
   /**
    * The round the order is in, while the customer has something to do with it: present for a
    * `pending` order (the date to confirm) and a `confirmed` one ("נתראה ב-<תאריך>"), absent

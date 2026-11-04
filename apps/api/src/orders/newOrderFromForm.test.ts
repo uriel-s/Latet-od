@@ -95,6 +95,7 @@ describe('newOrderFromForm', () => {
       token: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) as unknown,
       messages: [],
       source: 'form',
+      lang: 'he',
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -137,6 +138,17 @@ describe('newOrderFromForm', () => {
       expect(order.address.streetCode).toBe(STREET_WITHOUT_REGION.code);
     },
   );
+
+  it('keeps the language the form was filled in', () => {
+    const form = orderFormSchema.parse({
+      contact: { name: 'Moshe Cohen', phone: '050-1234567' },
+      address: FREE_TEXT_ADDRESS,
+      bottlesEstimated: '45',
+      lang: 'en',
+    });
+
+    expect(newOrderFromForm(form, { now: NOW, source: 'form' }).lang).toBe('en');
+  });
 
   it.each(['form', 'collector'] as const)('records the source %s', (source) => {
     const order = newOrderFromForm(parseForm(), { now: NOW, source });

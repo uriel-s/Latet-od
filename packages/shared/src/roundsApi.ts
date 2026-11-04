@@ -13,7 +13,8 @@ import {
   type InvalidTransitionErrorBody,
   type OrderNotFoundErrorBody,
 } from './collectorOrdersApi.ts';
-import { messageLinkSchema, pickupTimeSchema, toMessageLink } from './messages.ts';
+import { pickupTimeSchema } from './dates.ts';
+import { messageLinkSchema, toMessageLink } from './messages.ts';
 import { MAX_BOTTLES, type Order } from './order.ts';
 import { MAX_ROUND_ORDERS, roundSchema, roundStopSchema, type Round } from './round.ts';
 import { regionSchema } from './streets.ts';

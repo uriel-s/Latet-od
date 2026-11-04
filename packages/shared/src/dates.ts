@@ -1,9 +1,11 @@
-// Calendar dates as the app shows them: DD/MM, in Israel's time zone (spec §7, CLAUDE.md). Shared
-// so the collector app's tags ("לא אישר · 12/11") and anything the api writes read a day the same
-// way, whatever zone the code runs in (UTC on Vercel, the phone's own zone in the browser). Also
-// the calendar months of the monthly statistics (spec §3.7): which month an instant counts in, and
-// the instants a month covers, both in Israel's zone.
+// Calendar dates and pickup times as the app shows them, in Israel's time zone (spec §7,
+// CLAUDE.md): "DD/MM" and a 24-hour "08:00" in Hebrew, "Nov 4" and "8:00 AM" in English. Shared so
+// the collector app's tags ("לא אישר · 12/11"), the customer's page and anything the api writes
+// read a day the same way, whatever zone the code runs in (UTC on Vercel, the phone's own zone in
+// the browser). Also the calendar months of the monthly statistics (spec §3.7): which month an
+// instant counts in, and the instants a month covers, both in Israel's zone.
 import { z } from 'zod';
+import type { Lang } from './i18n.ts';
 
 /**
  * The app's time zone. Every calendar day the app shows or stores (a round's date,
@@ -29,24 +31,57 @@ const dayMonthInAppZone = new Intl.DateTimeFormat('en-GB', {
 });
 
 /**
- * A day as the app shows it: "DD/MM", two digits each ("05/01").
+ * Short English month names, January first. A fixed list rather than Intl's month names: ICU
+ * builds differ (some write "Sept"), and the same day must read the same on the server and on
+ * every phone.
+ */
+const ENGLISH_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** A day and month (two-digit strings, month 01-12) in `lang`: "04/11" or "Nov 4". */
+function dayMonthIn(lang: Lang, day: string, month: string): string {
+  if (lang === 'en') {
+    // Number() drops the leading zero ("04" → 4); the month is 01-12, so the index is 0-11.
+    const monthName = ENGLISH_MONTHS[Number(month) - 1];
+    // Cannot happen: both callers pass a validated month. Fails loudly rather than "undefined 4".
+    if (monthName === undefined) throw new RangeError('formatDayMonth: month out of range');
+    return `${monthName} ${String(Number(day))}`;
+  }
+  return `${day}/${month}`;
+}
+
+/**
+ * A day as the app shows it. Hebrew (the default): "DD/MM", two digits each ("05/01"). English:
+ * a short month name and the day without a leading zero, "Jan 5".
  *
  * - A string must be a calendar date `YYYY-MM-DD`, such as `lastMiss.date`: already a day in
  *   Israel, so it is reformatted as text. Never through `new Date(string)`, which reads it as UTC
  *   midnight and shows the previous day in any zone west of UTC.
  * - A `Date` is an instant (`createdAt`), shown as its calendar day in {@link APP_TIME_ZONE}:
- *   23:30 UTC on 11/11 is already 12/11 in Israel.
+ *   23:30 UTC on 11/11 is already 12/11 (Nov 12) in Israel.
  *
  * @throws RangeError for a string that is not a real `YYYY-MM-DD` date, or an invalid `Date`.
  *   The message never contains the value.
  */
-export function formatDayMonth(value: string | Date): string {
+export function formatDayMonth(value: string | Date, lang: Lang = 'he'): string {
   if (typeof value === 'string') {
     if (!isoCalendarDateSchema.safeParse(value).success) {
       throw new RangeError('formatDayMonth: expected a calendar date YYYY-MM-DD');
     }
     // `YYYY-MM-DD`: the month is at 5-6, the day at 8-9.
-    return `${value.slice(8, 10)}/${value.slice(5, 7)}`;
+    return dayMonthIn(lang, value.slice(8, 10), value.slice(5, 7));
   }
   if (Number.isNaN(value.getTime())) {
     throw new RangeError('formatDayMonth: invalid Date');
@@ -58,7 +93,43 @@ export function formatDayMonth(value: string | Date): string {
   if (day === undefined || month === undefined) {
     throw new RangeError('formatDayMonth: Intl gave no day or month');
   }
-  return `${day}/${month}`;
+  return dayMonthIn(lang, day, month);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pickup times (a round's "from" and "by", ADR-0003)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * "עד איזו שעה להוציא את הבקבוקים" (ADR-0003): an optional time of the round, `HH:MM` on a 24-hour
+ * clock, two digits each (00:00-23:59). Strict, so the message never says "עד השעה 8:0".
+ */
+export const pickupTimeSchema = z
+  .string()
+  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'expected a time HH:MM, 00:00-23:59');
+
+/**
+ * A pickup time ({@link pickupTimeSchema}) as the app shows it. Hebrew: unchanged, a 24-hour
+ * "08:00", as Israelis read times. English: a 12-hour clock with AM/PM and no leading zero on the
+ * hour: "08:00" → "8:00 AM", "00:30" → "12:30 AM" (midnight is 12 AM), "12:00" → "12:00 PM" (noon),
+ * "13:05" → "1:05 PM".
+ *
+ * Pure text arithmetic, no time zone conversion: a round's times are stored as Israel wall-clock
+ * time, so the result is always the time in {@link APP_TIME_ZONE}, wherever the code runs.
+ *
+ * @throws RangeError when `hhmm` is not a strict `HH:MM`, 00:00-23:59. The message never contains
+ *   the value.
+ */
+export function formatPickupTime(hhmm: string, lang: Lang): string {
+  if (!pickupTimeSchema.safeParse(hhmm).success) {
+    throw new RangeError('formatPickupTime: expected a time HH:MM, 00:00-23:59');
+  }
+  if (lang !== 'en') return hhmm;
+  const hour24 = Number(hhmm.slice(0, 2));
+  const minutes = hhmm.slice(3, 5);
+  // 0 → 12 AM, 1-11 → AM, 12 → 12 PM, 13-23 → 1-11 PM.
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${String(hour12)}:${minutes} ${hour24 < 12 ? 'AM' : 'PM'}`;
 }
 
 // ---------------------------------------------------------------------------------------------

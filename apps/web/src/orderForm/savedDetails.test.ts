@@ -225,7 +225,7 @@ describe('formValuesFromPrefill', () => {
 
     expect(result).toEqual({
       ok: true,
-      request: { ...prefill, bottlesEstimated: 40, website: '' },
+      request: { ...prefill, bottlesEstimated: 40, lang: 'he', website: '' },
     });
   });
 });

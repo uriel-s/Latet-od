@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { pickupTimeSchema } from './dates.ts';
 import { APP_NAME } from './index.ts';
 import {
   messageLinkSchema,
   messageOpenedResponseSchema,
-  pickupTimeSchema,
   renderMessage,
   toMessageLink,
   type MessageVars,
@@ -36,6 +36,7 @@ function makeOrder(messages: MessageLogEntry[]): Order {
     roundId: 'round-1',
     messages,
     source: 'form',
+    lang: 'he',
     createdAt: AT,
     updatedAt: AT,
   };

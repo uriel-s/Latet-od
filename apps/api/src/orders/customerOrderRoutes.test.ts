@@ -361,11 +361,12 @@ describe('GET /api/o/:token', () => {
         },
         bottlesEstimated: 55,
         status: 'pending',
+        lang: 'he',
         round: { date: DATE, pickupBy: PICKUP_BY },
       },
     });
     expect(Object.keys(orderOf(res)).sort()).toStrictEqual(
-      ['address', 'bottlesEstimated', 'contact', 'round', 'status'].sort(),
+      ['address', 'bottlesEstimated', 'contact', 'lang', 'round', 'status'].sort(),
     );
     // Nothing internal, in any form: ids, the token, the message log, the earlier miss.
     for (const secret of [order.id, round.id, order.token, MANUAL_REQUEST_URL, EARLIER_ROUND_ID]) {
