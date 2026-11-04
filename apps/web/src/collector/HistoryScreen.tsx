@@ -234,7 +234,7 @@ function outcomeText(order: HistoryOrder): string {
  */
 function HistoryOrderCard({ order }: { order: HistoryOrder }) {
   return (
-    <li className="order-card">
+    <li className="card round-order-card">
       <h3 className="order-card-name">{order.contact.name}</h3>
       <p>
         <bdi dir="ltr">{formatDayMonth(order.closedAt)}</bdi>

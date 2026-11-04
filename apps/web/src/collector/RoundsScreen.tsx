@@ -784,7 +784,7 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
   const tags = orderTags(order);
 
   return (
-    <li className="order-card">
+    <li className="card round-order-card">
       <h4 className="order-card-name">{contact.name}</h4>
       <p>
         <a className="order-card-phone" href={`tel:${contact.phone}`}>
@@ -799,7 +799,7 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
       {tags.length > 0 && (
         <p className="tag-list">
           {tags.map((tag) => (
-            <span key={tag} className="tag">
+            <span key={tag} className="badge">
               {tag}
             </span>
           ))}
