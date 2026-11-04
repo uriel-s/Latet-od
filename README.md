@@ -1,11 +1,19 @@
-# לתת עוד: אפליקציית איסוף בקבוקים
+# לתת עוד (BottleRun) — אפליקציית איסוף בקבוקים ותכנון מסלולים
 
-"הבקבוקים שלכם, התפילין שלהם!"
-האפליקציה לעמות לתת עוד.
-לקוחות בבית שמש מזמינים איסוף בקבוקים בטופס קצר,  הנהג (האוסף) מתכנן סבב לפי חצי עיר, הלקוחות מאשרים בקישור
-מ-WhatsApp, ויואל נוסע לפי רשימה מסודרת. הכסף מממן תפילין לנערי בר מצווה ולחיילים.
+**Zero-cost, mobile-first pickup coordination & route-planning web app** built for the **"Latet Od" ("לתת עוד")** volunteer bottle-collection initiative in Beit Shemesh ("Your bottles, their tefillin!").
 
-## הרצה מקומית
+Residents book bottle pickups via a bilingual (Hebrew/English) accessible form, confirm pickup time windows via WhatsApp links, and the collector plans half-city collection rounds with an in-process TSP route optimizer.
+
+### Engineering Highlights
+- **End-to-End TypeScript Monorepo (`npm workspaces`):** `apps/web` (React 19 + Vite, mobile-first RTL/LTR UI & collector PWA), `apps/api` (Express 5 + official MongoDB driver), and `packages/shared` (Zod schemas, domain logic, bilingual dictionary, and static street dataset). Boundaries enforced via ESLint `no-restricted-imports`.
+- **Hexagonal Architecture & Contract Testing:** `createApp(deps)` injects all external boundaries (`OrdersRepo`, `RoundsRepo`, `AttemptStore`, `MessageSender`, `DistanceMatrix`). Reusable `*.contract.ts` test suites verify both in-memory test doubles and MongoDB repositories (including `Promise.all` concurrency races and atomic `ifStatus` / `ifPhase` state transitions).
+- **Zero-Runtime-Cost Route Optimization (TSP):** Pre-computed street coordinates from data.gov.il & OpenStreetMap (`packages/shared/data/streets.json`) paired with a pure TSP solver (`planRoute`: branch-and-bound exhaustive up to 8 stops, nearest-neighbor + asymmetric 2-opt above 8 stops).
+- **Security & Privacy by Design:** Zero-dependency `node:crypto` `scrypt` password hashing, HMAC-SHA256 stateless renewable cookies, race-condition-proof pre-hash login rate limiting, `Origin` CSRF validation, and PII-redacting structured error logging (`errors.ts`).
+- **Architecture Decision Records:** 10 documented ADRs in [`docs/decisions/`](docs/decisions/README.md) covering serverless cold-start mitigation, database trade-offs, WhatsApp integration, and empirical geocoding spikes.
+
+---
+
+## הרצה מקומית (Local Development)
 
 דרוש Node 24.
 

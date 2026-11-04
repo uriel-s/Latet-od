@@ -1,23 +1,25 @@
 # Weekly backup of the production database (ADR-0002, "גיבוי"): a mongodump of the `bottlerun`
-# database, kept as a workflow artifact for 90 days in this private repo.
+# database, encrypted with AES-256 (gpg) and kept as a workflow artifact for 90 days.
 #
 # Why here and not in the app: the api is a Vercel function with no background jobs and no cron
 # (CLAUDE.md, "Serverless"). This runs outside it, on GitHub's runners, so a failed backup never
 # touches the app: the app keeps working either way.
 #
-# Secret (repo Settings > Secrets and variables > Actions): MONGODB_BACKUP_URI, the connection
-# string of a separate Atlas database user that has only the built-in role `read` on `bottlerun`
-# (never the app's read-write user). Its path names the database, so mongodump dumps just that one:
-#   mongodb+srv://<backup-user>:<password>@<cluster>.mongodb.net/bottlerun
+# Secrets (repo Settings > Secrets and variables > Actions):
+#   - MONGODB_BACKUP_URI: the connection string of a separate Atlas database user that has only
+#     the built-in role `read` on `bottlerun` (never the app's read-write user). Its path names
+#     the database, so mongodump dumps just that one:
+#       mongodb+srv://<backup-user>:<password>@<cluster>.mongodb.net/bottlerun
+#   - BACKUP_PASSPHRASE: passphrase used to AES-256 encrypt the archive before uploading it as a
+#     GitHub Actions artifact, so customer PII is never stored unencrypted in workflow artifacts.
 # Atlas network access is already 0.0.0.0/0 for Vercel (ADR-0002), so GitHub's runners reach it.
 #
 # When it runs: every Monday (the cron below) and by hand (Actions > backup > Run workflow).
 # GitHub runs schedules only from the default branch, so the weekly run starts once this file is
 # on main. GitHub emails a failed run to whoever last edited the cron line (the one developer), so
-# there is no Slack or mail step here. In a public repo GitHub would also switch the schedule off
-# after 60 days without commits; this repo is private, so it keeps running.
+# there is no Slack or mail step here.
 #
-# Restore: docs/deploy.md (download the artifact, then mongorestore).
+# Restore: docs/deploy.md (download the artifact, decrypt with gpg, then mongorestore).
 name: backup
 
 on:
@@ -45,9 +47,10 @@ jobs:
     # A dump of a few hundred orders takes seconds; a hung connection must not burn the minutes.
     timeout-minutes: 15
     steps:
-      - name: Dump the database
+      - name: Dump and encrypt the database
         env:
           MONGODB_BACKUP_URI: ${{ secrets.MONGODB_BACKUP_URI }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
 
@@ -55,6 +58,10 @@ jobs:
           # fail with a message that hides the real cause.
           if [ -z "${MONGODB_BACKUP_URI:-}" ]; then
             echo "::error::The secret MONGODB_BACKUP_URI is empty or missing. Add it under Settings > Secrets and variables > Actions (see the comment at the top of backup.yml)."
+            exit 1
+          fi
+          if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::The secret BACKUP_PASSPHRASE is empty or missing. Add it under Settings > Secrets and variables > Actions."
             exit 1
           fi
 
@@ -69,16 +76,23 @@ jobs:
           docker run --rm -e MONGODB_BACKUP_URI -v "$PWD/backup:/backup" mongo:8.0 \
             sh -c 'mongodump --uri="$MONGODB_BACKUP_URI" --gzip --archive=/backup/bottlerun.archive.gz'
 
+          # Encrypt the dump with AES-256 before uploading as a public workflow artifact, and remove
+          # the plaintext archive immediately.
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 \
+            --output backup/bottlerun.archive.gz.gpg backup/bottlerun.archive.gz
+          rm -f backup/bottlerun.archive.gz
+
           # The size, so a suspiciously small dump shows in the log.
           ls -l backup
 
-      - name: Keep the dump for 90 days
+      - name: Keep the encrypted dump for 90 days
         uses: actions/upload-artifact@v4
         with:
           name: mongodump-${{ env.BACKUP_DATE }}
-          path: backup/bottlerun.archive.gz
+          path: backup/bottlerun.archive.gz.gpg
           retention-days: 90
           # No file means the dump did not happen: fail the run (and so the email) instead of a green run.
           if-no-files-found: error
-          # The archive is already gzip; zipping it again costs time and saves nothing.
+          # The archive is already compressed and encrypted; zipping it again saves nothing.
           compression-level: 0

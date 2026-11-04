@@ -98,11 +98,12 @@ Settings → Environment Variables, בסביבה **Production**. ההסבר המ
 ## 5. GitHub: גיבוי
 
 ה-workflow: `.github/workflows/backup.yml`. `mongodump` של `bottlerun` עם המשתמש של הגיבוי (קריאה בלבד),
-והתוצאה נשמרת כ-artifact ל-90 יום.
+והתוצאה מוצפנת ב-AES-256 (`gpg`) ונשמרת כ-artifact ל-90 יום.
 
-- [ ] **Secret:** ב-GitHub, Settings → Secrets and variables → Actions → New repository secret:
-      `MONGODB_BACKUP_URI` = `mongodb+srv://<backup-user>:<password>@<cluster>.mongodb.net/bottlerun`
-      (המשתמש של הגיבוי מסעיף 4, וה-path הוא שם ה-DB).
+- [ ] **Secrets:** ב-GitHub, Settings → Secrets and variables → Actions → New repository secret:
+      - `MONGODB_BACKUP_URI` = `mongodb+srv://<backup-user>:<password>@<cluster>.mongodb.net/bottlerun`
+        (המשתמש של הגיבוי מסעיף 4, וה-path הוא שם ה-DB).
+      - `BACKUP_PASSPHRASE` = סיסמת הצפנה להצפנת קובץ ה-archive (`gpg --symmetric --cipher-algo AES256`).
 - **מתי הוא רץ:** כל יום שני ב-02:17 UTC, ובהפעלה ידנית. **אבל רק אחרי שהקובץ נמצא ב-`main`:**
   GitHub מריץ schedule ומציג את הכפתור Run workflow רק מה-branch הראשי.
 - **ריצה שנכשלה:** GitHub שולח מייל. אין צורך בעוד התראה.
@@ -114,7 +115,8 @@ Settings → Environment Variables, בסביבה **Production**. ההסבר המ
 - [ ] לבדוק אם ל-`actions/upload-artifact` יש major חדש מ-v4 (בגלל סוף התמיכה ב-Node 20). אם כן, לעדכן בענף.
 
 ### שחזור (לבדוק פעם אחת, לפני שצריך)
-1. מורידים את ה-artifact (zip) מעמוד הריצה, ופותחים אותו: בפנים `bottlerun.archive.gz`.
+1. מורידים את ה-artifact (zip) מעמוד הריצה, פותחים אותו (`bottlerun.archive.gz.gpg`), ומפענחים עם סיסמת ה-`BACKUP_PASSPHRASE`:
+   `gpg --decrypt --output bottlerun.archive.gz bottlerun.archive.gz.gpg`
 2. **משחזרים קודם ל-MongoDB מקומי**, לא ל-Atlas. ב-Docker, בתיקייה של הקובץ:
 
    ```bash

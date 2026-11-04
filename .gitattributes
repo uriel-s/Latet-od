@@ -5,3 +5,7 @@
 # Shell scripts must stay LF or bash dies on \r (added by /setup-project)
 *.sh text eol=lf
 .githooks/* text eol=lf
+
+# Generated Vercel function bundle — hide from GitHub language stats
+api/index.js linguist-generated=true
+

@@ -162,7 +162,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 
 ## Code Readability & Comments
 
-- When adding or changing code, add or update comments so intent and non-obvious behaviour are clear. Comment the *why* — business rules (minimum 30 bottles, one open order per phone), workarounds, assumptions — not the obvious *what*.
+- When adding or changing code, add or update comments so intent and non-obvious behaviour are clear. Comment the *why* — business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions — not the obvious *what*.
 - A one- or two-line comment at the top of each module that is not self-explanatory: what it does and how it fits in.
 - JSDoc (`/** … */`) on exported functions, types and components whose name does not already say everything.
 - Descriptive names (`bottlesEstimated`, not `count`); small single-purpose functions; explicit types on exported signatures.
@@ -171,11 +171,11 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 ## Testing Conventions
 
 - **Vitest**, four projects: `api` (node), `web` (jsdom), `shared` and `scripts` (node). Tests live next to the code: `src/foo.ts` → `src/foo.test.ts`, components `*.test.tsx`.
-- `describe` per unit, `it('…')` names that state the expected behaviour (`it('rejects fewer than 30 bottles')`).
+- `describe` per unit, `it('…')` names that state the expected behaviour (`it('rejects fewer than 20 bottles')`).
 - api routes: `supertest` against the exported `app` — no `listen()`, no port.
 - React: Testing Library, query by role / visible text (Hebrew), not by class or test id.
 - Fakes, not mocks, for the external interfaces above; `makeOrder(overrides)`-style helpers for test data.
-- Happy path first, then edges: minimum 30 bottles, Israeli mobile format, duplicate open order, expired/forged token, status transitions that must be refused.
+- Happy path first, then edges: minimum 20 bottles, Israeli mobile format, duplicate open order, expired/forged token, status transitions that must be refused.
 
 ## Adding Dependencies
 

@@ -14,8 +14,10 @@ import { z } from 'zod';
 const WORKFLOW_FILE = path.resolve(import.meta.dirname, '../.github/workflows/backup.yml');
 /** The step's env value: GitHub fills it from the repo secret at run time. */
 const SECRET_REFERENCE = '${{ secrets.MONGODB_BACKUP_URI }}';
+const PASSPHRASE_REFERENCE = '${{ secrets.BACKUP_PASSPHRASE }}';
 /** Where the dump step writes the archive, and what the upload step must pick up. */
 const ARCHIVE_PATH = 'backup/bottlerun.archive.gz';
+const ENCRYPTED_ARCHIVE_PATH = 'backup/bottlerun.archive.gz.gpg';
 /**
  * A MongoDB URI with `user:password@` in it. `<` is excluded so the documented placeholder
  * (`mongodb+srv://<backup-user>:<password>@…`) in the file's header comment is allowed.
@@ -89,16 +91,20 @@ describe('.github/workflows/backup.yml', () => {
     expect(steps.filter((step) => step.uses?.startsWith('actions/checkout'))).toEqual([]);
   });
 
-  it('gives the dump step the URI from the secret through env, by name only', () => {
+  it('gives the dump step the URI and passphrase from secrets through env, by name only', () => {
     const dumpSteps = steps.filter((step) => step.run?.includes('mongodump'));
     expect(dumpSteps).toHaveLength(1);
     const dumpStep = dumpSteps[0];
-    expect(dumpStep?.env).toEqual({ MONGODB_BACKUP_URI: SECRET_REFERENCE });
+    expect(dumpStep?.env).toEqual({
+      MONGODB_BACKUP_URI: SECRET_REFERENCE,
+      BACKUP_PASSPHRASE: PASSPHRASE_REFERENCE,
+    });
     // Never `${{ secrets.… }}` pasted into the script, and docker gets the variable's name, not
     // its value, so the URI is not on any command line.
     expect(dumpStep?.run).not.toContain('secrets.');
     expect(dumpStep?.run).toMatch(/-e MONGODB_BACKUP_URI\s/);
     expect(dumpStep?.run).toContain(`/${ARCHIVE_PATH}`);
+    expect(dumpStep?.run).toContain('--cipher-algo AES256');
   });
 
   it('contains no MongoDB URI with credentials, so no secret is ever committed', () => {
@@ -110,11 +116,11 @@ describe('.github/workflows/backup.yml', () => {
     expect(source).not.toMatch(URI_WITH_CREDENTIALS);
   });
 
-  it('keeps the dump as an artifact for 90 days and fails when the file is missing', () => {
+  it('keeps the encrypted dump as an artifact for 90 days and fails when the file is missing', () => {
     const uploadSteps = steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
     expect(uploadSteps).toHaveLength(1);
     expect(uploadSteps[0]?.with).toMatchObject({
-      path: ARCHIVE_PATH,
+      path: ENCRYPTED_ARCHIVE_PATH,
       'retention-days': 90,
       'if-no-files-found': 'error',
     });
