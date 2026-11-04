@@ -274,9 +274,15 @@ function currentCard(): HTMLElement {
   return card;
 }
 
-/** Opens the current card's "⋯" panel ("לא נמצא" and the arrows) for `name`. */
+/** Opens the card's "⋯" sheet for `name`. */
 function openMore(name: string): void {
   fireEvent.click(button(`עוד פעולות, ${name}`));
+}
+
+/** Opens a card's "⋯" sheet and taps a button inside it ("לא נמצא" or an arrow). */
+function sheetAction(name: string, label: string | RegExp): void {
+  openMore(name);
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
 }
 
 /** Taps "אספתי" on `name`'s card, types `text` (the estimate when undefined), and saves. */
@@ -411,12 +417,13 @@ describe('RouteScreen progress and current stop', () => {
 
     const more = button('עוד פעולות, דנה כהן');
     expect(more.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('button', { name: 'לא נמצא, דנה כהן' })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
 
     fireEvent.click(more);
     expect(more.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('button', { name: 'לא נמצא, דנה כהן' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'הזז למטה, דנה כהן' })).toBeTruthy();
+    const sheet = within(screen.getByRole('dialog'));
+    expect(sheet.getByRole('button', { name: 'לא נמצא' })).toBeTruthy();
+    expect(sheet.getByRole('button', { name: /^הזז למטה/ })).toBeTruthy();
   });
 });
 
@@ -511,7 +518,7 @@ describe('RouteScreen "אספתי"', () => {
     });
     // Moshe is the current card now, so his arrows sit behind "⋯".
     openMore('משה לוי');
-    fireEvent.click(button('הזז למטה, משה לוי'));
+    sheetAction('משה לוי', /^הזז למטה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['יוסי מזרחי', 'משה לוי', 'דנה כהן']));
     expect(screen.getByRole('link', { name: 'שלח לדנה כהן' }).getAttribute('href')).toBe(
@@ -525,7 +532,7 @@ describe('RouteScreen "לא נמצא"', () => {
     const { api } = renderRoute();
 
     openMore('דנה כהן');
-    fireEvent.click(button('לא נמצא, דנה כהן'));
+    sheetAction('דנה כהן', 'לא נמצא');
     expect(api.calls).toEqual([]);
     fireEvent.click(button('כן, לא נמצא'));
 
@@ -539,11 +546,19 @@ describe('RouteScreen moves', () => {
   it('shows no "up" on the first card and no "down" on the last one to collect', () => {
     renderRoute(makeView([stopOf(DANA), stopOf(MOSHE), stopOf(YOSSI, { state: 'collected' })]));
 
-    openMore('דנה כהן');
-    expect(within(cardOf('דנה כהן')).queryByRole('button', { name: /^הזז למעלה/ })).toBeNull();
-    expect(within(cardOf('דנה כהן')).getByRole('button', { name: /^הזז למטה/ })).toBeTruthy();
-    expect(within(cardOf('משה לוי')).getByRole('button', { name: /^הזז למעלה/ })).toBeTruthy();
-    expect(within(cardOf('משה לוי')).queryByRole('button', { name: /^הזז למטה/ })).toBeNull();
+    /** The arrows in the sheet of one card; the sheet is closed again after. */
+    const arrowsOf = (name: string): string[] => {
+      openMore(name);
+      const labels = within(screen.getByRole('dialog'))
+        .getAllByRole('button')
+        .map((arrow) => arrow.textContent ?? '')
+        .filter((text) => text.includes('הזז'));
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      return labels;
+    };
+    expect(arrowsOf('דנה כהן')).toEqual(['▼ הזז למטה']);
+    expect(arrowsOf('משה לוי')).toEqual(['▲ הזז למעלה']);
+    // A handled stop has no "⋯" at all.
     expect(within(cardOf('יוסי מזרחי')).queryByRole('button')).toBeNull();
   });
 
@@ -551,9 +566,9 @@ describe('RouteScreen moves', () => {
     const { api, parent } = renderRoute();
 
     openMore('דנה כהן');
-    fireEvent.click(button('הזז למטה, דנה כהן'));
+    sheetAction('דנה כהן', /^הזז למטה/);
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'דנה כהן', 'יוסי מזרחי']));
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן']));
 
     expect(api.calls).toEqual([
@@ -569,7 +584,7 @@ describe('RouteScreen moves', () => {
     );
     expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']);
 
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['יוסי מזרחי', 'דנה כהן', 'משה לוי']));
     expect(api.calls).toEqual([
@@ -592,7 +607,7 @@ describe('RouteScreen moves', () => {
       { kind: 'failed' },
     );
 
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() =>
       expect(within(cardOf('יוסי מזרחי')).getByRole('alert').textContent).toBe(
@@ -622,7 +637,7 @@ describe('RouteScreen errors', () => {
     const { api, parent } = renderRoute();
     api.next.push({ kind: 'notFound' });
 
-    fireEvent.click(button('לא נמצא, משה לוי'));
+    sheetAction('משה לוי', 'לא נמצא');
     fireEvent.click(button('כן, לא נמצא'));
 
     await waitFor(() => expect(parent.stale).toEqual([STOP_LEFT_ROUTE_MESSAGE]));
@@ -632,7 +647,7 @@ describe('RouteScreen errors', () => {
     const { api } = renderRoute();
     api.next.push({ kind: 'atEdge', message: ROUND_MESSAGES.stopAtEdge });
 
-    fireEvent.click(button('הזז למעלה, משה לוי'));
+    sheetAction('משה לוי', /^הזז למעלה/);
 
     await waitFor(() =>
       expect(within(cardOf('משה לוי')).getByRole('alert').textContent).toBe(
@@ -647,7 +662,7 @@ describe('RouteScreen errors', () => {
       const { api } = renderRoute();
       api.next.push(failure);
 
-      fireEvent.click(button('לא נמצא, משה לוי'));
+      sheetAction('משה לוי', 'לא נמצא');
       fireEvent.click(button('כן, לא נמצא'));
       await waitFor(() =>
         expect(within(cardOf('משה לוי')).getByRole('alert').textContent).toBe(
@@ -722,7 +737,7 @@ describe('RouteScreen busy', () => {
     collect('דנה כהן');
     fireEvent.click(button('שומר...'));
     expect(button('שומר...').getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']));
     expect(api.calls.map((call) => call.action)).toEqual(['collect', 'move']);
@@ -740,9 +755,10 @@ describe('RouteScreen busy', () => {
     const { api } = renderRoute();
     api.next.push(answer.promise);
 
-    openMore('דנה כהן');
-    fireEvent.click(button('הזז למטה, דנה כהן'));
-    fireEvent.click(button('הזז למטה, דנה כהן'));
+    sheetAction('דנה כהן', /^הזז למטה/);
+    // The second tap finds "⋯" busy: no sheet opens, so no second request can be made.
+    fireEvent.click(button('עוד פעולות, דנה כהן'));
+    expect(screen.queryByRole('dialog')).toBeNull();
 
     expect(api.calls).toHaveLength(1);
     answer.resolve({ kind: 'saved', view: makeView([stopOf(MOSHE), stopOf(DANA), stopOf(YOSSI)]) });

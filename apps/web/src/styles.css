@@ -1597,3 +1597,34 @@ html:has(.bottom-nav) {
 .stop-card-current-row .button {
   padding-inline: 0.75rem;
 }
+
+/* --- "⋯" sheet and bottles stepper (collector/MoreActionsSheet.tsx, StopCard.tsx) --------- */
+
+.more-actions-list {
+  display: grid;
+  gap: 0.625rem;
+  margin-block-end: 0.75rem;
+}
+
+/* "−  [field]  +": two big round-ish buttons (64px, ADR-0011) on both sides of the number. */
+.bottles-stepper {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.bottles-stepper .field {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-block-end: 0;
+}
+
+.bottles-stepper-button {
+  flex: 0 0 auto;
+  width: 4rem;
+  min-width: 4rem;
+  min-height: 4rem;
+  padding: 0;
+  font-size: 2rem;
+  line-height: 1;
+}

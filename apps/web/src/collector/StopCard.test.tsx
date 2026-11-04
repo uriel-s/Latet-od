@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { wazeUrl } from './routeStops.ts';
 import {
   COLLECT_STOP_ERRORS,
@@ -220,26 +220,11 @@ describe('StopCard to collect', () => {
     expect(digits.getAttribute('dir')).toBe('ltr');
   });
 
-  it('shows both arrows and moves the stop up or down', () => {
-    const { calls } = renderCard();
-
-    const up = button('הזז למעלה, דנה כהן');
-    expect(up.textContent).toContain('הזז למעלה');
-    fireEvent.click(up);
-    fireEvent.click(button('הזז למטה, דנה כהן'));
-
-    expect(calls.moves).toEqual(['up', 'down']);
-  });
-
-  it('shows only the arrows that can move', () => {
-    renderCard({ canMoveUp: false, canMoveDown: true });
-    expect(screen.queryByRole('button', { name: /^הזז למעלה/ })).toBeNull();
-    expect(button(/^הזז למטה/)).toBeTruthy();
-  });
-
-  it('shows no arrow for the only stop left', () => {
-    renderCard({ canMoveUp: false, canMoveDown: false });
+  it('has no arrows or "לא נמצא" on the card itself, only "⋯"', () => {
+    renderCard();
     expect(screen.queryByRole('button', { name: /^הזז/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^לא נמצא/ })).toBeNull();
+    expect(button('עוד פעולות, דנה כהן')).toBeTruthy();
   });
 });
 
@@ -384,11 +369,76 @@ describe('StopCard "אספתי"', () => {
   });
 });
 
-describe('StopCard "לא נמצא"', () => {
-  it('asks first, then calls onNotFound on "כן, לא נמצא"', () => {
-    const { calls } = renderCard();
+/** Taps "⋯" on the card. */
+function openSheet(): void {
+  fireEvent.click(button('עוד פעולות, דנה כהן'));
+}
 
-    fireEvent.click(button('לא נמצא, דנה כהן'));
+describe.each([
+  ['plain', false],
+  ['current', true],
+])('StopCard "⋯" sheet (%s card)', (_label, current) => {
+  it('opens a dialog with the focus inside and closes on "סגור", focus back on "⋯"', () => {
+    renderCard({ current });
+    const more = button('עוד פעולות, דנה כהן');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.click(more);
+
+    const dialog = screen.getByRole('dialog', { name: 'עוד פעולות, דנה כהן' });
+    expect(document.activeElement).toBe(dialog);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    expect(within(dialog).getByRole('button', { name: 'לא נמצא' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /^הזז למעלה/ })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /^הזז למטה/ })).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'סגור' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
+  });
+
+  it('closes on Escape and on the dark background, focus back on "⋯"', () => {
+    renderCard({ current });
+    openSheet();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
+
+    openSheet();
+    fireEvent.click(document.querySelector('.round-picker-backdrop') as HTMLElement);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
+  });
+
+  it('calls onMove from the arrows and closes', () => {
+    const { calls } = renderCard({ current });
+    openSheet();
+    fireEvent.click(button(/^הזז למעלה/));
+    openSheet();
+    fireEvent.click(button(/^הזז למטה/));
+    expect(calls.moves).toEqual(['up', 'down']);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows only the arrows that can move', () => {
+    renderCard({ current, canMoveUp: false, canMoveDown: true });
+    openSheet();
+    expect(screen.queryByRole('button', { name: /^הזז למעלה/ })).toBeNull();
+    expect(button(/^הזז למטה/)).toBeTruthy();
+  });
+
+  it('shows no arrow for the only stop left', () => {
+    renderCard({ current, canMoveUp: false, canMoveDown: false });
+    openSheet();
+    expect(screen.queryByRole('button', { name: /^הזז/ })).toBeNull();
+    expect(button('לא נמצא')).toBeTruthy();
+  });
+
+  it('asks first, then calls onNotFound only on "כן, לא נמצא"', () => {
+    const { calls } = renderCard({ current });
+    openSheet();
+
+    fireEvent.click(button('לא נמצא'));
     const question = screen.getByRole('group', { name: NOT_FOUND_QUESTION });
     expect(document.activeElement).toBe(within(question).getByText(NOT_FOUND_QUESTION));
     expect(calls.notFounds).toBe(0);
@@ -397,39 +447,31 @@ describe('StopCard "לא נמצא"', () => {
     expect(calls.notFounds).toBe(1);
   });
 
-  it('closes the question on "לא", with the focus back on "לא נמצא"', () => {
-    const { calls } = renderCard();
-    fireEvent.click(button('לא נמצא, דנה כהן'));
+  it('goes back to the actions on "לא" without calling onNotFound', () => {
+    const { calls } = renderCard({ current });
+    openSheet();
+    fireEvent.click(button('לא נמצא'));
 
     fireEvent.click(button('לא'));
 
     expect(screen.queryByRole('group', { name: NOT_FOUND_QUESTION })).toBeNull();
-    expect(document.activeElement).toBe(button('לא נמצא, דנה כהן'));
+    expect(button('לא נמצא')).toBeTruthy();
     expect(calls.notFounds).toBe(0);
-    expect(calls.typing).toEqual([]);
-  });
-});
-
-describe('StopCard busy', () => {
-  it('marks every button aria-disabled and ignores the taps', () => {
-    const { calls } = renderCard({ busy: true });
-
-    for (const name of ['אספתי, דנה כהן', 'לא נמצא, דנה כהן', 'הזז למעלה, דנה כהן']) {
-      expect(button(name).getAttribute('aria-disabled')).toBe('true');
-    }
-    fireEvent.click(button('אספתי, דנה כהן'));
-    fireEvent.click(button('לא נמצא, דנה כהן'));
-    fireEvent.click(button('הזז למעלה, דנה כהן'));
-    fireEvent.click(button('הזז למטה, דנה כהן'));
-
-    expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
-    expect(screen.queryByRole('group', { name: NOT_FOUND_QUESTION })).toBeNull();
-    expect(calls).toEqual({ moves: [], collects: [], notFounds: 0, typing: [] });
   });
 
-  it('ignores "כן, לא נמצא" and "לא" while the answer is on its way', () => {
-    const { calls, rerender } = renderCard();
-    fireEvent.click(button('לא נמצא, דנה כהן'));
+  it('closes when the stop is not found', () => {
+    const { rerender } = renderCard({ current });
+    openSheet();
+    fireEvent.click(button('לא נמצא'));
+    rerender({ stop: makeStop({ state: 'notFound' }) });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('לא נמצא')).toBeTruthy();
+  });
+
+  it('ignores every tap in the question while busy', () => {
+    const { calls, rerender } = renderCard({ current });
+    openSheet();
+    fireEvent.click(button('לא נמצא'));
     rerender({ busy: true });
 
     fireEvent.click(button('שומר...'));
@@ -437,6 +479,103 @@ describe('StopCard busy', () => {
 
     expect(screen.getByRole('group', { name: NOT_FOUND_QUESTION })).toBeTruthy();
     expect(calls.notFounds).toBe(0);
+  });
+
+  it('does not open while busy', () => {
+    renderCard({ current, busy: true });
+    expect(button('עוד פעולות, דנה כהן').getAttribute('aria-disabled')).toBe('true');
+    openSheet();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('StopCard bottles stepper', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('has big − and + buttons around the digit field, starting at the estimate', () => {
+    renderCard();
+    fireEvent.click(button('אספתי, דנה כהן'));
+    expect(quantityField().value).toBe('40');
+    expect(button('הפחת בקבוק').textContent).toBe('−');
+    expect(button('הוסף בקבוק').textContent).toBe('+');
+  });
+
+  it('changes the value by one and never goes below 1', () => {
+    renderCard({ stop: makeStop({ order: makeOrder({ bottlesEstimated: 2 }) }) });
+    fireEvent.click(button('אספתי, דנה כהן'));
+
+    fireEvent.click(button('הוסף בקבוק'));
+    expect(quantityField().value).toBe('3');
+    fireEvent.click(button('הפחת בקבוק'));
+    fireEvent.click(button('הפחת בקבוק'));
+    expect(quantityField().value).toBe('1');
+    fireEvent.click(button('הפחת בקבוק'));
+    expect(quantityField().value).toBe('1');
+  });
+
+  it('never goes above MAX_BOTTLES, and steps from the estimate when the field is blank', () => {
+    renderCard();
+    fireEvent.click(button('אספתי, דנה כהן'));
+    fireEvent.change(quantityField(), { target: { value: String(MAX_BOTTLES) } });
+    fireEvent.click(button('הוסף בקבוק'));
+    expect(quantityField().value).toBe(String(MAX_BOTTLES));
+
+    fireEvent.change(quantityField(), { target: { value: '' } });
+    fireEvent.click(button('הוסף בקבוק'));
+    expect(quantityField().value).toBe('41');
+  });
+
+  it('saves the stepped value through onCollect', () => {
+    const { calls } = renderCard();
+    fireEvent.click(button('אספתי, דנה כהן'));
+    fireEvent.click(button('הפחת בקבוק'));
+    fireEvent.click(button('שמור'));
+    expect(calls.collects).toEqual([39]);
+  });
+
+  it('vibrates once the save succeeded, not before', () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    const { rerender } = renderCard();
+    collectWith('42');
+    expect(vibrate).not.toHaveBeenCalled();
+
+    rerender({ stop: COLLECTED });
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(vibrate).toHaveBeenCalledWith(30);
+  });
+
+  it('does not fail where vibrate does not exist', () => {
+    vi.stubGlobal('navigator', { ...navigator, vibrate: undefined });
+    const { rerender } = renderCard();
+    collectWith('42');
+    rerender({ stop: COLLECTED });
+    expect(screen.getByText('נאסף')).toBeTruthy();
+  });
+
+  it('does not vibrate for a stop collected elsewhere', () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    const { rerender } = renderCard();
+    rerender({ stop: COLLECTED });
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+});
+
+describe('StopCard busy', () => {
+  it('marks the buttons aria-disabled and ignores the taps', () => {
+    const { calls } = renderCard({ busy: true });
+
+    for (const name of ['אספתי, דנה כהן', 'עוד פעולות, דנה כהן']) {
+      expect(button(name).getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(button(name));
+    }
+
+    expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(calls).toEqual({ moves: [], collects: [], notFounds: 0, typing: [] });
   });
 });
 
@@ -490,14 +629,6 @@ describe('StopCard handled', () => {
     expect(screen.queryByText(SEND_THANKS_TITLE)).toBeNull();
   });
 
-  it('closes the "לא נמצא" question once the stop is not found', () => {
-    const { rerender } = renderCard();
-    fireEvent.click(button('לא נמצא, דנה כהן'));
-    rerender({ stop: makeStop({ state: 'notFound' }) });
-    expect(screen.queryByRole('group', { name: NOT_FOUND_QUESTION })).toBeNull();
-    expect(screen.getByText('לא נמצא')).toBeTruthy();
-  });
-
   it('shows an error in a handled card too', () => {
     renderCard({ stop: COLLECTED, error: 'העצירה הזאת כבר טופלה. נא לרענן את המסך.' });
     expect(screen.getByRole('alert').textContent).toBe('העצירה הזאת כבר טופלה. נא לרענן את המסך.');
@@ -536,30 +667,5 @@ describe('StopCard current', () => {
     expect(quantityField().value).toBe('40');
     fireEvent.click(button('שמור'));
     expect(calls.collects).toEqual([40]);
-  });
-
-  it('opens "לא נמצא" and the arrows behind "⋯", and returns focus to "⋯" on "לא"', () => {
-    const { calls } = renderCard({ current: true });
-    expect(screen.queryByRole('button', { name: 'לא נמצא, דנה כהן' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'הזז למטה, דנה כהן' })).toBeNull();
-
-    fireEvent.click(button('עוד פעולות, דנה כהן'));
-    fireEvent.click(button('הזז למטה, דנה כהן'));
-    expect(calls.moves).toEqual(['down']);
-
-    fireEvent.click(button('לא נמצא, דנה כהן'));
-    expect(screen.getByRole('group', { name: NOT_FOUND_QUESTION })).toBeTruthy();
-    fireEvent.click(button('לא'));
-    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
-    expect(calls.notFounds).toBe(0);
-  });
-
-  it('closes the "⋯" panel when the card stops being the current one', () => {
-    const { rerender } = renderCard({ current: true });
-    fireEvent.click(button('עוד פעולות, דנה כהן'));
-    rerender({ current: false });
-    expect(screen.queryByRole('button', { name: /^עוד פעולות/ })).toBeNull();
-    rerender({ current: true });
-    expect(screen.queryByRole('button', { name: 'לא נמצא, דנה כהן' })).toBeNull();
   });
 });
