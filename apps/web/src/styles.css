@@ -1,31 +1,64 @@
 /*
  * Global styles of the whole web app, imported once by main.tsx. Plain CSS, no framework.
- * Brand colours from spec §7; sizes for elderly customers (spec §7, CLAUDE.md): text at least
- * 18px, tap targets at least 48px, WCAG AA contrast, one centred column.
+ * Colours are the "dawn" palette of ADR-0011 (docs/design/route-mockup.html); sizes for elderly
+ * customers (spec §7, CLAUDE.md): text at least 18px, tap targets at least 48px, WCAG AA
+ * contrast, one centred column.
  * Pages style themselves with the classes below and keep no CSS of their own.
  */
 
 :root {
-  /* Brand, spec §7. Contrast of --color-text on --color-background is 8.5:1, on white 10.4:1. */
-  --color-background: #dcebf8;
-  --color-text: #1e3a8a;
-  --color-accent: #a7d3f2; /* a background for --color-text (6.5:1), never a text colour */
-  --color-white: #ffffff;
   /*
-   * The brand gray fails AA as a text colour: 2.1:1 on --color-background and 2.6:1 on white,
-   * against the 4.5:1 text needs. It even misses the 3:1 a form control's border needs to be
-   * seen (WCAG 1.4.11), so controls are outlined in --color-text. Gray is for decoration only:
-   * separator lines, never text, never the only edge of something to tap.
+   * The "dawn" palette, ADR-0011, same names as the mockup. Write each colour as a 6-digit hex:
+   * styles.test.ts reads these values and checks WCAG AA (4.5:1) for every text/background pair
+   * in use, so that test, not a ratio in a comment, is the authority on contrast.
    */
-  --color-gray: #9aa3ad;
-  --color-muted: #4b5563; /* quiet text on --color-background, about 6:1 (AA) */
-  /* Error red: 6.5:1 on white and 5.3:1 on --color-background, AA on both. */
-  --color-error: #b91c1c;
+  --bg: #edf3f9; /* the page */
+  --card: #fdfdfe; /* cards and fields */
+  --brand: #1f5c9e; /* main colour, primary button; text on --brand-soft */
+  --brand-2: #3479b8; /* second colour: icons, small headings; white text on it is close to 4.5:1 */
+  --brand-soft: #d8e8f6; /* behind tags and highlights, never a text colour */
+  --ink: #172536; /* text */
+  --muted: #566475; /* quiet text */
   /*
-   * A handled route stop's background (StopCard.tsx), a quiet gray apart from the page's blue:
-   * --color-text on it is 8.4:1 and --color-error 5.2:1, AA for both.
+   * Lines and frames. Too light to be an edge on its own (well under the 3:1 of WCAG 1.4.11):
+   * decoration only, never text and never the only edge of something to tap.
    */
-  --color-handled: #e5e7eb;
+  --line: #d3dfeb;
+  --done: #e0e9f2; /* a handled route stop's card */
+  --hdr: linear-gradient(165deg, #1f5c9e 0%, #4a95d0 62%, #f0c79f 135%); /* the header */
+  --green: #1f6b44; /* collected, confirmed: text on --green-soft */
+  --green-soft: #d3ecdc;
+  --amber: #8a4b0c; /* waiting, warning: text on --amber-soft */
+  --amber-soft: #fbecc8;
+  /* Not in ADR-0011, which names no error colour: the red the app already used, AA on --card. */
+  --error: #b91c1c;
+  --white: #ffffff; /* text on --brand and --brand-2 */
+
+  /* Spacing steps and corners, from the mockup. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --shadow-1: 0 1px 2px rgb(20 30 25 / 5%), 0 6px 18px rgb(20 30 25 / 7%); /* cards */
+  --shadow-btn: 0 6px 16px rgb(20 40 32 / 28%); /* the primary button */
+
+  /*
+   * The old names (spec §7 colours, before ADR-0011), kept as aliases so the screens keep working
+   * until each one moves to the names above. Remove an alias once nothing uses it. Contrast
+   * ratios quoted in the comments of the rules below were measured on the old colours.
+   */
+  --color-background: var(--bg);
+  --color-text: var(--ink);
+  --color-accent: var(--brand-soft);
+  --color-white: var(--white);
+  --color-gray: var(--line);
+  --color-muted: var(--muted);
+  --color-error: var(--error);
+  --color-handled: var(--done);
 
   /* 48px is the floor (CLAUDE.md); 3rem (54px at the default 18px) grows with the user's font. */
   --tap-target: max(48px, 3rem);
@@ -827,7 +860,7 @@ html:has(.bottom-nav) {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: rgb(30 58 138 / 55%);
+  background: rgb(23 37 54 / 55%); /* --ink (#172536) at 55% */
 }
 
 /* The bottom sheet: as wide as the column, glued to the bottom, scrolls inside when long.
