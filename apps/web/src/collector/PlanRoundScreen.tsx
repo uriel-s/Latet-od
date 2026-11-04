@@ -667,7 +667,7 @@ function PlanOrderRow({ order, checked, invalid, onToggle }: PlanOrderRowProps) 
           {tags.length > 0 && (
             <span className="tag-list">
               {tags.map((tag) => (
-                <span key={tag} className="tag">
+                <span key={tag} className="badge">
                   {tag}
                 </span>
               ))}

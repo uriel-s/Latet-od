@@ -902,9 +902,10 @@ html:has(.bottom-nav) {
 /* The confirmation in place of the cancel button: a white box outlined like a form control. */
 .cancel-confirm {
   padding: 1rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
 }
 
 .cancel-confirm-question {
@@ -1058,11 +1059,23 @@ html:has(.bottom-nav) {
   max-height: 80dvh;
   margin-inline: auto;
   overflow-y: auto;
-  padding: 1rem var(--gutter-right) calc(1rem + env(safe-area-inset-bottom)) var(--gutter-left);
-  border: 2px solid var(--color-text);
-  border-block-end: 0;
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--color-white);
+  padding: 0.5rem var(--gutter-right) calc(1rem + env(safe-area-inset-bottom)) var(--gutter-left);
+  border: 0;
+  border-radius: 26px 26px 0 0; /* the mockup's sheet */
+  background: var(--card);
+  box-shadow: 0 -8px 28px rgb(23 37 54 / 18%);
+}
+
+/* The grab handle (decoration, like the mockup's): a short bar centred at the top. Shared by
+   the round picker and the "⋯" sheet, which both carry .round-picker-sheet. */
+.round-picker-sheet::before {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 5px;
+  margin: 0 auto 0.75rem;
+  border-radius: 999px;
+  background: var(--line);
 }
 
 /* Focus is moved here from code when the sheet opens; a ring around the whole sheet is noise. */
@@ -1087,10 +1100,10 @@ html:has(.bottom-nav) {
 .round-picker-chip {
   min-height: var(--tap-target);
   padding: 0.25rem 1rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--brand);
   border-radius: 999px;
-  background: var(--color-white);
-  color: var(--color-text);
+  background: var(--card);
+  color: var(--brand);
   font: inherit;
   font-weight: 700;
 }
@@ -1098,8 +1111,8 @@ html:has(.bottom-nav) {
 /* The chosen filter is filled (white on --color-text, 10.4:1): told apart by more than colour of
    the outline, and screen readers get aria-pressed. */
 .round-picker-chip[aria-pressed='true'] {
-  background: var(--color-text);
-  color: var(--color-white);
+  background: var(--brand);
+  color: var(--white);
 }
 
 .round-picker-list {
@@ -1120,9 +1133,10 @@ html:has(.bottom-nav) {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
   color: var(--color-text);
   font: inherit;
   text-align: start;
@@ -1131,16 +1145,16 @@ html:has(.bottom-nav) {
 /* The round on screen: --color-accent behind (6.5:1), a thick bar on the start side and a ✓, so
    it does not rely on colour alone. The tag turns white to stay visible on the accent. */
 .round-picker-row[aria-current='true'] {
-  border-inline-start-width: 8px;
+  border-inline-start: 8px solid var(--brand);
   background: var(--color-accent);
   font-weight: 700;
 }
 
-.round-picker-row[aria-current='true'] .tag {
-  background: var(--color-white);
+.round-picker-row[aria-current='true'] .badge {
+  background: var(--white);
 }
 
-.round-picker-row .tag {
+.round-picker-row .badge {
   flex: none;
 }
 
@@ -1200,6 +1214,11 @@ html:has(.bottom-nav) {
 
 .round-close h3 {
   margin-block-start: 0;
+}
+
+/* A round's order card (.card + this): the shared card with the old class's paragraph spacing. */
+.round-order-card p {
+  margin-block: 0 0.25rem;
 }
 
 /* The phone on a round's card dials; a full-size tap target although it reads as a link. */
