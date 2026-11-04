@@ -456,6 +456,7 @@ describe('POST /api/collector/rounds: "תכנון סבב" and "שלח בקשות
         kind: 'confirmRequest',
         orderId: order.id,
         to: order.contact.phone,
+        lang: 'he',
         vars: {
           name: order.contact.name,
           link: `${FAKE_PUBLIC_BASE_URL}/o/${order.token}`,
@@ -539,6 +540,7 @@ describe('POST /api/collector/rounds: "תכנון סבב" and "שלח בקשות
         kind: 'confirmRequest',
         orderId: order.id,
         to: order.contact.phone,
+        lang: 'he',
         vars: {
           name: order.contact.name,
           link: `${FAKE_PUBLIC_BASE_URL}/o/${order.token}`,
@@ -567,6 +569,24 @@ describe('POST /api/collector/rounds: "תכנון סבב" and "שלח בקשות
       expect(text).toContain(PERSONAL_TEXT);
       expect(text).toContain(PICKUP_BY);
     }
+  });
+
+  it('writes the wa.me text in English for an English order and in Hebrew for the rest', async () => {
+    buildApp({ messageSender: new WaMeLinkSender() });
+    const english = await seed({ lang: 'en' });
+    const hebrew = await seed();
+
+    const res = await plan(planBody([english.id, hebrew.id]));
+
+    expect(res.status).toBe(201);
+    const textOf = (id: string): string => {
+      const url = viewOf(res).sendList.find((row) => row.orderId === id)?.url ?? '';
+      return decodeURIComponent(url.slice(url.indexOf('?text=') + '?text='.length));
+    };
+    expect(textOf(english.id)).toContain('Please confirm the pickup at this link:');
+    expect(textOf(english.id)).not.toContain('נא לאשר');
+    // An order without `lang` keeps today's Hebrew wording.
+    expect(textOf(hebrew.id)).toContain('נא לאשר את האיסוף בקישור:');
   });
 
   it('accepts 25 orders, the most a round may have', async () => {
