@@ -1053,8 +1053,8 @@ function numKeys(data) {
   return keyCount;
 }
 var getParsedType = (data) => {
-  const t = typeof data;
-  switch (t) {
+  const t2 = typeof data;
+  switch (t2) {
     case "undefined":
       return "undefined";
     case "string":
@@ -1093,7 +1093,7 @@ var getParsedType = (data) => {
       }
       return "object";
     default:
-      throw new Error(`Unknown data type: ${t}`);
+      throw new Error(`Unknown data type: ${t2}`);
   }
 };
 var propertyKeyTypes = /* @__PURE__ */ new Set(["string", "number", "symbol"]);
@@ -1393,8 +1393,8 @@ function getLengthableOrigin(input2) {
   return "unknown";
 }
 function parsedType(data) {
-  const t = typeof data;
-  switch (t) {
+  const t2 = typeof data;
+  switch (t2) {
     case "number": {
       return Number.isNaN(data) ? "nan" : "number";
     }
@@ -1411,7 +1411,7 @@ function parsedType(data) {
       }
     }
   }
-  return t;
+  return t2;
 }
 function issue(...args) {
   const [iss, input2, inst] = args;
@@ -3635,7 +3635,7 @@ function handleCatchall(proms, input2, payload, ctx, def, inst, abortEarly) {
   const unrecognized = [];
   const keySet = def.keySet;
   const _catchall = def.catchall._zod;
-  const t = _catchall.def.type;
+  const t2 = _catchall.def.type;
   const optin = _catchall.optin;
   const optout = _catchall.optout;
   let seen = 0;
@@ -3648,11 +3648,11 @@ function handleCatchall(proms, input2, payload, ctx, def, inst, abortEarly) {
     if (keySet.has(key))
       continue;
     if (key === "__proto__") {
-      if (t === "never")
+      if (t2 === "never")
         unrecognized.push(key);
       continue;
     }
-    if (t === "never") {
+    if (t2 === "never") {
       unrecognized.push(key);
       continue;
     }
@@ -7888,16 +7888,16 @@ var error20 = () => {
     number: { unit: "", shortLabel: "\u05E7\u05D8\u05DF", longLabel: "\u05D2\u05D3\u05D5\u05DC" }
     // no unit
   };
-  const typeEntry = (t) => t ? TypeNames[t] : void 0;
-  const typeLabel = (t) => {
-    const e = typeEntry(t);
+  const typeEntry = (t2) => t2 ? TypeNames[t2] : void 0;
+  const typeLabel = (t2) => {
+    const e = typeEntry(t2);
     if (e)
       return e.label;
-    return t ?? TypeNames.unknown.label;
+    return t2 ?? TypeNames.unknown.label;
   };
-  const withDefinite = (t) => `\u05D4${typeLabel(t)}`;
-  const verbFor = (t) => {
-    const e = typeEntry(t);
+  const withDefinite = (t2) => `\u05D4${typeLabel(t2)}`;
+  const verbFor = (t2) => {
+    const e = typeEntry(t2);
     const gender = e?.gender ?? "m";
     return gender === "f" ? "\u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05D9\u05D5\u05EA" : "\u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA";
   };
@@ -16778,7 +16778,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
       json2 = { ...json2, [keyword]: mapped };
   }
   const types = Array.isArray(json2.type) ? json2.type : [json2.type];
-  const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+  const numericType = !types.includes("string") && types.some((t2) => t2 === "number" || t2 === "integer");
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
@@ -19281,8 +19281,8 @@ function convertBaseSchema(schema, ctx) {
   }
   const type = schema.type;
   if (Array.isArray(type)) {
-    const typeSchemas = type.map((t) => {
-      const typeSchema = { ...schema, type: t };
+    const typeSchemas = type.map((t2) => {
+      const typeSchema = { ...schema, type: t2 };
       return convertBaseSchema(typeSchema, ctx);
     });
     if (typeSchemas.length === 0) {
@@ -19869,6 +19869,121 @@ function date4(params) {
 // packages/shared/src/i18n.ts
 var langSchema = external_exports.enum(["he", "en"]);
 var DEFAULT_LANG = "he";
+var PLACEHOLDER = /\{(\w+)\}/g;
+function translate(dictionary, lang, key, vars) {
+  const text = dictionary[lang][key];
+  if (vars === void 0) return text;
+  return text.replace(
+    PLACEHOLDER,
+    (placeholder, name) => (
+      // Object.hasOwn, not `name in vars`: `{toString}` must not pick up Object.prototype.toString.
+      Object.hasOwn(vars, name) ? String(vars[name]) : placeholder
+    )
+  );
+}
+var HE = {
+  // The slogan under the app's name (index.ts APP_SLOGAN).
+  appSlogan: "\u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD, \u05D4\u05EA\u05E4\u05D9\u05DC\u05D9\u05DF \u05E9\u05DC\u05D4\u05DD!",
+  // Booking-form field messages (order.ts ORDER_FORM_ERRORS). {min} is MIN_BOTTLES.
+  "formError.nameRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E9\u05DD",
+  "formError.nameTooLong": "\u05D4\u05E9\u05DD \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.streetRequired": "\u05E0\u05D0 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05E8\u05D7\u05D5\u05D1 \u05D0\u05D5 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05D5\u05EA\u05D5",
+  "formError.streetNotFound": "\u05D4\u05E8\u05D7\u05D5\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4",
+  "formError.streetTooLong": "\u05E9\u05DD \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.houseNumberRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA",
+  "formError.houseNumberInvalid": "\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D1\u05D9\u05EA \u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05EA\u05D7\u05D9\u05DC \u05D1\u05E1\u05E4\u05E8\u05D4, \u05DC\u05DE\u05E9\u05DC 12 \u05D0\u05D5 12\u05D0",
+  "formError.houseNumberTooLong": "\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D1\u05D9\u05EA \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.bottlesSpotRequired": "\u05E0\u05D0 \u05DC\u05D1\u05D7\u05D5\u05E8 \u05D0\u05D9\u05E4\u05D4 \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "formError.floorAptRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05E7\u05D5\u05DE\u05D4 \u05D5\u05D3\u05D9\u05E8\u05D4",
+  "formError.floorAptTooLong": "\u05D4\u05D8\u05E7\u05E1\u05D8 \u05D0\u05E8\u05D5\u05DA \u05DE\u05D3\u05D9",
+  "formError.noteInvalid": "\u05D4\u05D4\u05E2\u05E8\u05D4 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4",
+  "formError.noteTooLong": "\u05D4\u05D4\u05E2\u05E8\u05D4 \u05D0\u05E8\u05D5\u05DB\u05D4 \u05DE\u05D3\u05D9",
+  "formError.bottlesRequired": "\u05E0\u05D0 \u05DC\u05DB\u05EA\u05D5\u05D1 \u05DE\u05E1\u05E4\u05E8 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "formError.bottlesTooFew": "\u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05D7\u05D5\u05EA {min} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
+  "formError.bottlesTooMany": "\u05D4\u05DE\u05E1\u05E4\u05E8 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9, \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7",
+  // Where the bottles wait (order.ts BOTTLES_SPOT_LABELS).
+  "bottlesSpot.privateHouse": "\u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05D9\u05EA \u05E4\u05E8\u05D8\u05D9",
+  "bottlesSpot.apartmentDoor": "\u05D1\u05D1\u05E0\u05D9\u05D9\u05DF - \u05DC\u05D9\u05D3 \u05D3\u05DC\u05EA \u05D4\u05D3\u05D9\u05E8\u05D4",
+  "bottlesSpot.buildingEntrance": "\u05DC\u05DE\u05D8\u05D4 \u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05E0\u05D9\u05D9\u05DF",
+  // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
+  "orderStatus.waiting": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05E1\u05D1\u05D1",
+  "orderStatus.pending": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8",
+  "orderStatus.confirmed": "\u05D0\u05D5\u05E9\u05E8\u05D4",
+  "orderStatus.collected": "\u05E0\u05D0\u05E1\u05E4\u05D4",
+  "orderStatus.cancelled": "\u05D1\u05D5\u05D8\u05DC\u05D4",
+  // POST /api/orders messages above the form (orderApi.ts CREATE_ORDER_MESSAGES).
+  "createOrder.duplicateOpenOrder": "\u05DB\u05D1\u05E8 \u05D9\u05E9 \u05D4\u05D6\u05DE\u05E0\u05D4 \u05E4\u05EA\u05D5\u05D7\u05D4 \u05DC\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D6\u05D4.",
+  "createOrder.rateLimited": "\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05E0\u05D9\u05E1\u05D9\u05D5\u05E0\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1 \u05DE\u05D0\u05D5\u05D7\u05E8 \u05D9\u05D5\u05EA\u05E8.",
+  // The customer's page (customerOrderApi.ts CUSTOMER_ORDER_MESSAGES).
+  "customerOrder.confirmationsClosed": "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E0\u05E1\u05D2\u05E8. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
+  "customerOrder.orderClosed": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D4, \u05D5\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D0\u05D5\u05EA\u05D4.",
+  "customerOrder.orderNotFound": "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05D9\u05D9\u05EA\u05DB\u05DF \u05E9\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05D4\u05D5\u05E2\u05EA\u05E7 \u05E2\u05D3 \u05D4\u05E1\u05D5\u05E3.",
+  // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
+  // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
+  // already formatted for the language. The Hebrew must stay exactly as sent before English
+  // existed: messages.test.ts compares whole messages char for char.
+  "whatsapp.greeting": "\u05E9\u05DC\u05D5\u05DD {name},",
+  "whatsapp.confirmRequest.date": "\u05D1-{date} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.",
+  "whatsapp.confirmRequest.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
+  "whatsapp.confirmRequest.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
+  "whatsapp.confirmRequest.confirmAtLink": "\u05E0\u05D0 \u05DC\u05D0\u05E9\u05E8 \u05D0\u05EA \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D9\u05E9\u05D5\u05E8:",
+  // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
+  "whatsapp.confirmRequest.signOff": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
+  // spec §6.1, word for word.
+  "whatsapp.thankYou.thanks": "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
+  "whatsapp.thankYou.orderAgain": "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:"
+};
+var EN = {
+  appSlogan: "Your bottles, their tefillin!",
+  // Booking-form field messages.
+  "formError.nameRequired": "Please write your name",
+  "formError.nameTooLong": "The name is too long",
+  "formError.streetRequired": "Please choose a street or type it",
+  "formError.streetNotFound": "This street is not on the list",
+  "formError.streetTooLong": "The street name is too long",
+  "formError.houseNumberRequired": "Please write a house number",
+  "formError.houseNumberInvalid": "The house number should start with a digit, for example 12 or 12A",
+  "formError.houseNumberTooLong": "The house number is too long",
+  "formError.bottlesSpotRequired": "Please choose where the bottles are",
+  "formError.floorAptRequired": "Please write the floor and apartment",
+  "formError.floorAptTooLong": "The text is too long",
+  "formError.noteInvalid": "The note is not valid",
+  "formError.noteTooLong": "The note is too long",
+  "formError.bottlesRequired": "Please write the number of bottles",
+  "formError.bottlesTooFew": "At least {min} bottles are needed",
+  "formError.bottlesTooMany": "The number is too large, please check",
+  // Where the bottles wait.
+  "bottlesSpot.privateHouse": "At the entrance of a private house",
+  "bottlesSpot.apartmentDoor": "In a building - by the apartment door",
+  "bottlesSpot.buildingEntrance": "Downstairs at the building entrance",
+  // Order status names.
+  "orderStatus.waiting": "Waiting for a round",
+  "orderStatus.pending": "Waiting for confirmation",
+  "orderStatus.confirmed": "Confirmed",
+  "orderStatus.collected": "Collected",
+  "orderStatus.cancelled": "Cancelled",
+  // POST /api/orders messages above the form.
+  "createOrder.duplicateOpenOrder": "There is already an open order for this number.",
+  "createOrder.rateLimited": "Too many attempts. Please try again later.",
+  // The customer's page.
+  "customerOrder.confirmationsClosed": "Confirmation is closed. We will get back to you with a new date.",
+  "customerOrder.orderClosed": "This order is already closed and cannot be changed.",
+  "customerOrder.orderNotFound": "We could not find the order. The link may not have been copied in full.",
+  // WhatsApp messages. The brand name "לתת עוד" stays in Hebrew: it is the name the customer
+  // knows the project by, in either language.
+  "whatsapp.greeting": "Hello {name},",
+  "whatsapp.confirmRequest.date": "On {date} we will come to collect your bottles.",
+  "whatsapp.confirmRequest.pickupWindow": "Please put the bottles out between {from} and {by}.",
+  "whatsapp.confirmRequest.pickupBy": "Please put the bottles out by {by}.",
+  "whatsapp.confirmRequest.confirmAtLink": "Please confirm the pickup at this link:",
+  "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
+  "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
+  "whatsapp.thankYou.orderAgain": "To order again:"
+};
+var MESSAGES = { he: HE, en: EN };
+function t(lang, key, vars) {
+  return translate(MESSAGES, lang, key, vars);
+}
 
 // packages/shared/data/streets.json
 var streets_default = {
@@ -20598,6 +20713,16 @@ function formatDayMonth(value, lang = "he") {
   return dayMonthIn(lang, day, month);
 }
 var pickupTimeSchema = external_exports.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "expected a time HH:MM, 00:00-23:59");
+function formatPickupTime(hhmm, lang) {
+  if (!pickupTimeSchema.safeParse(hhmm).success) {
+    throw new RangeError("formatPickupTime: expected a time HH:MM, 00:00-23:59");
+  }
+  if (lang !== "en") return hhmm;
+  const hour24 = Number(hhmm.slice(0, 2));
+  const minutes = hhmm.slice(3, 5);
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${String(hour12)}:${minutes} ${hour24 < 12 ? "AM" : "PM"}`;
+}
 var calendarMonthSchema = external_exports.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "expected YYYY-MM");
 var wallClockInAppZone = new Intl.DateTimeFormat("en-GB", {
   timeZone: APP_TIME_ZONE,
@@ -20738,6 +20863,12 @@ var ORDER_FORM_ERRORS = {
   bottlesTooFew: `\u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05D7\u05D5\u05EA ${MIN_BOTTLES} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD`,
   bottlesTooMany: "\u05D4\u05DE\u05E1\u05E4\u05E8 \u05D2\u05D3\u05D5\u05DC \u05DE\u05D3\u05D9, \u05E0\u05D0 \u05DC\u05D1\u05D3\u05D5\u05E7"
 };
+var FORM_ERROR_KEY_BY_MESSAGE = new Map(
+  Object.keys(ORDER_FORM_ERRORS).map((key) => [
+    ORDER_FORM_ERRORS[key],
+    key
+  ])
+);
 var bottlesSpotSchema = external_exports.enum(["privateHouse", "apartmentDoor", "buildingEntrance"]);
 var missReasonSchema = external_exports.enum([
   "notConfirmed",
@@ -21026,8 +21157,10 @@ var COLLECTOR_ORDER_MESSAGES = {
 };
 
 // packages/shared/src/messages.ts
-var CONFIRM_REQUEST_SIGN_OFF = "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3";
-function confirmRequestLines(vars, personalText) {
+function greetingLine(vars, lang) {
+  return t(lang, "whatsapp.greeting", { name: vars.name.trim() });
+}
+function confirmRequestLines(vars, personalText, lang) {
   if (vars.date === void 0) {
     throw new RangeError("renderMessage: confirmRequest needs a date");
   }
@@ -21043,31 +21176,42 @@ function confirmRequestLines(vars, personalText) {
     }
   }
   const lines = [
-    `\u05E9\u05DC\u05D5\u05DD ${vars.name.trim()},`,
-    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD.
-    `\u05D1-${formatDayMonth(vars.date)} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.`
+    greetingLine(vars, lang),
+    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" in
+    // Hebrew, "Nov 5" in English.
+    t(lang, "whatsapp.confirmRequest.date", { date: formatDayMonth(vars.date, lang) })
   ];
   if (vars.pickupBy !== void 0 && vars.pickupFrom !== void 0) {
-    lines.push(`\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA ${vars.pickupFrom} \u05DC-${vars.pickupBy}.`);
+    lines.push(
+      t(lang, "whatsapp.confirmRequest.pickupWindow", {
+        from: formatPickupTime(vars.pickupFrom, lang),
+        by: formatPickupTime(vars.pickupBy, lang)
+      })
+    );
   } else if (vars.pickupBy !== void 0) {
-    lines.push(`\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 ${vars.pickupBy}.`);
+    lines.push(
+      t(lang, "whatsapp.confirmRequest.pickupBy", { by: formatPickupTime(vars.pickupBy, lang) })
+    );
   }
   const personal = personalText?.trim() ?? "";
   if (personal !== "") lines.push(personal);
-  lines.push("\u05E0\u05D0 \u05DC\u05D0\u05E9\u05E8 \u05D0\u05EA \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D9\u05E9\u05D5\u05E8:", vars.link, CONFIRM_REQUEST_SIGN_OFF);
+  lines.push(
+    t(lang, "whatsapp.confirmRequest.confirmAtLink"),
+    vars.link,
+    t(lang, "whatsapp.confirmRequest.signOff")
+  );
   return lines;
 }
-function thankYouLines(vars) {
+function thankYouLines(vars, lang) {
   return [
-    `\u05E9\u05DC\u05D5\u05DD ${vars.name.trim()},`,
-    // spec §6.1, word for word.
-    "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
-    "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:",
+    greetingLine(vars, lang),
+    t(lang, "whatsapp.thankYou.thanks"),
+    t(lang, "whatsapp.thankYou.orderAgain"),
     vars.link
   ];
 }
-function renderMessage(kind, vars, personalText) {
-  const lines = kind === "confirmRequest" ? confirmRequestLines(vars, personalText) : thankYouLines(vars);
+function renderMessage(kind, vars, personalText, lang = DEFAULT_LANG) {
+  const lines = kind === "confirmRequest" ? confirmRequestLines(vars, personalText, lang) : thankYouLines(vars, lang);
   return lines.join("\n");
 }
 var manualLogEntrySchema = messageLogEntrySchema.options[1];
@@ -21760,7 +21904,7 @@ var WaMeLinkSender = class {
 function waMeResult(message) {
   const phone = waMePhone(message.to);
   if (phone === null) return { mode: "failed", reason: "invalid_phone" };
-  const text = renderMessage(message.kind, message.vars, message.personalText);
+  const text = renderMessage(message.kind, message.vars, message.personalText, message.lang);
   return { mode: "manual", url: linkTo(phone, text) };
 }
 

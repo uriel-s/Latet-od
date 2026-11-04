@@ -7,7 +7,8 @@ export const APP_NAME = 'לתת עוד';
 
 /**
  * The slogan shown under {@link APP_NAME} at the top of the booking form (spec §3.1, branding in
- * spec §7): the bottles a customer gives fund tefillin for bar-mitzvah boys and soldiers.
+ * spec §7): the bottles a customer gives fund tefillin for bar-mitzvah boys and soldiers. The
+ * English, and a copy of this Hebrew, are in i18n.ts under `appSlogan`: change both.
  */
 export const APP_SLOGAN = 'הבקבוקים שלכם, התפילין שלהם!';
 

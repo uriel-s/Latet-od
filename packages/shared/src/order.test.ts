@@ -3,9 +3,11 @@ import type { z } from 'zod';
 import {
   BOTTLES_SPOT_LABELS,
   MISS_REASON_LABELS,
+  MIN_BOTTLES,
   ORDER_FORM_ERRORS,
   ORDER_TOKEN_BYTES,
   bottlesSpotSchema,
+  formErrorText,
   missReasonSchema,
   orderFormSchema,
   orderSchema,
@@ -14,6 +16,7 @@ import {
   type Order,
   type OrderFormInput,
 } from './order.ts';
+import { t } from './i18n.ts';
 import { PHONE_ERROR } from './phone.ts';
 import { STREETS, type Street } from './streets.ts';
 
@@ -236,6 +239,32 @@ describe('labels', () => {
 
   it('documents a token length that matches its random bytes', () => {
     expect(Math.ceil((ORDER_TOKEN_BYTES * 4) / 3)).toBe(TOKEN.length);
+  });
+});
+
+describe('formErrorText', () => {
+  it('returns every form message unchanged in Hebrew and as the dictionary English', () => {
+    for (const key of Object.keys(ORDER_FORM_ERRORS) as (keyof typeof ORDER_FORM_ERRORS)[]) {
+      const he = ORDER_FORM_ERRORS[key];
+      expect(formErrorText('he', he)).toBe(he);
+      expect(formErrorText('en', he)).toBe(t('en', `formError.${key}`, { min: MIN_BOTTLES }));
+    }
+  });
+
+  it('fills the minimum into the English of too few bottles', () => {
+    expect(formErrorText('en', ORDER_FORM_ERRORS.bottlesTooFew)).toBe(
+      `At least ${MIN_BOTTLES} bottles are needed`,
+    );
+    expect(formErrorText('en', ORDER_FORM_ERRORS.nameRequired)).toBe('Please write your name');
+  });
+
+  it('returns a message that is not a form message as is, in any language', () => {
+    for (const lang of ['he', 'en'] as const) {
+      expect(formErrorText(lang, PHONE_ERROR)).toBe(PHONE_ERROR);
+      expect(formErrorText(lang, 'Invalid input')).toBe('Invalid input');
+      expect(formErrorText(lang, 'toString')).toBe('toString');
+      expect(formErrorText(lang, '')).toBe('');
+    }
   });
 });
 

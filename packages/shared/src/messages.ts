@@ -1,10 +1,12 @@
 // The WhatsApp messages (ADR-0003, spec §6.1): their text, the message the api hands its
 // MessageSender, the "שלח" row the collector app shows for each wa.me link, and the contract of the
 // route that marks a link as opened. One source for the text, whether it goes into a wa.me link
-// now or a Cloud API template later.
+// now or a Cloud API template later. The lines' wording lives in the i18n dictionary
+// (`whatsapp.*`), in Hebrew and English; the message goes out in the customer's language.
 import { z } from 'zod';
 import type { OrderNotFoundErrorBody } from './collectorOrdersApi.ts';
-import { formatDayMonth, pickupTimeSchema } from './dates.ts';
+import { formatDayMonth, formatPickupTime, pickupTimeSchema } from './dates.ts';
+import { DEFAULT_LANG, t, type Lang } from './i18n.ts';
 import {
   messageKindSchema,
   messageLogEntrySchema,
@@ -44,21 +46,32 @@ export interface OutgoingMessage {
   vars: MessageVars;
   /** Yoel's own words for this round. `confirmRequest` only; `thankYou` ignores it. */
   personalText?: string;
+  /**
+   * The language to write the message in: the customer's language (`order.lang`). Missing means
+   * Hebrew ({@link DEFAULT_LANG}), as for every message sent before languages existed.
+   */
+  lang?: Lang;
 }
 
 // ---------------------------------------------------------------------------------------------
 // Message text
 // ---------------------------------------------------------------------------------------------
 
-/**
- * Sign-off of the confirmation request: the app's name, `APP_NAME` in index.ts. Written out here
- * because index.ts re-exports this file, so importing from it would be circular. A test checks
- * that the two still agree.
- */
-const CONFIRM_REQUEST_SIGN_OFF = 'תודה, לתת עוד';
+/** The greeting that opens every message: "שלום <name>," / "Hello <name>,". */
+function greetingLine(vars: MessageVars, lang: Lang): string {
+  return t(lang, 'whatsapp.greeting', { name: vars.name.trim() });
+}
 
-/** "בקשת אישור": sent when Yoel plans a round, asking the customer to confirm the pickup. */
-function confirmRequestLines(vars: MessageVars, personalText: string | undefined): string[] {
+/**
+ * "בקשת אישור": sent when Yoel plans a round, asking the customer to confirm the pickup. The
+ * sign-off (`whatsapp.confirmRequest.signOff`) ends with the app's name, `APP_NAME` in index.ts;
+ * a test checks that in every language (index.ts re-exports this file, so it cannot be imported).
+ */
+function confirmRequestLines(
+  vars: MessageVars,
+  personalText: string | undefined,
+  lang: Lang,
+): string[] {
   if (vars.date === undefined) {
     throw new RangeError('renderMessage: confirmRequest needs a date');
   }
@@ -76,29 +89,42 @@ function confirmRequestLines(vars: MessageVars, personalText: string | undefined
     }
   }
   const lines = [
-    `שלום ${vars.name.trim()},`,
-    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD.
-    `ב-${formatDayMonth(vars.date)} נעבור לאסוף את הבקבוקים שלכם.`,
+    greetingLine(vars, lang),
+    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" in
+    // Hebrew, "Nov 5" in English.
+    t(lang, 'whatsapp.confirmRequest.date', { date: formatDayMonth(vars.date, lang) }),
   ];
+  // Both times were validated above. Hebrew keeps the 24-hour "08:00"; English reads "8:00 AM".
   if (vars.pickupBy !== undefined && vars.pickupFrom !== undefined) {
-    lines.push(`נא להוציא את הבקבוקים בין השעות ${vars.pickupFrom} ל-${vars.pickupBy}.`);
+    lines.push(
+      t(lang, 'whatsapp.confirmRequest.pickupWindow', {
+        from: formatPickupTime(vars.pickupFrom, lang),
+        by: formatPickupTime(vars.pickupBy, lang),
+      }),
+    );
   } else if (vars.pickupBy !== undefined) {
-    lines.push(`נא להוציא את הבקבוקים עד השעה ${vars.pickupBy}.`);
+    lines.push(
+      t(lang, 'whatsapp.confirmRequest.pickupBy', { by: formatPickupTime(vars.pickupBy, lang) }),
+    );
   }
-  // A personal text that is only spaces is as good as none: no blank line in the message.
+  // Yoel's own words go in as he wrote them, never translated. A personal text that is only
+  // spaces is as good as none: no blank line in the message.
   const personal = personalText?.trim() ?? '';
   if (personal !== '') lines.push(personal);
-  lines.push('נא לאשר את האיסוף בקישור:', vars.link, CONFIRM_REQUEST_SIGN_OFF);
+  lines.push(
+    t(lang, 'whatsapp.confirmRequest.confirmAtLink'),
+    vars.link,
+    t(lang, 'whatsapp.confirmRequest.signOff'),
+  );
   return lines;
 }
 
 /** "תודה": sent on "אספתי", with the customer's page for ordering again (spec §6.1). */
-function thankYouLines(vars: MessageVars): string[] {
+function thankYouLines(vars: MessageVars, lang: Lang): string[] {
   return [
-    `שלום ${vars.name.trim()},`,
-    // spec §6.1, word for word.
-    'הזמנתכם נאספה! תודה רבה שלקחתם חלק בלתת עוד!',
-    'להזמנה חוזרת:',
+    greetingLine(vars, lang),
+    t(lang, 'whatsapp.thankYou.thanks'),
+    t(lang, 'whatsapp.thankYou.orderAgain'),
     vars.link,
   ];
 }
@@ -107,18 +133,31 @@ function thankYouLines(vars: MessageVars): string[] {
  * The text of a WhatsApp message, lines joined with '\n' (ADR-0003). The wa.me sender encodes it
  * into its link; a Cloud API sender would map `kind` to a template instead.
  *
- * - `confirmRequest`: name, the round's date as DD/MM, the pickup time if given, Yoel's personal
- *   text if it is not blank (trimmed, its own line breaks kept), the link to confirm, sign-off.
+ * - `confirmRequest`: name, the round's date, the pickup time if given, Yoel's personal text if
+ *   it is not blank (trimmed, its own line breaks kept, never translated), the link to confirm,
+ *   sign-off.
  * - `thankYou`: name, the thanks of spec §6.1, the link for ordering again. It ignores `date`,
  *   `pickupBy` and `personalText`: the personal text belongs to the confirmation request only.
  *
+ * `lang` is the customer's language (`order.lang`), Hebrew by default. Hebrew writes the date as
+ * DD/MM ("05/11") and times on a 24-hour clock ("08:00"); English writes "Nov 5" and "8:00 AM".
+ * The brand name "לתת עוד" stays in Hebrew in both.
+ *
  * @throws RangeError when `confirmRequest` has no `date`, a `date` that is not a real
- *   `YYYY-MM-DD`, or a `pickupBy` or `pickupFrom` that is not `HH:MM`, or a `pickupFrom` without `pickupBy`. The message never contains the value: it
- *   may reach the logs.
+ *   `YYYY-MM-DD`, a `pickupBy` or `pickupFrom` that is not `HH:MM`, or a `pickupFrom` without
+ *   `pickupBy`; the same in every language. The message never contains the value: it may reach
+ *   the logs.
  */
-export function renderMessage(kind: MessageKind, vars: MessageVars, personalText?: string): string {
+export function renderMessage(
+  kind: MessageKind,
+  vars: MessageVars,
+  personalText?: string,
+  lang: Lang = DEFAULT_LANG,
+): string {
   const lines =
-    kind === 'confirmRequest' ? confirmRequestLines(vars, personalText) : thankYouLines(vars);
+    kind === 'confirmRequest'
+      ? confirmRequestLines(vars, personalText, lang)
+      : thankYouLines(vars, lang);
   return lines.join('\n');
 }
 
