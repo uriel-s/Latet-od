@@ -12,6 +12,7 @@
   "scripts": {
     "dev:api": "npm run dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
+    "dev:demo": "npm run demo --workspace apps/api",
     "test": "bash .claude/checks.sh test",
     "check": "bash .claude/checks.sh all",
     "smoke": "tsx scripts/smoke.ts",
