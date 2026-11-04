@@ -6,6 +6,7 @@
 // every page that uses it credits "© OpenStreetMap contributors".
 import { z } from 'zod';
 import streetsJson from '../data/streets.json' with { type: 'json' };
+import type { Lang } from './i18n.ts';
 
 /**
  * Half of the city a round covers: `ramat` = רמת בית שמש, `old` = בית שמש הוותיקה.
@@ -92,6 +93,23 @@ const STREETS_BY_CODE: ReadonlyMap<number, Street> = new Map(
 /** The street with this official code, or undefined if the code is not in the list. */
 export function findStreet(code: number): Street | undefined {
   return STREETS_BY_CODE.get(code);
+}
+
+// Which name each language shows. `satisfies Record<Lang, …>`: a third language added to Lang
+// without a name here is a type error, not a street shown with no name.
+const STREET_NAME_KEY_BY_LANG = { he: 'name', en: 'nameEn' } as const satisfies Record<
+  Lang,
+  'name' | 'nameEn'
+>;
+
+/**
+ * The street's name in the language the customer reads: `nameEn` for 'en', the official Hebrew
+ * `name` for 'he'. For what the customer sees only (the street picker, the customer page). The
+ * order always stores the street code and the official Hebrew `streetName`, and the collector
+ * app always shows Hebrew, so never use this for anything stored or for what Yoel sees.
+ */
+export function streetDisplayName(street: Street, lang: Lang): string {
+  return street[STREET_NAME_KEY_BY_LANG[lang]];
 }
 
 // Geresh / gershayim in every spelling: ASCII ' " and backtick, Hebrew ׳ ״, typographic ‘ ’ “ ”.

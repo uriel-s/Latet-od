@@ -5,11 +5,13 @@ import {
   STREETS_ATTRIBUTION,
   findStreet,
   searchStreets,
+  streetDisplayName,
   streetSchema,
   streetsFileSchema,
   type Street,
   type StreetsFile,
 } from './streets.ts';
+import { DEFAULT_LANG } from './i18n.ts';
 
 /** A valid streets file with two streets; override any header key or the street list. */
 function makeStreetsFile(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -190,6 +192,30 @@ describe('findStreet', () => {
 
   it('returns undefined for an unknown code', () => {
     expect(findStreet(999_999)).toBeUndefined();
+  });
+});
+
+describe('streetDisplayName', () => {
+  const street: Street = { code: 103, name: "ז'בוטינסקי", nameEn: 'Jabotinsky' };
+
+  it('returns the official Hebrew name for he', () => {
+    expect(streetDisplayName(street, 'he')).toBe("ז'בוטינסקי");
+  });
+
+  it('returns the English name for en', () => {
+    expect(streetDisplayName(street, 'en')).toBe('Jabotinsky');
+  });
+
+  it('returns the Hebrew name for DEFAULT_LANG', () => {
+    expect(streetDisplayName(street, DEFAULT_LANG)).toBe("ז'בוטינסקי");
+  });
+
+  it('names a street of the real list in both languages', () => {
+    const herzl = findStreet(101);
+    expect(herzl).toBeDefined();
+    if (herzl === undefined) return;
+    expect(streetDisplayName(herzl, 'he')).toBe('הרצל');
+    expect(streetDisplayName(herzl, 'en')).toBe('Herzl');
   });
 });
 
