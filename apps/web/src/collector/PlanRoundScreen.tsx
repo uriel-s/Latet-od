@@ -3,6 +3,7 @@
 // out. An optional pickup time (pre-filled from the last round, ADR-0003) and an optional personal
 // text go into every confirmation request. "שלח בקשות אישור" plans the round
 // (POST /api/collector/rounds) and opens the "סבבים" tab, where the round's "שלח" list waits.
+import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
@@ -215,7 +216,7 @@ export function PlanRoundScreen({
         חזרה להזמנות
       </Link>
 
-      {state.kind === 'loading' && <p role="status">טוען...</p>}
+      {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
         <>

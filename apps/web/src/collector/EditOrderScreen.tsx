@@ -3,6 +3,7 @@
 // address, which sets both its region and its map point) and the region by hand ("שינוי אזור"),
 // and "ביטול ההזמנה" with a confirmation in plain words. The PATCH body is put together in
 // orderEditing.ts; this file is the screen and what happens after each answer.
+import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   COLLECTOR_ORDER_MESSAGES,
@@ -143,7 +144,7 @@ export function EditOrderScreen({
         חזרה להזמנות
       </Link>
 
-      {state.kind === 'loading' && <p role="status">טוען...</p>}
+      {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
         <>
