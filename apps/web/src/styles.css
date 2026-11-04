@@ -74,6 +74,24 @@
   --gutter-right: max(var(--gutter), env(safe-area-inset-right));
 }
 
+/*
+ * Heebo, self-hosted (ADR-0011): one variable-weight woff2 in apps/web/public/fonts/, subset to
+ * Hebrew + basic Latin (how it was made: README.txt there; licence OFL.txt). No Google Fonts at
+ * runtime: no external request, and the customer's IP is not sent to Google. The absolute URL is
+ * served from public/ as is (Vite does not bundle it), and must match the preload in index.html,
+ * or the browser downloads the font twice; indexHtml.test.ts checks that.
+ * font-weight 100 900 is the file's wght axis, so 400 and 700 (all this file uses) come from the
+ * one file. font-display: swap shows the text in the system font at once and switches when Heebo
+ * arrives, so a slow connection never hides the form.
+ */
+@font-face {
+  font-family: 'Heebo';
+  src: url('/fonts/heebo-variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -95,8 +113,13 @@ body {
   margin: 0;
   background: var(--color-background);
   color: var(--color-text);
-  /* System fonts that carry Hebrew: Segoe UI and Arial on Windows, SF on Apple, Noto on Android. */
+  /*
+   * Heebo (the @font-face above, ADR-0011). Until it loads, or if it fails, or for a character
+   * outside its subset: system fonts that carry Hebrew (Segoe UI and Arial on Windows, SF on
+   * Apple, Noto on Android).
+   */
   font-family:
+    'Heebo',
     system-ui,
     -apple-system,
     'Segoe UI',
