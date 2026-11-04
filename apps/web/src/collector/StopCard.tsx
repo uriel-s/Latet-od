@@ -12,6 +12,8 @@ import {
   formatIsraeliMobileLocal,
   type RouteStopView,
 } from '@bottlerun/shared';
+import { Icon } from '../components/Icon.tsx';
+import { StatusBadge } from '../components/StatusBadge.tsx';
 import { TextField } from '../components/TextField.tsx';
 import { bottlesText } from './OrdersScreen.tsx';
 import { NO_LOCATION_TAG } from './orderTags.ts';
@@ -29,6 +31,9 @@ export const BOTTLES_COLLECTED_LABEL = 'כמה בקבוקים נאספו';
 
 /** The in-card question "לא נמצא" opens: a mistap would otherwise block "אספתי" (stop_handled). */
 export const NOT_FOUND_QUESTION = 'לסמן שהלקוח לא נמצא?';
+
+/** The eyebrow of the current stop's card (the first stop still to collect). */
+export const NEXT_STOP_EYEBROW = 'העצירה הבאה';
 
 /** Above the thank-you's "שלח" row of a collected stop. */
 export const SEND_THANKS_TITLE = 'שלח תודה';
@@ -62,6 +67,12 @@ export interface StopCardProps {
   stop: RouteStopView;
   /** 1-based position in the visible list, shown on a stop still to collect, e.g. "עצירה 2". */
   position: number;
+  /**
+   * The route's next stop to collect: shown as the big "העצירה הבאה" card (icon, tags, "נווט" /
+   * "חייג" / "⋯", a big "אספתי"), with "לא נמצא" and the arrows behind "⋯". Ignored for a handled
+   * stop. Default false: the plain card.
+   */
+  current?: boolean;
   /** Whether the "הזז למעלה" arrow shows (the route screen's storedMovesFor(...) > 0). */
   canMoveUp: boolean;
   /** Whether the "הזז למטה" arrow shows. */
@@ -83,8 +94,9 @@ export interface StopCardProps {
   markOpened?: SendListProps['markOpened'];
 }
 
-/** What is open in a card still to collect: nothing, the quantity field, or the question. */
-type OpenPart = 'none' | 'quantity' | 'notFoundQuestion';
+/** What is open in a card still to collect: nothing, the quantity field, the question, or (the
+ *  current card only) the "⋯" panel with "לא נמצא" and the arrows. */
+type OpenPart = 'none' | 'quantity' | 'notFoundQuestion' | 'more';
 
 /**
  * One stop as a list item; the route screen puts the cards in an `<ol>` under the round's `<h2>`,
@@ -107,6 +119,8 @@ export function StopCard(props: StopCardProps) {
   // a reload that shows it handled elsewhere): the handled card has neither. Set during render,
   // React's pattern for state that follows a prop, so no frame shows the stale part.
   if (handled && openPart !== 'none') setOpenPart('none');
+  // The "⋯" panel belongs to the current card only: a card that stops being it closes the panel.
+  if (!props.current && openPart === 'more') setOpenPart('none');
   const typing = openPart === 'quantity' && !handled;
 
   // The latest callback, read by the effects below, so a new arrow from the screen on every
@@ -170,6 +184,7 @@ interface ToCollectStopCardProps extends StopCardProps {
 function ToCollectStopCard({
   stop,
   position,
+  current = false,
   canMoveUp,
   canMoveDown,
   busy,
@@ -189,6 +204,7 @@ function ToCollectStopCard({
   const questionId = useId();
   const collectButtonRef = useRef<HTMLButtonElement>(null);
   const notFoundButtonRef = useRef<HTMLButtonElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
   const questionRef = useRef<HTMLParagraphElement>(null);
 
@@ -214,7 +230,10 @@ function ToCollectStopCard({
     } else if (part === 'notFoundQuestion') {
       questionRef.current?.focus();
     } else {
-      (closing === 'quantity' ? collectButtonRef : notFoundButtonRef).current?.focus();
+      // The current card keeps "לא נמצא" behind "⋯", so focus returns to "⋯" from the question.
+      const target =
+        closing === 'quantity' ? collectButtonRef : current ? moreButtonRef : notFoundButtonRef;
+      target.current?.focus();
     }
   }
 
@@ -235,38 +254,9 @@ function ToCollectStopCard({
   const ariaBusy = busy ? true : undefined;
   const nameSuffix = <span className="visually-hidden">, {name}</span>;
 
-  return (
-    <li className="stop-card">
-      <p className="stop-card-position">עצירה {position}</p>
-      <h3 className="stop-card-name">{name}</h3>
-      <p className="stop-card-street">{lines.street}</p>
-      <p>{lines.spot}</p>
-      {lines.note !== undefined && <p className="stop-card-note">הערה: {lines.note}</p>}
-      <p className="stop-card-bottles">{bottlesText(order.bottlesEstimated)}</p>
-      {!stop.hasLocation && (
-        <p className="tag-list">
-          <span className="tag">{NO_LOCATION_TAG}</span>
-        </p>
-      )}
-
-      <div className="stop-card-actions">
-        {/* Waze opens in its app or a new tab, and the route stays here for the next stop.
-            noopener: Waze's page gets no handle on this one; noreferrer: nor the app's path. */}
-        <a
-          className="button button-secondary"
-          href={wazeUrl(order.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          נווט{nameSuffix}
-        </a>
-        <a className="button button-secondary" href={telUrl(order.contact.phone)}>
-          {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
-          חייג <bdi dir="ltr">{formatIsraeliMobileLocal(order.contact.phone)}</bdi>
-          {nameSuffix}
-        </a>
-      </div>
-
+  // Shared by the plain card and the current one: the quantity field and the "לא נמצא" question.
+  const openPanels = (
+    <>
       {openPart === 'quantity' && (
         // A form, so the phone keyboard's "Go" saves too. noValidate: the card checks the number
         // itself and says what is wrong in plain words.
@@ -339,34 +329,10 @@ function ToCollectStopCard({
           </div>
         </div>
       )}
-
-      {openPart === 'none' && (
-        <div className="stop-card-actions">
-          <button
-            ref={collectButtonRef}
-            type="button"
-            className="button button-primary"
-            aria-disabled={ariaBusy}
-            onClick={() => {
-              if (!busy) open('quantity');
-            }}
-          >
-            אספתי{nameSuffix}
-          </button>
-          <button
-            ref={notFoundButtonRef}
-            type="button"
-            className="button button-secondary"
-            aria-disabled={ariaBusy}
-            onClick={() => {
-              if (!busy) open('notFoundQuestion');
-            }}
-          >
-            לא נמצא{nameSuffix}
-          </button>
-        </div>
-      )}
-
+    </>
+  );
+  const movesRow = (
+    <>
       {(canMoveUp || canMoveDown) && (
         <div className="stop-card-actions stop-card-moves">
           {canMoveUp && (
@@ -396,6 +362,173 @@ function ToCollectStopCard({
           )}
         </div>
       )}
+    </>
+  );
+
+  if (current) {
+    const moreOpen = openPart === 'more';
+    const panelOpen = openPart === 'quantity' || openPart === 'notFoundQuestion';
+    return (
+      <li className="stop-card stop-card-current">
+        <div className="stop-card-current-top">
+          <span className="stop-card-avatar" aria-hidden="true">
+            <Icon name="bottle" />
+          </span>
+          <div>
+            <p className="stop-card-eyebrow">{NEXT_STOP_EYEBROW}</p>
+            <h3 className="stop-card-name">{name}</h3>
+          </div>
+        </div>
+        <div className="stop-card-fact">
+          <Icon name="pin" />
+          <div>
+            <p className="stop-card-street">{lines.street}</p>
+            <p className="stop-card-spot">{lines.spot}</p>
+            {lines.note !== undefined && <p className="stop-card-note">הערה: {lines.note}</p>}
+          </div>
+        </div>
+        <p className="tag-list">
+          <span className="tag">{bottlesText(order.bottlesEstimated)}</span>
+          <StatusBadge status={order.status} />
+          {!stop.hasLocation && <span className="tag">{NO_LOCATION_TAG}</span>}
+        </p>
+
+        {openPanels}
+
+        {!panelOpen && (
+          <>
+            <div className="stop-card-current-row">
+              {/* The same Waze link as the plain card's "נווט" (ADR-0007): it follows the current
+                  stop, so after "אספתי" it points at the next one. */}
+              <a
+                className="button button-secondary"
+                href={wazeUrl(order.address)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon name="navigate" />
+                נווט{nameSuffix}
+              </a>
+              <a className="button button-secondary" href={telUrl(order.contact.phone)}>
+                <Icon name="phone" />
+                חייג{nameSuffix}
+              </a>
+              <button
+                ref={moreButtonRef}
+                type="button"
+                className="button button-secondary"
+                aria-expanded={moreOpen}
+                aria-disabled={ariaBusy}
+                aria-label={`עוד פעולות, ${name}`}
+                onClick={() => {
+                  if (!busy) setOpenPart(moreOpen ? 'none' : 'more');
+                }}
+              >
+                <Icon name="more" />
+              </button>
+            </div>
+            <button
+              ref={collectButtonRef}
+              type="button"
+              className="button button-primary button-big button-block"
+              aria-disabled={ariaBusy}
+              onClick={() => {
+                if (!busy) open('quantity');
+              }}
+            >
+              <Icon name="check" />
+              אספתי{nameSuffix}
+            </button>
+            {moreOpen && (
+              <div className="stop-card-actions">
+                <button
+                  ref={notFoundButtonRef}
+                  type="button"
+                  className="button button-secondary"
+                  aria-disabled={ariaBusy}
+                  onClick={() => {
+                    if (!busy) open('notFoundQuestion');
+                  }}
+                >
+                  לא נמצא{nameSuffix}
+                </button>
+              </div>
+            )}
+            {moreOpen && movesRow}
+          </>
+        )}
+
+        {error !== undefined && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+      </li>
+    );
+  }
+
+  return (
+    <li className="stop-card">
+      <p className="stop-card-position">עצירה {position}</p>
+      <h3 className="stop-card-name">{name}</h3>
+      <p className="stop-card-street">{lines.street}</p>
+      <p>{lines.spot}</p>
+      {lines.note !== undefined && <p className="stop-card-note">הערה: {lines.note}</p>}
+      <p className="stop-card-bottles">{bottlesText(order.bottlesEstimated)}</p>
+      {!stop.hasLocation && (
+        <p className="tag-list">
+          <span className="tag">{NO_LOCATION_TAG}</span>
+        </p>
+      )}
+
+      <div className="stop-card-actions">
+        {/* Waze opens in its app or a new tab, and the route stays here for the next stop.
+            noopener: Waze's page gets no handle on this one; noreferrer: nor the app's path. */}
+        <a
+          className="button button-secondary"
+          href={wazeUrl(order.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          נווט{nameSuffix}
+        </a>
+        <a className="button button-secondary" href={telUrl(order.contact.phone)}>
+          {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
+          חייג <bdi dir="ltr">{formatIsraeliMobileLocal(order.contact.phone)}</bdi>
+          {nameSuffix}
+        </a>
+      </div>
+
+      {openPanels}
+
+      {openPart === 'none' && (
+        <div className="stop-card-actions">
+          <button
+            ref={collectButtonRef}
+            type="button"
+            className="button button-primary"
+            aria-disabled={ariaBusy}
+            onClick={() => {
+              if (!busy) open('quantity');
+            }}
+          >
+            אספתי{nameSuffix}
+          </button>
+          <button
+            ref={notFoundButtonRef}
+            type="button"
+            className="button button-secondary"
+            aria-disabled={ariaBusy}
+            onClick={() => {
+              if (!busy) open('notFoundQuestion');
+            }}
+          >
+            לא נמצא{nameSuffix}
+          </button>
+        </div>
+      )}
+
+      {movesRow}
 
       {error !== undefined && (
         <p className="field-error" role="alert">

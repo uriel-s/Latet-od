@@ -1481,3 +1481,119 @@ html:has(.bottom-nav) {
 :root[dir='ltr'] .ltr {
   text-align: left;
 }
+
+/* --- Route progress and the current stop (collector/RouteScreen.tsx, StopCard.tsx) ---- */
+
+/* The progress card above the list: "עצירה 3 מתוך 12" and a bar of one segment per stop. */
+.route-progress,
+.route-drop-off {
+  margin-block: 0.75rem;
+}
+
+.route-progress-title {
+  margin-block: 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.route-progress .round-summary {
+  margin-block: 0.5rem 0;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.route-progress-bar {
+  display: flex;
+  gap: 5px;
+}
+
+/* A segment: still ahead (--brand-soft), done (--brand), the current one (--brand-2 with a halo).
+   Decoration only; the words say the same. */
+.route-progress-bar i {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+}
+
+.route-progress-bar .route-progress-done {
+  background: var(--brand);
+}
+
+.route-progress-bar .route-progress-current {
+  background: var(--brand-2);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+/* The current stop: a white card with a soft shadow instead of the plain card's gray frame. */
+.stop-card-current {
+  padding: 1.1rem;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.stop-card-current-top {
+  display: flex;
+  gap: 0.875rem;
+  align-items: center;
+  margin-block-end: 0.5rem;
+}
+
+.stop-card-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-md);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 1.4rem;
+}
+
+.stop-card-eyebrow {
+  margin-block: 0;
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.stop-card-current .stop-card-name {
+  margin-block: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+
+/* The pin, then the street in the ink colour and where the bottles are, gray, under it. */
+.stop-card-fact {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  margin-block-end: 0.5rem;
+}
+
+.stop-card-fact > svg {
+  margin-block-start: 0.25rem;
+  color: var(--brand);
+}
+
+.stop-card-fact p {
+  margin-block: 0;
+}
+
+.stop-card-spot {
+  color: var(--muted);
+}
+
+/* "נווט", "חייג" and "⋯" in one row, then the big "אספתי" under it. */
+.stop-card-current-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr var(--tap-target);
+  gap: 0.625rem;
+  margin-block: 0.75rem;
+}
+
+.stop-card-current-row .button {
+  padding-inline: 0.75rem;
+}

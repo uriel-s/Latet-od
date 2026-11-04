@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { wazeUrl } from './routeStops.ts';
 import {
   COLLECT_STOP_ERRORS,
   MAX_BOTTLES,
@@ -10,6 +11,7 @@ import {
 import type { MarkMessageOpenedOutcome } from '../api.ts';
 import {
   BOTTLES_COLLECTED_LABEL,
+  NEXT_STOP_EYEBROW,
   NOT_FOUND_QUESTION,
   SEND_THANKS_TITLE,
   StopCard,
@@ -499,5 +501,65 @@ describe('StopCard handled', () => {
   it('shows an error in a handled card too', () => {
     renderCard({ stop: COLLECTED, error: 'העצירה הזאת כבר טופלה. נא לרענן את המסך.' });
     expect(screen.getByRole('alert').textContent).toBe('העצירה הזאת כבר טופלה. נא לרענן את המסך.');
+  });
+});
+
+describe('StopCard current', () => {
+  it('shows the "העצירה הבאה" card: name, address, spot, tags and the main buttons', () => {
+    renderCard({ current: true });
+
+    expect(screen.getByText(NEXT_STOP_EYEBROW)).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: 'דנה כהן' })).toBeTruthy();
+    expect(screen.getByText('שד נהר הדן 12')).toBeTruthy();
+    expect(screen.getByText(/דלת הדירה/)).toBeTruthy();
+    expect(screen.getByText('אושרה')).toBeTruthy();
+    expect(screen.queryByText('בלי מיקום')).toBeNull();
+    // Same Waze link as the plain card, and every name still carries the customer.
+    expect(screen.getByRole('link', { name: 'נווט, דנה כהן' }).getAttribute('href')).toBe(
+      wazeUrl(makeOrder().address),
+    );
+    expect(screen.getByRole('link', { name: /^חייג/ }).getAttribute('href')).toBe(
+      'tel:+972501234567',
+    );
+    expect(button('אספתי, דנה כהן')).toBeTruthy();
+    expect(button('עוד פעולות, דנה כהן')).toBeTruthy();
+  });
+
+  it('shows "בלי מיקום" for a stop without a map point', () => {
+    renderCard({ current: true, stop: makeStop({ hasLocation: false }) });
+    expect(screen.getByText('בלי מיקום')).toBeTruthy();
+  });
+
+  it('keeps "אספתי" working: the quantity field opens with the estimate', () => {
+    const { calls } = renderCard({ current: true });
+    fireEvent.click(button('אספתי, דנה כהן'));
+    expect(quantityField().value).toBe('40');
+    fireEvent.click(button('שמור'));
+    expect(calls.collects).toEqual([40]);
+  });
+
+  it('opens "לא נמצא" and the arrows behind "⋯", and returns focus to "⋯" on "לא"', () => {
+    const { calls } = renderCard({ current: true });
+    expect(screen.queryByRole('button', { name: 'לא נמצא, דנה כהן' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'הזז למטה, דנה כהן' })).toBeNull();
+
+    fireEvent.click(button('עוד פעולות, דנה כהן'));
+    fireEvent.click(button('הזז למטה, דנה כהן'));
+    expect(calls.moves).toEqual(['down']);
+
+    fireEvent.click(button('לא נמצא, דנה כהן'));
+    expect(screen.getByRole('group', { name: NOT_FOUND_QUESTION })).toBeTruthy();
+    fireEvent.click(button('לא'));
+    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
+    expect(calls.notFounds).toBe(0);
+  });
+
+  it('closes the "⋯" panel when the card stops being the current one', () => {
+    const { rerender } = renderCard({ current: true });
+    fireEvent.click(button('עוד פעולות, דנה כהן'));
+    rerender({ current: false });
+    expect(screen.queryByRole('button', { name: /^עוד פעולות/ })).toBeNull();
+    rerender({ current: true });
+    expect(screen.queryByRole('button', { name: 'לא נמצא, דנה כהן' })).toBeNull();
   });
 });
