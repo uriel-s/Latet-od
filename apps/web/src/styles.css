@@ -1628,3 +1628,73 @@ html:has(.bottom-nav) {
   font-size: 2rem;
   line-height: 1;
 }
+
+/* --- Upcoming timeline and donation line (collector/RouteScreen.tsx, StopCard.tsx) ------ */
+
+/* "הבאות" / "טופלו": a quiet title above a list of stops. */
+.route-section-title {
+  margin-block: 1.25rem 0.5rem;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A compact card: dot | name, street, tags | "⋯"; the quantity stepper and an error take the
+   full width below. */
+.stop-card-compact {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.25rem 1fr auto;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+}
+
+.stop-card-compact .stop-card-name,
+.stop-card-compact .stop-card-street,
+.stop-card-compact .tag-list {
+  margin-block: 0;
+}
+
+.stop-card-compact-wide {
+  grid-column: 1 / -1;
+}
+
+/* The numbered circle. The vertical line runs from it down through the gap to the next card's
+   dot (the last card has none); both are decoration, the number is also in the order of the list. */
+.timeline-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 800;
+}
+
+.timeline > .stop-card-compact:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(0.75rem + 1.125rem - 1px);
+  top: 50%;
+  bottom: calc(-0.75rem - 50%);
+  width: 2px;
+  background: var(--line);
+}
+
+.route-donation {
+  margin-block: 1rem;
+  font-weight: 700;
+  text-align: center;
+}

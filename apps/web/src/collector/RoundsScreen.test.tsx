@@ -394,8 +394,8 @@ function cardOf(name: string): HTMLElement {
 
 /** The customers' names on round r1's route, from its stop cards' headings, in screen order. */
 function stopNames(): string[] {
-  const route = within(roundRegion()).getByRole('list', { name: 'עצירות המסלול' });
-  return within(route)
+  // The route is three lists (current, upcoming, handled), but the cards are the region's h3s.
+  return within(roundRegion())
     .getAllByRole('heading', { level: 3 })
     .map((heading) => heading.textContent ?? '');
 }
@@ -1216,7 +1216,9 @@ describe('RoundsScreen', () => {
       const round = await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
 
       const close = within(round).getByRole('button', { name: 'סיימתי את הסבב' });
-      expect(follows(within(round).getByRole('list', { name: 'עצירות המסלול' }), close)).toBe(true);
+      expect(follows(within(round).getByRole('list', { name: 'העצירה הנוכחית' }), close)).toBe(
+        true,
+      );
     });
 
     it('asks first, and closes once for a double tap, "מבטל סבב..." meanwhile', async () => {

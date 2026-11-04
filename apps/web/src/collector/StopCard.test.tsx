@@ -83,6 +83,8 @@ function renderCard(overrides: Partial<StopCardProps> = {}): {
   const props = (next: Partial<StopCardProps>): StopCardProps => ({
     stop: makeStop(),
     position: 2,
+    // The big card by default: it has "אספתи" itself. The compact card is asked for with current: false.
+    current: true,
     canMoveUp: true,
     canMoveDown: true,
     busy: false,
@@ -153,78 +155,79 @@ describe('parseBottlesCollected', () => {
   });
 });
 
-describe('StopCard to collect', () => {
-  it('shows the position, the name as a heading, the full address and the bottles', () => {
-    renderCard();
+describe('StopCard compact (upcoming stop)', () => {
+  it('shows the number in a dot, the name as a heading, the street and the estimate', () => {
+    renderCard({ current: false });
 
     const card = screen.getByRole('listitem');
-    expect(within(card).getByText('עצירה 2')).toBeTruthy();
+    expect(within(card).getByText('2')).toBeTruthy();
     expect(within(card).getByRole('heading', { level: 3, name: 'דנה כהן' })).toBeTruthy();
     expect(within(card).getByText('שד נהר הדן 12')).toBeTruthy();
-    expect(within(card).getByText('בבניין - ליד דלת הדירה · קומה 3, דירה 12')).toBeTruthy();
-    expect(within(card).getByText('הערה: ליד העגלה')).toBeTruthy();
     expect(within(card).getByText('40 בקבוקים')).toBeTruthy();
     expect(within(card).queryByText('בלי מיקום')).toBeNull();
-    expect(card.className).toBe('stop-card');
-  });
-
-  it('leaves out the floor and the note when there are none', () => {
-    renderCard({
-      stop: makeStop({
-        order: makeOrder({
-          address: {
-            streetName: 'הרצל',
-            houseNumber: '5',
-            bottlesSpot: 'privateHouse',
-          },
-        }),
-      }),
-    });
-
-    expect(screen.queryByText(/^הערה:/)).toBeNull();
-    expect(screen.getByText('הרצל 5')).toBeTruthy();
-    expect(screen.getByText('בכניסה לבית פרטי')).toBeTruthy();
+    expect(card.className).toContain('stop-card-compact');
   });
 
   it('tags "בלי מיקום" by the stored flag of the stop, not the order', () => {
-    renderCard({ stop: makeStop({ hasLocation: false, order: makeOrder({ hasLocation: true }) }) });
+    renderCard({
+      current: false,
+      stop: makeStop({ hasLocation: false, order: makeOrder({ hasLocation: true }) }),
+    });
     expect(screen.getByText('בלי מיקום')).toBeTruthy();
   });
 
   it('shows no "בלי מיקום" when the stop had a point, although the order has none now', () => {
-    renderCard({ stop: makeStop({ hasLocation: true, order: makeOrder({ hasLocation: false }) }) });
+    renderCard({
+      current: false,
+      stop: makeStop({ hasLocation: true, order: makeOrder({ hasLocation: false }) }),
+    });
     expect(screen.queryByText('בלי מיקום')).toBeNull();
   });
 
-  it('links "נווט" to Waze with the address and the city encoded, in a new tab', () => {
-    renderCard();
+  it('has only "⋯" on the card itself; every action is in its sheet', () => {
+    renderCard({ current: false });
+    expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      'עוד פעולות, דנה כהן',
+    ]);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
 
-    const link = screen.getByRole('link', { name: 'נווט, דנה כהן' });
-    expect(link.getAttribute('href')).toBe(
-      `https://waze.com/ul?q=${encodeURIComponent('שד נהר הדן 12, בית שמש')}&navigate=yes`,
-    );
-    expect(link.getAttribute('href')).toContain('%D7%A9%D7%93');
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')?.split(' ')).toEqual(
+  it('puts "אספתי", "נווט" and "חייג" in the sheet', () => {
+    renderCard({ current: false });
+    openSheet();
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'אספתי' })).toBeTruthy();
+    const waze = within(dialog).getByRole('link', { name: 'נווט' });
+    expect(waze.getAttribute('href')).toBe(wazeUrl(makeOrder().address));
+    expect(waze.getAttribute('target')).toBe('_blank');
+    expect(waze.getAttribute('rel')?.split(' ')).toEqual(
       expect.arrayContaining(['noopener', 'noreferrer']),
     );
+    expect(within(dialog).getByRole('link', { name: 'חייג' }).getAttribute('href')).toBe(
+      'tel:+972501234567',
+    );
   });
 
-  it('links "חייג" to the phone, with the number shown left to right', () => {
-    renderCard();
+  it('collects out of order: the sheet closes and the stepper opens with the estimate', () => {
+    const { calls } = renderCard({ current: false });
+    openSheet();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
 
-    const link = screen.getByRole('link', { name: /^חייג 050-1234567/ });
-    expect(link.getAttribute('href')).toBe('tel:+972501234567');
-    const digits = within(link).getByText('050-1234567');
-    expect(digits.tagName).toBe('BDI');
-    expect(digits.getAttribute('dir')).toBe('ltr');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(quantityField().value).toBe('40');
+    expect(document.activeElement).toBe(quantityField());
+    fireEvent.change(quantityField(), { target: { value: '33' } });
+    fireEvent.click(button('שמור'));
+    expect(calls.collects).toEqual([33]);
   });
 
-  it('has no arrows or "לא נמצא" on the card itself, only "⋯"', () => {
-    renderCard();
-    expect(screen.queryByRole('button', { name: /^הזז/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^לא נמצא/ })).toBeNull();
-    expect(button('עוד פעולות, דנה כהן')).toBeTruthy();
+  it('gives the focus back to "⋯" when the stepper is cancelled', () => {
+    renderCard({ current: false });
+    openSheet();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
+    fireEvent.click(button('ביטול'));
+    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
   });
 });
 
@@ -352,6 +355,7 @@ describe('StopCard "אספתי"', () => {
           <StopCard
             stop={makeStop()}
             position={1}
+            current
             canMoveUp={false}
             canMoveDown={false}
             busy={false}
@@ -375,7 +379,7 @@ function openSheet(): void {
 }
 
 describe.each([
-  ['plain', false],
+  ['compact', false],
   ['current', true],
 ])('StopCard "⋯" sheet (%s card)', (_label, current) => {
   it('opens a dialog with the focus inside and closes on "סגור", focus back on "⋯"', () => {

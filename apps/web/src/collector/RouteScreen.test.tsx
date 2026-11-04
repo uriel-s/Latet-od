@@ -12,6 +12,9 @@ import {
 import type { MarkMessageOpenedOutcome, StopActionOutcome } from '../api.ts';
 import {
   ALL_STOPS_HANDLED_TEXT,
+  HANDLED_TITLE,
+  UPCOMING_TITLE,
+  donationLine,
   GOOGLE_MAPS_ROUTE_TEXT,
   NAVIGATE_TO_DROP_OFF_TEXT,
   NO_STOPS_TEXT,
@@ -21,7 +24,7 @@ import {
   routeSummary,
   type RouteScreenProps,
 } from './RouteScreen.tsx';
-import { dropOffWazeUrl, wazeUrl } from './routeStops.ts';
+import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
 
 /** A confirmed order in round r1, in רמת בית שמש; overrides change it. */
@@ -285,9 +288,23 @@ function sheetAction(name: string, label: string | RegExp): void {
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
 }
 
+/**
+ * Taps "אספתי" of `name`'s stop: on the big card itself, or, for an upcoming stop, in its "⋯"
+ * sheet (collecting out of order).
+ */
+function startCollect(name: string): void {
+  const direct = screen.queryByRole('button', { name: `אספתי, ${name}` });
+  if (direct !== null) {
+    fireEvent.click(direct);
+    return;
+  }
+  fireEvent.click(button(`עוד פעולות, ${name}`));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
+}
+
 /** Taps "אספתי" on `name`'s card, types `text` (the estimate when undefined), and saves. */
 function collect(name: string, text?: string): void {
-  fireEvent.click(button(`אספתי, ${name}`));
+  startCollect(name);
   if (text !== undefined) {
     fireEvent.change(screen.getByLabelText(BOTTLES_COLLECTED_LABEL), { target: { value: text } });
   }
@@ -326,9 +343,11 @@ describe('RouteScreen order', () => {
     renderRoute();
 
     expect(shownNames()).toEqual(['דנה כהן', 'משה לוי', 'יוסי מזרחי']);
-    const list = screen.getByRole('list', { name: 'עצירות המסלול' });
-    expect(list.tagName).toBe('OL');
-    expect(within(cardOf('משה לוי')).getByText('עצירה 2')).toBeTruthy();
+    const timeline = screen.getByRole('list', { name: UPCOMING_TITLE });
+    expect(timeline.tagName).toBe('OL');
+    // The dots count the cards on screen: the current stop is 1, the timeline starts at 2.
+    expect(within(cardOf('משה לוי')).getByText('2')).toBeTruthy();
+    expect(within(cardOf('יוסי מזרחי')).getByText('3')).toBeTruthy();
     expect(screen.getByText('נאספו 0 מתוך 3 · נשארו 3').getAttribute('aria-live')).toBe('polite');
   });
 
@@ -336,7 +355,7 @@ describe('RouteScreen order', () => {
     renderRoute(makeView([stopOf(DANA), stopOf(MOSHE, { state }), stopOf(YOSSI)]));
     expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']);
     // The numbers count the cards on screen.
-    expect(within(cardOf('יוסי מזרחי')).getByText('עצירה 2')).toBeTruthy();
+    expect(within(cardOf('יוסי מזרחי')).getByText('2')).toBeTruthy();
   });
 
   it('says so, with no list, when the route has no stop', () => {
@@ -345,16 +364,66 @@ describe('RouteScreen order', () => {
     expect(screen.queryByRole('list')).toBeNull();
   });
 
-  it('links each stop to Waze and to its phone', () => {
+  it('links the current stop to Waze and to its phone', () => {
     renderRoute();
 
-    const card = cardOf('משה לוי');
-    expect(within(card).getByRole('link', { name: 'נווט, משה לוי' }).getAttribute('href')).toBe(
-      `https://waze.com/ul?q=${encodeURIComponent("בית ג'מאל 5, בית שמש")}&navigate=yes`,
+    const card = cardOf('דנה כהן');
+    expect(within(card).getByRole('link', { name: 'נווט, דנה כהן' }).getAttribute('href')).toBe(
+      wazeUrl(DANA.address),
     );
     expect(within(card).getByRole('link', { name: /^חייג/ }).getAttribute('href')).toBe(
+      'tel:+972501234567',
+    );
+  });
+
+  it('keeps Waze and the phone of an upcoming stop in its "⋯" sheet', () => {
+    renderRoute();
+
+    fireEvent.click(button('עוד פעולות, משה לוי'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('link', { name: 'נווט' }).getAttribute('href')).toBe(
+      `https://waze.com/ul?q=${encodeURIComponent("בית ג'מאל 5, בית שמש")}&navigate=yes`,
+    );
+    expect(within(dialog).getByRole('link', { name: 'חייג' }).getAttribute('href')).toBe(
       'tel:+972527654321',
     );
+  });
+
+  it('shows the screen order of screenOrderOfStops across the three groups', () => {
+    const stops = [
+      stopOf(DANA, { state: 'notFound' }),
+      stopOf(MOSHE),
+      stopOf(YOSSI),
+      stopOf(makeOrder({ id: 'o4', contact: { name: 'רות בר', phone: '+972521111111' } }), {
+        state: 'collected',
+      }),
+    ];
+    renderRoute(makeView(stops));
+
+    expect(shownNames()).toEqual(screenOrderOfStops(stops).map((stop) => stop.order.contact.name));
+    expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן', 'רות בר']);
+    expect(screen.getByText(UPCOMING_TITLE)).toBeTruthy();
+    expect(screen.getByText(HANDLED_TITLE)).toBeTruthy();
+    // The handled group lists the two handled stops, with their state in words.
+    const handled = screen.getByRole('list', { name: HANDLED_TITLE });
+    expect(within(handled).getByText('לא נמצא')).toBeTruthy();
+    expect(within(handled).getByText('נאסף')).toBeTruthy();
+  });
+
+  it('collects an upcoming stop out of order from its sheet', async () => {
+    const { api } = renderRoute();
+    collect('יוסי מזרחי', '12');
+    await waitFor(() =>
+      expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o3', arg: 12 }]),
+    );
+  });
+
+  it('marks an upcoming stop not found from its sheet', () => {
+    renderRoute();
+    fireEvent.click(button('עוד פעולות, משה לוי'));
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'לא נמצא' }),
+    ).toBeTruthy();
   });
 });
 
@@ -771,9 +840,9 @@ describe('RouteScreen typing', () => {
   it('tells the parent once while any quantity field is open', () => {
     const { parent } = renderRoute(VIEW, { strict: true });
 
-    fireEvent.click(button('אספתי, דנה כהן'));
+    startCollect('דנה כהן');
     expect(parent.typing).toEqual([true]);
-    fireEvent.click(button('אספתי, משה לוי'));
+    startCollect('משה לוי');
     fireEvent.click(within(cardOf('דנה כהן')).getByRole('button', { name: 'ביטול' }));
     expect(parent.typing).toEqual([true]);
     fireEvent.click(within(cardOf('משה לוי')).getByRole('button', { name: 'ביטול' }));
@@ -791,5 +860,31 @@ describe('RouteScreen typing', () => {
     fireEvent.click(button('אספתי, דנה כהן'));
     unmount();
     expect(parent.typing).toEqual([true, false]);
+  });
+});
+
+describe('donationLine and the donation row', () => {
+  const collectedWith = (order: CollectorOrder, bottlesCollected: number) =>
+    collected(stopOf({ ...order, bottlesCollected }));
+
+  it('is hidden while nothing was collected', () => {
+    expect(donationLine([stopOf(DANA), stopOf(MOSHE)])).toBeUndefined();
+    renderRoute();
+    expect(screen.queryByText(/לתפילין/)).toBeNull();
+  });
+
+  it('sums the real counts of the collected stops, in shekels', () => {
+    const stops = [collectedWith(DANA, 40), collectedWith(MOSHE, 85), stopOf(YOSSI)];
+    expect(donationLine(stops)).toBe('בסבב הזה נאספו 125 בקבוקים, כ־25 ₪ לתפילין');
+    renderRoute(makeView(stops));
+    expect(screen.getByText('בסבב הזה נאספו 125 בקבוקים, כ־25 ₪ לתפילין')).toBeTruthy();
+  });
+
+  it('reads right for one bottle and counts only collected stops', () => {
+    const stops = [
+      collectedWith(DANA, 1),
+      stopOf({ ...MOSHE, bottlesCollected: 50 }, { state: 'notFound' }),
+    ];
+    expect(donationLine(stops)).toBe('בסבב הזה נאסף בקבוק אחד, כ־0.20 ₪ לתפילין');
   });
 });

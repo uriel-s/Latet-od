@@ -10,7 +10,6 @@ import {
   COLLECT_STOP_ERRORS,
   MAX_BOTTLES,
   collectStopRequestSchema,
-  formatIsraeliMobileLocal,
   type RouteStopView,
 } from '@bottlerun/shared';
 import { Icon } from '../components/Icon.tsx';
@@ -67,12 +66,12 @@ export function parseBottlesCollected(
 /** Props of {@link StopCard}. */
 export interface StopCardProps {
   stop: RouteStopView;
-  /** 1-based position in the visible list, shown on a stop still to collect, e.g. "עצירה 2". */
+  /** 1-based position in the visible list: the number in the timeline dot of an upcoming stop. */
   position: number;
   /**
    * The route's next stop to collect: shown as the big "העצירה הבאה" card (icon, tags, "נווט" /
-   * "חייג" / "⋯", a big "אספתי"). Ignored for a handled stop. Default false: the plain card.
-   * Both have "⋯" with "לא נמצא" and the arrows in a sheet.
+   * "חייג" / "⋯", a big "אספתי"). Ignored for a handled stop. Default false: the compact
+   * timeline card of an upcoming stop, whose "⋯" sheet also holds "אספתי", "נווט" and "חייג".
    */
   current?: boolean;
   /** Whether the "הזז למעלה" arrow shows (the route screen's storedMovesFor(...) > 0). */
@@ -103,11 +102,14 @@ type OpenPart = 'none' | 'quantity' | 'more';
  * One stop as a list item; the route screen puts the cards in an `<ol>` under the round's `<h2>`,
  * so the customer's name is the card's `<h3>`.
  *
- * Still to collect: "עצירה N", the name, the full address (street and number; where the bottles
- * are, with the floor and apartment; the note), the estimated bottles, "בלי מיקום" by the STORED
- * flag (`stop.hasLocation`, from when the route was built), and the buttons. Every button's
- * hidden rest names the customer, so a screen reader's list of buttons tells the cards apart; the
- * visible words start the name, as WCAG 2.5.3 (label in name) asks.
+ * Still to collect, the current one: the full address (street and number; where the bottles are,
+ * with the floor and apartment; the note), the estimated bottles, "בלי מיקום" by the STORED flag
+ * (`stop.hasLocation`, from when the route was built), and the buttons. Every button's hidden rest
+ * names the customer, so a screen reader's list of buttons tells the cards apart; the visible
+ * words start the name, as WCAG 2.5.3 (label in name) asks.
+ *
+ * Still to collect, an upcoming one (`current` false): a compact timeline card with a numbered dot,
+ * the name, the street, the estimate or "בלי מיקום", and "⋯", whose sheet has every action.
  *
  * Handled (any other state): coloured, with its state in words, the name and the street, and no
  * action; when collected, its "שלח תודה" row. The route screen moves it to the end of the list.
@@ -231,7 +233,8 @@ function ToCollectStopCard({
       // Selected, so typing the real count replaces the estimate instead of adding to it.
       quantityInputRef.current?.select();
     } else if (part === 'none') {
-      (closing === 'more' ? moreButtonRef : collectButtonRef).current?.focus();
+      // The compact card has no "אספתי" of its own: focus goes back to its "⋯".
+      (closing === 'more' || !current ? moreButtonRef : collectButtonRef).current?.focus();
     }
   }
 
@@ -338,6 +341,14 @@ function ToCollectStopCard({
       busy={busy}
       onMove={onMove}
       onNotFound={onNotFound}
+      // Only the compact card: its sheet is where "אספתי", "נווט" and "חייג" live.
+      {...(current
+        ? {}
+        : {
+            onCollect: () => open('quantity'),
+            navigateUrl: wazeUrl(order.address),
+            phoneUrl: telUrl(order.contact.phone),
+          })}
       onClose={() => open('none')}
     />
   );
@@ -434,61 +445,29 @@ function ToCollectStopCard({
     );
   }
 
+  // An upcoming stop: a numbered dot on the timeline and a compact card. Everything else
+  // ("אספתי", "נווט", "חייג", "לא נמצא", the arrows) is in the "⋯" sheet.
   return (
-    <li className="stop-card">
-      <p className="stop-card-position">עצירה {position}</p>
-      <h3 className="stop-card-name">{name}</h3>
-      <p className="stop-card-street">{lines.street}</p>
-      <p>{lines.spot}</p>
-      {lines.note !== undefined && <p className="stop-card-note">הערה: {lines.note}</p>}
-      <p className="stop-card-bottles">{bottlesText(order.bottlesEstimated)}</p>
-      {!stop.hasLocation && (
+    <li className="stop-card stop-card-compact">
+      <span className="timeline-dot" aria-hidden="true">
+        {position}
+      </span>
+      <div className="stop-card-compact-body">
+        <h3 className="stop-card-name">{name}</h3>
+        <p className="stop-card-street">{lines.street}</p>
         <p className="tag-list">
-          <span className="tag">{NO_LOCATION_TAG}</span>
+          <span className="tag">{bottlesText(order.bottlesEstimated)}</span>
+          {!stop.hasLocation && <span className="tag">{NO_LOCATION_TAG}</span>}
         </p>
-      )}
-
-      <div className="stop-card-actions">
-        {/* Waze opens in its app or a new tab, and the route stays here for the next stop.
-            noopener: Waze's page gets no handle on this one; noreferrer: nor the app's path. */}
-        <a
-          className="button button-secondary"
-          href={wazeUrl(order.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          נווט{nameSuffix}
-        </a>
-        <a className="button button-secondary" href={telUrl(order.contact.phone)}>
-          {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
-          חייג <bdi dir="ltr">{formatIsraeliMobileLocal(order.contact.phone)}</bdi>
-          {nameSuffix}
-        </a>
       </div>
+      {moreButton}
 
-      {quantityPanel}
-
-      {!quantityOpen && (
-        <div className="stop-card-actions">
-          <button
-            ref={collectButtonRef}
-            type="button"
-            className="button button-primary"
-            aria-disabled={ariaBusy}
-            onClick={() => {
-              if (!busy) open('quantity');
-            }}
-          >
-            אספתי{nameSuffix}
-          </button>
-          {moreButton}
-        </div>
-      )}
+      {quantityOpen && <div className="stop-card-compact-wide">{quantityPanel}</div>}
 
       {moreSheet}
 
       {error !== undefined && (
-        <p className="field-error" role="alert">
+        <p className="field-error stop-card-compact-wide" role="alert">
           {error}
         </p>
       )}
