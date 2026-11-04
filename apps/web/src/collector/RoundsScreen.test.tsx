@@ -1124,7 +1124,7 @@ describe('RoundsScreen', () => {
       await renderLoaded({ loadRounds: rounds.load, ...props });
 
       fireEvent.click(screen.getByRole('button', { name: 'עוד פעולות, דנה כהן' }));
-      fireEvent.click(screen.getByRole('button', { name: 'לא נמצא, דנה כהן' }));
+      fireEvent.click(screen.getByRole('button', { name: 'לא נמצא' }));
       fireEvent.click(screen.getByRole('button', { name: 'כן, לא נמצא' }));
 
       const notice = await screen.findByRole('alert');

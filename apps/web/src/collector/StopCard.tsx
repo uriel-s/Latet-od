@@ -1,13 +1,14 @@
 // One stop of the route screen (spec §3.6 step 2, "מסלול"): who, where, how many bottles, and
-// what Yoel does there: "נווט" (Waze), "חייג", "אספתי" with the real quantity, "לא נמצא", and the
-// arrows that move the stop in the route. A handled stop shows its state in words and, once
+// what Yoel does there: "נווט" (Waze), "חייג", "אספתי" with the real quantity (a − / + stepper),
+// and "⋯", which opens the bottom sheet with "לא נמצא" and the arrows that move the stop. A handled stop shows its state in words and, once
 // collected, its "שלח תודה" row (SendList.tsx). Presentational: the route screen sends every
 // request and tells this card whether one is on its way and why it failed; the card owns only
-// what is open in it (the quantity field, the "לא נמצא" question) and where focus goes.
-import { useEffect, useId, useRef, useState, type RefObject } from 'react';
+// what is open in it (the quantity stepper, the "⋯" sheet) and where focus goes.
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import {
   COLLECT_STOP_ERRORS,
+  MAX_BOTTLES,
   collectStopRequestSchema,
   formatIsraeliMobileLocal,
   type RouteStopView,
@@ -15,6 +16,7 @@ import {
 import { Icon } from '../components/Icon.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { TextField } from '../components/TextField.tsx';
+import { MoreActionsSheet, NOT_FOUND_QUESTION } from './MoreActionsSheet.tsx';
 import { bottlesText } from './OrdersScreen.tsx';
 import { NO_LOCATION_TAG } from './orderTags.ts';
 import {
@@ -29,8 +31,8 @@ import { SendList, type SendListProps } from './SendList.tsx';
 /** The label of the quantity field "אספתי" opens. */
 export const BOTTLES_COLLECTED_LABEL = 'כמה בקבוקים נאספו';
 
-/** The in-card question "לא נמצא" opens: a mistap would otherwise block "אספתי" (stop_handled). */
-export const NOT_FOUND_QUESTION = 'לסמן שהלקוח לא נמצא?';
+// The "לא נמצא" question moved into the sheet; re-exported so existing imports keep working.
+export { NOT_FOUND_QUESTION };
 
 /** The eyebrow of the current stop's card (the first stop still to collect). */
 export const NEXT_STOP_EYEBROW = 'העצירה הבאה';
@@ -69,8 +71,8 @@ export interface StopCardProps {
   position: number;
   /**
    * The route's next stop to collect: shown as the big "העצירה הבאה" card (icon, tags, "נווט" /
-   * "חייג" / "⋯", a big "אספתי"), with "לא נמצא" and the arrows behind "⋯". Ignored for a handled
-   * stop. Default false: the plain card.
+   * "חייג" / "⋯", a big "אספתי"). Ignored for a handled stop. Default false: the plain card.
+   * Both have "⋯" with "לא נמצא" and the arrows in a sheet.
    */
   current?: boolean;
   /** Whether the "הזז למעלה" arrow shows (the route screen's storedMovesFor(...) > 0). */
@@ -94,9 +96,8 @@ export interface StopCardProps {
   markOpened?: SendListProps['markOpened'];
 }
 
-/** What is open in a card still to collect: nothing, the quantity field, the question, or (the
- *  current card only) the "⋯" panel with "לא נמצא" and the arrows. */
-type OpenPart = 'none' | 'quantity' | 'notFoundQuestion' | 'more';
+/** What is open in a card still to collect: nothing, the quantity stepper, or the "⋯" sheet. */
+type OpenPart = 'none' | 'quantity' | 'more';
 
 /**
  * One stop as a list item; the route screen puts the cards in an `<ol>` under the round's `<h2>`,
@@ -115,12 +116,10 @@ export function StopCard(props: StopCardProps) {
   const { stop, onCollect, onTypingChange } = props;
   const [openPart, setOpenPart] = useState<OpenPart>('none');
   const handled = isStopHandled(stop.state);
-  // The field and the question close by themselves once the stop is handled (the saved view, or
+  // The field and the sheet close by themselves once the stop is handled (the saved view, or
   // a reload that shows it handled elsewhere): the handled card has neither. Set during render,
   // React's pattern for state that follows a prop, so no frame shows the stale part.
   if (handled && openPart !== 'none') setOpenPart('none');
-  // The "⋯" panel belongs to the current card only: a card that stops being it closes the panel.
-  if (!props.current && openPart === 'more') setOpenPart('none');
   const typing = openPart === 'quantity' && !handled;
 
   // The latest callback, read by the effects below, so a new arrow from the screen on every
@@ -150,6 +149,12 @@ export function StopCard(props: StopCardProps) {
   // is gone, and the row he taps next ("שלח") is right under it, wherever the card moved.
   const thanksTitleRef = useRef<HTMLHeadingElement>(null);
   const savedFromHereRef = useRef(false);
+  // A short buzz once Yoel's own "אספתי" is saved (the stop turned collected), so he feels it
+  // went through without looking. navigator.vibrate is missing on iOS and desktop: optional call.
+  const stopState = stop.state;
+  useEffect(() => {
+    if (stopState === 'collected' && savedFromHereRef.current) navigator.vibrate?.(30);
+  }, [stopState]);
   const showThanks = stop.state === 'collected' && stop.thankYou !== undefined;
   useEffect(() => {
     if (showThanks && savedFromHereRef.current) {
@@ -201,17 +206,15 @@ function ToCollectStopCard({
   const lines = stopAddressLines(order.address);
   const [quantity, setQuantity] = useState('');
   const [quantityError, setQuantityError] = useState<string | undefined>(undefined);
-  const questionId = useId();
   const collectButtonRef = useRef<HTMLButtonElement>(null);
-  const notFoundButtonRef = useRef<HTMLButtonElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
-  const questionRef = useRef<HTMLParagraphElement>(null);
 
   /**
    * Opens or closes a part of the card. flushSync renders first, so the element to focus exists,
-   * and the focus call stays inside the tap: to the new part when it opens (the button just tapped
-   * is gone), and back to that button when it closes.
+   * and the focus call stays inside the tap: to the quantity field when it opens (the button just
+   * tapped is gone; the sheet takes its own focus), and back to the button that opened the part
+   * when it closes.
    */
   function open(part: OpenPart): void {
     const closing = openPart;
@@ -227,14 +230,18 @@ function ToCollectStopCard({
       quantityInputRef.current?.focus();
       // Selected, so typing the real count replaces the estimate instead of adding to it.
       quantityInputRef.current?.select();
-    } else if (part === 'notFoundQuestion') {
-      questionRef.current?.focus();
-    } else {
-      // The current card keeps "לא נמצא" behind "⋯", so focus returns to "⋯" from the question.
-      const target =
-        closing === 'quantity' ? collectButtonRef : current ? moreButtonRef : notFoundButtonRef;
-      target.current?.focus();
+    } else if (part === 'none') {
+      (closing === 'more' ? moreButtonRef : collectButtonRef).current?.focus();
     }
+  }
+
+  /** The − / + buttons: one bottle at a time, never below 1 or above what the api accepts. */
+  function step(delta: 1 | -1): void {
+    const typed = quantity.trim();
+    // A blank or half-typed field steps from the estimate, so the buttons always do something.
+    const base = /^\d+$/.test(typed) ? Number(typed) : order.bottlesEstimated;
+    setQuantity(String(Math.min(MAX_BOTTLES, Math.max(1, base + delta))));
+    setQuantityError(undefined);
   }
 
   function save(): void {
@@ -253,121 +260,107 @@ function ToCollectStopCard({
   // unavailable, and its tap does nothing (the screen keeps its own guard too).
   const ariaBusy = busy ? true : undefined;
   const nameSuffix = <span className="visually-hidden">, {name}</span>;
+  const moreOpen = openPart === 'more';
+  const quantityOpen = openPart === 'quantity';
 
-  // Shared by the plain card and the current one: the quantity field and the "לא נמצא" question.
-  const openPanels = (
-    <>
-      {openPart === 'quantity' && (
-        // A form, so the phone keyboard's "Go" saves too. noValidate: the card checks the number
-        // itself and says what is wrong in plain words.
-        <form
-          className="stop-card-quantity"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            save();
+  // Shared by the plain card and the current one: the quantity stepper (the "⋯" sheet follows).
+  const quantityPanel = quantityOpen && (
+    // A form, so the phone keyboard's "Go" saves too. noValidate: the card checks the number
+    // itself and says what is wrong in plain words.
+    <form
+      className="stop-card-quantity"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        save();
+      }}
+    >
+      <div className="bottles-stepper">
+        <button
+          type="button"
+          className="button button-secondary bottles-stepper-button"
+          aria-label="הפחת בקבוק"
+          aria-disabled={ariaBusy}
+          onClick={() => {
+            if (!busy) step(-1);
           }}
         >
-          <TextField
-            label={BOTTLES_COLLECTED_LABEL}
-            value={quantity}
-            onChange={(value) => {
-              setQuantity(value);
-              setQuantityError(undefined);
-            }}
-            error={quantityError ?? bottlesError}
-            autoComplete="off"
-            digits
-            inputRef={quantityInputRef}
-          />
-          <div className="cancel-confirm-actions">
-            <button type="submit" className="button button-primary" aria-disabled={ariaBusy}>
-              {busy ? SAVING_LABEL : 'שמור'}
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              aria-disabled={ariaBusy}
-              onClick={() => {
-                // While the save is on its way its answer decides; closing now would hide it.
-                if (!busy) open('none');
-              }}
-            >
-              ביטול
-            </button>
-          </div>
-        </form>
-      )}
-
-      {openPart === 'notFoundQuestion' && (
-        <div role="group" aria-labelledby={questionId} className="cancel-confirm">
-          {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}
-          <p id={questionId} ref={questionRef} tabIndex={-1} className="cancel-confirm-question">
-            {NOT_FOUND_QUESTION}
-          </p>
-          <div className="cancel-confirm-actions">
-            <button
-              type="button"
-              className="button button-primary"
-              aria-disabled={ariaBusy}
-              onClick={() => {
-                if (!busy) onNotFound();
-              }}
-            >
-              {busy ? SAVING_LABEL : 'כן, לא נמצא'}
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              aria-disabled={ariaBusy}
-              onClick={() => {
-                if (!busy) open('none');
-              }}
-            >
-              לא
-            </button>
-          </div>
-        </div>
-      )}
-    </>
+          <span aria-hidden="true">−</span>
+        </button>
+        <TextField
+          label={BOTTLES_COLLECTED_LABEL}
+          value={quantity}
+          onChange={(value) => {
+            setQuantity(value);
+            setQuantityError(undefined);
+          }}
+          error={quantityError ?? bottlesError}
+          autoComplete="off"
+          digits
+          inputRef={quantityInputRef}
+        />
+        <button
+          type="button"
+          className="button button-secondary bottles-stepper-button"
+          aria-label="הוסף בקבוק"
+          aria-disabled={ariaBusy}
+          onClick={() => {
+            if (!busy) step(1);
+          }}
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      </div>
+      <div className="cancel-confirm-actions">
+        <button type="submit" className="button button-primary button-big" aria-disabled={ariaBusy}>
+          {busy ? SAVING_LABEL : 'שמור'}
+        </button>
+        <button
+          type="button"
+          className="button button-secondary"
+          aria-disabled={ariaBusy}
+          onClick={() => {
+            // While the save is on its way its answer decides; closing now would hide it.
+            if (!busy) open('none');
+          }}
+        >
+          ביטול
+        </button>
+      </div>
+    </form>
   );
-  const movesRow = (
-    <>
-      {(canMoveUp || canMoveDown) && (
-        <div className="stop-card-actions stop-card-moves">
-          {canMoveUp && (
-            <button
-              type="button"
-              className="button button-secondary"
-              aria-disabled={ariaBusy}
-              onClick={() => {
-                if (!busy) onMove('up');
-              }}
-            >
-              {/* The arrow first and hidden, so the accessible name starts with the words. */}
-              <span aria-hidden="true">▲</span> הזז למעלה{nameSuffix}
-            </button>
-          )}
-          {canMoveDown && (
-            <button
-              type="button"
-              className="button button-secondary"
-              aria-disabled={ariaBusy}
-              onClick={() => {
-                if (!busy) onMove('down');
-              }}
-            >
-              <span aria-hidden="true">▼</span> הזז למטה{nameSuffix}
-            </button>
-          )}
-        </div>
-      )}
-    </>
+
+  const moreSheet = moreOpen && (
+    <MoreActionsSheet
+      name={name}
+      canMoveUp={canMoveUp}
+      canMoveDown={canMoveDown}
+      busy={busy}
+      onMove={onMove}
+      onNotFound={onNotFound}
+      onClose={() => open('none')}
+    />
+  );
+
+  // "⋯": opens the sheet; aria-haspopup tells a screen reader it is a dialog.
+  const moreButton = (
+    <button
+      ref={moreButtonRef}
+      type="button"
+      className="button button-secondary"
+      aria-haspopup="dialog"
+      aria-expanded={moreOpen}
+      aria-disabled={ariaBusy}
+      aria-label={`עוד פעולות, ${name}`}
+      onClick={() => {
+        if (!busy) open('more');
+      }}
+    >
+      <Icon name="more" />
+    </button>
   );
 
   if (current) {
-    const moreOpen = openPart === 'more';
-    const panelOpen = openPart === 'quantity' || openPart === 'notFoundQuestion';
     return (
       <li className="stop-card stop-card-current">
         <div className="stop-card-current-top">
@@ -393,9 +386,9 @@ function ToCollectStopCard({
           {!stop.hasLocation && <span className="tag">{NO_LOCATION_TAG}</span>}
         </p>
 
-        {openPanels}
+        {quantityPanel}
 
-        {!panelOpen && (
+        {!quantityOpen && (
           <>
             <div className="stop-card-current-row">
               {/* The same Waze link as the plain card's "נווט" (ADR-0007): it follows the current
@@ -413,19 +406,7 @@ function ToCollectStopCard({
                 <Icon name="phone" />
                 חייג{nameSuffix}
               </a>
-              <button
-                ref={moreButtonRef}
-                type="button"
-                className="button button-secondary"
-                aria-expanded={moreOpen}
-                aria-disabled={ariaBusy}
-                aria-label={`עוד פעולות, ${name}`}
-                onClick={() => {
-                  if (!busy) setOpenPart(moreOpen ? 'none' : 'more');
-                }}
-              >
-                <Icon name="more" />
-              </button>
+              {moreButton}
             </div>
             <button
               ref={collectButtonRef}
@@ -439,24 +420,10 @@ function ToCollectStopCard({
               <Icon name="check" />
               אספתי{nameSuffix}
             </button>
-            {moreOpen && (
-              <div className="stop-card-actions">
-                <button
-                  ref={notFoundButtonRef}
-                  type="button"
-                  className="button button-secondary"
-                  aria-disabled={ariaBusy}
-                  onClick={() => {
-                    if (!busy) open('notFoundQuestion');
-                  }}
-                >
-                  לא נמצא{nameSuffix}
-                </button>
-              </div>
-            )}
-            {moreOpen && movesRow}
           </>
         )}
+
+        {moreSheet}
 
         {error !== undefined && (
           <p className="field-error" role="alert">
@@ -499,9 +466,9 @@ function ToCollectStopCard({
         </a>
       </div>
 
-      {openPanels}
+      {quantityPanel}
 
-      {openPart === 'none' && (
+      {!quantityOpen && (
         <div className="stop-card-actions">
           <button
             ref={collectButtonRef}
@@ -514,21 +481,11 @@ function ToCollectStopCard({
           >
             אספתי{nameSuffix}
           </button>
-          <button
-            ref={notFoundButtonRef}
-            type="button"
-            className="button button-secondary"
-            aria-disabled={ariaBusy}
-            onClick={() => {
-              if (!busy) open('notFoundQuestion');
-            }}
-          >
-            לא נמצא{nameSuffix}
-          </button>
+          {moreButton}
         </div>
       )}
 
-      {movesRow}
+      {moreSheet}
 
       {error !== undefined && (
         <p className="field-error" role="alert">
