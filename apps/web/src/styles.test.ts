@@ -5,6 +5,8 @@
 // 2. Colour contrast: the "dawn" palette of ADR-0011 is read from the :root block and every
 //    text/background pair the screens use must reach WCAG AA (4.5:1), so a colour changed to a
 //    weaker shade fails here instead of on Yoel's phone in the sun.
+// 3. Tap targets: buttons stay at least --tap-target (48px+) tall, the big button at least 66px,
+//    and the press animation respects prefers-reduced-motion.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -71,6 +73,9 @@ const TEXT_PAIRS: [foreground: string, background: string][] = [
   ['green', 'green-soft'],
   ['amber', 'amber-soft'],
   ['error', 'card'],
+  ['white', 'error'], // .button-danger
+  ['ink', 'done'], // a disabled or busy .button, a handled stop card
+  ['brand', 'card'], // .button-secondary in the site header
 ];
 
 describe('styles.css colour contrast', () => {
@@ -105,5 +110,41 @@ describe('styles.css colour contrast', () => {
       expect(root).toContain(`--${oldName}: var(--${newName});`);
       expect(rootTokens.has(newName ?? ''), `--${newName ?? ''} is defined`).toBe(true);
     }
+  });
+});
+
+/**
+ * The body of the top-level rule whose whole selector list is `selectors`, written at the start
+ * of a line right after a blank line, a closing brace or a comment. So `.button` finds
+ * `.button { … }` and not `.button:active`, a `.button` indented inside `@media`, or the `button`
+ * that ends `input, select, textarea, button { … }`. A list is passed as `a, b` and matches any
+ * whitespace or line break after each comma in the file.
+ */
+function ruleBody(css: string, selectors: string): string {
+  const pattern = selectors
+    .split(/,\s*/)
+    .map((selector) => selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join(',\\s*');
+  const ruleStart = String.raw`(?<=(?:^|\}|\*/|\n)[ \t]*\n)`;
+  const match = new RegExp(String.raw`${ruleStart}${pattern}\s*\{([^}]*)\}`).exec(css);
+  if (!match?.[1]) throw new Error(`styles.css has no top-level rule for ${selectors}`);
+  return match[1];
+}
+
+describe('styles.css tap targets', () => {
+  it('keeps every <button> at least --tap-target tall', () => {
+    expect(ruleBody(stylesCss, 'button')).toContain('min-height: var(--tap-target);');
+  });
+
+  it('keeps a .button (also a link styled as one) at least --tap-target tall', () => {
+    expect(ruleBody(stylesCss, '.button')).toContain('min-height: var(--tap-target);');
+  });
+
+  it('makes the big button at least 66px tall', () => {
+    expect(ruleBody(stylesCss, '.button-big, .button-large')).toMatch(/min-height:[^;]*66px/);
+  });
+
+  it('turns the press animation off for prefers-reduced-motion', () => {
+    expect(stylesCss).toContain('prefers-reduced-motion: reduce');
   });
 });

@@ -210,6 +210,12 @@ h1[tabindex='-1']:focus {
   flex: none;
 }
 
+/* A secondary button is --brand-soft, the header's own colour: on the header it turns --card
+   (--brand on it is AA too, styles.test.ts), or only its text would show ("כניסת מנהל"). */
+.site-header .button-secondary {
+  background: var(--card);
+}
+
 /* The flyer's garland of flags (components/Bunting.tsx), hanging from the header's lower edge onto
    the page. Decoration only: the flags carry no meaning and no text. */
 .bunting {
@@ -432,56 +438,111 @@ button:disabled {
 
 /*
  * A button that is busy rather than disabled (the form's "שולח..." while its request runs): it
- * keeps focus and its full contrast, so the new text stays readable; only the cursor changes.
+ * keeps focus and is announced as unavailable. A .button also looks greyed (the disabled look
+ * below), but its text keeps AA contrast, so the new words stay readable; the cursor says "wait".
  */
 button[aria-disabled='true'] {
   cursor: progress;
 }
 
 /*
- * A button that cannot be used yet (the booking form's "שליחת הזמנה" Below 20 is fine). Still
- * aria-disabled, not disabled, so a tap shows the form's messages; greyed, but --color-text on
- * --color-handled keeps AA contrast.
+ * A button that cannot be used yet (the booking form's "שליחת הזמנה" below the minimum of
+ * bottles). Still aria-disabled, not disabled, so a tap shows the form's messages; it gets the
+ * disabled look below, and the cursor says "not allowed" rather than "wait".
  */
-/* Two classes: .button-primary (below) has the same weight as one class and comes later. */
-.button-primary.button-not-ready {
-  background: var(--color-handled);
-  color: var(--color-text);
-}
-
 button.button-not-ready[aria-disabled='true'] {
   cursor: not-allowed;
 }
 
-/* The shared shape of buttons and of links that look like buttons (<a class="button">). */
+/*
+ * The shared shape of buttons and of links that look like buttons (<a class="button">), from the
+ * dawn mockup (ADR-0011): no outline, rounded, filled; the variants below set the fill. The gap
+ * leaves room for an <Icon> next to the text.
+ */
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   min-height: var(--tap-target);
   padding: 0.5rem 1.25rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
+  border: 0;
+  border-radius: var(--r-md);
   font-weight: 700;
   text-align: center;
   text-decoration: none;
+  transition:
+    transform 0.08s ease,
+    filter 0.15s;
 }
 
-/* A tap shows: the button darkens a little while it is pressed, so a finger knows it was felt. */
+/* A tap shows: the button shrinks a little and darkens while pressed, so a finger knows it was felt. */
 .button:active {
-  filter: brightness(0.9);
+  transform: scale(0.97);
+  filter: brightness(0.95);
 }
 
-/* The page's main action, such as "send": white on --color-text (10.4:1). */
+/* No movement for someone who asked for less of it; the darkening alone still answers the tap. */
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .button:active {
+    transform: none;
+  }
+}
+
+/* The page's main action, such as "send": --white on the --brand-2 → --brand gradient (AA on both
+   ends, styles.test.ts), lifted by a shadow. */
 .button-primary {
-  background: var(--color-text);
-  color: var(--color-white);
+  background: linear-gradient(160deg, var(--brand-2), var(--brand));
+  color: var(--white);
+  box-shadow: var(--shadow-btn);
 }
 
-/* A second action next to a primary one: --color-text on white, with the same outline. */
+/* A second action next to a primary one: tonal, --brand on --brand-soft. On a --brand-soft
+   background (the site header) it turns --card, or it would vanish; see .site-header. */
 .button-secondary {
-  background: var(--color-white);
-  color: var(--color-text);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* A destructive action ("כן, לבטל"): --white on --error. */
+.button-danger {
+  background: var(--error);
+  color: var(--white);
+}
+
+/* The screen's one big action (spec §3.3, "כפתור גדול"): at least 66px, growing with the font.
+   .button-large is the older name the customer's page (OrderPage.tsx) still uses. */
+.button-big,
+.button-large {
+  min-height: max(66px, 3.67rem);
+  font-size: 1.25rem;
+}
+
+.button-big svg,
+.button-large svg {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+/*
+ * The disabled look, for disabled and for aria-disabled (busy or not ready) buttons alike: flat
+ * --ink on --done (AA, styles.test.ts), no gradient, no shadow, and no shrink when tapped, since
+ * the tap does nothing. Two parts each, so it outweighs the one-class variants above.
+ */
+.button:disabled,
+.button[aria-disabled='true'] {
+  background: var(--done);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.button:disabled:active,
+.button[aria-disabled='true']:active {
+  transform: none;
 }
 
 /* Full width of the column: the main action on a phone form. */
@@ -864,7 +925,7 @@ html:has(.bottom-nav) {
 }
 
 /* The wide button that shows the round on screen: text on the start side, chevron at the end.
-   .button gives the 48px height and the outline; the text is left-aligned like a row, not centred. */
+   .button gives the 48px height and the fill; the text sits at the start like a row, not centred. */
 .round-picker-trigger {
   display: flex;
   width: 100%;
@@ -1078,11 +1139,12 @@ html:has(.bottom-nav) {
 
 /*
  * "החודש הבא" on the current month. Inactive controls are exempt from the contrast rule, but the
- * text keeps its full contrast anyway; the dashed edge and the missing white fill set it apart.
+ * text keeps AA anyway (the disabled look, --ink on --done); a dashed --muted edge sets it apart
+ * from "החודש הקודם" by shape too. min-height counts the border (border-box), so the two buttons
+ * stay the same height.
  */
 .month-picker .button:disabled {
-  border-style: dashed;
-  background: transparent;
+  border: 2px dashed var(--muted);
 }
 
 /*
@@ -1238,11 +1300,8 @@ html:has(.bottom-nav) {
   margin-block: 0 1.5rem;
 }
 
-/* The page's one big action (spec §3.3, "כפתור גדול"): taller and larger than any other. */
-.button-large {
-  min-height: max(64px, 4rem);
-  font-size: 1.3rem;
-}
+/* The page's one big action (spec §3.3, "כפתור גדול") is .button-large, styled with .button-big
+   in the Buttons section. */
 
 /*
  * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --color-text on
