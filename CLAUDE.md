@@ -150,7 +150,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 
 ## Rules
 
-- **Hebrew and RTL.** All UI text is Hebrew; `dir="rtl"` on the document. Phone numbers and digits render LTR inside the text (`<bdi>` / `dir="ltr"`). Dates `DD/MM`. Time zone `Asia/Jerusalem`, also for monthly statistics.
+- **Hebrew and RTL.** The collector app is Hebrew only, and so are the Open Graph tags. The booking form (`/` Hebrew, `/en` English) and the customer page `/o/<token>` follow the order's `lang` (`he`|`en`, ADR-0010): texts come from the `t()` dictionary in `packages/shared/src/i18n.ts`, no i18n library, and the document `lang`/`dir` switch with it (`rtl` for Hebrew). Hebrew pages use `dir="rtl"`. Phone numbers and digits render LTR inside the text (`<bdi>` / `dir="ltr"`). Dates `DD/MM`. Time zone `Asia/Jerusalem`, also for monthly statistics.
 - **Mobile first, built for elderly customers.** Single column, font ≥18px, tap targets ≥48px, WCAG AA contrast, numeric keyboard for phone and quantity, errors in plain words next to the field.
 - **No secrets in code.** Everything secret or private comes from env; `apps/api/.env.example` lists every variable with no real values; `.env` is git-ignored. Yoel's home address (`ROUTE_START`) counts as private.
 - **Every external call sits behind an interface with a fake for tests.** Today: WhatsApp → `MessageSender` (ADR-0003). Also MongoDB → repositories (`OrdersRepo`, `RoundsRepo`), rate-limit store → `AttemptStore` (ADR-0004), distances → `DistanceMatrix` (ADR-0005). Tests never touch the network or Atlas.
