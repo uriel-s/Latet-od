@@ -4,6 +4,8 @@
 // "הוספת הזמנה" and "עריכה" lead to /app/orders/new and /app/orders/<id>, the add and edit screens
 // built from the booking form's parts (OrderFields); "תכנון סבב" leads to /app/orders/plan
 // (PlanRoundScreen.tsx). The cards here only show.
+import { EmptyState } from '../components/EmptyState.tsx';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useState } from 'react';
 import {
   BOTTLES_SPOT_LABELS,
@@ -163,7 +165,7 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
         תכנון סבב
       </Link>
 
-      {state.kind === 'loading' && <p role="status">טוען...</p>}
+      {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
         <>
@@ -199,7 +201,11 @@ function OrderGroupSection({ group }: { group: OrderGroup }) {
   return (
     <section className="order-group" aria-labelledby={headingId}>
       <h2 id={headingId}>{ORDER_GROUP_LABELS[group.key]}</h2>
-      <p className="order-group-summary">{groupSummary(group)}</p>
+      {group.orders.length === 0 ? (
+        <EmptyState icon="list" text={groupSummary(group)} />
+      ) : (
+        <p className="order-group-summary">{groupSummary(group)}</p>
+      )}
       {group.orders.length > 0 && (
         <ul className="order-list">
           {group.orders.map((order) => (

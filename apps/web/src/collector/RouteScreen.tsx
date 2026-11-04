@@ -8,6 +8,7 @@
 // tab, not a page of its own: RoundsScreen owns the rounds, renders this under the round's <h2>
 // once its phase is `routed`, swaps in every view a saved action answers, and reloads when this
 // part says the screen is out of date.
+import { EmptyState } from '../components/EmptyState.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   COLLECT_STOP_ERRORS,
@@ -378,9 +379,13 @@ export function RouteScreen({
   return (
     <>
       {shownStops.length === 0 ? (
-        <p className="round-summary" aria-live="polite">
-          {routeSummary(screenStops)}
-        </p>
+        screenStops.length === 0 ? (
+          <EmptyState icon="route" text={NO_STOPS_TEXT} />
+        ) : (
+          <p className="round-summary" aria-live="polite">
+            {routeSummary(screenStops)}
+          </p>
+        )
       ) : (
         <div className="card route-progress" role="group" aria-label={ROUTE_PROGRESS_LABEL}>
           <p className="route-progress-title">
