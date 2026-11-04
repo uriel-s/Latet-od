@@ -1,7 +1,8 @@
 // Tests for the static <head> of apps/web/index.html: the Open Graph tags WhatsApp reads to build
 // a link preview (ADR-0002), and the image they point at in apps/web/public/. Link previews do not
 // run JavaScript, so these tags must be in the file itself; this reads the file, not the rendered app.
-// Also the viewport meta: full screen (viewport-fit=cover) and zoom left on.
+// Also the viewport meta: full screen (viewport-fit=cover) and zoom left on, and the self-hosted
+// Heebo font (ADR-0011): its preload, the file in public/fonts/, and the matching @font-face.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -126,5 +127,65 @@ describe('index.html viewport', () => {
     expect(settings).not.toHaveProperty('maximum-scale');
     expect(settings['user-scalable']).not.toBe('no');
     expect(settings['user-scalable']).not.toBe('0');
+  });
+});
+
+describe('index.html self-hosted font (Heebo, ADR-0011)', () => {
+  /** The woff2 must stay a small, Hebrew + basic Latin subset: it loads on every customer's phone. */
+  const FONT_MAX_BYTES = 90 * 1024;
+  /** Google's font hosts: ADR-0011 rules them out at runtime (external request, customer IP). */
+  const GOOGLE_FONT_HOSTS = /fonts\.(googleapis|gstatic)\.com/;
+
+  const stylesCss = fs.readFileSync(path.join(WEB_ROOT, 'src', 'styles.css'), 'utf8');
+
+  /** The font preload link; fails the test when there is none. */
+  function fontPreload(): Element {
+    const link = head.querySelector('link[rel="preload"][as="font"]');
+    if (!link) throw new Error('index.html has no <link rel="preload" as="font">');
+    return link;
+  }
+
+  it('loads nothing from Google Fonts, in index.html or in styles.css', () => {
+    expect(indexHtml).not.toMatch(GOOGLE_FONT_HOSTS);
+    expect(stylesCss).not.toMatch(GOOGLE_FONT_HOSTS);
+  });
+
+  it('preloads a woff2 font with crossorigin, or the browser would not reuse the preload', () => {
+    const link = fontPreload();
+    expect(link.getAttribute('type')).toBe('font/woff2');
+    expect(link.hasAttribute('crossorigin')).toBe(true);
+    expect(link.getAttribute('href')).toMatch(/^\/fonts\/[\w.-]+\.woff2$/);
+  });
+
+  it('preloads a real woff2 in apps/web/public no larger than 90 KB', () => {
+    const href = fontPreload().getAttribute('href') ?? '';
+    const file = publicFile(href);
+
+    expect(fs.existsSync(file), `apps/web/public${href} exists`).toBe(true);
+    expect(fs.statSync(file).size).toBeLessThanOrEqual(FONT_MAX_BYTES);
+    expect(fs.readFileSync(file).subarray(0, 4).toString('latin1')).toBe('wOF2'); // woff2 signature
+  });
+
+  it('keeps the OFL licence next to the font file', () => {
+    // The SIL Open Font License requires the licence to travel with the font (ADR-0011).
+    const href = fontPreload().getAttribute('href') ?? '';
+    const licence = path.join(path.dirname(publicFile(href)), 'OFL.txt');
+    expect(fs.readFileSync(licence, 'utf8')).toContain('SIL Open Font License');
+  });
+
+  it('preloads the same URL that the Heebo @font-face in styles.css loads', () => {
+    // A preload for a URL nothing uses is a wasted download, and the real font is fetched again.
+    const fontFace = /@font-face\s*\{([^}]*)\}/.exec(stylesCss)?.[1] ?? '';
+    expect(fontFace).toMatch(/font-family:\s*'Heebo'/);
+    const src = /src:\s*url\('([^']+)'\)\s*format\('woff2'\)/.exec(fontFace)?.[1];
+    expect(src).toBe(fontPreload().getAttribute('href'));
+  });
+
+  it('puts Heebo first in the body font stack, with system fonts after it', () => {
+    const bodyFont = /\nbody\s*\{[^}]*font-family:\s*([^;]+);/.exec(stylesCss)?.[1] ?? '';
+    const families = bodyFont.split(',').map((family) => family.trim());
+    expect(families[0]).toBe("'Heebo'");
+    expect(families).toContain('system-ui');
+    expect(families.at(-1)).toBe('sans-serif');
   });
 });
