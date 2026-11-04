@@ -1409,7 +1409,14 @@ html:has(.bottom-nav) {
 
 /* "מצב ההזמנה: ממתינה לאישור": a little larger than body text, the first thing to read. */
 .order-status {
+  /* Also a .card: the status badge sits at the top of the page. */
   font-size: 1.15rem;
+  margin-block: 0 1rem;
+}
+
+/* The thank-you screen's donation line (also a .card). */
+.thank-you-donation {
+  margin-block: 1rem;
 }
 
 /* "כן, אוציא את הבקבוקים" over "לא מתאים הפעם", with room between them against a wrong tap. */
@@ -1441,11 +1448,8 @@ html:has(.bottom-nav) {
 
 /* The order's details: a white card like .order-card (the gray edge is decoration only). */
 .order-details {
+  /* Also a .card (white, shadow); this only sets the room above. */
   margin-block: 1.5rem 0;
-  padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
 }
 
 .order-details h2 {

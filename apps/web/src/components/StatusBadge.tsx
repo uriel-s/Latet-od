@@ -3,12 +3,10 @@
 // words, so colour is never the only signal (WCAG 1.4.1): amber "waiting" and amber "pending" differ
 // by clock vs calendar and by text, green "confirmed" and green "collected" by check vs heart.
 //
-// Not used by any screen yet: later sections swap it in where a status is shown as plain text.
-// Hebrew only, for the collector app; the customer page follows the order's `lang` (ADR-0010), so
-// when it adopts this badge it needs the label from the i18n `t()` dictionary (`orderStatus.*`)
-// instead of ORDER_STATUS_LABELS.
+// The words come from the i18n `t()` dictionary (`orderStatus.*`): Hebrew by default (collector app),
+// the order's `lang` on the customer page (ADR-0010).
 
-import { ORDER_STATUS_LABELS, type OrderStatus } from '@bottlerun/shared';
+import { DEFAULT_LANG, t, type Lang, type OrderStatus } from '@bottlerun/shared';
 import { Icon, type IconName } from './Icon.tsx';
 
 /** A badge colour; each one is a `.badge-<tone>` class in styles.css. */
@@ -38,19 +36,21 @@ export interface StatusBadgeProps {
   status: OrderStatus;
   /** Extra class for the badge, e.g. for spacing in its row. */
   className?: string;
+  /** Language of the status words: the order's `lang` on the customer page. Defaults to Hebrew. */
+  lang?: Lang;
 }
 
 /**
  * An order's status as a coloured pill: icon, then the Hebrew status name. The visible text is the
  * accessible name and the icon is hidden from screen readers, so no role or aria-label is needed.
  */
-export function StatusBadge({ status, className }: StatusBadgeProps) {
+export function StatusBadge({ status, className, lang = DEFAULT_LANG }: StatusBadgeProps) {
   const { tone, icon } = STATUS_BADGE_STYLES[status];
   const classes = ['badge', `badge-${tone}`, className].filter(Boolean).join(' ');
   return (
     <span className={classes}>
       <Icon name={icon} />
-      {ORDER_STATUS_LABELS[status]}
+      {t(lang, `orderStatus.${status}`)}
     </span>
   );
 }

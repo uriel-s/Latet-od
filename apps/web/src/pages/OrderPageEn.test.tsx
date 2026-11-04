@@ -116,6 +116,7 @@ describe('OrderPage in English', () => {
     await renderEn(makeOrder());
 
     expect(statusLine()).toBe('Order status: Waiting for a round');
+    expect(screen.getByText('Waiting for a round').closest('.badge')).not.toBeNull();
     expect(screen.getByText(/We will send you a WhatsApp message/)).toBeDefined();
     expect(screen.getByRole('heading', { level: 2, name: 'Order details' })).toBeDefined();
     const street = streetDisplayName(findStreet(247)!, 'en');

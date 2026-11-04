@@ -172,6 +172,8 @@ const HE = {
   'thankYou.title': 'תודה!',
   'thankYou.body': 'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp לאישור.',
   'thankYou.viewOrder': 'לצפייה בהזמנה או לביטול',
+  // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
+  'thankYou.donation': 'כ־{bottles} בקבוקים = כ־{amount} לתפילין לבר מצווה ולחיילים',
 
   // The customer's own page (web: OrderPage). {date} is the round's day, {from}/{by} the times.
   // The Hebrew is what the page showed before English existed.
@@ -332,6 +334,8 @@ const EN = {
   'thankYou.body':
     'We received your order. Before the round in your area we will send you a WhatsApp message to confirm.',
   'thankYou.viewOrder': 'View or cancel the order',
+  'thankYou.donation':
+    'About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers',
 
   // The customer's own page.
   'orderPage.heading': 'Your order',
