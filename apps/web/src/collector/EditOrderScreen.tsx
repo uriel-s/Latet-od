@@ -306,6 +306,7 @@ function EditOrderForm({ order, updateOrder, cancelOrder, deleteOrder }: EditOrd
           browser's bubbles. */}
       <form
         ref={formRef}
+        className="card"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();

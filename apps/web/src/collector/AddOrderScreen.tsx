@@ -102,6 +102,7 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
           browser's bubbles. */}
       <form
         ref={formRef}
+        className="card"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
