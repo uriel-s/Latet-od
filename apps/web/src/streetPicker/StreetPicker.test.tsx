@@ -47,6 +47,7 @@ function manyStreets(count: number): Street[] {
   return Array.from({ length: count }, (_, index) => ({
     code: index + 1,
     name: `הדקל ${index + 1}`,
+    nameEn: `HaDekel ${index + 1}`,
   }));
 }
 

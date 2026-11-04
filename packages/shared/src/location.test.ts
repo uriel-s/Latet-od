@@ -3,12 +3,31 @@ import { pointForAddress, regionForAddress, type StreetLookup } from './location
 import { STREETS, type Street } from './streets.ts';
 
 // Fixed streets, so the tests do not change when the real list is geocoded again.
-const OLD_STREET: Street = { code: 1, name: 'הרצל', region: 'old', lat: 31.75, lng: 34.99 };
-const RAMAT_STREET: Street = { code: 2, name: 'נחל דולב', region: 'ramat', lat: 31.71, lng: 34.98 };
+const OLD_STREET: Street = {
+  code: 1,
+  name: 'הרצל',
+  nameEn: 'Herzl',
+  region: 'old',
+  lat: 31.75,
+  lng: 34.99,
+};
+const RAMAT_STREET: Street = {
+  code: 2,
+  name: 'נחל דולב',
+  nameEn: 'Nahal Dolev',
+  region: 'ramat',
+  lat: 31.71,
+  lng: 34.98,
+};
 /** Not found by Nominatim: no point, no region. */
-const BARE_STREET: Street = { code: 3, name: 'רחוב חדש' };
+const BARE_STREET: Street = { code: 3, name: 'רחוב חדש', nameEn: 'New Street' };
 /** Region fixed by hand in the file, point still missing. */
-const REGION_ONLY_STREET: Street = { code: 4, name: 'נחל שורק', region: 'ramat' };
+const REGION_ONLY_STREET: Street = {
+  code: 4,
+  name: 'נחל שורק',
+  nameEn: 'Nahal Sorek',
+  region: 'ramat',
+};
 const UNKNOWN_CODE = 999;
 
 const FAKE_STREETS = new Map(
