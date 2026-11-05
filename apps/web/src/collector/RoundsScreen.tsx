@@ -11,6 +11,8 @@
 // and routed (the shared buildRoundView), so this screen only shows them, and after each action it
 // swaps in the round as the api answers it. The question components own only their open state and
 // focus; this screen sends every request and keeps its double-tap guards.
+import { EmptyState } from '../components/EmptyState.tsx';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   REGION_LABELS,
@@ -489,7 +491,7 @@ export function RoundsScreen({
         </p>
       )}
 
-      {state.kind === 'loading' && <p role="status">טוען...</p>}
+      {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
         <>
@@ -503,12 +505,15 @@ export function RoundsScreen({
       )}
 
       {state.kind === 'loaded' && state.rounds.length === 0 && (
-        <>
-          <p>{NO_OPEN_ROUND_TEXT}</p>
-          <Link to={PLAN_ROUND_PATH} className="button button-primary button-block">
-            תכנון סבב
-          </Link>
-        </>
+        <EmptyState
+          icon="calendar"
+          text={NO_OPEN_ROUND_TEXT}
+          action={
+            <Link to={PLAN_ROUND_PATH} className="button button-primary button-block">
+              תכנון סבב
+            </Link>
+          }
+        />
       )}
 
       {state.kind === 'loaded' && selected !== undefined && (
@@ -784,7 +789,7 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
   const tags = orderTags(order);
 
   return (
-    <li className="order-card">
+    <li className="card round-order-card">
       <h4 className="order-card-name">{contact.name}</h4>
       <p>
         <a className="order-card-phone" href={`tel:${contact.phone}`}>
@@ -799,7 +804,7 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
       {tags.length > 0 && (
         <p className="tag-list">
           {tags.map((tag) => (
-            <span key={tag} className="tag">
+            <span key={tag} className="badge">
               {tag}
             </span>
           ))}

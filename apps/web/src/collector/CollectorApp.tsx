@@ -3,6 +3,7 @@
 // `fetchSession`): logged in shows the app (CollectorShell), logged out goes to /login, and no
 // answer offers a retry. The api guards every /api/collector/* route itself; this guard only
 // decides what to show, so Yoel never sees an app whose every request would answer 401.
+import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
 import { fetchSession, logout, type SessionOutcome } from '../api.ts';
 import { navigate } from '../router.tsx';
@@ -93,7 +94,7 @@ export function CollectorApp({
     <>
       <h1>{APP_TITLE}</h1>
       {guard === 'checking' ? (
-        <p role="status">טוען...</p>
+        <Skeleton />
       ) : (
         <>
           <p className="form-alert" role="alert">

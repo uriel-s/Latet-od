@@ -146,6 +146,33 @@ describe('OrderFields', () => {
     expect(input('כמות בקבוקים').getAttribute('aria-invalid')).toBeNull();
   });
 
+  it('groups the fields in three titled cards', () => {
+    renderFields();
+    for (const name of ['פרטים', 'כתובת', 'בקבוקים']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeDefined();
+    }
+  });
+
+  it('has no details card without the contact fields', () => {
+    render(
+      <OrderFields
+        values={makeValues()}
+        errors={{}}
+        onFieldChange={() => {}}
+        showContact={false}
+      />,
+    );
+    expect(screen.queryByRole('heading', { name: 'פרטים' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'כתובת' })).toBeDefined();
+  });
+
+  it('offers where the bottles are as three radios, one chosen at a time', () => {
+    const { changes } = renderFields();
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('radio', { name: 'למטה בכניסה לבניין' }));
+    expect(changes).toEqual([['bottlesSpot', 'buildingEntrance']]);
+  });
+
   it('shows the hints of the phone and the number of bottles', () => {
     renderFields();
 

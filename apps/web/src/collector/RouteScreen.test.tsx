@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   COLLECT_STOP_ERRORS,
   ROUND_MESSAGES,
@@ -11,6 +11,10 @@ import {
 } from '@bottlerun/shared';
 import type { MarkMessageOpenedOutcome, StopActionOutcome } from '../api.ts';
 import {
+  ALL_STOPS_HANDLED_TEXT,
+  HANDLED_TITLE,
+  UPCOMING_TITLE,
+  donationLine,
   GOOGLE_MAPS_ROUTE_TEXT,
   NAVIGATE_TO_DROP_OFF_TEXT,
   NO_STOPS_TEXT,
@@ -20,8 +24,8 @@ import {
   routeSummary,
   type RouteScreenProps,
 } from './RouteScreen.tsx';
-import { dropOffWazeUrl, wazeUrl } from './routeStops.ts';
-import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
+import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
+import { BOTTLES_COLLECTED_LABEL, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
 
 /** A confirmed order in round r1, in רמת בית שמש; overrides change it. */
 function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
@@ -266,9 +270,41 @@ function button(name: string | RegExp): HTMLElement {
   return screen.getByRole('button', { name });
 }
 
+/** The big "העצירה הבאה" card: the first stop still to collect. */
+function currentCard(): HTMLElement {
+  const card = screen.getByText(NEXT_STOP_EYEBROW).closest('li');
+  if (card === null) throw new Error('no current card');
+  return card;
+}
+
+/** Opens the card's "⋯" sheet for `name`. */
+function openMore(name: string): void {
+  fireEvent.click(button(`עוד פעולות, ${name}`));
+}
+
+/** Opens a card's "⋯" sheet and taps a button inside it ("לא נמצא" or an arrow). */
+function sheetAction(name: string, label: string | RegExp): void {
+  openMore(name);
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
+}
+
+/**
+ * Taps "אספתי" of `name`'s stop: on the big card itself, or, for an upcoming stop, in its "⋯"
+ * sheet (collecting out of order).
+ */
+function startCollect(name: string): void {
+  const direct = screen.queryByRole('button', { name: `אספתי, ${name}` });
+  if (direct !== null) {
+    fireEvent.click(direct);
+    return;
+  }
+  fireEvent.click(button(`עוד פעולות, ${name}`));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
+}
+
 /** Taps "אספתי" on `name`'s card, types `text` (the estimate when undefined), and saves. */
 function collect(name: string, text?: string): void {
-  fireEvent.click(button(`אספתי, ${name}`));
+  startCollect(name);
   if (text !== undefined) {
     fireEvent.change(screen.getByLabelText(BOTTLES_COLLECTED_LABEL), { target: { value: text } });
   }
@@ -307,9 +343,11 @@ describe('RouteScreen order', () => {
     renderRoute();
 
     expect(shownNames()).toEqual(['דנה כהן', 'משה לוי', 'יוסי מזרחי']);
-    const list = screen.getByRole('list', { name: 'עצירות המסלול' });
-    expect(list.tagName).toBe('OL');
-    expect(within(cardOf('משה לוי')).getByText('עצירה 2')).toBeTruthy();
+    const timeline = screen.getByRole('list', { name: UPCOMING_TITLE });
+    expect(timeline.tagName).toBe('OL');
+    // The dots count the cards on screen: the current stop is 1, the timeline starts at 2.
+    expect(within(cardOf('משה לוי')).getByText('2')).toBeTruthy();
+    expect(within(cardOf('יוסי מזרחי')).getByText('3')).toBeTruthy();
     expect(screen.getByText('נאספו 0 מתוך 3 · נשארו 3').getAttribute('aria-live')).toBe('polite');
   });
 
@@ -317,7 +355,7 @@ describe('RouteScreen order', () => {
     renderRoute(makeView([stopOf(DANA), stopOf(MOSHE, { state }), stopOf(YOSSI)]));
     expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']);
     // The numbers count the cards on screen.
-    expect(within(cardOf('יוסי מזרחי')).getByText('עצירה 2')).toBeTruthy();
+    expect(within(cardOf('יוסי מזרחי')).getByText('2')).toBeTruthy();
   });
 
   it('says so, with no list, when the route has no stop', () => {
@@ -326,16 +364,135 @@ describe('RouteScreen order', () => {
     expect(screen.queryByRole('list')).toBeNull();
   });
 
-  it('links each stop to Waze and to its phone', () => {
+  it('links the current stop to Waze and to its phone', () => {
     renderRoute();
 
-    const card = cardOf('משה לוי');
-    expect(within(card).getByRole('link', { name: 'נווט, משה לוי' }).getAttribute('href')).toBe(
-      `https://waze.com/ul?q=${encodeURIComponent("בית ג'מאל 5, בית שמש")}&navigate=yes`,
+    const card = cardOf('דנה כהן');
+    expect(within(card).getByRole('link', { name: 'נווט, דנה כהן' }).getAttribute('href')).toBe(
+      wazeUrl(DANA.address),
     );
     expect(within(card).getByRole('link', { name: /^חייג/ }).getAttribute('href')).toBe(
+      'tel:+972501234567',
+    );
+  });
+
+  it('keeps Waze and the phone of an upcoming stop in its "⋯" sheet', () => {
+    renderRoute();
+
+    fireEvent.click(button('עוד פעולות, משה לוי'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('link', { name: 'נווט' }).getAttribute('href')).toBe(
+      `https://waze.com/ul?q=${encodeURIComponent("בית ג'מאל 5, בית שמש")}&navigate=yes`,
+    );
+    expect(within(dialog).getByRole('link', { name: 'חייג' }).getAttribute('href')).toBe(
       'tel:+972527654321',
     );
+  });
+
+  it('shows the screen order of screenOrderOfStops across the three groups', () => {
+    const stops = [
+      stopOf(DANA, { state: 'notFound' }),
+      stopOf(MOSHE),
+      stopOf(YOSSI),
+      stopOf(makeOrder({ id: 'o4', contact: { name: 'רות בר', phone: '+972521111111' } }), {
+        state: 'collected',
+      }),
+    ];
+    renderRoute(makeView(stops));
+
+    expect(shownNames()).toEqual(screenOrderOfStops(stops).map((stop) => stop.order.contact.name));
+    expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן', 'רות בר']);
+    expect(screen.getByText(UPCOMING_TITLE)).toBeTruthy();
+    expect(screen.getByText(HANDLED_TITLE)).toBeTruthy();
+    // The handled group lists the two handled stops, with their state in words.
+    const handled = screen.getByRole('list', { name: HANDLED_TITLE });
+    expect(within(handled).getByText('לא נמצא')).toBeTruthy();
+    expect(within(handled).getByText('נאסף')).toBeTruthy();
+  });
+
+  it('collects an upcoming stop out of order from its sheet', async () => {
+    const { api } = renderRoute();
+    collect('יוסי מזרחי', '12');
+    await waitFor(() =>
+      expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o3', arg: 12 }]),
+    );
+  });
+
+  it('marks an upcoming stop not found from its sheet', () => {
+    renderRoute();
+    fireEvent.click(button('עוד פעולות, משה לוי'));
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'לא נמצא' }),
+    ).toBeTruthy();
+  });
+});
+
+describe('RouteScreen progress and current stop', () => {
+  it('shows "עצירה N מתוך M" and keeps the summary as text', () => {
+    renderRoute(makeView([collected(stopOf(DANA)), stopOf(MOSHE), stopOf(YOSSI)]));
+
+    const progress = screen.getByRole('group', { name: 'התקדמות המסלול' });
+    expect(within(progress).getByText('עצירה 2 מתוך 3')).toBeTruthy();
+    expect(within(progress).getByText('נאספו 1 מתוך 3 · נשארו 2')).toBeTruthy();
+    // One decorative segment per stop: done, current, ahead.
+    const segments = progress.querySelectorAll('.route-progress-bar i');
+    expect([...segments].map((segment) => segment.className)).toEqual([
+      'route-progress-done',
+      'route-progress-current',
+      '',
+    ]);
+  });
+
+  it('makes the first stop to collect the current card, with its tags', () => {
+    renderRoute(
+      makeView([collected(stopOf(DANA)), stopOf(YOSSI, { hasLocation: false }), stopOf(MOSHE)]),
+    );
+
+    const card = currentCard();
+    expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe('יוסי מזרחי');
+    expect(within(card).getByText('הרצל 3')).toBeTruthy();
+    expect(within(card).getByText('בלי מיקום')).toBeTruthy();
+    expect(within(card).getByText('אושרה')).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'אספתי, יוסי מזרחי' })).toBeTruthy();
+    expect(within(card).getByRole('link', { name: /^חייג/ })).toBeTruthy();
+    // Only one card is the current one.
+    expect(screen.getAllByText(NEXT_STOP_EYEBROW)).toHaveLength(1);
+  });
+
+  it('moves the current card to the next stop after "אספתי"', async () => {
+    renderRoute();
+    expect(within(currentCard()).getByRole('heading', { level: 3 }).textContent).toBe('דנה כהן');
+
+    collect('דנה כהן');
+
+    await waitFor(() =>
+      expect(within(currentCard()).getByRole('heading', { level: 3 }).textContent).toBe('משה לוי'),
+    );
+    expect(screen.getByText('עצירה 2 מתוך 3')).toBeTruthy();
+  });
+
+  it('shows the drop-off card and no current card when no stop is left', () => {
+    renderRoute(makeView([collected(stopOf(DANA)), stopOf(MOSHE, { state: 'notFound' })]));
+
+    expect(screen.queryByText(NEXT_STOP_EYEBROW)).toBeNull();
+    expect(screen.getByText(ALL_STOPS_HANDLED_TEXT)).toBeTruthy();
+    expect(screen.getByRole('link', { name: NAVIGATE_TO_DROP_OFF_TEXT }).getAttribute('href')).toBe(
+      dropOffWazeUrl(),
+    );
+  });
+
+  it('keeps "לא נמצא" and the arrows behind "⋯" until it is tapped', () => {
+    renderRoute();
+
+    const more = button('עוד פעולות, דנה כהן');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.click(more);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    const sheet = within(screen.getByRole('dialog'));
+    expect(sheet.getByRole('button', { name: 'לא נמצא' })).toBeTruthy();
+    expect(sheet.getByRole('button', { name: /^הזז למטה/ })).toBeTruthy();
   });
 });
 
@@ -343,7 +500,7 @@ describe('RouteScreen navigation links', () => {
   it('opens Waze at the first stop to collect, in stored order', () => {
     renderRoute(makeView([collected(stopOf(DANA)), stopOf(YOSSI), stopOf(MOSHE)]));
 
-    const link = screen.getByRole('link', { name: 'נווט לעצירה הבאה: הרצל 3' });
+    const link = within(currentCard()).getByRole('link', { name: 'נווט, יוסי מזרחי' });
     expect(link.getAttribute('href')).toBe(wazeUrl(YOSSI.address));
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
@@ -351,11 +508,14 @@ describe('RouteScreen navigation links', () => {
 
   it('moves on to the next stop after "אספתי"', async () => {
     renderRoute();
-    expect(screen.getByRole('link', { name: 'נווט לעצירה הבאה: שד נהר הדן 12' })).toBeTruthy();
+    expect(within(currentCard()).getByRole('link', { name: 'נווט, דנה כהן' })).toBeTruthy();
 
     collect('דנה כהן');
 
-    const next = await screen.findByRole('link', { name: "נווט לעצירה הבאה: בית ג'מאל 5" });
+    await waitFor(() =>
+      expect(within(currentCard()).getByRole('heading', { level: 3 }).textContent).toBe('משה לוי'),
+    );
+    const next = within(currentCard()).getByRole('link', { name: 'נווט, משה לוי' });
     expect(next.getAttribute('href')).toBe(wazeUrl(MOSHE.address));
   });
 
@@ -390,6 +550,10 @@ describe('RouteScreen navigation links', () => {
 });
 
 describe('RouteScreen "אספתי"', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('sends the estimate, then moves the card to the end with its "שלח תודה" row', async () => {
     const { api, parent } = renderRoute();
 
@@ -405,6 +569,35 @@ describe('RouteScreen "אספתי"', () => {
       thankYouUrl(DANA),
     );
     expect(screen.getByText('נאספו 1 מתוך 3 · נשארו 2')).toBeTruthy();
+  });
+
+  // The saved card leaves the current list for the handled one, where React mounts a new card:
+  // the buzz and the focus must still come (the screen tells the new card, justSaved).
+  it("buzzes once and moves the focus to 'שלח תודה' after Yoel's own 'אספתי'", async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    renderRoute();
+
+    collect('דנה כהן');
+
+    const title = await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(vibrate).toHaveBeenCalledWith(30);
+  });
+
+  it('neither buzzes nor moves the focus when the save fails', async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    const { api } = renderRoute();
+    api.next.push({ kind: 'failed' });
+
+    collect('דנה כהן');
+
+    await waitFor(() =>
+      expect(within(currentCard()).getByRole('alert').textContent).toBe(STOP_ACTION_FAILED_MESSAGE),
+    );
+    expect(vibrate).not.toHaveBeenCalled();
   });
 
   it('sends the corrected quantity', async () => {
@@ -425,7 +618,9 @@ describe('RouteScreen "אספתי"', () => {
       kind: 'saved',
       view: makeView([collected(stopOf(DANA), { thankYou: false }), stopOf(YOSSI), stopOf(MOSHE)]),
     });
-    fireEvent.click(button('הזז למטה, משה לוי'));
+    // Moshe is the current card now, so his arrows sit behind "⋯".
+    openMore('משה לוי');
+    sheetAction('משה לוי', /^הזז למטה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['יוסי מזרחי', 'משה לוי', 'דנה כהן']));
     expect(screen.getByRole('link', { name: 'שלח לדנה כהן' }).getAttribute('href')).toBe(
@@ -438,7 +633,8 @@ describe('RouteScreen "לא נמצא"', () => {
   it('asks first, then marks the stop and moves it to the end with its badge', async () => {
     const { api } = renderRoute();
 
-    fireEvent.click(button('לא נמצא, דנה כהן'));
+    openMore('דנה כהן');
+    sheetAction('דנה כהן', 'לא נמצא');
     expect(api.calls).toEqual([]);
     fireEvent.click(button('כן, לא נמצא'));
 
@@ -452,19 +648,29 @@ describe('RouteScreen moves', () => {
   it('shows no "up" on the first card and no "down" on the last one to collect', () => {
     renderRoute(makeView([stopOf(DANA), stopOf(MOSHE), stopOf(YOSSI, { state: 'collected' })]));
 
-    expect(within(cardOf('דנה כהן')).queryByRole('button', { name: /^הזז למעלה/ })).toBeNull();
-    expect(within(cardOf('דנה כהן')).getByRole('button', { name: /^הזז למטה/ })).toBeTruthy();
-    expect(within(cardOf('משה לוי')).getByRole('button', { name: /^הזז למעלה/ })).toBeTruthy();
-    expect(within(cardOf('משה לוי')).queryByRole('button', { name: /^הזז למטה/ })).toBeNull();
+    /** The arrows in the sheet of one card; the sheet is closed again after. */
+    const arrowsOf = (name: string): string[] => {
+      openMore(name);
+      const labels = within(screen.getByRole('dialog'))
+        .getAllByRole('button')
+        .map((arrow) => arrow.textContent ?? '')
+        .filter((text) => text.includes('הזז'));
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      return labels;
+    };
+    expect(arrowsOf('דנה כהן')).toEqual(['▼ הזז למטה']);
+    expect(arrowsOf('משה לוי')).toEqual(['▲ הזז למעלה']);
+    // A handled stop has no "⋯" at all.
     expect(within(cardOf('יוסי מזרחי')).queryByRole('button')).toBeNull();
   });
 
   it('moves a stop down and up, one stored place each', async () => {
     const { api, parent } = renderRoute();
 
-    fireEvent.click(button('הזז למטה, דנה כהן'));
+    openMore('דנה כהן');
+    sheetAction('דנה כהן', /^הזז למטה/);
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'דנה כהן', 'יוסי מזרחי']));
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן']));
 
     expect(api.calls).toEqual([
@@ -474,13 +680,22 @@ describe('RouteScreen moves', () => {
     expect(parent.views).toHaveLength(2);
   });
 
+  it("keeps the focus on the moved stop's '⋯' when it leaves the current card", async () => {
+    renderRoute();
+
+    sheetAction('דנה כהן', /^הזז למטה/);
+
+    await waitFor(() => expect(within(currentCard()).getByText('משה לוי')).toBeTruthy());
+    await waitFor(() => expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן')));
+  });
+
   it('passes a handled stop in between with two stored moves for one tap', async () => {
     const { api, parent } = renderRoute(
       makeView([stopOf(DANA), stopOf(MOSHE, { state: 'notFound' }), stopOf(YOSSI)]),
     );
     expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']);
 
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['יוסי מזרחי', 'דנה כהן', 'משה לוי']));
     expect(api.calls).toEqual([
@@ -503,7 +718,7 @@ describe('RouteScreen moves', () => {
       { kind: 'failed' },
     );
 
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() =>
       expect(within(cardOf('יוסי מזרחי')).getByRole('alert').textContent).toBe(
@@ -533,7 +748,7 @@ describe('RouteScreen errors', () => {
     const { api, parent } = renderRoute();
     api.next.push({ kind: 'notFound' });
 
-    fireEvent.click(button('לא נמצא, משה לוי'));
+    sheetAction('משה לוי', 'לא נמצא');
     fireEvent.click(button('כן, לא נמצא'));
 
     await waitFor(() => expect(parent.stale).toEqual([STOP_LEFT_ROUTE_MESSAGE]));
@@ -543,7 +758,7 @@ describe('RouteScreen errors', () => {
     const { api } = renderRoute();
     api.next.push({ kind: 'atEdge', message: ROUND_MESSAGES.stopAtEdge });
 
-    fireEvent.click(button('הזז למעלה, משה לוי'));
+    sheetAction('משה לוי', /^הזז למעלה/);
 
     await waitFor(() =>
       expect(within(cardOf('משה לוי')).getByRole('alert').textContent).toBe(
@@ -553,15 +768,16 @@ describe('RouteScreen errors', () => {
   });
 
   it.each([{ kind: 'failed' } as const, 'rejects' as const])(
-    'shows a failed save in the card, and the next tap clears it (%s)',
+    'shows a failed "לא נמצא" in the open sheet, and the next tap clears it (%s)',
     async (failure) => {
       const { api } = renderRoute();
       api.next.push(failure);
 
-      fireEvent.click(button('לא נמצא, משה לוי'));
+      sheetAction('משה לוי', 'לא נמצא');
       fireEvent.click(button('כן, לא נמצא'));
+      // In the still-open sheet, where Yoel looks, not in the card behind its dark background.
       await waitFor(() =>
-        expect(within(cardOf('משה לוי')).getByRole('alert').textContent).toBe(
+        expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toBe(
           STOP_ACTION_FAILED_MESSAGE,
         ),
       );
@@ -633,7 +849,7 @@ describe('RouteScreen busy', () => {
     collect('דנה כהן');
     fireEvent.click(button('שומר...'));
     expect(button('שומר...').getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(button('הזז למעלה, יוסי מזרחי'));
+    sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']));
     expect(api.calls.map((call) => call.action)).toEqual(['collect', 'move']);
@@ -651,8 +867,10 @@ describe('RouteScreen busy', () => {
     const { api } = renderRoute();
     api.next.push(answer.promise);
 
-    fireEvent.click(button('הזז למטה, דנה כהן'));
-    fireEvent.click(button('הזז למטה, דנה כהן'));
+    sheetAction('דנה כהן', /^הזז למטה/);
+    // The second tap finds "⋯" busy: no sheet opens, so no second request can be made.
+    fireEvent.click(button('עוד פעולות, דנה כהן'));
+    expect(screen.queryByRole('dialog')).toBeNull();
 
     expect(api.calls).toHaveLength(1);
     answer.resolve({ kind: 'saved', view: makeView([stopOf(MOSHE), stopOf(DANA), stopOf(YOSSI)]) });
@@ -665,9 +883,9 @@ describe('RouteScreen typing', () => {
   it('tells the parent once while any quantity field is open', () => {
     const { parent } = renderRoute(VIEW, { strict: true });
 
-    fireEvent.click(button('אספתי, דנה כהן'));
+    startCollect('דנה כהן');
     expect(parent.typing).toEqual([true]);
-    fireEvent.click(button('אספתי, משה לוי'));
+    startCollect('משה לוי');
     fireEvent.click(within(cardOf('דנה כהן')).getByRole('button', { name: 'ביטול' }));
     expect(parent.typing).toEqual([true]);
     fireEvent.click(within(cardOf('משה לוי')).getByRole('button', { name: 'ביטול' }));
@@ -685,5 +903,31 @@ describe('RouteScreen typing', () => {
     fireEvent.click(button('אספתי, דנה כהן'));
     unmount();
     expect(parent.typing).toEqual([true, false]);
+  });
+});
+
+describe('donationLine and the donation row', () => {
+  const collectedWith = (order: CollectorOrder, bottlesCollected: number) =>
+    collected(stopOf({ ...order, bottlesCollected }));
+
+  it('is hidden while nothing was collected', () => {
+    expect(donationLine([stopOf(DANA), stopOf(MOSHE)])).toBeUndefined();
+    renderRoute();
+    expect(screen.queryByText(/לתפילין/)).toBeNull();
+  });
+
+  it('sums the real counts of the collected stops, in shekels', () => {
+    const stops = [collectedWith(DANA, 40), collectedWith(MOSHE, 85), stopOf(YOSSI)];
+    expect(donationLine(stops)).toBe('בסבב הזה נאספו 125 בקבוקים, כ־25 ₪ לתפילין');
+    renderRoute(makeView(stops));
+    expect(screen.getByText('בסבב הזה נאספו 125 בקבוקים, כ־25 ₪ לתפילין')).toBeTruthy();
+  });
+
+  it('reads right for one bottle and counts only collected stops', () => {
+    const stops = [
+      collectedWith(DANA, 1),
+      stopOf({ ...MOSHE, bottlesCollected: 50 }, { state: 'notFound' }),
+    ];
+    expect(donationLine(stops)).toBe('בסבב הזה נאסף בקבוק אחד, כ־0.20 ₪ לתפילין');
   });
 });

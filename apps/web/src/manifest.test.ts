@@ -10,8 +10,23 @@ import { describe, expect, it } from 'vitest';
 /** apps/web/public, served at the root of the site. */
 const PUBLIC_DIR = path.resolve(import.meta.dirname, '..', 'public');
 
-/** The brand's light blue: the icon background, and index.html's theme-color. */
-const BRAND_BACKGROUND = '#DCEBF8';
+/**
+ * The page background, --bg of the "dawn" palette (ADR-0011): the manifest's background and theme
+ * colour, and the theme-color of index.html and guide.html. Read from styles.css, so changing --bg
+ * there without these files fails a test.
+ */
+const PAGE_BACKGROUND = (() => {
+  const stylesCss = fs.readFileSync(path.join(import.meta.dirname, 'styles.css'), 'utf8');
+  const match = /^\s*--bg:\s*(#[0-9a-f]{6})\s*;/im.exec(stylesCss);
+  if (!match?.[1]) throw new Error('styles.css defines no --bg: #rrggbb');
+  return match[1].toLowerCase();
+})();
+
+/** The `content` of the `<meta name="theme-color">` tag of an HTML file, lower-cased. */
+function themeColorOf(htmlPath: string): string | undefined {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  return /<meta name="theme-color" content="([^"]*)"/.exec(html)?.[1]?.toLowerCase();
+}
 
 /** One entry of the manifest's `icons` array. */
 interface ManifestIcon {
@@ -70,9 +85,14 @@ describe('manifest.webmanifest', () => {
     });
   });
 
-  it('uses the brand light blue for the background and the theme colour', () => {
-    expect(manifest.background_color).toBe(BRAND_BACKGROUND);
-    expect(manifest.theme_color).toBe(BRAND_BACKGROUND);
+  it('uses the page background (--bg) for the background and the theme colour', () => {
+    expect(manifest.background_color).toBe(PAGE_BACKGROUND);
+    expect(manifest.theme_color).toBe(PAGE_BACKGROUND);
+  });
+
+  it('matches the theme-color of index.html and guide.html', () => {
+    expect(themeColorOf(path.resolve(PUBLIC_DIR, '..', 'index.html'))).toBe(PAGE_BACKGROUND);
+    expect(themeColorOf(publicFile('/guide.html'))).toBe(PAGE_BACKGROUND);
   });
 
   it('declares the 192 and 512 PNG icons that Android and Chrome require', () => {

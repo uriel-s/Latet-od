@@ -140,6 +140,9 @@ const HE = {
   'form.phoneExample': 'למשל',
   // Copy of phone.ts PHONE_ERROR (kept out of ORDER_FORM_ERRORS, so formErrorText leaves it alone).
   'form.phoneInvalid': 'מספר נייד לא תקין. למשל: 050-1234567',
+  'form.sectionDetails': 'פרטים',
+  'form.sectionAddress': 'כתובת',
+  'form.sectionBottles': 'בקבוקים',
   'form.street': 'רחוב',
   'form.houseNumber': 'מספר בית',
   'form.bottlesSpot': 'איפה הבקבוקים',
@@ -169,6 +172,8 @@ const HE = {
   'thankYou.title': 'תודה!',
   'thankYou.body': 'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp לאישור.',
   'thankYou.viewOrder': 'לצפייה בהזמנה או לביטול',
+  // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
+  'thankYou.donation': 'כ־{bottles} בקבוקים = כ־{amount} לתפילין לבר מצווה ולחיילים',
 
   // The customer's own page (web: OrderPage). {date} is the round's day, {from}/{by} the times.
   // The Hebrew is what the page showed before English existed.
@@ -295,6 +300,9 @@ const EN = {
   'form.phone': 'Mobile phone',
   'form.phoneExample': 'For example',
   'form.phoneInvalid': 'Invalid mobile number. For example: 050-1234567',
+  'form.sectionDetails': 'Details',
+  'form.sectionAddress': 'Address',
+  'form.sectionBottles': 'Bottles',
   'form.street': 'Street',
   'form.houseNumber': 'House number',
   'form.bottlesSpot': 'Where are the bottles',
@@ -326,6 +334,8 @@ const EN = {
   'thankYou.body':
     'We received your order. Before the round in your area we will send you a WhatsApp message to confirm.',
   'thankYou.viewOrder': 'View or cancel the order',
+  'thankYou.donation':
+    'About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers',
 
   // The customer's own page.
   'orderPage.heading': 'Your order',

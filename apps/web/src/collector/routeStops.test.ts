@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Address, MessageLink, RoundStopState, RouteStopView } from '@bottlerun/shared';
-import { DROP_OFF_ADDRESS } from '@bottlerun/shared';
+import { BOTTLE_VALUE_AGOROT, DROP_OFF_ADDRESS } from '@bottlerun/shared';
 import {
   MAX_MAPS_WAYPOINTS,
   ROUTE_CITY,
@@ -10,6 +10,7 @@ import {
   isStopHandled,
   keepThankYouRows,
   nextStopToCollect,
+  roundDonation,
   screenOrderOfStops,
   stopAddressLines,
   storedMovesFor,
@@ -376,5 +377,44 @@ describe('dropOffWazeUrl', () => {
     const url = dropOffWazeUrl();
     expect(url).toBe(`https://waze.com/ul?q=${encodeURIComponent(DROP_OFF_ADDRESS)}&navigate=yes`);
     expect(new URL(url).searchParams.get('q')).toBe('נחל נחשון 7, בית שמש');
+  });
+});
+
+describe('roundDonation', () => {
+  /** A stop in `state` whose order recorded `bottlesCollected` (none when undefined). */
+  function stopWith(state: RoundStopState, bottlesCollected?: number): RouteStopView {
+    const stop = makeStop({ state });
+    return bottlesCollected === undefined
+      ? stop
+      : { ...stop, order: { ...stop.order, bottlesCollected } };
+  }
+
+  it('is zero for a route with nothing collected', () => {
+    expect(roundDonation([])).toEqual({ bottles: 0, valueAgorot: 0 });
+    expect(roundDonation([stopWith('toCollect'), stopWith('toCollect')])).toEqual({
+      bottles: 0,
+      valueAgorot: 0,
+    });
+  });
+
+  it('sums the real counts of several collected stops, times the bottle value', () => {
+    expect(
+      roundDonation([stopWith('collected', 40), stopWith('collected', 35), stopWith('toCollect')]),
+    ).toEqual({ bottles: 75, valueAgorot: 75 * BOTTLE_VALUE_AGOROT });
+  });
+
+  it('does not count a stop not found, cancelled or left, whatever its order says', () => {
+    expect(
+      roundDonation([
+        stopWith('collected', 30),
+        stopWith('notFound', 50),
+        stopWith('cancelled', 50),
+        stopWith('left', 50),
+      ]),
+    ).toEqual({ bottles: 30, valueAgorot: 30 * BOTTLE_VALUE_AGOROT });
+  });
+
+  it('counts a collected stop without a recorded count as 0', () => {
+    expect(roundDonation([stopWith('collected')]).bottles).toBe(0);
   });
 });

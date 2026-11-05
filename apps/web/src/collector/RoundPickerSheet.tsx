@@ -206,7 +206,7 @@ export function RoundPicker({ rounds, selectedId, onSelect }: RoundPickerProps) 
                         )}
                         <RoundText view={view} />
                       </span>
-                      <span className="tag">{roundPhaseLabel(view)}</span>
+                      <span className="badge">{roundPhaseLabel(view)}</span>
                     </button>
                   </li>
                 );

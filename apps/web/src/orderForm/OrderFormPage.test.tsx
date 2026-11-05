@@ -120,6 +120,21 @@ function descriptionOf(element: HTMLElement): string {
 }
 
 describe('OrderFormPage', () => {
+  it('groups the fields in three titled cards and offers the spot as radios', () => {
+    renderForm();
+    for (const name of ['פרטים', 'כתובת', 'בקבוקים']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeDefined();
+    }
+    expect(screen.getByRole('radio', { name: 'בבניין - ליד דלת הדירה' })).toBeDefined();
+  });
+
+  it('shows the missing-spot error next to the group', () => {
+    renderForm();
+    submit();
+    const group = screen.getByRole('group', { name: 'איפה הבקבוקים' });
+    expect(descriptionOf(group)).toBe('נא לבחור איפה הבקבוקים');
+  });
+
   it('sends a valid order and shows the thank-you screen with a link to the order page', async () => {
     const { requests } = renderForm();
 

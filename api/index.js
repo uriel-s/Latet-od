@@ -19949,6 +19949,9 @@ var HE = {
   "form.phoneExample": "\u05DC\u05DE\u05E9\u05DC",
   // Copy of phone.ts PHONE_ERROR (kept out of ORDER_FORM_ERRORS, so formErrorText leaves it alone).
   "form.phoneInvalid": "\u05DE\u05E1\u05E4\u05E8 \u05E0\u05D9\u05D9\u05D3 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05DC\u05DE\u05E9\u05DC: 050-1234567",
+  "form.sectionDetails": "\u05E4\u05E8\u05D8\u05D9\u05DD",
+  "form.sectionAddress": "\u05DB\u05EA\u05D5\u05D1\u05EA",
+  "form.sectionBottles": "\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
   "form.street": "\u05E8\u05D7\u05D5\u05D1",
   "form.houseNumber": "\u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA",
   "form.bottlesSpot": "\u05D0\u05D9\u05E4\u05D4 \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
@@ -19975,6 +19978,8 @@ var HE = {
   "thankYou.title": "\u05EA\u05D5\u05D3\u05D4!",
   "thankYou.body": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.",
   "thankYou.viewOrder": "\u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D0\u05D5 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC",
+  // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
+  "thankYou.donation": "\u05DB\u05BE{bottles} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD = \u05DB\u05BE{amount} \u05DC\u05EA\u05E4\u05D9\u05DC\u05D9\u05DF \u05DC\u05D1\u05E8 \u05DE\u05E6\u05D5\u05D5\u05D4 \u05D5\u05DC\u05D7\u05D9\u05D9\u05DC\u05D9\u05DD",
   // The customer's own page (web: OrderPage). {date} is the round's day, {from}/{by} the times.
   // The Hebrew is what the page showed before English existed.
   "orderPage.heading": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05E9\u05DC\u05DA",
@@ -20083,6 +20088,9 @@ var EN = {
   "form.phone": "Mobile phone",
   "form.phoneExample": "For example",
   "form.phoneInvalid": "Invalid mobile number. For example: 050-1234567",
+  "form.sectionDetails": "Details",
+  "form.sectionAddress": "Address",
+  "form.sectionBottles": "Bottles",
   "form.street": "Street",
   "form.houseNumber": "House number",
   "form.bottlesSpot": "Where are the bottles",
@@ -20109,6 +20117,7 @@ var EN = {
   "thankYou.title": "Thank you!",
   "thankYou.body": "We received your order. Before the round in your area we will send you a WhatsApp message to confirm.",
   "thankYou.viewOrder": "View or cancel the order",
+  "thankYou.donation": "About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers",
   // The customer's own page.
   "orderPage.heading": "Your order",
   "orderPage.loading": "Loading...",
@@ -21278,6 +21287,11 @@ var collectorOrderSchema = external_exports.object({
   lastMiss: orderSchema.shape.lastMiss,
   source: orderSchema.shape.source,
   createdAt: orderSchema.shape.createdAt,
+  /**
+   * The real count Yoel recorded at "אספתי"; set only once the order is collected. The route
+   * screen's donation line sums it (roundDonation, in the web app).
+   */
+  bottlesCollected: orderSchema.shape.bottlesCollected,
   /** Whether the address has a map point; false shows the "בלי מיקום" tag (ADR-0005). */
   hasLocation: external_exports.boolean(),
   /**

@@ -311,6 +311,8 @@ describe('OrderPage', () => {
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
       expect(screen.getByText(WAITING_TEXT)).toBeDefined();
       expect(WAITING_TEXT).toBe('נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.');
+      // The status is a badge with the status in words (not colour alone), inside a card.
+      expect(screen.getByText('ממתינה לסבב').closest('.badge')).not.toBeNull();
     });
 
     it("shows the order's details: name, phone, address, spot, note and bottles", async () => {

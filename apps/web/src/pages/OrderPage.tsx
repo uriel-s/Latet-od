@@ -42,6 +42,7 @@ import {
   type CustomerOrderOutcome,
   type CustomerOrderWriteOutcome,
 } from '../api.ts';
+import { StatusBadge } from '../components/StatusBadge.tsx';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import {
   NO_ERRORS,
@@ -720,8 +721,8 @@ function ConfirmLabel({ round, lang }: { round: CustomerOrder['round']; lang: La
 function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   return (
     <>
-      <p className="order-status">
-        {t(lang, 'orderPage.status')} <strong>{t(lang, `orderStatus.${order.status}`)}</strong>
+      <p className="order-status card">
+        {t(lang, 'orderPage.status')} <StatusBadge status={order.status} lang={lang} />
       </p>
       <StatusText order={order} lang={lang} />
     </>
@@ -802,7 +803,7 @@ function OrderDetails({ order, lang }: { order: CustomerOrder; lang: Lang }) {
     listedStreet === undefined ? address.streetName : streetDisplayName(listedStreet, lang);
 
   return (
-    <section className="order-details" aria-labelledby={headingId}>
+    <section className="order-details card" aria-labelledby={headingId}>
       <h2 id={headingId}>{t(lang, 'orderPage.details')}</h2>
       <dl>
         <dt>{t(lang, 'orderPage.detailName')}</dt>

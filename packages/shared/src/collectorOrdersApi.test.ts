@@ -149,11 +149,16 @@ describe('toCollectorOrder', () => {
     const collectorOrder = toCollectorOrder(
       makeOrder({ roundId: 'round-1', bottlesCollected: 50, collectedAt: CREATED_AT }),
     );
-    for (const key of ['token', 'messages', 'roundId', 'bottlesCollected', 'updatedAt']) {
+    for (const key of ['token', 'messages', 'roundId', 'updatedAt']) {
       expect(collectorOrder, key).not.toHaveProperty(key);
     }
     expect(collectorOrder.contact).not.toHaveProperty('method');
     expect(JSON.stringify(collectorOrder)).not.toContain(TOKEN);
+  });
+
+  it('keeps the recorded count of a collected order, for the donation line', () => {
+    expect(toCollectorOrder(makeOrder({ bottlesCollected: 50 })).bottlesCollected).toBe(50);
+    expect(toCollectorOrder(makeOrder())).not.toHaveProperty('bottlesCollected');
   });
 
   it('keeps the near street, which Yoel sees and changes', () => {

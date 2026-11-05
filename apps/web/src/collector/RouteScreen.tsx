@@ -1,31 +1,41 @@
 // The route of one routed round (spec §3.6 step 2, "מסלול"): its stops as StopCards, still to
 // collect in driving order and handled ones at the end, and every request a card asks for: the
-// arrows (moveStop), "אספתי" (collectStop) and "לא נמצא" (markStopNotFound). At the top, two plain
-// links built in the browser (ADR-0007): a big Waze button to the next stop still to collect (the
-// drop-off once none is left) and "כל המסלול ב-Google Maps". Part of the "סבבים"
+// arrows (moveStop), "אספתי" (collectStop) and "לא נמצא" (markStopNotFound). At the top, a progress
+// card ("עצירה N מתוך M" and one segment per stop); the first stop to collect is the big "העצירה
+// הבאה" card whose "נווט" is the ADR-0007 Waze link (the drop-off card once none is left); after
+// it come the upcoming stops as a timeline ("הבאות") and the handled ones ("טופלו"); a donation line
+// ("בסבב הזה נאספו N בקבוקים, כ־X לתפילין") once something was collected; then the secondary link "כל המסלול ב-Google Maps". Part of the "סבבים"
 // tab, not a page of its own: RoundsScreen owns the rounds, renders this under the round's <h2>
 // once its phase is `routed`, swaps in every view a saved action answers, and reloads when this
 // part says the screen is out of date.
-import { useEffect, useRef, useState } from 'react';
-import { COLLECT_STOP_ERRORS, type RoundView, type RouteStopView } from '@bottlerun/shared';
+import { EmptyState } from '../components/EmptyState.tsx';
+import { useEffect, useId, useRef, useState } from 'react';
+import {
+  COLLECT_STOP_ERRORS,
+  formatShekels,
+  type RoundView,
+  type RouteStopView,
+} from '@bottlerun/shared';
 import {
   collectStop as apiCollectStop,
   markStopNotFound as apiMarkStopNotFound,
   moveStop as apiMoveStop,
   type StopActionOutcome,
 } from '../api.ts';
+import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 import {
   dropOffWazeUrl,
   googleMapsRouteUrl,
+  isStopHandled,
   keepThankYouRows,
   nextStopToCollect,
+  roundDonation,
   screenOrderOfStops,
   storedMovesFor,
-  wazeUrl,
 } from './routeStops.ts';
 import type { SendListProps } from './SendList.tsx';
-import { StopCard } from './StopCard.tsx';
+import { StopCard, type JustSaved } from './StopCard.tsx';
 
 /** In place of the list when the route has no stop at all. */
 export const NO_STOPS_TEXT = 'אין עצירות במסלול.';
@@ -39,8 +49,14 @@ export const STOP_ACTION_FAILED_MESSAGE = 'לא הצלחנו לשמור. נא ל
 /** A stop action answered 404: the round is gone, or the order is no longer a stop of its route. */
 export const STOP_LEFT_ROUTE_MESSAGE = 'העצירה כבר לא במסלול. נא לרענן את המסך.';
 
-/** The big button's text once no stop is left to collect (ADR-0007). */
+/** The drop-off card's button text once no stop is left to collect (ADR-0007). */
 export const NAVIGATE_TO_DROP_OFF_TEXT = 'נווט לנקודת הפריקה';
+
+/** The accessible name of the progress card at the top of the route. */
+const ROUTE_PROGRESS_LABEL = 'התקדמות המסלול';
+
+/** The progress card's title once no stop is left to collect. */
+export const ALL_STOPS_HANDLED_TEXT = 'כל העצירות טופלו';
 
 /** The secondary link to the whole route in Google Maps (ADR-0007). */
 export const GOOGLE_MAPS_ROUTE_TEXT = 'כל המסלול ב-Google Maps';
@@ -48,8 +64,26 @@ export const GOOGLE_MAPS_ROUTE_TEXT = 'כל המסלול ב-Google Maps';
 /** Under that link: Google Maps cannot know a stop was handled, so it shows only what is left. */
 export const GOOGLE_MAPS_ROUTE_HINT = 'מציג רק עצירות שעוד לא נאספו.';
 
-/** The accessible name of the list of stops. */
-const ROUTE_LIST_LABEL = 'עצירות המסלול';
+/** The title of the timeline of the stops still to collect after the current one. */
+export const UPCOMING_TITLE = 'הבאות';
+
+/** The title of the list of handled stops. */
+export const HANDLED_TITLE = 'טופלו';
+
+/** The accessible name of the current stop's list, which holds the one big card. */
+const CURRENT_LIST_LABEL = 'העצירה הנוכחית';
+
+/**
+ * The donation line at the bottom (spec §1: the money funds tefillin): what the collected stops
+ * brought so far, e.g. "בסבב הזה נאספו 120 בקבוקים, כ־24 ₪ לתפילין". `undefined` while nothing was
+ * collected, so the line never says "0".
+ */
+export function donationLine(stops: readonly RouteStopView[]): string | undefined {
+  const { bottles, valueAgorot } = roundDonation(stops);
+  if (bottles === 0) return undefined;
+  const count = bottles === 1 ? 'בקבוק אחד' : `${bottles} בקבוקים`;
+  return `בסבב הזה ${bottles === 1 ? 'נאסף' : 'נאספו'} ${count}, כ־${formatShekels(valueAgorot)} לתפילין`;
+}
 
 /**
  * The route at a glance, in words: how many stops were collected out of all of them, and how many
@@ -73,11 +107,11 @@ function withId(ids: ReadonlySet<string>, id: string, present: boolean): Readonl
 }
 
 /** `messages` with `message` for `id`, or without `id` when undefined; the same map if unchanged. */
-function withMessage(
-  messages: ReadonlyMap<string, string>,
+function withMessage<Value>(
+  messages: ReadonlyMap<string, Value>,
   id: string,
-  message: string | undefined,
-): ReadonlyMap<string, string> {
+  message: Value | undefined,
+): ReadonlyMap<string, Value> {
   if (messages.get(id) === message) return messages;
   const next = new Map(messages);
   if (message === undefined) next.delete(id);
@@ -157,6 +191,10 @@ export function RouteScreen({
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [bottlesErrors, setBottlesErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
+  // What was just saved for a card (Yoel's own "אספתי", or an arrow), until the card acted on it.
+  // Kept here, not in the card: the save moves the card into another list, where React mounts a
+  // new one, and that new card is the one that buzzes and takes the focus (StopCard justSaved).
+  const [justSaved, setJustSaved] = useState<ReadonlyMap<string, JustSaved>>(() => new Map());
   // The state above reaches a handler only after a re-render; this ref stops a second tap on the
   // same card that comes before it, so one tap sends one request.
   const busyIdsRef = useRef(new Set<string>());
@@ -268,15 +306,24 @@ export function RouteScreen({
     }
   }
 
-  /** One action of card `orderId`: a single request, its answer shown. */
+  /** Card `orderId` should react to `what` once it is drawn from the saved view. */
+  function markJustSaved(orderId: string, what: JustSaved): void {
+    setJustSaved((previous) => withMessage(previous, orderId, what));
+  }
+
+  /**
+   * One action of card `orderId`: a single request, its answer shown; `onSaved` runs only when
+   * the answer was saved (not for a stale, failed or refused one).
+   */
   async function runOnce(
     orderId: string,
     request: () => Promise<StopActionOutcome>,
+    onSaved?: () => void,
   ): Promise<void> {
     if (!begin(orderId)) return;
     const outcome = await send(request);
     end(orderId);
-    if (mountedRef.current) settle(orderId, outcome);
+    if (mountedRef.current && settle(orderId, outcome)) onSaved?.();
   }
 
   /**
@@ -289,12 +336,15 @@ export function RouteScreen({
     // Counted on the view of the tap: the one whose arrows Yoel saw.
     const moves = storedMovesFor(view.stops, orderId, direction);
     if (moves === 0 || !begin(orderId)) return;
+    let movedAtAll = false;
     for (let done = 0; done < moves; done += 1) {
       const outcome = await send(() => moveStop(roundId, orderId, direction));
       if (!mountedRef.current) break;
       if (!settle(orderId, outcome)) break;
+      movedAtAll = true;
     }
     end(orderId);
+    if (movedAtAll && mountedRef.current) markJustSaved(orderId, 'moved');
   }
 
   // Both links read the STORED order (shownStops), not the screen order, so "next" is the next one
@@ -302,69 +352,157 @@ export function RouteScreen({
   const nextStop = nextStopToCollect(shownStops);
   const mapsUrl = googleMapsRouteUrl(shownStops);
 
+  // "עצירה N מתוך M": N counts the stops already handled (collected or not) plus the current one.
+  const handledCount = shownStops.filter((stop) => isStopHandled(stop.state)).length;
+  const currentOrderId = nextStop?.order.id;
+
+  // The screen order cut in three: the first stop to collect (big card), the other stops to collect
+  // (timeline), the handled ones. Concatenated they are screenStops again.
+  const toCollectStops = screenStops.filter((stop) => !isStopHandled(stop.state));
+  const currentStops = toCollectStops.slice(0, 1);
+  const upcomingStops = toCollectStops.slice(1);
+  const handledStops = screenStops.slice(toCollectStops.length);
+  const upcomingTitleId = useId();
+  const handledTitleId = useId();
+  const donation = donationLine(shownStops);
+
+  /** One card of the list, numbered by its place in the whole screen order. */
+  function renderCard(stop: RouteStopView) {
+    const orderId = stop.order.id;
+    return (
+      // Keyed by the order: a card keeps its open field and focus when it moves inside its list.
+      // A move into another list (current, upcoming, handled) mounts a new card; justSaved tells
+      // that new card what Yoel just did there.
+      <StopCard
+        key={orderId}
+        stop={stop}
+        position={screenStops.indexOf(stop) + 1}
+        current={orderId === currentOrderId}
+        canMoveUp={storedMovesFor(view.stops, orderId, 'up') > 0}
+        canMoveDown={storedMovesFor(view.stops, orderId, 'down') > 0}
+        busy={busyIds.has(orderId)}
+        error={errors.get(orderId)}
+        bottlesError={bottlesErrors.get(orderId)}
+        onMove={(direction) => void move(orderId, direction)}
+        onCollect={(bottlesCollected) =>
+          void runOnce(
+            orderId,
+            () => collectStop(roundId, orderId, bottlesCollected),
+            () => markJustSaved(orderId, 'collected'),
+          )
+        }
+        onNotFound={() => void runOnce(orderId, () => markStopNotFound(roundId, orderId))}
+        onTypingChange={(typing) => typingChanged(orderId, typing)}
+        markOpened={markOpened}
+        justSaved={justSaved.get(orderId)}
+        onJustSavedSeen={() =>
+          setJustSaved((previous) => withMessage(previous, orderId, undefined))
+        }
+      />
+    );
+  }
+
   return (
     <>
-      {shownStops.length > 0 && (
-        <div className="route-navigation">
-          {/* Plain anchors, like the per-stop "נווט": Waze opens in its app or a new tab, and the
-              route stays here. noopener/noreferrer: the opened page gets no handle on this one. */}
+      {shownStops.length === 0 ? (
+        screenStops.length === 0 ? (
+          <EmptyState icon="route" text={NO_STOPS_TEXT} />
+        ) : (
+          <p className="round-summary" aria-live="polite">
+            {routeSummary(screenStops)}
+          </p>
+        )
+      ) : (
+        <div className="card route-progress" role="group" aria-label={ROUTE_PROGRESS_LABEL}>
+          <p className="route-progress-title">
+            {nextStop === undefined
+              ? ALL_STOPS_HANDLED_TEXT
+              : `עצירה ${handledCount + 1} מתוך ${shownStops.length}`}
+          </p>
+          {/* One segment per stop: done, then the current one, then those still ahead. Decoration;
+              the words above and the summary below carry the meaning. */}
+          <div className="route-progress-bar" aria-hidden="true">
+            {shownStops.map((stop, index) => (
+              <i
+                key={stop.order.id}
+                className={
+                  index < handledCount
+                    ? 'route-progress-done'
+                    : index === handledCount && nextStop !== undefined
+                      ? 'route-progress-current'
+                      : undefined
+                }
+              />
+            ))}
+          </div>
+          {/* The accessible text of the same progress; a polite live region, so a screen reader
+              hears the new counts after each "אספתי". */}
+          <p className="round-summary" aria-live="polite">
+            {routeSummary(screenStops)}
+          </p>
+        </div>
+      )}
+      {nextStop === undefined && shownStops.length > 0 && (
+        // No stop left: the card Yoel taps to drive to the drop-off (ADR-0007). Plain anchor, like
+        // the per-stop "נווט": the app opens Waze in its app or a new tab, and the route stays here.
+        <div className="card route-drop-off">
           <a
-            className="button button-primary button-block"
-            href={nextStop === undefined ? dropOffWazeUrl() : wazeUrl(nextStop.order.address)}
+            className="button button-primary button-big button-block"
+            href={dropOffWazeUrl()}
             target="_blank"
             rel="noopener noreferrer"
           >
-            {nextStop === undefined
-              ? NAVIGATE_TO_DROP_OFF_TEXT
-              : `נווט לעצירה הבאה: ${nextStop.order.address.streetName} ${nextStop.order.address.houseNumber}`}
+            <Icon name="navigate" />
+            {NAVIGATE_TO_DROP_OFF_TEXT}
           </a>
-          {mapsUrl !== undefined && (
-            <>
-              <a
-                className="button button-secondary button-block"
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {GOOGLE_MAPS_ROUTE_TEXT}
-              </a>
-              <p className="round-hint">{GOOGLE_MAPS_ROUTE_HINT}</p>
-            </>
-          )}
         </div>
       )}
-      <p className="round-summary" aria-live="polite">
-        {routeSummary(screenStops)}
-      </p>
       {screenStops.length > 0 && (
         <>
           <p className="round-hint">{ROUTE_HINT}</p>
-          <ol className="order-list" aria-label={ROUTE_LIST_LABEL}>
-            {screenStops.map((stop, index) => {
-              const orderId = stop.order.id;
-              return (
-                // Keyed by the order, so a card keeps its open field and focus when it moves.
-                <StopCard
-                  key={orderId}
-                  stop={stop}
-                  position={index + 1}
-                  canMoveUp={storedMovesFor(view.stops, orderId, 'up') > 0}
-                  canMoveDown={storedMovesFor(view.stops, orderId, 'down') > 0}
-                  busy={busyIds.has(orderId)}
-                  error={errors.get(orderId)}
-                  bottlesError={bottlesErrors.get(orderId)}
-                  onMove={(direction) => void move(orderId, direction)}
-                  onCollect={(bottlesCollected) =>
-                    void runOnce(orderId, () => collectStop(roundId, orderId, bottlesCollected))
-                  }
-                  onNotFound={() => void runOnce(orderId, () => markStopNotFound(roundId, orderId))}
-                  onTypingChange={(typing) => typingChanged(orderId, typing)}
-                  markOpened={markOpened}
-                />
-              );
-            })}
-          </ol>
+          {/* One flow in screenOrderOfStops order, in three lists: the current stop, the upcoming
+              timeline, the handled ones. Splitting changes only the markup, never the order. */}
+          {currentStops.length > 0 && (
+            <ol className="order-list" aria-label={CURRENT_LIST_LABEL}>
+              {currentStops.map(renderCard)}
+            </ol>
+          )}
+          {upcomingStops.length > 0 && (
+            <>
+              <p className="route-section-title" id={upcomingTitleId}>
+                {UPCOMING_TITLE}
+              </p>
+              <ol className="timeline" aria-labelledby={upcomingTitleId}>
+                {upcomingStops.map(renderCard)}
+              </ol>
+            </>
+          )}
+          {handledStops.length > 0 && (
+            <>
+              <p className="route-section-title" id={handledTitleId}>
+                {HANDLED_TITLE}
+              </p>
+              <ol className="order-list" aria-labelledby={handledTitleId}>
+                {handledStops.map(renderCard)}
+              </ol>
+            </>
+          )}
         </>
+      )}
+      {donation !== undefined && <p className="card route-donation">{donation}</p>}
+      {/* Last: a secondary link, so the current stop stays near the top of the phone screen. */}
+      {mapsUrl !== undefined && (
+        <div className="route-navigation">
+          <a
+            className="button button-secondary button-block"
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {GOOGLE_MAPS_ROUTE_TEXT}
+          </a>
+          <p className="round-hint">{GOOGLE_MAPS_ROUTE_HINT}</p>
+        </div>
       )}
     </>
   );

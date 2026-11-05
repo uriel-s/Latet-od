@@ -4,6 +4,8 @@
 // orders closed in that month, collected and cancelled, newest first. GET /api/collector/history
 // sends it all already counted (the shared buildHistory), so this screen only shows it. Read-only:
 // nothing here changes an order.
+import { EmptyState } from '../components/EmptyState.tsx';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
 import {
   ORDER_STATUS_LABELS,
@@ -161,7 +163,7 @@ export function HistoryScreen({ loadHistory = fetchHistory, now = systemNow }: H
         </button>
       </div>
 
-      {state.kind === 'loading' && <p role="status">טוען...</p>}
+      {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
         <>
@@ -192,7 +194,7 @@ function MonthHistory({ history }: { history: HistoryResponse }) {
       </dl>
 
       {orders.length === 0 ? (
-        <p>{EMPTY_MONTH_TEXT}</p>
+        <EmptyState icon="heart" text={EMPTY_MONTH_TEXT} />
       ) : (
         <ul className="order-list" aria-label="ההזמנות שנסגרו בחודש">
           {orders.map((order) => (
@@ -207,7 +209,7 @@ function MonthHistory({ history }: { history: HistoryResponse }) {
 /** One total: its name, and under it the number, large. */
 function HistoryTotal({ label, value }: { label: string; value: string }) {
   return (
-    <div className="history-total">
+    <div className="card history-total">
       <dt>{label}</dt>
       {/* Digits (and "9.60 ₪") read left to right inside the right-to-left page (CLAUDE.md). */}
       <dd>
@@ -234,7 +236,7 @@ function outcomeText(order: HistoryOrder): string {
  */
 function HistoryOrderCard({ order }: { order: HistoryOrder }) {
   return (
-    <li className="order-card">
+    <li className="card round-order-card">
       <h3 className="order-card-name">{order.contact.name}</h3>
       <p>
         <bdi dir="ltr">{formatDayMonth(order.closedAt)}</bdi>

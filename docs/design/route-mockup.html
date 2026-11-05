@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מוקאפ מסך מסלול v2</title>
+<!--
+  Approved design reference for ADR-0011 (docs/decisions/0011-design-system.md).
+  Palette: "שחר" (dawn) — the only one. Makes no network requests; Heebo is used
+  only if installed locally (system font otherwise). The real app self-hosts Heebo.
+-->
+<style>
+  /* פלטת "שחר" — הפלטה היחידה */
+  :root {
+    --bg:#edf3f9; --card:#fdfdfe; --brand:#1f5c9e; --brand-2:#3479b8; --brand-soft:#d8e8f6;
+    --ink:#172536; --muted:#566475; --line:#d3dfeb; --done:#e0e9f2;
+    --hdr:linear-gradient(165deg,#1f5c9e 0%,#4a95d0 62%,#f0c79f 135%); --green:#1f6b44; --green-soft:#d3ecdc; --amber:#8a4b0c; --amber-soft:#fbecc8;
+  }
+  /* מצב כהה אוטומטי (ADR-0011): אותם טוקנים בלבד, כמו ב-apps/web/src/styles.css */
+  :root { color-scheme: light dark; --on-brand:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1a28; --card:#182638; --brand:#7db4ea; --brand-2:#5a9ad8; --brand-soft:#1f3a58;
+      --ink:#e8eff7; --muted:#a3b2c3; --line:#2b3d52; --done:#213246;
+      --hdr:linear-gradient(165deg,#173a63 0%,#2a6199 62%,#8f6d58 135%); --green:#7fd1a0; --green-soft:#17382a; --amber:#f0b86e; --amber-soft:#3d2e12; --on-brand:#0b1522;
+    }
+  }
+  :root {
+    --r-lg: 22px; --r-md: 16px; --r-sm: 12px;
+    --shadow-1: 0 1px 2px rgba(20,30,25,.05), 0 6px 18px rgba(20,30,25,.07);
+    --shadow-btn: 0 6px 16px rgba(20,40,32,.28);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { font-size: 112.5%; }
+  body {
+    margin: 0; background: #c9d0cc; color: var(--ink);
+    font-family: 'Heebo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; line-height: 1.45;
+  }
+  svg { width: 1.25em; height: 1.25em; flex: none; }
+
+  .phone { max-width: 26rem; margin: 0 auto; min-height: 100vh; background: var(--bg); position: relative; padding-bottom: 6.5rem; overflow: hidden; }
+
+  /* כותרת: ברכה על רקע צבעוני רך עם פינות תחתונות מעוגלות */
+  header {
+    background: var(--hdr);
+    color: #fff; padding: 1.1rem 1.25rem 4.2rem; border-radius: 0 0 28px 28px;
+  }
+  .hello { font-size: .95rem; opacity: .85; margin: 0; }
+  .title { font-size: 1.6rem; font-weight: 800; margin: .1rem 0 .6rem; line-height: 1.2; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.16); padding: .2rem .7rem; border-radius: 99px; font-size: .9rem; font-weight: 500; }
+
+  main { padding: 0 1rem; display: grid; gap: 14px; margin-top: -3rem; position: relative; }
+
+  /* התקדמות: נקודות לכל עצירה */
+  .progress { background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: .9rem 1.1rem 1rem; }
+  .progress-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .6rem; }
+  .progress-top b { font-size: 1.1rem; }
+  .progress-top span { color: var(--muted); font-size: .95rem; }
+  .dots { display: flex; gap: 5px; }
+  .dots i { flex: 1; height: 8px; border-radius: 99px; background: var(--brand-soft); }
+  .dots i.d { background: var(--brand); }
+  .dots i.c { background: var(--brand-2); box-shadow: 0 0 0 3px var(--brand-soft); }
+
+  /* העצירה הנוכחית */
+  .current { background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow-1); overflow: hidden; }
+  .current-top { display: flex; gap: 14px; padding: 1.1rem 1.1rem .4rem; }
+  .avatar { width: 52px; height: 52px; border-radius: 16px; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; flex: none; }
+  .avatar svg { width: 1.7em; height: 1.7em; }
+  .eyebrow { color: var(--brand-2); font-weight: 700; font-size: .85rem; letter-spacing: .02em; margin: 0; }
+  .name { font-size: 1.45rem; font-weight: 800; margin: 0; line-height: 1.2; }
+  .facts { padding: .4rem 1.1rem 0; display: grid; gap: 8px; }
+  .fact { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); }
+  .fact svg { color: var(--brand-2); margin-top: 3px; }
+  .fact small { display: block; color: var(--muted); font-size: .9rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: .8rem 1.1rem 0; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: .2rem .75rem; border-radius: 99px; font-weight: 700; font-size: .9rem; background: var(--brand-soft); color: var(--brand); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+
+  .actions { padding: 1rem 1.1rem 1.1rem; display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr 56px; gap: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 56px; padding: 0 1rem;
+    border-radius: var(--r-md); border: 0; font: inherit; font-weight: 700; cursor: pointer; text-decoration: none;
+    background: var(--brand-soft); color: var(--brand); transition: transform .08s ease, filter .15s;
+  }
+  .btn:active { transform: scale(.97); filter: brightness(.95); }
+  .btn.primary { background: linear-gradient(160deg, var(--brand-2), var(--brand)); color: var(--on-brand); box-shadow: var(--shadow-btn); }
+  .btn.big { width: 100%; min-height: 66px; font-size: 1.25rem; border-radius: 18px; }
+  .btn.big svg { width: 1.5em; height: 1.5em; }
+  .btn.ghost { background: transparent; border: 2px solid var(--line); color: var(--ink); }
+
+  .qty { display: none; padding: 1rem 1.1rem 1.2rem; border-top: 1px dashed var(--line); background: color-mix(in srgb, var(--brand-soft) 35%, var(--card)); }
+  .qty.open { display: block; }
+  .qty p { margin: 0 0 .6rem; font-weight: 700; text-align: center; }
+  .stepper { display: grid; grid-template-columns: 68px 1fr 68px; gap: 10px; align-items: center; margin-bottom: .8rem; }
+  .stepper .num { text-align: center; font-size: 2.6rem; font-weight: 800; color: var(--brand); line-height: 1; }
+  .stepper .num small { display: block; font-size: .85rem; font-weight: 500; color: var(--muted); margin-top: 2px; }
+  .stepper .btn { min-height: 68px; font-size: 2rem; padding: 0; background: var(--card); box-shadow: var(--shadow-1); }
+
+  /* כותרות אזורים */
+  h2 { font-size: .95rem; margin: .6rem .25rem -4px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ציר זמן להבאות */
+  .timeline { display: grid; gap: 10px; position: relative; }
+  .timeline::before { content: ""; position: absolute; inset-block: 22px; inset-inline-start: 21px; width: 2px; background: var(--line); }
+  .next { display: flex; align-items: center; gap: 12px; position: relative; }
+  .dot { width: 44px; height: 44px; border-radius: 50%; background: var(--card); border: 2px solid var(--line); color: var(--brand); display: grid; place-items: center; font-weight: 800; flex: none; z-index: 1; }
+  .next .card { flex: 1; min-width: 0; background: var(--card); border-radius: var(--r-md); box-shadow: var(--shadow-1); padding: .65rem .95rem; display: flex; align-items: center; gap: 10px; }
+  .info { flex: 1; min-width: 0; }
+  .info b { display: block; }
+  .info span { color: var(--muted); font-size: .92rem; }
+  .qtyb { font-weight: 800; color: var(--brand); white-space: nowrap; text-align: center; line-height: 1.1; }
+  .qtyb small { display: block; font-weight: 500; color: var(--muted); font-size: .72rem; }
+  .done .dot { background: var(--green-soft); border-color: var(--green-soft); color: var(--green); }
+  .done .card { background: var(--done); box-shadow: none; }
+
+  /* הערה על התרומה */
+  .impact { display: flex; gap: 12px; align-items: center; background: var(--brand-soft); color: var(--brand); border-radius: var(--r-md); padding: .8rem 1rem; font-weight: 500; }
+  .impact svg { width: 1.8em; height: 1.8em; }
+
+  /* חלון תחתון */
+  .sheet-bg { display: none; position: fixed; inset: 0; background: rgba(20,30,25,.45); z-index: 20; }
+  .sheet-bg.open { display: block; }
+  .sheet { position: fixed; inset-inline: 0; bottom: 0; max-width: 26rem; margin: 0 auto; background: var(--card); border-radius: 26px 26px 0 0; padding: .6rem 1rem 1.2rem; display: grid; gap: 8px; }
+  .sheet::before { content: ""; width: 44px; height: 5px; border-radius: 9px; background: var(--line); margin: 0 auto .5rem; }
+  .sheet .btn { justify-content: flex-start; background: var(--bg); color: var(--ink); }
+  .sheet .warn { color: #a32020; }
+
+  /* סרגל תחתון צף */
+  nav { position: fixed; bottom: 12px; inset-inline: 0; max-width: 26rem; margin: 0 auto; padding: 0 1rem; z-index: 10; }
+  .nav-in { background: var(--card); border-radius: 24px; box-shadow: 0 8px 28px rgba(20,30,25,.2); display: grid; grid-template-columns: repeat(3, 1fr); padding: .35rem; gap: 4px; }
+  nav a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: .45rem; border-radius: 18px; text-decoration: none; color: var(--muted); font-size: .8rem; font-weight: 600; }
+  nav a[aria-current] { color: var(--brand); background: var(--brand-soft); }
+  nav svg { width: 1.5em; height: 1.5em; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header>
+    <p class="hello">שלום יואל</p>
+    <h1 class="title">המסלול של היום</h1>
+    <div class="meta">
+      <span class="pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+        יום ג׳ · 04/11
+      </span>
+      <span class="pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        רמת בית שמש
+      </span>
+    </div>
+  </header>
+
+  <main>
+    <section class="progress" aria-label="התקדמות">
+      <div class="progress-top"><b>עצירה 3 מתוך 12</b><span>נשארו כ־45 דקות</span></div>
+      <div class="dots" aria-hidden="true">
+        <i class="d"></i><i class="d"></i><i class="c"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+    </section>
+
+    <section class="current" aria-label="העצירה הנוכחית">
+      <div class="current-top">
+        <div class="avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2h4v3l2 3v12a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 20V8l2-3V2z"/><path d="M8 12h8"/></svg>
+        </div>
+        <div>
+          <p class="eyebrow">העצירה הבאה</p>
+          <h3 class="name">משפחת כהן</h3>
+        </div>
+      </div>
+
+      <div class="facts">
+        <div class="fact">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <div>נחל שורק 14<small>דירה 6, קומה 2 · הבקבוקים ליד הדלת</small></div>
+        </div>
+      </div>
+
+      <div class="chips">
+        <span class="chip">כ־40 בקבוקים</span>
+        <span class="chip green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+          אישרה
+        </span>
+      </div>
+
+      <div class="actions" id="actions">
+        <div class="row">
+          <a class="btn" href="#">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l7 19-7-4-7 4z"/></svg>
+            נווט
+          </a>
+          <a class="btn" href="#">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+            חייג
+          </a>
+          <button class="btn" id="more" aria-label="עוד פעולות">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          </button>
+        </div>
+        <button class="btn primary big" id="collect">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M5 13l4 4L19 7"/></svg>
+          אספתי
+        </button>
+      </div>
+
+      <div class="qty" id="qty">
+        <p>כמה בקבוקים נאספו?</p>
+        <div class="stepper">
+          <button class="btn" id="minus" aria-label="פחות">−</button>
+          <div class="num"><span id="n" dir="ltr">40</span><small>בקבוקים</small></div>
+          <button class="btn" id="plus" aria-label="יותר">+</button>
+        </div>
+        <button class="btn primary big" id="save">שמור</button>
+      </div>
+    </section>
+
+    <h2>הבאות</h2>
+    <div class="timeline">
+      <div class="next">
+        <span class="dot">4</span>
+        <div class="card"><div class="info"><b>לוי דוד</b><span>הרב אשי 9</span></div><div class="qtyb">30<small>בקבוקים</small></div></div>
+      </div>
+      <div class="next">
+        <span class="dot">5</span>
+        <div class="card"><div class="info"><b>שרה אברהם</b><span>נחל לכיש 3</span></div><div class="qtyb">55<small>בקבוקים</small></div></div>
+      </div>
+      <div class="next">
+        <span class="dot">6</span>
+        <div class="card"><div class="info"><b>מרים פרידמן</b><span>נחל דולב 21</span></div><span class="chip amber">בלי מיקום</span></div>
+      </div>
+    </div>
+
+    <h2>טופלו</h2>
+    <div class="timeline">
+      <div class="next done">
+        <span class="dot">✓</span>
+        <div class="card"><div class="info"><b>גולד משה</b><span>נאסף · 48 בקבוקים</span></div></div>
+      </div>
+      <div class="next done">
+        <span class="dot">✓</span>
+        <div class="card"><div class="info"><b>בן ארי</b><span>נאסף · 36 בקבוקים</span></div></div>
+      </div>
+    </div>
+
+    <div class="impact">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-8-5-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 6-8 11-8 11z"/></svg>
+      <span>היום כבר נאספו 84 בקבוקים, כמעט 17 ₪ לתפילין</span>
+    </div>
+  </main>
+
+  <div class="sheet-bg" id="bg">
+    <div class="sheet" role="dialog" aria-label="עוד פעולות">
+      <button class="btn">לא נמצא</button>
+      <button class="btn">הזז למעלה</button>
+      <button class="btn">הזז למטה</button>
+      <button class="btn ghost" id="close">סגור</button>
+    </div>
+  </div>
+
+  <nav aria-label="ניווט באפליקציה">
+    <div class="nav-in">
+      <a href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        הזמנות
+      </a>
+      <a href="#" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        סבבים
+      </a>
+      <a href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        היסטוריה
+      </a>
+    </div>
+  </nav>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let n = 40;
+  $('collect').onclick = () => { $('qty').classList.add('open'); $('actions').style.display = 'none'; };
+  $('plus').onclick = () => { n++; $('n').textContent = n; };
+  $('minus').onclick = () => { if (n > 1) n--; $('n').textContent = n; };
+  $('save').onclick = () => { $('qty').classList.remove('open'); $('actions').style.display = ''; alert('נשמר: ' + n + ' בקבוקים (במוקאפ בלבד)'); };
+  $('more').onclick = () => $('bg').classList.add('open');
+  $('close').onclick = () => $('bg').classList.remove('open');
+  $('bg').onclick = (e) => { if (e.target === $('bg')) $('bg').classList.remove('open'); };
+</script>
+</body>
+</html>
