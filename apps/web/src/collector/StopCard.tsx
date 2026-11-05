@@ -93,7 +93,19 @@ export interface StopCardProps {
   onTypingChange?: (typing: boolean) => void;
   /** Passed to the thank-you's "שלח" row; undefined keeps SendList's own default (the api). */
   markOpened?: SendListProps['markOpened'];
+  /**
+   * What the route screen just saved for this card: 'collected' (Yoel's own "אספתי") buzzes once
+   * and moves the focus to "שלח תודה"; 'moved' (an arrow) puts a lost focus back on "⋯". It comes
+   * from the screen, not from a flag inside the card, because the save moves the card into another
+   * list (current → handled, current ↔ upcoming), and React mounts a new card there.
+   */
+  justSaved?: JustSaved;
+  /** The card acted on `justSaved`: the screen forgets it, so it happens once. */
+  onJustSavedSeen?: () => void;
 }
+
+/** A save of the route screen that the card reacts to; see {@link StopCardProps.justSaved}. */
+export type JustSaved = 'collected' | 'moved';
 
 /** What is open in a card still to collect: nothing, the quantity stepper, or the "⋯" sheet. */
 type OpenPart = 'none' | 'quantity' | 'more';
@@ -115,7 +127,7 @@ type OpenPart = 'none' | 'quantity' | 'more';
  * action; when collected, its "שלח תודה" row. The route screen moves it to the end of the list.
  */
 export function StopCard(props: StopCardProps) {
-  const { stop, onCollect, onTypingChange } = props;
+  const { stop, onTypingChange, justSaved } = props;
   const [openPart, setOpenPart] = useState<OpenPart>('none');
   const handled = isStopHandled(stop.state);
   // The field and the sheet close by themselves once the stop is handled (the saved view, or
@@ -127,8 +139,10 @@ export function StopCard(props: StopCardProps) {
   // The latest callback, read by the effects below, so a new arrow from the screen on every
   // render neither reports "typing" again nor is missed on unmount.
   const onTypingChangeRef = useRef(onTypingChange);
+  const onJustSavedSeenRef = useRef(props.onJustSavedSeen);
   useEffect(() => {
     onTypingChangeRef.current = onTypingChange;
+    onJustSavedSeenRef.current = props.onJustSavedSeen;
   });
   // What the screen was last told, so it hears each change once (StrictMode's second run too).
   const reportedTypingRef = useRef(false);
@@ -147,23 +161,33 @@ export function StopCard(props: StopCardProps) {
     [],
   );
 
-  // The thank-you row's title gets the focus when Yoel's own "אספתי" saved: the field he typed in
-  // is gone, and the row he taps next ("שלח") is right under it, wherever the card moved.
+  // Yoel's own "אספתי" was saved (the screen says so in justSaved, and the stop shows collected).
+  // A stop collected elsewhere or seen collected on a reload does neither of the two below.
   const thanksTitleRef = useRef<HTMLHeadingElement>(null);
-  const savedFromHereRef = useRef(false);
-  // A short buzz once Yoel's own "אספתי" is saved (the stop turned collected), so he feels it
-  // went through without looking. navigator.vibrate is missing on iOS and desktop: optional call.
-  const stopState = stop.state;
+  const collectedHere = justSaved === 'collected' && stop.state === 'collected';
+  // A short buzz, so he feels it went through without looking. navigator.vibrate is missing on
+  // iOS and desktop: optional call.
   useEffect(() => {
-    if (stopState === 'collected' && savedFromHereRef.current) navigator.vibrate?.(30);
-  }, [stopState]);
+    if (collectedHere) navigator.vibrate?.(30);
+  }, [collectedHere]);
+  // The thank-you row's title gets the focus: the field he typed in is gone, and the row he taps
+  // next ("שלח") is right under it, in the handled list the card moved to.
   const showThanks = stop.state === 'collected' && stop.thankYou !== undefined;
   useEffect(() => {
-    if (showThanks && savedFromHereRef.current) {
-      savedFromHereRef.current = false;
-      thanksTitleRef.current?.focus();
-    }
-  }, [showThanks]);
+    if (!collectedHere || !showThanks) return;
+    thanksTitleRef.current?.focus();
+    onJustSavedSeenRef.current?.();
+  }, [collectedHere, showThanks]);
+  // An arrow's move was saved. Focus that was on this card's "⋯" is lost when the move took the
+  // card into the other list; put it back on the new "⋯", but never take it from somewhere else.
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const movedHere = justSaved === 'moved' && !handled;
+  useEffect(() => {
+    if (!movedHere) return;
+    const active = document.activeElement;
+    if (active === null || active === document.body) moreButtonRef.current?.focus();
+    onJustSavedSeenRef.current?.();
+  }, [movedHere]);
 
   if (handled) {
     return <HandledStopCard {...props} thanksTitleRef={thanksTitleRef} />;
@@ -171,20 +195,19 @@ export function StopCard(props: StopCardProps) {
   return (
     <ToCollectStopCard
       {...props}
-      onCollect={(bottlesCollected) => {
-        savedFromHereRef.current = true;
-        onCollect(bottlesCollected);
-      }}
       openPart={openPart}
       setOpenPart={setOpenPart}
+      moreButtonRef={moreButtonRef}
     />
   );
 }
 
-/** Props of {@link ToCollectStopCard}: the card's, plus what is open in it. */
+/** Props of {@link ToCollectStopCard}: the card's, plus what is open in it and its "⋯" button. */
 interface ToCollectStopCardProps extends StopCardProps {
   openPart: OpenPart;
   setOpenPart: (part: OpenPart) => void;
+  /** Owned by StopCard, which focuses "⋯" after a saved move. */
+  moreButtonRef: RefObject<HTMLButtonElement | null>;
 }
 
 /** A stop Yoel has yet to stop at; see {@link StopCard}. */
@@ -202,6 +225,7 @@ function ToCollectStopCard({
   onNotFound,
   openPart,
   setOpenPart,
+  moreButtonRef,
 }: ToCollectStopCardProps) {
   const { order } = stop;
   const name = order.contact.name;
@@ -209,7 +233,6 @@ function ToCollectStopCard({
   const [quantity, setQuantity] = useState('');
   const [quantityError, setQuantityError] = useState<string | undefined>(undefined);
   const collectButtonRef = useRef<HTMLButtonElement>(null);
-  const moreButtonRef = useRef<HTMLButtonElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
 
   /**
@@ -333,12 +356,16 @@ function ToCollectStopCard({
     </form>
   );
 
+  // While the sheet is open its error shows inside it: in the card it would sit behind the dark
+  // background, outside the modal dialog a screen reader stays in. Closed, the card shows it.
+  const cardError = moreOpen ? undefined : error;
   const moreSheet = moreOpen && (
     <MoreActionsSheet
       name={name}
       canMoveUp={canMoveUp}
       canMoveDown={canMoveDown}
       busy={busy}
+      error={error}
       onMove={onMove}
       onNotFound={onNotFound}
       // Only the compact card: its sheet is where "אספתי", "נווט" and "חייג" live.
@@ -436,9 +463,9 @@ function ToCollectStopCard({
 
         {moreSheet}
 
-        {error !== undefined && (
+        {cardError !== undefined && (
           <p className="field-error" role="alert">
-            {error}
+            {cardError}
           </p>
         )}
       </li>
@@ -466,9 +493,9 @@ function ToCollectStopCard({
 
       {moreSheet}
 
-      {error !== undefined && (
+      {cardError !== undefined && (
         <p className="field-error stop-card-compact-wide" role="alert">
-          {error}
+          {cardError}
         </p>
       )}
     </li>

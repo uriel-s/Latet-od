@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   COLLECT_STOP_ERRORS,
   ROUND_MESSAGES,
@@ -550,6 +550,10 @@ describe('RouteScreen navigation links', () => {
 });
 
 describe('RouteScreen "אספתי"', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('sends the estimate, then moves the card to the end with its "שלח תודה" row', async () => {
     const { api, parent } = renderRoute();
 
@@ -565,6 +569,35 @@ describe('RouteScreen "אספתי"', () => {
       thankYouUrl(DANA),
     );
     expect(screen.getByText('נאספו 1 מתוך 3 · נשארו 2')).toBeTruthy();
+  });
+
+  // The saved card leaves the current list for the handled one, where React mounts a new card:
+  // the buzz and the focus must still come (the screen tells the new card, justSaved).
+  it("buzzes once and moves the focus to 'שלח תודה' after Yoel's own 'אספתי'", async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    renderRoute();
+
+    collect('דנה כהן');
+
+    const title = await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(vibrate).toHaveBeenCalledWith(30);
+  });
+
+  it('neither buzzes nor moves the focus when the save fails', async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    const { api } = renderRoute();
+    api.next.push({ kind: 'failed' });
+
+    collect('דנה כהן');
+
+    await waitFor(() =>
+      expect(within(currentCard()).getByRole('alert').textContent).toBe(STOP_ACTION_FAILED_MESSAGE),
+    );
+    expect(vibrate).not.toHaveBeenCalled();
   });
 
   it('sends the corrected quantity', async () => {
@@ -647,6 +680,15 @@ describe('RouteScreen moves', () => {
     expect(parent.views).toHaveLength(2);
   });
 
+  it("keeps the focus on the moved stop's '⋯' when it leaves the current card", async () => {
+    renderRoute();
+
+    sheetAction('דנה כהן', /^הזז למטה/);
+
+    await waitFor(() => expect(within(currentCard()).getByText('משה לוי')).toBeTruthy());
+    await waitFor(() => expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן')));
+  });
+
   it('passes a handled stop in between with two stored moves for one tap', async () => {
     const { api, parent } = renderRoute(
       makeView([stopOf(DANA), stopOf(MOSHE, { state: 'notFound' }), stopOf(YOSSI)]),
@@ -726,15 +768,16 @@ describe('RouteScreen errors', () => {
   });
 
   it.each([{ kind: 'failed' } as const, 'rejects' as const])(
-    'shows a failed save in the card, and the next tap clears it (%s)',
+    'shows a failed "לא נמצא" in the open sheet, and the next tap clears it (%s)',
     async (failure) => {
       const { api } = renderRoute();
       api.next.push(failure);
 
       sheetAction('משה לוי', 'לא נמצא');
       fireEvent.click(button('כן, לא נמצא'));
+      // In the still-open sheet, where Yoel looks, not in the card behind its dark background.
       await waitFor(() =>
-        expect(within(cardOf('משה לוי')).getByRole('alert').textContent).toBe(
+        expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toBe(
           STOP_ACTION_FAILED_MESSAGE,
         ),
       );

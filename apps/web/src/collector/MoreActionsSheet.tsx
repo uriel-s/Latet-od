@@ -26,6 +26,11 @@ export interface MoreActionsSheetProps {
   canMoveDown: boolean;
   /** An action of the card is on its way: buttons aria-disabled, the tap does nothing. */
   busy: boolean;
+  /**
+   * Why the card's last action failed (plain Hebrew), shown inside the sheet: "כן, לא נמצא" keeps
+   * the sheet open, so an error drawn in the card would be hidden behind it. Undefined for none.
+   */
+  error?: string;
   /** An arrow was tapped; the sheet closes itself first. */
   onMove: (direction: 'up' | 'down') => void;
   /** "כן, לא נמצא" in the sheet's question. */
@@ -49,6 +54,7 @@ export function MoreActionsSheet({
   canMoveUp,
   canMoveDown,
   busy,
+  error,
   onMove,
   onNotFound,
   onCollect,
@@ -223,6 +229,12 @@ export function MoreActionsSheet({
               </button>
             )}
           </div>
+        )}
+
+        {error !== undefined && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
         )}
 
         <button

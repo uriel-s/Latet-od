@@ -70,6 +70,33 @@ function darkBlock(css: string): string {
   return match[1];
 }
 
+/** The `#rrggbb N%` colour stops of a block's `--hdr` linear-gradient, in order. */
+function headerGradientStops(block: string): { hex: string; percent: number }[] {
+  const gradient = /--hdr:([^;]*);/.exec(block)?.[1] ?? '';
+  return [...gradient.matchAll(/(#[0-9a-f]{6})\s+(\d+(?:\.\d+)?)%/gi)].map(([, hex, percent]) => ({
+    hex: (hex ?? '').toLowerCase(),
+    percent: Number(percent),
+  }));
+}
+
+/** The `#rrggbb` colour a linear gradient shows at `percent`, mixed in sRGB as browsers do. */
+function gradientColourAt(stops: { hex: string; percent: number }[], percent: number): string {
+  const after = stops.findIndex((stop) => stop.percent >= percent);
+  const to = stops[after === -1 ? stops.length - 1 : after];
+  const from = stops[Math.max(0, after - 1)];
+  if (!from || !to) throw new Error('a gradient needs colour stops');
+  const span = to.percent - from.percent;
+  const share = span === 0 ? 0 : (percent - from.percent) / span;
+  return `#${[1, 3, 5]
+    .map((start) => {
+      const [a, b] = [from.hex, to.hex].map((hex) => parseInt(hex.slice(start, start + 2), 16));
+      return Math.round((a ?? 0) + ((b ?? 0) - (a ?? 0)) * share)
+        .toString(16)
+        .padStart(2, '0');
+    })
+    .join('')}`;
+}
+
 const rootTokens = hexTokens(rootBlock(stylesCss));
 const darkTokens = hexTokens(darkBlock(stylesCss));
 
@@ -123,13 +150,20 @@ describe('styles.css colour contrast', () => {
     expect(missing).toEqual([]);
   });
 
-  it('keeps the header text readable over the dark header gradient', () => {
-    const gradient = /--hdr:([^;]*);/.exec(darkBlock(stylesCss))?.[1] ?? '';
-    const stops = gradient.match(/#[0-9a-f]{6}/gi) ?? [];
+  // The header's white text sits anywhere from the top to the lower corner, where the gradient is
+  // lightest: the slogan (1.1rem, not bold, so 4.5:1) ends in that corner in RTL. So every colour
+  // the header actually shows, from 0% to 100%, must be AA; the warm stop past 100% may be lighter.
+  it.each([
+    ['light', rootBlock(stylesCss)],
+    ['dark', darkBlock(stylesCss)],
+  ])('keeps the header text readable over the whole %s header gradient', (_mode, block) => {
+    const stops = headerGradientStops(block);
     expect(stops.length).toBeGreaterThan(1);
-    // Every stop but the last (the dim peach hint at 135%, mostly past the edge) sits under text.
-    for (const stop of stops.slice(0, -1)) {
-      expect(contrastRatio(rootTokens.get('on-hdr') ?? '', stop)).toBeGreaterThanOrEqual(AA_TEXT);
+    const onHeader = rootTokens.get('on-hdr') ?? '';
+    for (let percent = 0; percent <= 100; percent += 5) {
+      expect(contrastRatio(onHeader, gradientColourAt(stops, percent))).toBeGreaterThanOrEqual(
+        AA_TEXT,
+      );
     }
   });
 
