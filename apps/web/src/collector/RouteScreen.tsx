@@ -35,7 +35,7 @@ import {
   storedMovesFor,
 } from './routeStops.ts';
 import type { SendListProps } from './SendList.tsx';
-import { StopCard } from './StopCard.tsx';
+import { StopCard, type JustSaved } from './StopCard.tsx';
 
 /** In place of the list when the route has no stop at all. */
 export const NO_STOPS_TEXT = 'אין עצירות במסלול.';
@@ -107,11 +107,11 @@ function withId(ids: ReadonlySet<string>, id: string, present: boolean): Readonl
 }
 
 /** `messages` with `message` for `id`, or without `id` when undefined; the same map if unchanged. */
-function withMessage(
-  messages: ReadonlyMap<string, string>,
+function withMessage<Value>(
+  messages: ReadonlyMap<string, Value>,
   id: string,
-  message: string | undefined,
-): ReadonlyMap<string, string> {
+  message: Value | undefined,
+): ReadonlyMap<string, Value> {
   if (messages.get(id) === message) return messages;
   const next = new Map(messages);
   if (message === undefined) next.delete(id);
@@ -191,6 +191,10 @@ export function RouteScreen({
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [bottlesErrors, setBottlesErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
+  // What was just saved for a card (Yoel's own "אספתי", or an arrow), until the card acted on it.
+  // Kept here, not in the card: the save moves the card into another list, where React mounts a
+  // new one, and that new card is the one that buzzes and takes the focus (StopCard justSaved).
+  const [justSaved, setJustSaved] = useState<ReadonlyMap<string, JustSaved>>(() => new Map());
   // The state above reaches a handler only after a re-render; this ref stops a second tap on the
   // same card that comes before it, so one tap sends one request.
   const busyIdsRef = useRef(new Set<string>());
@@ -302,15 +306,24 @@ export function RouteScreen({
     }
   }
 
-  /** One action of card `orderId`: a single request, its answer shown. */
+  /** Card `orderId` should react to `what` once it is drawn from the saved view. */
+  function markJustSaved(orderId: string, what: JustSaved): void {
+    setJustSaved((previous) => withMessage(previous, orderId, what));
+  }
+
+  /**
+   * One action of card `orderId`: a single request, its answer shown; `onSaved` runs only when
+   * the answer was saved (not for a stale, failed or refused one).
+   */
   async function runOnce(
     orderId: string,
     request: () => Promise<StopActionOutcome>,
+    onSaved?: () => void,
   ): Promise<void> {
     if (!begin(orderId)) return;
     const outcome = await send(request);
     end(orderId);
-    if (mountedRef.current) settle(orderId, outcome);
+    if (mountedRef.current && settle(orderId, outcome)) onSaved?.();
   }
 
   /**
@@ -323,12 +336,15 @@ export function RouteScreen({
     // Counted on the view of the tap: the one whose arrows Yoel saw.
     const moves = storedMovesFor(view.stops, orderId, direction);
     if (moves === 0 || !begin(orderId)) return;
+    let movedAtAll = false;
     for (let done = 0; done < moves; done += 1) {
       const outcome = await send(() => moveStop(roundId, orderId, direction));
       if (!mountedRef.current) break;
       if (!settle(orderId, outcome)) break;
+      movedAtAll = true;
     }
     end(orderId);
+    if (movedAtAll && mountedRef.current) markJustSaved(orderId, 'moved');
   }
 
   // Both links read the STORED order (shownStops), not the screen order, so "next" is the next one
@@ -354,7 +370,9 @@ export function RouteScreen({
   function renderCard(stop: RouteStopView) {
     const orderId = stop.order.id;
     return (
-      // Keyed by the order, so a card keeps its open field and focus when it moves.
+      // Keyed by the order: a card keeps its open field and focus when it moves inside its list.
+      // A move into another list (current, upcoming, handled) mounts a new card; justSaved tells
+      // that new card what Yoel just did there.
       <StopCard
         key={orderId}
         stop={stop}
@@ -367,11 +385,19 @@ export function RouteScreen({
         bottlesError={bottlesErrors.get(orderId)}
         onMove={(direction) => void move(orderId, direction)}
         onCollect={(bottlesCollected) =>
-          void runOnce(orderId, () => collectStop(roundId, orderId, bottlesCollected))
+          void runOnce(
+            orderId,
+            () => collectStop(roundId, orderId, bottlesCollected),
+            () => markJustSaved(orderId, 'collected'),
+          )
         }
         onNotFound={() => void runOnce(orderId, () => markStopNotFound(roundId, orderId))}
         onTypingChange={(typing) => typingChanged(orderId, typing)}
         markOpened={markOpened}
+        justSaved={justSaved.get(orderId)}
+        onJustSavedSeen={() =>
+          setJustSaved((previous) => withMessage(previous, orderId, undefined))
+        }
       />
     );
   }

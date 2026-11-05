@@ -331,10 +331,10 @@ describe('StopCard "אספתי"', () => {
     expect(quantityField()).toBeTruthy();
     expect(calls.collects).toEqual([42]);
 
-    rerender({ busy: false, stop: COLLECTED });
+    rerender({ busy: false, stop: COLLECTED, justSaved: 'collected' });
     expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
     expect(calls.typing).toEqual([true, false]);
-    // Yoel's own save: the focus goes to the thank-you he sends next.
+    // Yoel's own save (the screen says so): the focus goes to the thank-you he sends next.
     expect(document.activeElement).toBe(
       screen.getByRole('heading', { level: 4, name: SEND_THANKS_TITLE }),
     );
@@ -485,6 +485,25 @@ describe.each([
     expect(calls.notFounds).toBe(0);
   });
 
+  it('shows a failed "כן, לא נמצא" inside the sheet, not behind it', () => {
+    const { rerender } = renderCard({ current });
+    openSheet();
+    fireEvent.click(button('לא נמצא'));
+    fireEvent.click(button('כן, לא נמצא'));
+
+    rerender({ error: 'לא הצלחנו לשמור. נא לנסות שוב.' });
+
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toBe(
+      'לא הצלחנו לשמור. נא לנסות שוב.',
+    );
+
+    // Closed, the card shows it again.
+    fireEvent.click(button('סגור'));
+    expect(screen.getByRole('alert').textContent).toBe('לא הצלחנו לשמור. נא לנסות שוב.');
+  });
+
   it('does not open while busy', () => {
     renderCard({ current, busy: true });
     expect(button('עוד פעולות, דנה כהן').getAttribute('aria-disabled')).toBe('true');
@@ -546,7 +565,7 @@ describe('StopCard bottles stepper', () => {
     collectWith('42');
     expect(vibrate).not.toHaveBeenCalled();
 
-    rerender({ stop: COLLECTED });
+    rerender({ stop: COLLECTED, justSaved: 'collected' });
     expect(vibrate).toHaveBeenCalledTimes(1);
     expect(vibrate).toHaveBeenCalledWith(30);
   });
@@ -555,7 +574,7 @@ describe('StopCard bottles stepper', () => {
     vi.stubGlobal('navigator', { ...navigator, vibrate: undefined });
     const { rerender } = renderCard();
     collectWith('42');
-    rerender({ stop: COLLECTED });
+    rerender({ stop: COLLECTED, justSaved: 'collected' });
     expect(screen.getByText('נאסף')).toBeTruthy();
   });
 
@@ -587,6 +606,46 @@ describe('StopCard error', () => {
   it('shows why the last action failed, as an alert in the card', () => {
     renderCard({ error: 'לא הצלחנו לשמור. נא לנסות שוב.' });
     expect(screen.getByRole('alert').textContent).toBe('לא הצלחנו לשמור. נא לנסות שוב.');
+  });
+});
+
+// The route screen mounts a NEW card when a save moves a stop into another list; these render the
+// card straight in its saved state, as that new card is.
+describe('StopCard justSaved', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('buzzes and focuses "שלח תודה" when mounted collected right after Yoel\'s "אספתי"', () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal('navigator', { ...navigator, vibrate });
+    const seen = vi.fn();
+
+    renderCard({ stop: COLLECTED, justSaved: 'collected', onJustSavedSeen: seen });
+
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { level: 4, name: SEND_THANKS_TITLE }),
+    );
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts a lost focus back on "⋯" when mounted after a saved move', () => {
+    const seen = vi.fn();
+    renderCard({ current: false, justSaved: 'moved', onJustSavedSeen: seen });
+    expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not take the focus from elsewhere after a saved move', () => {
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    renderCard({ justSaved: 'moved' });
+
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
   });
 });
 

@@ -26,7 +26,12 @@
    */
   --line: #d3dfeb;
   --done: #e0e9f2; /* a handled route stop's card */
-  --hdr: linear-gradient(165deg, #1f5c9e 0%, #4a95d0 62%, #f0c79f 135%); /* the header */
+  /*
+   * The header. Darker than the mockup's #4a95d0 → #f0c79f: white text there was under 3:1 where
+   * the slogan sits (the lower right in RTL). The warm dawn hint stays, as a muted amber, and every
+   * colour the header shows is AA under white (styles.test.ts); the light peach is on the bunting.
+   */
+  --hdr: linear-gradient(165deg, #1f5c9e 0%, #2f6fae 62%, #b07a5c 135%);
   --green: #1f6b44; /* collected, confirmed: text on --green-soft */
   --green-soft: #d3ecdc;
   --amber: #8a4b0c; /* waiting, warning: text on --amber-soft */
@@ -235,8 +240,8 @@ h1[tabindex='-1']:focus {
   color: var(--on-hdr);
   border-radius: 0 0 var(--r-header) var(--r-header);
   padding-block: calc(0.75rem + env(safe-area-inset-top)) 1rem;
-  /* The gradient turns light towards the lower edge, where white text is under 4.5:1: a soft
-     shadow and the bold weight below keep the name and slogan readable (large bold text). */
+  /* Every colour of --hdr is AA under white already (styles.test.ts); the soft shadow only helps
+     in bright sun, it is not what makes the contrast pass. */
   text-shadow: 0 1px 3px rgb(23 37 54 / 45%);
 }
 
