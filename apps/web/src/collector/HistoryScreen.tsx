@@ -196,7 +196,8 @@ function MonthHistory({ history }: { history: HistoryResponse }) {
       {orders.length === 0 ? (
         <EmptyState icon="heart" text={EMPTY_MONTH_TEXT} />
       ) : (
-        <ul className="order-list" aria-label="ההזמנות שנסגרו בחודש">
+        // ONE grouped-list card with a thin row per order, as on the rounds screen.
+        <ul className="card grouped-list" aria-label="ההזמנות שנסגרו בחודש">
           {orders.map((order) => (
             <HistoryOrderCard key={order.id} order={order} />
           ))}
@@ -231,20 +232,28 @@ function outcomeText(order: HistoryOrder): string {
 }
 
 /**
- * One closed order: who (its `<h3>`, so a screen reader jumps from order to order, as on the
- * orders tab), the day it closed as DD/MM in Israel, the address, and what became of it.
+ * One closed order, a thin row of the month's grouped list (same look as the rounds screen's
+ * rows): who (its `<h3>`, so a screen reader jumps from order to order, as on the orders tab),
+ * then one line "DD/MM · address · outcome" — the day it closed in Israel, the address, and what
+ * became of it (bold, the part Yoel looks for).
  */
 function HistoryOrderCard({ order }: { order: HistoryOrder }) {
   return (
-    <li className="card round-order-card">
-      <h3 className="order-card-name">{order.contact.name}</h3>
-      <p>
-        <bdi dir="ltr">{formatDayMonth(order.closedAt)}</bdi>
-      </p>
-      <p>
-        {order.address.streetName} {order.address.houseNumber}
-      </p>
-      <p className="order-card-bottles">{outcomeText(order)}</p>
+    // round-order-card: shared with RoundsScreen's rows (styles.css).
+    <li className="grouped-row round-order-card">
+      <div className="grouped-row-main">
+        <h3 className="grouped-row-title">{order.contact.name}</h3>
+        <p className="grouped-row-meta">
+          {/* Digits read left to right inside the right-to-left text (CLAUDE.md). */}
+          <bdi dir="ltr">{formatDayMonth(order.closedAt)}</bdi>
+          {' · '}
+          <span>
+            {order.address.streetName} {order.address.houseNumber}
+          </span>
+          {' · '}
+          <span className="order-card-bottles">{outcomeText(order)}</span>
+        </p>
+      </div>
     </li>
   );
 }

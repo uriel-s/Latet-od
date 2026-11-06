@@ -708,7 +708,8 @@ button.button-not-ready[aria-disabled='true'] {
 }
 
 /* One row: the name/meta column at the start, a call button or a badge at the end, wrapping on a
-   narrow phone. At least 64px tall, so its buttons (48px+) fit with room around them. */
+   narrow phone. At least 64px tall, so its buttons (48px+) fit with room around them. The rounds
+   screen's and the history tab's order rows both add .round-order-card: a shared hook, no CSS. */
 .grouped-row {
   display: flex;
   flex-wrap: wrap;
@@ -1521,12 +1522,6 @@ html:has(.bottom-nav) {
 
 .round-close h3 {
   margin-block-start: 0;
-}
-
-/* A history card (.card + this, HistoryScreen.tsx): the shared card with the old class's paragraph
-   spacing. Not on the rounds screen's rows (.grouped-row, no .card), whose row gap spaces them. */
-.card.round-order-card p {
-  margin-block: 0 0.25rem;
 }
 
 /* "אישר בשיחה או בהודעה" on a row of "עוד לא אישרו": a full line under the row (.grouped-row-full);
