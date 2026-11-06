@@ -8,7 +8,8 @@
 // 3. Tap targets: buttons stay at least --tap-target (48px+) tall, the big button at least 66px,
 //    and the press animation respects prefers-reduced-motion.
 // 4. Cards and badges: a .card keeps the dawn radius and shadow, every coloured badge sets both
-//    its text and its background, and badge text is never shrunk below 1rem.
+//    its text and its background (so does every round tile), badge text is never shrunk below
+//    1rem, and the round .call-button is a full tap target.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -118,6 +119,7 @@ const TEXT_PAIRS: [foreground: string, background: string][] = [
   ['brand', 'card'], // .button-secondary in the site header
   ['brand', 'bg'], // .back-link: a chevron and a word, no fill of its own
   ['muted', 'done'], // .badge-gray
+  ['green', 'card'], // "נפתח ✓" as plain text in a grouped send list (.grouped-list .send-row-mark)
 ];
 
 describe('styles.css colour contrast', () => {
@@ -253,6 +255,21 @@ describe('styles.css cards and badges', () => {
       expect(badge).toMatch(/(^|[\s;])background:/);
     },
   );
+
+  it.each(['.round-tile-green', '.round-tile-amber', '.round-tile-gray'])(
+    'gives %s both a text colour and a background',
+    (selector) => {
+      const tile = ruleBody(stylesCss, selector);
+      expect(tile).toMatch(/(^|[\s;])color:/);
+      expect(tile).toMatch(/(^|[\s;])background:/);
+    },
+  );
+
+  it('makes a .call-button a full --tap-target circle', () => {
+    const callButton = ruleBody(stylesCss, '.call-button');
+    expect(callButton).toContain('width: var(--tap-target);');
+    expect(callButton).toContain('height: var(--tap-target);');
+  });
 
   it('keeps .badge text at 1rem or larger (no text under 18px)', () => {
     // A font-size on .badge, if any, must be exactly 1rem: the mockup's .9rem is too small.

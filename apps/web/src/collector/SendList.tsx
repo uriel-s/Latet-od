@@ -2,7 +2,8 @@
 // WhatsApp with the message already written (a wa.me url), for Yoel to tap "send" there. Tapping
 // marks the row opened at once and tells the api (markMessageOpened), so a row he already sent
 // stands out. Reusable: the hosting screen (a planned round, section 8) owns the heading and
-// passes the rows (`MessageLink`, built by the api with `toMessageLink`).
+// passes the rows (`MessageLink`, built by the api with `toMessageLink`). Two looks: framed rows by
+// default (the route's thank-you row, the close question), or one card of thin rows (`grouped`).
 import { useEffect, useRef, useState } from 'react';
 import { formatDayMonth, type MessageLink } from '@bottlerun/shared';
 import { markMessageOpened, type MarkMessageOpenedOutcome } from '../api.ts';
@@ -23,6 +24,12 @@ export interface SendListProps {
   rows: readonly MessageLink[];
   /** Stores that a row's link was opened. Defaults to {@link markMessageOpened}; tests pass a fake. */
   markOpened?: (orderId: string, messageIndex: number) => Promise<MarkMessageOpenedOutcome>;
+  /**
+   * One card of thin rows split by a line (the inset grouped list of styles.css), as on the rounds
+   * screen's step 1. Off by default: the route's thank-you row and the close question keep the
+   * framed rows. Only the classes change; the text, links and behaviour are the same.
+   */
+  grouped?: boolean;
 }
 
 /**
@@ -54,9 +61,10 @@ function rowKey(row: Pick<MessageLink, 'orderId' | 'messageIndex'>): string {
  * `openedAt` as DD/MM; `loggedOut` goes to /login; `notFound` and `failed` keep the row opened
  * and add {@link MARK_OPENED_FAILED_MESSAGE}. An opened row keeps its link, as "שלח שוב", for a
  * message that did not go. The local state is kept by row key, so new `rows` from the hosting
- * screen keep what was tapped. No `<h1>`: the hosting screen has the page's heading.
+ * screen keep what was tapped. No `<h1>`: the hosting screen has the page's heading. `grouped`
+ * shows the list (and its empty sentence) as one card of thin rows.
  */
-export function SendList({ rows, markOpened = markMessageOpened }: SendListProps) {
+export function SendList({ rows, markOpened = markMessageOpened, grouped = false }: SendListProps) {
   const [openedLocally, setOpenedLocally] = useState<Readonly<Record<string, OpenedLocally>>>({});
   // False once the list is gone: an answer that comes after Yoel left the screen must not pull
   // him to the login from the screen he went to.
@@ -104,14 +112,26 @@ export function SendList({ rows, markOpened = markMessageOpened }: SendListProps
     markOpened(row.orderId, row.messageIndex).then(settle, () => settle({ kind: 'failed' }));
   }
 
-  if (rows.length === 0) return <p>{EMPTY_SEND_LIST_TEXT}</p>;
+  if (rows.length === 0) {
+    return grouped ? (
+      <p className="card grouped-empty">{EMPTY_SEND_LIST_TEXT}</p>
+    ) : (
+      <p>{EMPTY_SEND_LIST_TEXT}</p>
+    );
+  }
 
   return (
-    <ul className="send-list">
+    <ul className={grouped ? 'send-list card grouped-list' : 'send-list'}>
       {rows.map((row) => {
         const key = rowKey(row);
         return (
-          <SendRow key={key} row={row} local={openedLocally[key]} onOpen={() => handleOpen(row)} />
+          <SendRow
+            key={key}
+            row={row}
+            local={openedLocally[key]}
+            grouped={grouped}
+            onOpen={() => handleOpen(row)}
+          />
         );
       })}
     </ul>
@@ -123,6 +143,8 @@ interface SendRowProps {
   row: MessageLink;
   /** What this list knows of the row beyond its props; undefined until Yoel taps it here. */
   local: OpenedLocally | undefined;
+  /** The list is one card of thin rows: the row adds `grouped-row` to its classes. */
+  grouped: boolean;
   onOpen: () => void;
 }
 
@@ -131,16 +153,17 @@ interface SendRowProps {
  * known, a modifier class, and the link as "שלח שוב" in the quieter outline style, so the rows
  * still to send are the filled ones. The words carry the meaning, never the colour alone.
  */
-function SendRow({ row, local, onOpen }: SendRowProps) {
+function SendRow({ row, local, grouped, onOpen }: SendRowProps) {
   const opened = row.openedAt !== undefined || local !== undefined;
   // The stored value first: once set, the api never changes it, so both agree when both exist.
   const openedAt = row.openedAt ?? local?.openedAt;
   // A failed save of an opening the api already stored loses nothing: no note then.
   const showSaveFailed = local?.saveFailed === true && openedAt === undefined;
   const linkText = opened ? 'שלח שוב' : 'שלח';
+  const rowClass = opened ? 'send-row send-row-opened' : 'send-row';
 
   return (
-    <li className={opened ? 'send-row send-row-opened' : 'send-row'}>
+    <li className={grouped ? `${rowClass} grouped-row` : rowClass}>
       <p className="send-row-name">{row.name}</p>
       {opened && (
         <p className="send-row-mark">

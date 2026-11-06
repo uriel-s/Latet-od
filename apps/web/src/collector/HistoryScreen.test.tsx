@@ -221,6 +221,21 @@ describe('HistoryScreen', () => {
       ).toEqual(['משה לוי', 'רחל אברהם', 'דנה כהן']);
     });
 
+    it('shows the closed orders as one grouped-list card with a thin row each', async () => {
+      await renderOctober();
+
+      const list = screen.getByRole('list', { name: 'ההזמנות שנסגרו בחודש' });
+      expect(list.classList).toContain('card');
+      expect(list.classList).toContain('grouped-list');
+      const rows = within(list).getAllByRole('listitem');
+      expect(rows).toHaveLength(3);
+      for (const row of rows) {
+        expect(row.classList).toContain('grouped-row');
+        // The list is the one card: no card per row.
+        expect(row.classList).not.toContain('card');
+      }
+    });
+
     it('shows a collected order with its day, address and the bottles counted', async () => {
       await renderOctober();
 
