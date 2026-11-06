@@ -579,6 +579,24 @@ button.button-not-ready[aria-disabled='true'] {
   color: var(--white);
 }
 
+/*
+ * The button that opens a destructive question, from the approved mockup: red says "careful"
+ * before the tap, while the "כן, לבטל" inside the question keeps its own look. Both are .button
+ * variants, so .button keeps them at least --tap-target tall; both pairs are AA in styles.test.ts.
+ * - outline: the main destructive action ("ביטול ההזמנה"), --error on --card, a currentColor frame.
+ * - quiet: a secondary destructive action ("מחיקת ההזמנה", "בטל את הסבב"), --error text, no fill.
+ */
+.button-danger-outline {
+  border: 1.5px solid currentColor;
+  background: var(--card);
+  color: var(--error);
+}
+
+.button-danger-quiet {
+  background: transparent;
+  color: var(--error);
+}
+
 /* The screen's one big action (spec §3.3, "כפתור גדול"): at least 66px, growing with the font.
    .button-large is the older name the customer's page (OrderPage.tsx) still uses. */
 .button-big,

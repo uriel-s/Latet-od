@@ -86,6 +86,8 @@ export function DeleteOrderButton({
       question={`למחוק את ההזמנה של ${order.contact.name} לצמיתות? אי אפשר לשחזר אותה.`}
       confirmLabel="כן, למחוק"
       busyLabel="מוחק..."
+      // Quiet red, not the outline: it sits under "ביטול ההזמנה", the edit screen's main red action.
+      buttonTone="dangerQuiet"
       cancelling={deleting}
       error={error}
       onConfirm={() => void confirmDelete()}

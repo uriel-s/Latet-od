@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type {
   CollectorOrder,
@@ -367,6 +367,20 @@ describe('CloseRoundConfirm', () => {
       expect(within(question).getByText(/לבטל את הסבב\?$/)).toBeDefined();
       expect(within(question).getByRole('button', { name: 'כן, לבטל את הסבב' })).toBeDefined();
       expect(within(question).getByRole('button', { name: CLOSE_ROUND_NO_LABEL })).toBeDefined();
+    });
+
+    // Only the look (styles.css): calling a round off is destructive, finishing a drive is not.
+    it('shows "בטל את הסבב" in quiet red and "סיימתי את הסבב" as the tonal button', () => {
+      renderConfirm({ view: CONFIRMING });
+      expect(screen.getByRole('button', { name: 'בטל את הסבב' }).classList).toContain(
+        'button-danger-quiet',
+      );
+      cleanup();
+
+      renderConfirm({ view: routedView([toCollect(DANA)]) });
+      expect(screen.getByRole('button', { name: 'סיימתי את הסבב' }).classList).toContain(
+        'button-secondary',
+      );
     });
 
     it('has the busy and failed texts of each phase', () => {
