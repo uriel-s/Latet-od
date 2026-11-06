@@ -303,8 +303,9 @@ describe('PlanRoundScreen', () => {
   });
 
   describe('loaded', () => {
-    it('shows the form in order: date, region, pickup time, personal text, send', async () => {
+    it('shows the form in order: region, orders, date, window, personal text, send', async () => {
       await renderLoaded();
+      chooseRegion('רמת בית שמש');
 
       expectOneH1();
       expect(dateInput().type).toBe('date');
@@ -313,8 +314,10 @@ describe('PlanRoundScreen', () => {
       expect(timeInput().type).toBe('time');
       expect(textInput().tagName).toBe('TEXTAREA');
       const order = [
-        dateInput(),
         regionRadio('רמת בית שמש'),
+        orderBox('משה לוי'),
+        dateInput(),
+        fromInput(),
         timeInput(),
         textInput(),
         sendButton(),
@@ -327,6 +330,23 @@ describe('PlanRoundScreen', () => {
           before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING,
         ).toBeTruthy();
       }
+    });
+
+    it('groups the fields in three titled cards: where, when, message', async () => {
+      await renderLoaded();
+      chooseRegion('רמת בית שמש');
+
+      const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+      expect(titles).toEqual(['איפה', 'מתי', 'הודעה']);
+      const where = within(screen.getByRole('region', { name: 'איפה' }));
+      expect(where.getByRole('group', { name: 'אזור' })).toBeDefined();
+      expect(where.getByRole('group', { name: 'הזמנות לסבב' })).toBeDefined();
+      const when = within(screen.getByRole('region', { name: 'מתי' }));
+      expect(when.getByLabelText('תאריך הסבב')).toBe(dateInput());
+      expect(when.getByLabelText('מאיזו שעה להוציא את הבקבוקים (לא חובה)')).toBe(fromInput());
+      expect(when.getByLabelText('עד איזו שעה להוציא את הבקבוקים (לא חובה)')).toBe(timeInput());
+      const message = within(screen.getByRole('region', { name: 'הודעה' }));
+      expect(message.getByLabelText('טקסט אישי (לא חובה)')).toBe(textInput());
     });
 
     it('reads the date and the time left to right', async () => {
@@ -649,14 +669,26 @@ describe('PlanRoundScreen', () => {
       expect(recorded.plans).toHaveLength(0);
     });
 
-    it('shows every error at once, and focuses the first field', async () => {
+    it('shows every error at once, and focuses the first field: the region, above the date', async () => {
       const recorded = await renderLoaded();
 
       send();
 
       expect(screen.getByText(ROUND_PLAN_ERRORS.dateRequired)).toBeDefined();
       expect(screen.getByText(ROUND_PLAN_ERRORS.regionRequired)).toBeDefined();
-      expect(document.activeElement).toBe(dateInput());
+      expect(document.activeElement).toBe(regionRadio('רמת בית שמש'));
+      expect(recorded.plans).toHaveLength(0);
+    });
+
+    it('focuses the orders list, above the date, when no order is marked and the date is missing', async () => {
+      const recorded = await renderLoaded();
+      chooseRegion('בית שמש');
+      fireEvent.click(orderBox('יוסי מזרחי'));
+
+      send();
+
+      expect(screen.getByText(ROUND_PLAN_ERRORS.dateRequired)).toBeDefined();
+      expect(document.activeElement).toBe(orderBox('יוסי מזרחי'));
       expect(recorded.plans).toHaveLength(0);
     });
 

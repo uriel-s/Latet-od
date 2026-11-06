@@ -303,6 +303,16 @@ describe('styles.css tap targets', () => {
     expect(disabled).not.toContain('dashed');
   });
 
+  // The planning screen (mockup §6): the region is a words-only choice card, each order a grouped
+  // row whose whole height is the checkbox's tap target.
+  it('keeps the planning screen region cards and order rows at least 48px tall', () => {
+    expect(ruleBody(stylesCss, '.choice-card:not(:has(svg))')).toContain(
+      'min-height: var(--tap-target);',
+    );
+    expect(ruleBody(stylesCss, '.grouped-row')).toContain('min-height: 4rem;');
+    expect(ruleBody(stylesCss, '.plan-order input')).toContain('width: 1.75rem;');
+  });
+
   it('makes the big button at least 66px tall', () => {
     expect(ruleBody(stylesCss, '.button-big, .button-large')).toMatch(/min-height:[^;]*66px/);
   });

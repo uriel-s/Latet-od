@@ -1231,11 +1231,48 @@ html:has(.bottom-nav) {
 /* --- Planning screen (collector/PlanRoundScreen.tsx) ------------------------------- */
 
 /*
- * One order row of the plan: the checkbox, then the order's details one under the other. The
- * whole row is the .choice tap target; the checkbox stays at the top when the details wrap.
+ * The region's orders (mockup §6): a .grouped-list of thin rows inside the "איפה" card. That card
+ * is already the .card, so the list gets a light frame of its own instead of a second card; an
+ * error on the list turns the frame red.
+ */
+.plan-order-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.plan-order-list:has(input[aria-invalid='true']) {
+  border: 2px solid var(--error);
+}
+
+/*
+ * One order row of the plan: a big checkbox, then the order's details one under the other. The
+ * whole row is the tap target (.grouped-row: at least 64px tall); the checkbox stays at the top
+ * when the details wrap.
  */
 .plan-order {
+  flex-wrap: nowrap;
   align-items: flex-start;
+  cursor: pointer;
+}
+
+/* The big checkbox (mockup: 28px), in the brand colour when marked. */
+.plan-order input {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+/* The keyboard ring goes around the whole row (the tap target), inside the list's clipped frame. */
+.plan-order:has(input:focus-visible) {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+}
+
+.plan-order input:focus-visible {
+  outline: none;
 }
 
 /* The name, then the address, bottles and tags (.plan-order-more), each on its own line. */
@@ -1245,6 +1282,10 @@ html:has(.bottom-nav) {
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
+}
+
+.plan-order-details {
+  flex: 1 1 0;
 }
 
 /* The tags under the bottles, with a little room above. */
@@ -2190,7 +2231,11 @@ html:has(.bottom-nav) {
   padding: var(--space-4);
 }
 
+/* A flex row, so an optional icon (FormCard `icon`) sits centred before the words. */
 .form-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0 0 var(--space-3);
   color: var(--brand);
   font-size: 1.25rem;

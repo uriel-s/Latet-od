@@ -38,6 +38,7 @@ export const ICON_NAMES = [
   'back',
   'forward',
   'logout',
+  'chat',
 ] as const;
 
 /** One of the icons the app can draw. */
@@ -127,6 +128,8 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
   forward: <path d="M15 6l-6 6 6 6" />,
   // Leaving: an arrow pointing out (left) of an open door frame on the right.
   logout: <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10" />,
+  // A speech bubble with its tail at the start corner: a message (the plan's personal text).
+  chat: <path d="M4 5h16v11H9l-5 4z" />,
 };
 
 /** Props of {@link Icon}. */
