@@ -540,6 +540,42 @@ describe('RoundsScreen', () => {
       ).toBeDefined();
     });
 
+    it('puts the details in one card with three count tiles, hidden from screen readers', async () => {
+      const round = await renderLoaded();
+
+      const details = round.querySelector('.card.round-details');
+      if (details === null) throw new Error('no details card');
+      expect(details.contains(within(round).getByRole('heading', { level: 2 }))).toBe(true);
+      expect(within(details as HTMLElement).getByText(/טקסט אישי/)).toBeDefined();
+      const tiles = details.querySelector('.round-tiles');
+      expect(tiles?.getAttribute('aria-hidden')).toBe('true');
+      expect(
+        [...(tiles?.querySelectorAll('.round-tile') ?? [])].map((tile) => [
+          tile.className,
+          tile.querySelector('b')?.textContent,
+          tile.querySelector('span')?.textContent,
+        ]),
+      ).toEqual([
+        ['round-tile round-tile-green', '1', 'אישרו'],
+        ['round-tile round-tile-amber', '2', 'עוד לא אישרו'],
+        ['round-tile round-tile-gray', '1', 'ביקשו מועד אחר'],
+      ]);
+    });
+
+    it("shows each group's count as a badge next to its title, 0 for an empty group", async () => {
+      const view = makeView({ confirmed: [DANA], pending: [MOSHE, YOSSI] });
+      await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
+
+      const badgeOf = (name: string) => groupRegion(name).querySelector('.group-head .badge');
+      expect(badgeOf('אישרו')?.textContent).toBe('1');
+      expect(badgeOf('אישרו')?.className).toContain('badge-green');
+      expect(badgeOf('עוד לא אישרו')?.textContent).toBe('2');
+      expect(badgeOf('עוד לא אישרו')?.className).toContain('badge-amber');
+      expect(badgeOf('ביקשו מועד אחר')?.textContent).toBe('0');
+      expect(badgeOf('ביקשו מועד אחר')?.className).toContain('badge-gray');
+      expect(badgeOf('אישרו')?.getAttribute('aria-hidden')).toBe('true');
+    });
+
     it('shows the three groups in order, each a region named by its title, with its count', async () => {
       const round = await renderLoaded();
 
@@ -575,6 +611,7 @@ describe('RoundsScreen', () => {
       const card = cardOf('משה לוי');
       const phone = within(card).getByRole('link', { name: '052-7654321' });
       expect(phone.getAttribute('href')).toBe('tel:+972527654321');
+      expect(phone.classList.contains('call-button')).toBe(true);
       expect(within(phone).getByText('052-7654321').closest('[dir="ltr"]')).not.toBeNull();
       expect(within(card).getByText("בית ג'מאל 5")).toBeDefined();
       expect(within(card).getByText('80 בקבוקים')).toBeDefined();
@@ -1095,6 +1132,10 @@ describe('RoundsScreen', () => {
       expect(within(round).queryByRole('button', { name: BUILD_ROUTE_LABEL })).toBeNull();
       // One live summary per round: the route's.
       expect(round.querySelectorAll('[aria-live]')).toHaveLength(1);
+      // The route screen keeps its plain look: no details card, no count tiles.
+      expect(round.querySelector('.round-details')).toBeNull();
+      expect(round.querySelector('.round-tiles')).toBeNull();
+      expect(round.querySelector('.round-pickup')).toBeNull();
       expectOneH1();
     });
 
