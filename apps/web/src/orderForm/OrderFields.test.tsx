@@ -170,6 +170,17 @@ describe('OrderFields', () => {
     expect(titles).toEqual(['פרטים', 'כתובת', 'מיקום', 'בקבוקים']);
   });
 
+  it('draws a FormCard icon before the title, hidden, so the heading is named by the title alone', () => {
+    render(
+      <FormCard title="מתי" icon="calendar">
+        <p>תוכן</p>
+      </FormCard>,
+    );
+    const heading = screen.getByRole('heading', { level: 2, name: 'מתי' });
+    expect(heading.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('region', { name: 'מתי' })).toBeDefined();
+  });
+
   it('has no details card without the contact fields', () => {
     render(
       <OrderFields

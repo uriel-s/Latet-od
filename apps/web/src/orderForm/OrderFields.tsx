@@ -192,15 +192,26 @@ const SPOT_ICONS: Record<(typeof bottlesSpotSchema.options)[number], IconName> =
   buildingEntrance: 'building',
 };
 
+/** Props of {@link FormCard}. */
+export interface FormCardProps {
+  /** The group's heading, which also names the section for screen readers. */
+  title: string;
+  /** A decorative icon before the title (the planning screen's "איפה" / "מתי" / "הודעה"). */
+  icon?: IconName;
+  children: ReactNode;
+}
+
 /**
  * One titled group of fields on a white card; the heading names the group for screen readers.
  * The form's only level of cards: the page's <form> around them is not a card itself.
  */
-export function FormCard({ title, children }: { title: string; children: ReactNode }) {
+export function FormCard({ title, icon, children }: FormCardProps) {
   const headingId = useId();
   return (
     <section className="card form-card" aria-labelledby={headingId}>
       <h2 id={headingId} className="form-card-title">
+        {/* Hidden from screen readers (Icon), so the heading's name stays the title alone. */}
+        {icon !== undefined && <Icon name={icon} />}
         {title}
       </h2>
       {children}

@@ -25,6 +25,7 @@ describe('Icon', () => {
         'back',
         'forward',
         'logout',
+        'chat',
       ].sort(),
     );
   });
