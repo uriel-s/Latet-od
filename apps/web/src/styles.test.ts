@@ -171,6 +171,37 @@ describe('styles.css colour contrast', () => {
     }
   });
 
+  // The history tab's "שווי" hero tile: its text colour must be AA on every token its gradient
+  // runs through, in both palettes. Read from the rules, so a changed gradient or text colour is
+  // checked too; the colours between the stops are sampled every 5%, as for the header.
+  it.each([
+    ['light', rootTokens],
+    ['dark', darkTokens],
+  ])('keeps the history hero tile text AA on its gradient (%s)', (_mode, tokens) => {
+    const background = ruleBody(stylesCss, '.history-total-hero');
+    const gradientTokens = [
+      ...(/background:\s*linear-gradient\(([^;]*)\);/.exec(background)?.[1] ?? '').matchAll(
+        /var\(--([a-z0-9-]+)\)/g,
+      ),
+    ].map(([, name]) => name ?? '');
+    expect(gradientTokens.length).toBeGreaterThan(1);
+    const textToken = /color:\s*var\(--([a-z0-9-]+)\)/.exec(
+      ruleBody(stylesCss, '.history-total-hero dt, .history-total-hero dd'),
+    )?.[1];
+    expect(textToken).toBeDefined();
+    const textHex = tokens.get(textToken ?? '') ?? '';
+    const stops = gradientTokens.map((name, index) => ({
+      hex: tokens.get(name) ?? '',
+      percent: (index / (gradientTokens.length - 1)) * 100,
+    }));
+    for (const stop of stops) expect(stop.hex, 'a #rrggbb gradient token').toMatch(/^#/);
+    for (let percent = 0; percent <= 100; percent += 5) {
+      expect(contrastRatio(textHex, gradientColourAt(stops, percent))).toBeGreaterThanOrEqual(
+        AA_TEXT,
+      );
+    }
+  });
+
   it('declares color-scheme: light dark', () => {
     expect(rootBlock(stylesCss)).toContain('color-scheme: light dark;');
   });
@@ -230,6 +261,18 @@ describe('styles.css tap targets', () => {
       expect(variant).toContain('color: var(--error);');
     },
   );
+
+  it('makes each history month arrow a full --tap-target circle', () => {
+    const arrow = ruleBody(stylesCss, '.month-arrow');
+    expect(arrow).toContain('width: var(--tap-target);');
+    expect(arrow).toContain('height: var(--tap-target);');
+  });
+
+  it('greys out a disabled month arrow with no dashed frame', () => {
+    const disabled = ruleBody(stylesCss, '.month-arrow:disabled');
+    expect(disabled).toContain('color: var(--muted);');
+    expect(disabled).not.toContain('dashed');
+  });
 
   it('makes the big button at least 66px tall', () => {
     expect(ruleBody(stylesCss, '.button-big, .button-large')).toMatch(/min-height:[^;]*66px/);

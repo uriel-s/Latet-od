@@ -1,10 +1,11 @@
 // The "היסטוריה" tab of the collector app (spec §3.7): one calendar month in Israel at a time,
-// picked with "החודש הקודם" / "החודש הבא" (it opens on the current month), the month's three
-// totals at the top (bottles collected, addresses collected, their value) and, under them, the
-// orders closed in that month, collected and cancelled, newest first. GET /api/collector/history
-// sends it all already counted (the shared buildHistory), so this screen only shows it. Read-only:
-// nothing here changes an order.
+// picked with the round arrows "החודש הקודם" / "החודש הבא" (it opens on the current month), the
+// month's three totals at the top (their value as a hero tile, then the bottles and the addresses
+// collected) and, under them, the orders closed in that month, collected and cancelled, newest
+// first. GET /api/collector/history sends it all already counted (the shared buildHistory), so this
+// screen only shows it. Read-only: nothing here changes an order.
 import { EmptyState } from '../components/EmptyState.tsx';
+import { Icon } from '../components/Icon.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
 import {
@@ -139,27 +140,31 @@ export function HistoryScreen({ loadHistory = fetchHistory, now = systemNow }: H
   return (
     <>
       <h1>היסטוריה</h1>
-      {/* Announced when it changes, since the tap that changes it stays on the button. */}
-      <h2 className="month-name" aria-live="polite">
-        {monthName(month)}
-      </h2>
-      {/* In the right-to-left row the first button is on the right: the earlier month, as a
-          Hebrew calendar reads. */}
-      <div className="month-picker">
+      {/* One card: a round arrow button on each side and the month name between them. In the
+          right-to-left row the first button is on the right: the earlier month, as a Hebrew
+          calendar reads, so its arrow points right ("back") and the later one left. The arrows
+          are decoration (Icon hides them), so each button carries its name in aria-label. */}
+      <div className="card month-picker">
         <button
           type="button"
-          className="button button-secondary"
+          className="month-arrow"
+          aria-label="החודש הקודם"
           onClick={() => showMonth(addMonths(month, -1))}
         >
-          החודש הקודם
+          <Icon name="back" />
         </button>
+        {/* Announced when it changes, since the tap that changes it stays on the button. */}
+        <h2 className="month-name" aria-live="polite">
+          {monthName(month)}
+        </h2>
         <button
           type="button"
-          className="button button-secondary"
+          className="month-arrow"
+          aria-label="החודש הבא"
           disabled={isCurrentMonth}
           onClick={() => showMonth(addMonths(month, 1))}
         >
-          החודש הבא
+          <Icon name="forward" />
         </button>
       </div>
 
@@ -188,9 +193,11 @@ function MonthHistory({ history }: { history: HistoryResponse }) {
   return (
     <>
       <dl className="history-totals">
+        {/* The value first: the full-width hero tile, then the two counts side by side under it
+            (styles.css), so a screen reader hears them in the order they are seen. */}
+        <HistoryTotal label="שווי" value={formatShekels(totals.valueAgorot)} hero />
         <HistoryTotal label="בקבוקים שנאספו" value={String(totals.bottlesCollected)} />
         <HistoryTotal label="כתובות שנאספו" value={String(totals.addressesCollected)} />
-        <HistoryTotal label="שווי" value={formatShekels(totals.valueAgorot)} />
       </dl>
 
       {orders.length === 0 ? (
@@ -207,10 +214,21 @@ function MonthHistory({ history }: { history: HistoryResponse }) {
   );
 }
 
-/** One total: its name, and under it the number, large. */
-function HistoryTotal({ label, value }: { label: string; value: string }) {
+/**
+ * One total: its name, and the number large above it. `hero` makes it the month's headline tile,
+ * full width on the brand gradient (the value, "שווי").
+ */
+function HistoryTotal({
+  label,
+  value,
+  hero = false,
+}: {
+  label: string;
+  value: string;
+  hero?: boolean;
+}) {
   return (
-    <div className="card history-total">
+    <div className={hero ? 'card history-total history-total-hero' : 'card history-total'}>
       <dt>{label}</dt>
       {/* Digits (and "9.60 ₪") read left to right inside the right-to-left page (CLAUDE.md). */}
       <dd>
