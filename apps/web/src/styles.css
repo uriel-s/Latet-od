@@ -960,11 +960,13 @@ html:has(.bottom-nav) {
 
 /* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */
 
-/* "הוספת הזמנה" and "תכנון סבב" right under the heading, one under the other, with room before
-   the first group. */
-.orders-add,
-.orders-plan {
-  margin-block-end: 0.75rem;
+/* "הוספת הזמנה" and "תכנון סבב" right under the heading, side by side in two equal columns
+   (mockup §2), with room before the list. Each keeps .button's --tap-target height (≥48px). */
+.orders-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+  margin-block-end: 1rem;
 }
 
 /* The count and bottle total under a group's title: bold, so it reads as the group's header. */
