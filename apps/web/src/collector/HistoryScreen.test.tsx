@@ -194,9 +194,34 @@ describe('HistoryScreen', () => {
       expect(shownMonth()).toBe('נובמבר 2026');
       expect(history.months).toEqual(['2026-11']);
     });
+
+    it('puts the month name between the two arrows, which are named only by their labels', () => {
+      renderScreen(fakeLoad(deferred<HistoryOutcome>().promise).load);
+
+      const monthHeading = screen.getByRole('heading', { level: 2 });
+      // Earlier month first (on the right in RTL), then the name, then the later month.
+      expect(
+        previousButton().compareDocumentPosition(monthHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        monthHeading.compareDocumentPosition(nextButton()) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      // The arrows draw a decorative icon: no visible text competes with the aria-label.
+      for (const button of [previousButton(), nextButton()]) {
+        expect(button.textContent).toBe('');
+        expect(button.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+      }
+    });
   });
 
   describe('loaded', () => {
+    it('shows the value first, then the bottles and the addresses collected', async () => {
+      await renderOctober();
+
+      const labels = [...document.querySelectorAll('dl dt')].map((term) => term.textContent);
+      expect(labels).toEqual(['שווי', 'בקבוקים שנאספו', 'כתובות שנאספו']);
+    });
+
     it('shows the three totals of the month, each number left to right', async () => {
       await renderOctober();
 

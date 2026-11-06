@@ -1534,43 +1534,63 @@ html:has(.bottom-nav) {
 
 /* --- History tab (collector/HistoryScreen.tsx) ------------------------------------- */
 
-/* The month shown ("אוקטובר 2026"), centred over the two buttons that change it. */
+/*
+ * The month picker: one card, a round arrow button at each end and the month shown ("אוקטובר
+ * 2026") between them, apart from the totals below.
+ */
+.month-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-end: 1rem;
+  padding: 0.375rem;
+}
+
 .month-name {
-  margin-block: 0 0.5rem;
+  flex: 1;
+  margin: 0;
+  font-size: 1.2rem;
   text-align: center;
 }
 
-/* "החודש הקודם" and "החודש הבא" side by side, each half the column, apart from the totals. */
-.month-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-block-end: 1.5rem;
+/* "החודש הקודם" / "החודש הבא": a full --tap-target circle, --brand on --brand-soft (AA). Its name
+   is its aria-label; the arrow inside is decoration. */
+.month-arrow {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap-target);
+  height: var(--tap-target);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
-.month-picker .button {
-  padding-inline: 0.5rem;
+.month-arrow svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* "החודש הבא" on the current month: a gray arrow with no fill and no frame, plainly off. Inactive
+   controls are exempt from the contrast rule; the not-allowed cursor comes from button:disabled. */
+.month-arrow:disabled {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.6;
 }
 
 /*
- * "החודש הבא" on the current month. Inactive controls are exempt from the contrast rule, but the
- * text keeps AA anyway (the disabled look, --ink on --done); a dashed --muted edge sets it apart
- * from "החודש הקודם" by shape too. min-height counts the border (border-box), so the two buttons
- * stay the same height.
- */
-.month-picker .button:disabled {
-  border: 2px dashed var(--muted);
-}
-
-/*
- * The month's three totals as stat tiles (ADR-0011): each a .card with the number large in --brand
- * and its label under it in --muted (both AA on --card, styles.test.ts). The DOM keeps the label
- * (dt) before the number (dd) so a screen reader hears the name first; column-reverse puts the
- * number on top. Tiles wrap, so a long value never squeezes.
+ * The month's three totals as stat tiles (ADR-0011): the value ("שווי") is the hero, full width,
+ * then the two counts side by side under it, so no tile stands alone in a row. Each count is a
+ * .card with the number large in --brand and its label under it in --muted (both AA on --card,
+ * styles.test.ts). The DOM keeps the label (dt) before the number (dd) so a screen reader hears
+ * the name first; column-reverse puts the number on top.
  */
 .history-totals {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
   margin: 0 0 1.5rem;
 }
@@ -1580,7 +1600,9 @@ html:has(.bottom-nav) {
   flex-direction: column-reverse;
   justify-content: flex-end;
   gap: 0.25rem;
-  padding: 1rem;
+  /* A long number squeezes its own column, not the row: grid items default to min-content. */
+  min-width: 0;
+  padding: 1rem 0.5rem;
   text-align: center;
 }
 
@@ -1596,6 +1618,24 @@ html:has(.bottom-nav) {
   font-size: 2rem;
   font-weight: 800;
   line-height: 1.1;
+}
+
+/* The value as the hero: the whole row, --white on the --brand-2 → --brand gradient of
+   .button-primary (both ends AA, light and dark, styles.test.ts), number and label alike. */
+.history-total-hero {
+  grid-column: 1 / -1;
+  padding: 1.25rem 1rem;
+  background: linear-gradient(160deg, var(--brand-2), var(--brand));
+  box-shadow: var(--shadow-btn);
+}
+
+.history-total-hero dt,
+.history-total-hero dd {
+  color: var(--white);
+}
+
+.history-total-hero dd {
+  font-size: 2.6rem;
 }
 
 /* --- Route stops (collector/StopCard.tsx) ------------------------------------------ */
