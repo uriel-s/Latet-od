@@ -63,23 +63,8 @@
   --shadow-1: 0 1px 2px rgb(20 30 25 / 5%), 0 6px 18px rgb(20 30 25 / 7%); /* cards */
   --shadow-btn: 0 6px 16px rgb(20 40 32 / 28%); /* the primary button */
 
-  /*
-   * The old names (spec §7 colours, before ADR-0011), kept as aliases so the screens keep working
-   * until each one moves to the names above. Remove an alias once nothing uses it. Contrast
-   * ratios quoted in the comments of the rules below were measured on the old colours.
-   */
-  --color-background: var(--bg);
-  --color-text: var(--ink);
-  --color-accent: var(--brand-soft);
-  --color-white: var(--white);
-  --color-gray: var(--line);
-  --color-muted: var(--muted);
-  --color-error: var(--error);
-  --color-handled: var(--done);
-
   /* 48px is the floor (CLAUDE.md); 3rem (54px at the default 18px) grows with the user's font. */
   --tap-target: max(48px, 3rem);
-  --radius: 0.5rem;
   --gutter: 16px;
   /*
    * The side gutters, at least --gutter and at least the screen's safe area. index.html sets
@@ -128,8 +113,8 @@ html {
 
 body {
   margin: 0;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg);
+  color: var(--ink);
   /*
    * Heebo (the @font-face above, ADR-0011). Until it loads, or if it fails, or for a character
    * outside its subset: system fonts that carry Hebrew (Segoe UI and Arial on Windows, SF on
@@ -166,7 +151,7 @@ p {
 }
 
 a {
-  color: var(--color-text);
+  color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -176,9 +161,9 @@ svg {
   max-width: 100%;
 }
 
-/* Visible keyboard focus everywhere: 3px of --color-text, 8.5:1 against the page. */
+/* Visible keyboard focus everywhere: 3px of --ink, 13.9:1 against the page (light palette). */
 :focus-visible {
-  outline: 3px solid var(--color-text);
+  outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -190,9 +175,9 @@ h1[tabindex='-1']:focus {
 /*
  * Automatic dark mode (ADR-0011): follows the phone, no switch. Only the tokens change; no screen
  * has a dark rule of its own. Same names and same pairs as :root, so styles.test.ts checks this
- * block against the same 4.5:1 list. Two names keep their meaning, not their colour:
- * --white is "text on --brand / --error", so it turns dark here (the brand colours get lighter);
- * --color-white is "a white surface", so it follows --card. --on-hdr stays light on the header.
+ * block against the same 4.5:1 list. --white keeps its meaning, not its colour:
+ * --white is "text on --brand / --error", so it turns dark here (the brand colours get lighter).
+ * Surfaces use --card, which turns dark too. --on-hdr stays light on the header.
  * Not tokens, and fine in both modes: the translucent shadows and the sheet backdrop.
  */
 @media (prefers-color-scheme: dark) {
@@ -216,7 +201,6 @@ h1[tabindex='-1']:focus {
     --error: #ff8a8a;
     --white: #0b1522;
     --peach: #c9a07a;
-    --color-white: var(--card);
   }
 }
 
@@ -306,7 +290,7 @@ h1[tabindex='-1']:focus {
 .bunting-flag-light,
 .bunting-flag-white,
 .bunting-flag-peach {
-  stroke: var(--color-text);
+  stroke: var(--ink);
   stroke-opacity: 0.2;
   stroke-width: 1;
 }
@@ -331,10 +315,10 @@ h1[tabindex='-1']:focus {
 
 /* A quiet footer: a thin accent line like the header's, and very small centred text (about 12px,
    the smallest size in the app, chosen on purpose). The credit is legally required (ODbL), so it
-   stays readable: --color-muted on the page is about 6:1. The footer ends the page, so on a phone with
+   stays readable: --muted on the page is about 5.4:1. The footer ends the page, so on a phone with
    a home bar the OSM credit is lifted above it. */
 .site-footer {
-  border-block-start: 2px solid var(--color-accent);
+  border-block-start: 2px solid var(--brand-soft);
   padding-block: 0.25rem calc(0.25rem + env(safe-area-inset-bottom));
   font-size: 0.7rem;
 }
@@ -360,7 +344,7 @@ h1[tabindex='-1']:focus {
 
 /* Taller than the text, so the credit link is a full-size tap target too. */
 .footer-link {
-  color: var(--color-muted);
+  color: var(--muted);
   display: inline-flex;
   align-items: center;
   min-height: var(--tap-target);
@@ -387,7 +371,7 @@ h1[tabindex='-1']:focus {
 /* The error in plain words next to its field (spec §7). Bold, so red is not the only signal. */
 .field-error {
   margin: 0;
-  color: var(--color-error);
+  color: var(--error);
   font-weight: 700;
 }
 
@@ -420,10 +404,10 @@ textarea {
   width: 100%;
   min-height: var(--tap-target);
   padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
-  color: var(--color-text);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
 }
 
 textarea {
@@ -436,7 +420,7 @@ textarea {
  * Element-qualified so it outweighs the input rule above (same specificity, later wins).
  */
 :is(input, select, textarea)[aria-invalid='true'] {
-  border-color: var(--color-error);
+  border-color: var(--error);
 }
 
 /*
@@ -465,9 +449,9 @@ textarea {
   gap: 0.75rem;
   min-height: var(--tap-target);
   padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--card);
   cursor: pointer;
 }
 
@@ -476,12 +460,12 @@ textarea {
   width: 1.5rem;
   height: 1.5rem;
   margin: 0;
-  accent-color: var(--color-text);
+  accent-color: var(--ink);
 }
 
 /* The keyboard ring goes around the whole row (the tap target), not only the small native dot. */
 .choice:has(input:focus-visible) {
-  outline: 3px solid var(--color-text);
+  outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -492,7 +476,7 @@ textarea {
 
 /* The chosen row stands out by its background too, not only by the dot. */
 .choice:has(input:checked) {
-  background: var(--color-accent);
+  background: var(--brand-soft);
 }
 
 /* --- Buttons ------------------------------------------------------------------ */
@@ -645,7 +629,7 @@ button.button-not-ready[aria-disabled='true'] {
   padding: 0.5rem 0;
   border: 0;
   background: none;
-  color: var(--color-text);
+  color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -820,21 +804,21 @@ button.button-not-ready[aria-disabled='true'] {
   width: 100%;
   min-height: var(--tap-target);
   padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--card);
   text-align: start;
 }
 
 /* Feedback on the row under the finger or the mouse; :hover only where hover exists (a touch
    screen would leave the last tapped row coloured). */
 .street-result:active {
-  background: var(--color-accent);
+  background: var(--brand-soft);
 }
 
 @media (hover: hover) {
   .street-result:hover {
-    background: var(--color-accent);
+    background: var(--brand-soft);
   }
 }
 
@@ -991,13 +975,13 @@ html:has(.bottom-nav) {
 
 /*
  * One waiting order. White on the page's blue sets the card apart; the gray edge is decoration
- * only (it fails AA as an edge, see --color-gray), and nothing to tap depends on it.
+ * only (it fails AA as an edge, see --line), and nothing to tap depends on it.
  */
 .order-card {
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
 .order-card p {
@@ -1023,16 +1007,16 @@ html:has(.bottom-nav) {
 }
 
 /*
- * A tag ("לא אישר בזמן · 12/11", "בלי מיקום"): --color-text on --color-accent (6.5:1, AA) inside
- * a --color-text outline, so it reads as a badge by its shape, and its words say what it means.
+ * A tag ("לא אישר בזמן · 12/11", "בלי מיקום"): --ink on --brand-soft (12.4:1, AA) inside
+ * an --ink outline, so it reads as a badge by its shape, and its words say what it means.
  */
 .tag {
   display: inline-block;
   padding: 0.125rem 0.625rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--color-text);
+  background: var(--brand-soft);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -1099,7 +1083,7 @@ html:has(.bottom-nav) {
 .cancel-order {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
-  border-block-start: 2px solid var(--color-gray);
+  border-block-start: 2px solid var(--line);
 }
 
 /* The same question among other buttons (CancelConfirm `inline`): no gap and no line above it. */
@@ -1156,15 +1140,15 @@ html:has(.bottom-nav) {
   align-items: center;
   gap: 0.5rem 1rem;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
-/* An opened row: a thick --color-text bar on its start edge, next to the "נפתח ✓" words, so it
+/* An opened row: a thick --ink bar on its start edge, next to the "נפתח ✓" words, so it
    is told apart by shape and text, not by colour alone. */
 .send-row-opened {
-  border-inline-start: 6px solid var(--color-text);
+  border-inline-start: 6px solid var(--ink);
 }
 
 .send-row-name {
@@ -1173,14 +1157,14 @@ html:has(.bottom-nav) {
   font-weight: 700;
 }
 
-/* "נפתח ✓ · 20/10": a badge like .tag, --color-text on --color-accent (6.5:1, AA). */
+/* "נפתח ✓ · 20/10": a badge like .tag, --ink on --brand-soft (12.4:1, AA). */
 .send-row-mark {
   margin: 0;
   padding: 0.125rem 0.625rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--color-text);
+  background: var(--brand-soft);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -1193,7 +1177,7 @@ html:has(.bottom-nav) {
 .send-row-note {
   flex-basis: 100%;
   margin: 0;
-  color: var(--color-error);
+  color: var(--error);
   font-weight: 700;
 }
 
@@ -1390,7 +1374,7 @@ html:has(.bottom-nav) {
   font-weight: 700;
 }
 
-/* The chosen filter is filled (white on --color-text, 10.4:1): told apart by more than colour of
+/* The chosen filter is filled (--white on --brand, 6.8:1): told apart by more than colour of
    the outline, and screen readers get aria-pressed. */
 .round-picker-chip[aria-pressed='true'] {
   background: var(--brand);
@@ -1419,16 +1403,16 @@ html:has(.bottom-nav) {
   border-radius: var(--r-md);
   background: var(--card);
   box-shadow: var(--shadow-1);
-  color: var(--color-text);
+  color: var(--ink);
   font: inherit;
   text-align: start;
 }
 
-/* The round on screen: --color-accent behind (6.5:1), a thick bar on the start side and a ✓, so
+/* The round on screen: --brand-soft behind (12.4:1 under --ink), a thick start bar and a ✓, so
    it does not rely on colour alone. The tag turns white to stay visible on the accent. */
 .round-picker-row[aria-current='true'] {
   border-inline-start: 8px solid var(--brand);
-  background: var(--color-accent);
+  background: var(--brand-soft);
   font-weight: 700;
 }
 
@@ -1444,7 +1428,7 @@ html:has(.bottom-nav) {
 .round + .round {
   margin-block-start: 2rem;
   padding-block-start: 0.5rem;
-  border-block-start: 2px solid var(--color-gray);
+  border-block-start: 2px solid var(--line);
 }
 
 /* "בקשות אישור" and the group titles: under the round's <h2>, above the cards' names. */
@@ -1559,7 +1543,7 @@ html:has(.bottom-nav) {
 .round-build-route {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
-  border-block-start: 2px solid var(--color-gray);
+  border-block-start: 2px solid var(--line);
 }
 
 /* The close button (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
@@ -1693,9 +1677,9 @@ html:has(.bottom-nav) {
  */
 .stop-card {
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
 .stop-card > p {
@@ -1704,12 +1688,12 @@ html:has(.bottom-nav) {
 
 /*
  * A handled stop (collected, not found, cancelled, left the round): a quieter gray background
- * (--color-handled) and a thick --color-text bar on its start edge, next to the state in words,
+ * (--done) and a thick --ink bar on its start edge, next to the state in words,
  * so it is told apart by shape and text, not by colour alone.
  */
 .stop-card-handled {
-  border-inline-start: 6px solid var(--color-text);
-  background: var(--color-handled);
+  border-inline-start: 6px solid var(--ink);
+  background: var(--done);
 }
 
 /* "עצירה 2": a small header line above the name. */
@@ -1737,15 +1721,15 @@ html:has(.bottom-nav) {
 
 /*
  * "נאסף", "לא נמצא", ...: a badge like .tag, but white inside, so it stands out on the gray of a
- * handled card (--color-text on white, 10.4:1).
+ * handled card (--ink on --card, 15.3:1).
  */
 .stop-card-state {
   display: inline-block;
   padding: 0.125rem 0.625rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--color-white);
-  color: var(--color-text);
+  background: var(--card);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -1842,18 +1826,18 @@ html:has(.bottom-nav) {
    in the Buttons section. */
 
 /*
- * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --color-text on
- * white (10.4:1) instead of the error red, so it reads as news, not as a mistake. The change
+ * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --ink on
+ * --card (15.3:1) instead of the error red, so it reads as news, not as a mistake. The change
  * form's warning that a new address leaves the round looks the same: news before saving.
  */
 .order-notice,
 .order-change-warning {
   margin-block: 0 1.5rem;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-inline-start-width: 6px;
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border-radius: var(--r-sm);
+  background: var(--card);
   font-weight: 700;
 }
 
@@ -1920,11 +1904,11 @@ html:has(.bottom-nav) {
 .form-alert {
   margin-block: 0 1.5rem;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-error);
+  border: 2px solid var(--error);
   border-inline-start-width: 6px;
-  border-radius: var(--radius);
-  background: var(--color-white);
-  color: var(--color-error);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--error);
   font-weight: 700;
 }
 
@@ -2191,7 +2175,7 @@ html:has(.bottom-nav) {
   align-items: center;
   gap: 0.75rem;
   text-align: center;
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 .empty-state svg {

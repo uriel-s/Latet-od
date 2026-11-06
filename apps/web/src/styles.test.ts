@@ -220,7 +220,7 @@ describe('styles.css colour contrast', () => {
     expect(contrastRatio(borderHex, tokens.get('card') ?? '')).toBeGreaterThanOrEqual(NON_TEXT);
   });
 
-  // Text fields keep their dark frame (--color-text), never the decorative --line.
+  // Text fields keep their dark frame (--ink), never the decorative --line.
   it('frames the text fields with the text colour, not --line', () => {
     // Read by hand: the comma inside :not(…) would split ruleBody's selector list.
     const fieldRule =
@@ -228,29 +228,20 @@ describe('styles.css colour contrast', () => {
         stylesCss,
       )?.[1];
     expect(fieldRule).toBeDefined();
-    expect(fieldRule).toContain('border: 2px solid var(--color-text);');
+    expect(fieldRule).toContain('border: 2px solid var(--ink);');
   });
 
   it('declares color-scheme: light dark', () => {
     expect(rootBlock(stylesCss)).toContain('color-scheme: light dark;');
   });
 
-  it('keeps the old colour names as aliases of the dawn tokens', () => {
-    // Screens still use the pre-ADR-0011 names until each one moves to the new ones.
-    const root = rootBlock(stylesCss);
-    for (const [oldName, newName] of [
-      ['color-background', 'bg'],
-      ['color-text', 'ink'],
-      ['color-accent', 'brand-soft'],
-      ['color-white', 'white'],
-      ['color-gray', 'line'],
-      ['color-muted', 'muted'],
-      ['color-error', 'error'],
-      ['color-handled', 'done'],
-    ]) {
-      expect(root).toContain(`--${oldName}: var(--${newName});`);
-      expect(rootTokens.has(newName ?? ''), `--${newName ?? ''} is defined`).toBe(true);
-    }
+  it('no longer defines or uses the old colour names or the old radius', () => {
+    // The pre-ADR-0011 aliases (the "color-" names: text, white, accent, ...) and the old 0.5rem
+    // radius are gone: every rule names a dawn token directly, one name per colour and corner.
+    // The patterns are built from pieces so this test file itself stays free of the old names.
+    expect(stylesCss).not.toMatch(new RegExp('--' + 'color-[a-z]'));
+    expect(stylesCss).not.toMatch(new RegExp('--' + 'radius\\b'));
+    expect(rootTokens.has('ink'), '--ink is defined').toBe(true);
   });
 });
 
