@@ -739,22 +739,48 @@ button.button-not-ready[aria-disabled='true'] {
 
 /* --- Collector app (collector/) ----------------------------------------------------- */
 
-/* The logout action above the screen, at the end (left, in right-to-left) of the column, away
-   from where the heading starts. */
+/*
+ * The title row (mockup: .title-row / .back-row). The logout toolbar comes first in the DOM
+ * (CollectorShell.tsx) and floats to the end of the row (left, in right-to-left), so the screen's
+ * <h1>, or on the add/edit/plan screens the back link, shares the row with it without moving the
+ * button between components. `float: left` is the fallback for a browser without the logical
+ * value; the collector app is always right-to-left, where the two mean the same.
+ */
 .collector-toolbar {
-  display: flex;
-  justify-content: flex-end;
+  float: left;
+  float: inline-end;
+  margin-inline-start: 0.5rem;
 }
 
-/* .link-button has no side padding; this keeps the short word a full 48px wide target too. */
+/* A quiet action: icon and word in --muted, no underline (it overrides .link-button's look), a
+   full 48px target on both axes; the round shape shows only as the focus ring's corners. */
 .collector-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   min-width: var(--tap-target);
-  padding-inline: 0.5rem;
+  min-height: var(--tap-target);
+  padding-inline: 0.75rem;
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-/* Each screen starts with its <h1>: the toolbar above it already makes the space at the top. */
+/* A top-level screen's <h1> in the row beside the toolbar: as tall as the button and centred on
+   it. A flex box does not flow under a float, so a long heading wraps beside the button. */
 .collector-toolbar + h1 {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target);
   margin-block-start: 0;
+}
+
+/* Whatever follows the title row starts under it, even when the heading is shorter than the
+   button. */
+.collector-toolbar + h1 + *,
+.back-link + h1 {
+  clear: both;
 }
 
 /*
@@ -932,12 +958,30 @@ html:has(.bottom-nav) {
 
 /* --- Add and edit order screens (collector/AddOrderScreen.tsx, EditOrderScreen.tsx) -- */
 
-/* "חזרה להזמנות" under the heading: a plain link, still a full-size tap target. */
+/*
+ * The back link (collector/BackToOrdersLink.tsx), like an iPhone back button: a chevron and
+ * "הזמנות" in --brand at the start of the title row, beside the floated logout, with the screen's
+ * <h1> under it. A flex box (not inline) so it stays beside the float; fit-content keeps its
+ * target to its own width. The negative start margin lines the chevron up with the column edge
+ * while the padding keeps the whole 48px target.
+ */
 .back-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  gap: 0.125rem;
+  width: fit-content;
   min-height: var(--tap-target);
-  margin-block-end: 1rem;
+  margin-inline-start: -0.5rem;
+  padding-inline: 0.5rem 0.75rem;
+  border-radius: 999px;
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* The heading under the back link: the row above already makes the space at the top. */
+.back-link + h1 {
+  margin-block-start: 0.5rem;
 }
 
 /* "ביטול ההזמנה" (components/CancelConfirm.tsx, also on the customer's page) sits apart from the

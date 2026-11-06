@@ -8,7 +8,8 @@ import { addCollectorOrder, type CollectorOrderWriteOutcome } from '../api.ts';
 import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderForm/formValues.ts';
 import { OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
-import { Link, navigate } from '../router.tsx';
+import { navigate } from '../router.tsx';
+import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { ORDERS_LIST_PATH, saveErrors } from './orderEditing.ts';
 
@@ -93,10 +94,8 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
 
   return (
     <>
+      <BackToOrdersLink />
       <h1>הוספת הזמנה</h1>
-      <Link to={ORDERS_LIST_PATH} className="back-link">
-        חזרה להזמנות
-      </Link>
 
       {/* noValidate: the form shows its own Hebrew messages next to each field, not the
           browser's bubbles. */}
