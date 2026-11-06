@@ -285,3 +285,45 @@ describe('SendList', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 });
+
+describe('SendList grouped', () => {
+  it('shows the list as one card of thin rows, keeping the opened modifier', () => {
+    renderList({
+      rows: [makeRow({ openedAt: OPENED_AT }), ...ROWS.slice(1)],
+      markOpened: fakeMarkOpened().markOpened,
+      grouped: true,
+    });
+
+    const list = screen.getByRole('list');
+    expect(list.className.split(' ')).toEqual(
+      expect.arrayContaining(['send-list', 'card', 'grouped-list']),
+    );
+    for (const item of screen.getAllByRole('listitem')) {
+      expect(item.className.split(' ')).toEqual(
+        expect.arrayContaining(['send-row', 'grouped-row']),
+      );
+    }
+    expect(rowOf('דנה כהן').className).toContain('send-row-opened');
+    // Same text and accessible names as the framed list.
+    expect(screen.getByRole('link', { name: 'שלח למשה לוי' })).toBeDefined();
+  });
+
+  it('shows the empty sentence as a card of its own', () => {
+    renderList({ rows: [], markOpened: fakeMarkOpened().markOpened, grouped: true });
+
+    expect(screen.getByText(EMPTY_SEND_LIST_TEXT).className).toBe('card grouped-empty');
+  });
+
+  it('keeps the framed rows without `grouped` (the route and the close question)', () => {
+    const { container, unmount } = renderList({
+      rows: ROWS,
+      markOpened: fakeMarkOpened().markOpened,
+    });
+    expect(screen.getByRole('list').className).toBe('send-list');
+    expect(container.querySelector('.card, .grouped-list, .grouped-row')).toBeNull();
+    unmount();
+
+    renderList({ rows: [], markOpened: fakeMarkOpened().markOpened });
+    expect(screen.getByText(EMPTY_SEND_LIST_TEXT).className).toBe('');
+  });
+});
