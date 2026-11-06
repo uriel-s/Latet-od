@@ -1745,11 +1745,37 @@ html:has(.bottom-nav) {
 
 /* --- Customer order page (pages/OrderPage.tsx) ------------------------------------ */
 
-/* "מצב ההזמנה: ממתינה לאישור": a little larger than body text, the first thing to read. */
-.order-status {
-  /* Also a .card: the status badge sits at the top of the page. */
-  font-size: 1.15rem;
+/*
+ * The status card at the top of the page (OrderStatus): "מצב ההזמנה:" in --muted, the status as a
+ * large badge, and the sentence that explains it under them, in one .card.
+ */
+.order-status-card {
+  display: grid;
+  gap: 0.75rem;
   margin-block: 0 1rem;
+  padding: 1rem;
+}
+
+.order-status-card p {
+  margin: 0;
+}
+
+/* The label wraps above the badge on a narrow phone; --muted on --card is AA (styles.test.ts). */
+.order-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* The badge larger than in the collector's lists: the first thing the customer reads. It keeps
+   its tone's own text and background (.badge-*), so the contrast pairs stay the tested ones. */
+.order-status .badge {
+  padding: 0.375rem 1rem;
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 /* The thank-you screen's donation line (also a .card). */
@@ -1791,24 +1817,49 @@ html:has(.bottom-nav) {
 }
 
 .order-details h2 {
-  margin-block-start: 0;
+  margin-block: 0 0.25rem;
 }
 
 .order-details dl {
   margin: 0;
 }
 
-/* Each detail: its name in bold, the value under it. */
+/*
+ * Each detail as a settings-style row (OrderPage's DetailRow): the name at the inline start in
+ * --muted, the value at the inline end in bold, a thin line between rows. Logical properties and
+ * text-align: end, so the same rules serve Hebrew (RTL) and English (/en, LTR). A value too long
+ * for the space left wraps: first inside its own column, and below 8rem it drops to a line of its
+ * own; overflow-wrap breaks a long word, so nothing runs past the card at 390px.
+ */
+.order-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  min-height: var(--tap-target);
+  padding-block: 0.75rem;
+}
+
+/* --line is decoration only (too light to be an edge); the words carry the meaning. */
+.order-detail-row + .order-detail-row {
+  border-block-start: 1px solid var(--line);
+}
+
+/* --muted on --card is AA (styles.test.ts). */
 .order-details dt {
-  font-weight: 700;
+  flex: 0 1 auto;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .order-details dd {
-  margin: 0 0 0.75rem;
-}
-
-.order-details dd:last-child {
-  margin-block-end: 0;
+  flex: 1 1 8rem;
+  min-width: 0;
+  margin: 0;
+  font-weight: 700;
+  text-align: end;
+  overflow-wrap: anywhere;
 }
 
 /* "שינוי" right under the details card, apart from it. */
