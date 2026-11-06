@@ -25,7 +25,7 @@ import {
 } from '../api.ts';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { NO_ERRORS, validateOrderDetails } from '../orderForm/formValues.ts';
-import { OrderFields } from '../orderForm/OrderFields.tsx';
+import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { navigate } from '../router.tsx';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
@@ -55,6 +55,8 @@ export const REGION_HINT = 'רחוב קרוב כבר קובע את האזור. �
 const SAVE_LABEL = 'שמירת השינויים';
 const SAVING_LABEL = 'שומר...';
 const CANCEL_ORDER_LABEL = 'ביטול ההזמנה';
+/** The title of the card with "רחוב קרוב" and "אזור": where the order is on the map. */
+const LOCATION_CARD_TITLE = 'מיקום';
 
 /** Props of {@link EditOrderScreen}. */
 export interface EditOrderScreenProps {
@@ -300,53 +302,65 @@ function EditOrderForm({ order, updateOrder, cancelOrder, deleteOrder }: EditOrd
     }
   }
 
+  // "רחוב קרוב" and "אזור", Yoel's own fields: their own card between the address and the
+  // bottles (mockup §5), so the form keeps one level of cards.
+  const locationCard = (
+    <FormCard title={LOCATION_CARD_TITLE}>
+      {/* Shown for every order, not only one written by hand: a listed street with no point,
+          or a wrong one, gets its location from a near street too (ADR-0005). */}
+      <StreetPicker
+        label="רחוב קרוב"
+        allowFreeText={false}
+        value={nearStreet}
+        onChange={setNearStreet}
+        hint={NEAR_STREET_HINT}
+      />
+
+      <fieldset className="field" aria-describedby={regionHintId}>
+        <legend className="field-label">אזור</legend>
+        <p id={regionHintId} className="field-hint">
+          {REGION_HINT}
+        </p>
+        {/* Choice cards like "איפה הבקבוקים", without an icon. No card is checked for an order
+            without a region ("בלי אזור"). There is no way back to it: the api keeps a region
+            once the order has one. */}
+        <div className="choice-cards">
+          {regionSchema.options.map((option) => (
+            <label key={option} className="choice-card">
+              <input
+                type="radio"
+                name={regionGroupName}
+                value={option}
+                checked={region === option}
+                onChange={() => setRegion(option)}
+              />
+              <span>{REGION_LABELS[option]}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </FormCard>
+  );
+
   return (
     <>
       {/* noValidate: the form shows its own Hebrew messages next to each field, not the
-          browser's bubbles. */}
+          browser's bubbles. Not a .card itself: OrderFields already draws the cards, and a card
+          inside a card is one level too many. */}
       <form
         ref={formRef}
-        className="card"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
           void save();
         }}
       >
-        <OrderFields values={values} errors={errors.byField} onFieldChange={setField} />
-
-        {/* Shown for every order, not only one written by hand: a listed street with no point,
-            or a wrong one, gets its location from a near street too (ADR-0005). */}
-        <StreetPicker
-          label="רחוב קרוב"
-          allowFreeText={false}
-          value={nearStreet}
-          onChange={setNearStreet}
-          hint={NEAR_STREET_HINT}
+        <OrderFields
+          values={values}
+          errors={errors.byField}
+          onFieldChange={setField}
+          afterAddress={locationCard}
         />
-
-        <fieldset className="field" aria-describedby={regionHintId}>
-          <legend className="field-label">אזור</legend>
-          <p id={regionHintId} className="field-hint">
-            {REGION_HINT}
-          </p>
-          {/* No radio is checked for an order without a region ("בלי אזור"). There is no way
-              back to it: the api keeps a region once the order has one. */}
-          <div className="choice-list">
-            {regionSchema.options.map((option) => (
-              <label key={option} className="choice">
-                <input
-                  type="radio"
-                  name={regionGroupName}
-                  value={option}
-                  checked={region === option}
-                  onChange={() => setRegion(option)}
-                />
-                {REGION_LABELS[option]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
 
         {errors.other && (
           <p className="form-alert" role="alert">
@@ -365,20 +379,26 @@ function EditOrderForm({ order, updateOrder, cancelOrder, deleteOrder }: EditOrd
         </button>
       </form>
 
-      {/* Outside the form, so Enter in a field never reaches it. The customer's name is in the
-          question, so Yoel sees whose order he is about to cancel. */}
-      <CancelConfirm
-        buttonLabel={CANCEL_ORDER_LABEL}
-        question={`לבטל את ההזמנה של ${order.contact.name}?`}
-        cancelling={cancelling}
-        error={cancelError}
-        onConfirm={() => void confirmCancel()}
-        onOpenChange={() => setCancelError(null)}
-      />
+      {/* The destructive actions, at the bottom after a dividing line (mockup §5), so they are
+          never the next tap after "שמירת השינויים". Outside the form, so Enter in a field never
+          reaches them. */}
+      <div className="danger-zone">
+        <hr className="danger-zone-divider" />
+        {/* The customer's name is in the question, so Yoel sees whose order he is about to
+            cancel. */}
+        <CancelConfirm
+          buttonLabel={CANCEL_ORDER_LABEL}
+          question={`לבטל את ההזמנה של ${order.contact.name}?`}
+          cancelling={cancelling}
+          error={cancelError}
+          onConfirm={() => void confirmCancel()}
+          onOpenChange={() => setCancelError(null)}
+        />
 
-      {/* Only for an order in no round (ADR-0008); a pending or confirmed one is cancelled first
-          or leaves its round, and the button does not show. */}
-      <DeleteOrderButton order={order} deleteOrder={deleteOrder} />
+        {/* Only for an order in no round (ADR-0008); a pending or confirmed one is cancelled first
+            or leaves its round, and the button does not show. */}
+        <DeleteOrderButton order={order} deleteOrder={deleteOrder} />
+      </div>
     </>
   );
 }

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AddOrderRequest, Lang } from '@bottlerun/shared';
 import { addCollectorOrder, type CollectorOrderWriteOutcome } from '../api.ts';
 import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderForm/formValues.ts';
-import { OrderFields } from '../orderForm/OrderFields.tsx';
+import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { navigate } from '../router.tsx';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
@@ -15,6 +15,8 @@ import { ORDERS_LIST_PATH, saveErrors } from './orderEditing.ts';
 
 const SAVE_LABEL = 'שמירת ההזמנה';
 const SAVING_LABEL = 'שומר...';
+/** The title of the card with the customer's language, the one field the public form lacks. */
+const LANGUAGE_CARD_TITLE = 'שפה';
 
 /** The picker's choices, labelled in Hebrew like the rest of the collector app. */
 const CUSTOMER_LANGS: { lang: Lang; label: string }[] = [
@@ -98,10 +100,10 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
       <h1>הוספת הזמנה</h1>
 
       {/* noValidate: the form shows its own Hebrew messages next to each field, not the
-          browser's bubbles. */}
+          browser's bubbles. Not a .card itself: OrderFields already draws the cards, and a card
+          inside a card is one level too many. */}
       <form
         ref={formRef}
-        className="card"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -111,24 +113,28 @@ export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenP
         <OrderFields values={values} errors={errors.byField} onFieldChange={setField} />
 
         {/* The language of the customer's WhatsApp messages and page; the collector app itself
-            stays Hebrew. Hebrew is preselected, so an untouched picker sends `he`. */}
-        <fieldset className="field">
-          <legend className="field-label">שפת הלקוח</legend>
-          <div className="choice-list">
-            {CUSTOMER_LANGS.map(({ lang, label }) => (
-              <label key={lang} className="choice">
-                <input
-                  type="radio"
-                  name="customerLang"
-                  value={lang}
-                  checked={customerLang === lang}
-                  onChange={() => setCustomerLang(lang)}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+            stays Hebrew. Hebrew is preselected, so an untouched picker sends `he`. Its own card,
+            in the same choice cards as "איפה הבקבוקים" (no icon), so no field stands outside a
+            card. */}
+        <FormCard title={LANGUAGE_CARD_TITLE}>
+          <fieldset className="field">
+            <legend className="field-label">שפת הלקוח</legend>
+            <div className="choice-cards">
+              {CUSTOMER_LANGS.map(({ lang, label }) => (
+                <label key={lang} className="choice-card">
+                  <input
+                    type="radio"
+                    name="customerLang"
+                    value={lang}
+                    checked={customerLang === lang}
+                    onChange={() => setCustomerLang(lang)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </FormCard>
 
         {errors.other && (
           <p className="form-alert" role="alert">

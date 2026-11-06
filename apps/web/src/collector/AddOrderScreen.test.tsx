@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   CREATE_ORDER_MESSAGES,
@@ -164,6 +164,18 @@ describe('AddOrderScreen', () => {
     expect(screen.getByRole('group', { name: 'שפת הלקוח' })).toBeDefined();
     expect(input('עברית').checked).toBe(true);
     expect(input('אנגלית').checked).toBe(false);
+  });
+
+  it('keeps one level of cards, the customer language in a card of its own', () => {
+    renderScreen();
+
+    const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(titles).toEqual(['פרטים', 'כתובת', 'בקבוקים', 'שפה']);
+    const languageCard = screen.getByRole('region', { name: 'שפה' });
+    expect(within(languageCard).getByRole('group', { name: 'שפת הלקוח' })).toBeDefined();
+    // No card inside a card: the form around the cards is not one, and no card holds another.
+    expect(document.querySelectorAll('.card .card')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'שמירת ההזמנה' }).closest('.card')).toBeNull();
   });
 
   it('sends lang en when English is chosen', async () => {

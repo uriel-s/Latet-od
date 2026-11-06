@@ -62,6 +62,9 @@ function contrastRatio(foreground: string, background: string): number {
 /** WCAG AA for normal-size text. */
 const AA_TEXT = 4.5;
 
+/** WCAG 1.4.11: the frame of a control against what is next to it. */
+const NON_TEXT = 3;
+
 /** The tokens of the dark palette: the :root inside `@media (prefers-color-scheme: dark)`. */
 function darkBlock(css: string): string {
   const match = /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\n {2}\}/.exec(
@@ -200,6 +203,32 @@ describe('styles.css colour contrast', () => {
         AA_TEXT,
       );
     }
+  });
+
+  // An unchosen choice card ("איפה הבקבוקים", the region, the customer language) has no fill of
+  // its own: its frame is the only thing that shows where to tap, so it needs 3:1 (WCAG 1.4.11).
+  it.each([
+    ['light', rootTokens],
+    ['dark', darkTokens],
+  ])('frames an unchosen .choice-card at 3:1 or more on --card (%s)', (_mode, tokens) => {
+    const borderToken = /border:\s*\S+\s+solid\s+var\(--([a-z0-9-]+)\)/.exec(
+      ruleBody(stylesCss, '.choice-card'),
+    )?.[1];
+    expect(borderToken, 'the .choice-card border is a token').toBeDefined();
+    const borderHex = tokens.get(borderToken ?? '') ?? '';
+    expect(borderHex).toMatch(/^#/);
+    expect(contrastRatio(borderHex, tokens.get('card') ?? '')).toBeGreaterThanOrEqual(NON_TEXT);
+  });
+
+  // Text fields keep their dark frame (--color-text), never the decorative --line.
+  it('frames the text fields with the text colour, not --line', () => {
+    // Read by hand: the comma inside :not(…) would split ruleBody's selector list.
+    const fieldRule =
+      /input:not\(\[type='radio'\], \[type='checkbox'\]\),\s*select,\s*textarea\s*\{([^}]*)\}/.exec(
+        stylesCss,
+      )?.[1];
+    expect(fieldRule).toBeDefined();
+    expect(fieldRule).toContain('border: 2px solid var(--color-text);');
   });
 
   it('declares color-scheme: light dark', () => {
