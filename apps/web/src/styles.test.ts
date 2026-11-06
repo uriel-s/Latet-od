@@ -111,7 +111,8 @@ const TEXT_PAIRS: [foreground: string, background: string][] = [
   ['white', 'brand-2'],
   ['green', 'green-soft'],
   ['amber', 'amber-soft'],
-  ['error', 'card'],
+  ['error', 'card'], // .button-danger-outline, the opening "ביטול ההזמנה"
+  ['error', 'bg'], // .button-danger-quiet: no fill of its own, so the page shows through
   ['white', 'error'], // .button-danger
   ['ink', 'done'], // a disabled or busy .button, a handled stop card
   ['brand', 'card'], // .button-secondary in the site header
@@ -216,6 +217,16 @@ describe('styles.css tap targets', () => {
   it('keeps a .button (also a link styled as one) at least --tap-target tall', () => {
     expect(ruleBody(stylesCss, '.button')).toContain('min-height: var(--tap-target);');
   });
+
+  // The destructive variants only colour a .button; a height of their own could undercut the 48px.
+  it.each(['.button-danger-outline', '.button-danger-quiet'])(
+    'leaves the height of %s to .button, and gives it --error text',
+    (selector) => {
+      const variant = ruleBody(stylesCss, selector);
+      expect(variant).not.toMatch(/(^|[s;])(min-)?height:/);
+      expect(variant).toContain('color: var(--error);');
+    },
+  );
 
   it('makes the big button at least 66px tall', () => {
     expect(ruleBody(stylesCss, '.button-big, .button-large')).toMatch(/min-height:[^;]*66px/);

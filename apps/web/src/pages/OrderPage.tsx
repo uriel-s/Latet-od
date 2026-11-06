@@ -501,6 +501,8 @@ export function OrderPage({
                   </button>
                   <CancelConfirm
                     inline
+                    // "Not this time" only sends the order back to waiting: nothing red about it.
+                    buttonTone="secondary"
                     buttonLabel={t(lang, 'orderPage.decline')}
                     question={t(lang, 'orderPage.declineQuestion')}
                     confirmLabel={t(lang, 'orderPage.declineConfirm')}
