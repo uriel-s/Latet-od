@@ -315,6 +315,42 @@ describe('OrderPage', () => {
       expect(screen.getByText('ממתינה לסבב').closest('.badge')).not.toBeNull();
     });
 
+    it('puts the status and the sentence that explains it in one card', async () => {
+      await renderLoaded();
+
+      const card = screen.getByText('מצב ההזמנה:', { exact: false }).closest('.card');
+      expect(card).not.toBeNull();
+      expect(card?.contains(screen.getByText(WAITING_TEXT))).toBe(true);
+    });
+
+    it('draws each detail as one row: its name, then its value', async () => {
+      await renderLoaded();
+
+      const details = screen.getByRole('region', { name: 'פרטי ההזמנה' });
+      const rows = Array.from(details.querySelectorAll('dl > div')).map((row) =>
+        Array.from(row.children).map((cell) => `${cell.tagName}:${cell.textContent}`),
+      );
+      expect(rows).toEqual([
+        ['DT:שם', 'DD:דנה כהן'],
+        ['DT:טלפון', 'DD:050-1234567'],
+        ['DT:כתובת', 'DD:דרך רבין יצחק 12'],
+        ['DT:איפה הבקבוקים', 'DD:בבניין - ליד דלת הדירה · קומה 3, דירה 12'],
+        ['DT:הערה', 'DD:ליד העגלה הכחולה'],
+        ['DT:כמות בקבוקים', 'DD:40'],
+      ]);
+    });
+
+    it('sets "ביטול ההזמנה" apart from "שינוי", in the red outline', async () => {
+      await renderLoaded();
+
+      const cancel = button('ביטול ההזמנה');
+      expect(cancel.className).toContain('button-danger-outline');
+      // Its own block under a line (.cancel-order), which "שינוי" is not part of.
+      const cancelBlock = cancel.closest('.cancel-order');
+      expect(cancelBlock).not.toBeNull();
+      expect(cancelBlock?.contains(button('שינוי'))).toBe(false);
+    });
+
     it("shows the order's details: name, phone, address, spot, note and bottles", async () => {
       await renderLoaded();
 
