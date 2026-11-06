@@ -116,6 +116,7 @@ const TEXT_PAIRS: [foreground: string, background: string][] = [
   ['white', 'error'], // .button-danger
   ['ink', 'done'], // a disabled or busy .button, a handled stop card
   ['brand', 'card'], // .button-secondary in the site header
+  ['brand', 'bg'], // .back-link: a chevron and a word, no fill of its own
   ['muted', 'done'], // .badge-gray
 ];
 

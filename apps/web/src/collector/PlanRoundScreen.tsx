@@ -29,9 +29,9 @@ import {
 } from '../api.ts';
 import { TextField } from '../components/TextField.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
-import { Link, navigate } from '../router.tsx';
+import { navigate } from '../router.tsx';
+import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
-import { ORDERS_LIST_PATH } from './orderEditing.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE, bottlesText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 
@@ -211,10 +211,8 @@ export function PlanRoundScreen({
 
   return (
     <>
+      <BackToOrdersLink />
       <h1>תכנון סבב</h1>
-      <Link to={ORDERS_LIST_PATH} className="back-link">
-        חזרה להזמנות
-      </Link>
 
       {state.kind === 'loading' && <Skeleton />}
 

@@ -27,7 +27,8 @@ import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { NO_ERRORS, validateOrderDetails } from '../orderForm/formValues.ts';
 import { OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
-import { Link, navigate } from '../router.tsx';
+import { navigate } from '../router.tsx';
+import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import type { StreetChoice } from '../streetPicker/streetChoice.ts';
 import { DeleteOrderButton } from './DeleteOrderButton.tsx';
@@ -139,10 +140,8 @@ export function EditOrderScreen({
 
   return (
     <>
+      <BackToOrdersLink />
       <h1>עריכת הזמנה</h1>
-      <Link to={ORDERS_LIST_PATH} className="back-link">
-        חזרה להזמנות
-      </Link>
 
       {state.kind === 'loading' && <Skeleton />}
 
