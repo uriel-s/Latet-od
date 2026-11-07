@@ -10,7 +10,10 @@
 // Direction (RTL): every shape is symmetric or direction-neutral, so nothing is mirrored for
 // `dir="rtl"` and the same drawing serves the Hebrew and the English pages. "navigate" is an arrow
 // pointing up (straight ahead), not sideways; "list" centres its short last line instead of aligning
-// it to one side.
+// it to one side. Three exceptions, all used only in the Hebrew-only collector app: "back" points
+// right (the start side in RTL, where the previous screen or month is), "forward" points left (the
+// next month) and "logout" points left (out, to the end side). An English screen using them
+// would need them mirrored.
 
 import type { ReactNode } from 'react';
 
@@ -32,6 +35,10 @@ export const ICON_NAMES = [
   'door',
   'building',
   'home',
+  'back',
+  'forward',
+  'logout',
+  'chat',
 ] as const;
 
 /** One of the icons the app can draw. */
@@ -114,6 +121,15 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
       <path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5M10 21v-6h4v6" />
     </>
   ),
+  // A chevron pointing right: "back" in the right-to-left collector app (see the note at the top).
+  back: <path d="M9 6l6 6-6 6" />,
+  // The mirror of "back": a chevron pointing left, onward in the right-to-left collector app
+  // (the history tab's "החודש הבא").
+  forward: <path d="M15 6l-6 6 6 6" />,
+  // Leaving: an arrow pointing out (left) of an open door frame on the right.
+  logout: <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10" />,
+  // A speech bubble with its tail at the start corner: a message (the plan's personal text).
+  chat: <path d="M4 5h16v11H9l-5 4z" />,
 };
 
 /** Props of {@link Icon}. */

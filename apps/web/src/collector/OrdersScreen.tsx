@@ -158,12 +158,15 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
       <h1>הזמנות</h1>
       {/* What the screen Yoel just left did ("ההזמנה נשמרה"): its form is gone, so this tells it. */}
       <FlashNotice />
-      <Link to={ADD_ORDER_PATH} className="button button-primary button-block orders-add">
-        הוספת הזמנה
-      </Link>
-      <Link to={PLAN_ROUND_PATH} className="button button-secondary button-block orders-plan">
-        תכנון סבב
-      </Link>
+      {/* Side by side in one row of two columns, like an app's action bar (mockup §2). */}
+      <div className="orders-actions">
+        <Link to={ADD_ORDER_PATH} className="button button-primary button-block">
+          הוספת הזמנה
+        </Link>
+        <Link to={PLAN_ROUND_PATH} className="button button-secondary button-block">
+          תכנון סבב
+        </Link>
+      </div>
 
       {state.kind === 'loading' && <Skeleton />}
 
@@ -178,14 +181,27 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
         </>
       )}
 
-      {state.kind === 'loaded' && (
-        <>
-          <p className="orders-summary">{waitingSummary(state.groups)}</p>
-          {state.groups.map((group) => (
-            <OrderGroupSection key={group.key} group={group} />
-          ))}
-        </>
-      )}
+      {state.kind === 'loaded' && <LoadedOrders groups={state.groups} />}
+    </>
+  );
+}
+
+/**
+ * The loaded list. When no order waits in any group, one {@link EmptyState} says so, in place of
+ * the summary line and an empty state for each of the three groups (the same sentence four times
+ * said nothing more). With at least one order, the summary and all three groups show, an empty
+ * group with its own empty state, so the groups keep their places between visits.
+ */
+function LoadedOrders({ groups }: { groups: OrderGroup[] }) {
+  const anyWaiting = groups.some((group) => group.orderCount > 0);
+  if (!anyWaiting) return <EmptyState icon="list" text={EMPTY_GROUP_TEXT} />;
+
+  return (
+    <>
+      <p className="orders-summary">{waitingSummary(groups)}</p>
+      {groups.map((group) => (
+        <OrderGroupSection key={group.key} group={group} />
+      ))}
     </>
   );
 }

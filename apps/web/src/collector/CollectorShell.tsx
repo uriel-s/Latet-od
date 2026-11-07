@@ -1,7 +1,8 @@
 // The collector app once the guard (CollectorApp.tsx) knows Yoel is logged in: the logout action
-// at the top, the screen of the current URL, and the bottom navigation (spec §3 "אפליקציית
+// at the end of the screen's title row (CSS floats it beside the <h1>), the screen of the current URL, and the bottom navigation (spec §3 "אפליקציית
 // האוסף"). Switching tabs only changes `path`; this component and its guard stay mounted.
 import { useRef, useState, type ReactNode } from 'react';
+import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 import { AddOrderScreen } from './AddOrderScreen.tsx';
 import { BottomNav } from './BottomNav.tsx';
@@ -54,6 +55,8 @@ export function CollectorShell({ path, logOut }: CollectorShellProps) {
 
   return (
     <>
+      {/* First in the DOM, before the screen's <h1>; styles.css floats it to the end (left) of the
+          title row, so the heading and the back link share that row with it. */}
       <div className="collector-toolbar">
         {/* aria-disabled, not disabled, while the request runs: the button keeps focus and is
             announced as unavailable; loggingOutRef ignores the extra taps. */}
@@ -63,6 +66,7 @@ export function CollectorShell({ path, logOut }: CollectorShellProps) {
           aria-disabled={loggingOut ? true : undefined}
           onClick={() => void leave()}
         >
+          <Icon name="logout" />
           {loggingOut ? LOGGING_OUT_LABEL : LOGOUT_LABEL}
         </button>
       </div>

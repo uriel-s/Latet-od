@@ -12,6 +12,7 @@
 // swaps in the round as the api answers it. The question components own only their open state and
 // focus; this screen sends every request and keeps its double-tap guards.
 import { EmptyState } from '../components/EmptyState.tsx';
+import { Icon } from '../components/Icon.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -74,6 +75,17 @@ export const ORDER_LEFT_ROUND_MESSAGE = 'ההזמנה כבר לא בסבב.';
 
 const CONFIRM_LABEL = 'אישר בשיחה או בהודעה';
 const CONFIRMING_LABEL = 'שומר...';
+
+/**
+ * The colour of each group's count tile and badge (the `round-tile-*` / `badge-*` suffix): green for
+ * confirmed, amber for waiting on an answer, gray for another date. Decoration only: the words say
+ * which count it is.
+ */
+const GROUP_COLOURS: Readonly<Record<RoundGroupKey, 'green' | 'amber' | 'gray'>> = {
+  confirmed: 'green',
+  pending: 'amber',
+  otherDate: 'gray',
+};
 
 /**
  * Under the heading once the close button answered: the round left the tab (only open rounds are listed),
@@ -600,14 +612,22 @@ interface RoundSectionProps {
  * to bottom: the pickup time and the personal text that went into the requests, then the round's
  * step (spec §3.6).
  *
- * Step 1 (phase `confirming`): the confirmation counts, the "שלח" list, the three groups of orders
- * (every group shows, an empty one too, so the layout does not jump as customers confirm), and
- * last "התחל מסלול": the step that ends step 1 comes after everything Yoel checks
- * before it, and lies apart from the "אישר בשיחה או בהודעה" buttons.
+ * Step 1 (phase `confirming`): the heading, the pickup time (with a clock icon) and the personal
+ * text sit in ONE details card, which ends with three coloured count tiles (אישרו / עוד לא אישרו /
+ * ביקשו מועד אחר). The tiles are aria-hidden: a visually hidden live sentence
+ * ({@link confirmationSummary}) says the same counts in words, so a screen reader hears them once
+ * and hears the new counts after "אישר בשיחה או בהודעה". Then the grouped "שלח" list, the three
+ * groups of orders as grouped lists (every group shows, an empty one too, so the layout does not
+ * jump as customers confirm), and last "התחל מסלול": the step that ends step 1 comes after
+ * everything Yoel checks before it, and lies apart from the "אישר בשיחה או בהודעה" buttons.
  *
- * Step 2 (phase `routed`): the route alone. Its own summary takes the place of the confirmation
- * counts (one live summary per round, not two), and the groups and the "שלח" list are gone:
- * whoever did not confirm left the round when it was built.
+ * Step 2 (phase `routed`): the route alone, under the heading and texts as plain lines (no card,
+ * no tiles). Its own summary takes the place of the confirmation counts (one live summary per
+ * round, not two), and the groups and the "שלח" list are gone: whoever did not confirm left the
+ * round when it was built.
+ *
+ * The details wrapper is rendered in both steps (only its class changes), so the `<h2>` stays
+ * mounted across the build and the focus effect below can still reach it.
  *
  * Both steps end with the close button (CloseRoundConfirm.tsx), after the step's own last part (the
  * build question, or the route), so the quieter way out of the round comes after the way on. It
@@ -650,31 +670,61 @@ function RoundSection({
     if (focusLost) headingRef.current?.focus();
   }, [routed]);
 
+  const pickupText =
+    round.pickupBy === undefined ? null : round.pickupFrom !== undefined ? (
+      <>
+        להוציא את הבקבוקים בין <bdi dir="ltr">{round.pickupFrom}</bdi> ל-
+        <bdi dir="ltr">{round.pickupBy}</bdi>
+      </>
+    ) : (
+      <>
+        להוציא את הבקבוקים עד <bdi dir="ltr">{round.pickupBy}</bdi>
+      </>
+    );
+
   return (
     <section ref={sectionRef} className="round" aria-labelledby={headingId}>
-      {/* tabIndex -1: focused from code after the route is built, never a Tab stop. */}
-      <h2 id={headingId} ref={headingRef} tabIndex={-1}>
-        {REGION_LABELS[round.region]} ·{' '}
-        {/* DD/MM reads left to right inside the right-to-left text (CLAUDE.md). */}
-        <bdi dir="ltr">{formatDayMonth(round.date)}</bdi>
-      </h2>
-      {round.pickupBy !== undefined && (
-        <p>
-          {round.pickupFrom !== undefined ? (
-            <>
-              להוציא את הבקבוקים בין <bdi dir="ltr">{round.pickupFrom}</bdi> ל-
-              <bdi dir="ltr">{round.pickupBy}</bdi>
-            </>
+      {/* Always rendered, so the h2 inside stays mounted across the build (see the effect above);
+          a card only in step 1; step 2 keeps the plain lines above its route. */}
+      <div className={routed ? undefined : 'card round-details'}>
+        {/* tabIndex -1: focused from code after the route is built, never a Tab stop. */}
+        <h2 id={headingId} ref={headingRef} tabIndex={-1}>
+          {REGION_LABELS[round.region]} ·{' '}
+          {/* DD/MM reads left to right inside the right-to-left text (CLAUDE.md). */}
+          <bdi dir="ltr">{formatDayMonth(round.date)}</bdi>
+        </h2>
+        {pickupText !== null &&
+          (routed ? (
+            <p>{pickupText}</p>
           ) : (
-            <>
-              להוציא את הבקבוקים עד <bdi dir="ltr">{round.pickupBy}</bdi>
-            </>
-          )}
-        </p>
-      )}
-      {round.personalText !== undefined && (
-        <p className="round-personal-text">טקסט אישי: {round.personalText}</p>
-      )}
+            <p className="round-pickup">
+              <Icon name="clock" />
+              <span>{pickupText}</span>
+            </p>
+          ))}
+        {round.personalText !== undefined && (
+          <p className="round-personal-text">טקסט אישי: {round.personalText}</p>
+        )}
+
+        {!routed && (
+          <>
+            {/* Polite live text: a screen reader hears the new counts after "אישר בשיחה או
+                בהודעה". Hidden, because the tiles below show the same counts to the eye. */}
+            <p className="round-summary visually-hidden" aria-live="polite">
+              {confirmationSummary(groups)}
+            </p>
+            {/* The same counts as three coloured tiles; aria-hidden so they are not read twice. */}
+            <div className="round-tiles" aria-hidden="true">
+              {ROUND_GROUP_KEYS.map((key) => (
+                <div key={key} className={`round-tile round-tile-${GROUP_COLOURS[key]}`}>
+                  <b>{ordersOfGroup(groups, key).length}</b>
+                  <span>{ROUND_GROUP_LABELS[key]}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {routed ? (
         // Not keyed by anything that changes: it stays mounted across every swapped view, so an
@@ -682,16 +732,11 @@ function RoundSection({
         <RouteScreen view={view} {...route} />
       ) : (
         <>
-          {/* Polite live text: a screen reader hears the new counts after "אישר בשיחה או בהודעה". */}
-          <p className="round-summary" aria-live="polite">
-            {confirmationSummary(groups)}
-          </p>
-
           <h3>בקשות אישור</h3>
           {sendList.length > 0 && <p className="round-hint">{SEND_LIST_HINT}</p>}
           {/* Always rendered at this place, so it stays mounted across a swapped view; it shows its
               own text when no request is left to send. */}
-          <SendList rows={sendList} markOpened={markOpened} />
+          <SendList rows={sendList} markOpened={markOpened} grouped />
 
           {ROUND_GROUP_KEYS.map((key) => (
             <RoundGroupSection
@@ -730,9 +775,12 @@ interface RoundGroupSectionProps {
 }
 
 /**
- * One group of the round ("אישרו", "עוד לא אישרו", "ביקשו מועד אחר") as a named region, with its
- * order count, or {@link EMPTY_ROUND_GROUP_TEXT} and no list. Only "עוד לא אישרו" has the
- * "אישר בשיחה או בהודעה" button on its cards.
+ * One group of the round ("אישרו", "עוד לא אישרו", "ביקשו מועד אחר") as a named region: its title
+ * with a coloured count badge next to it, then ONE grouped-list card with a thin row per order, or
+ * a quiet card with {@link EMPTY_ROUND_GROUP_TEXT} and no list. The badge is aria-hidden (a bare
+ * number), so a visually hidden "2 הזמנות" beside it says the count in words; it sits outside the
+ * `<h3>`, so the region's name stays the group's title. Only "עוד לא אישרו" has the
+ * "אישר בשיחה או בהודעה" button on its rows.
  */
 function RoundGroupSection({
   groupKey,
@@ -745,12 +793,17 @@ function RoundGroupSection({
 
   return (
     <section className="round-group" aria-labelledby={headingId}>
-      <h3 id={headingId}>{ROUND_GROUP_LABELS[groupKey]}</h3>
-      <p className="order-group-summary">
-        {orders.length === 0 ? EMPTY_ROUND_GROUP_TEXT : ordersText(orders.length)}
-      </p>
-      {orders.length > 0 && (
-        <ul className="order-list">
+      <div className="group-head">
+        <h3 id={headingId}>{ROUND_GROUP_LABELS[groupKey]}</h3>
+        <span className={`badge badge-${GROUP_COLOURS[groupKey]}`} aria-hidden="true">
+          {orders.length}
+        </span>
+        {orders.length > 0 && <span className="visually-hidden">{ordersText(orders.length)}</span>}
+      </div>
+      {orders.length === 0 ? (
+        <p className="card grouped-empty">{EMPTY_ROUND_GROUP_TEXT}</p>
+      ) : (
+        <ul className="card grouped-list">
           {orders.map((order) => (
             <RoundOrderCard
               key={order.id}
@@ -780,29 +833,38 @@ interface CardConfirm {
 }
 
 /**
- * One order of the round: who, the phone as a link that dials (to ask a customer who has not
- * answered), the street, the bottles, and its tags (in "ביקשו מועד אחר", why it left the round and
- * the day). The customer's name is the card's `<h4>`, under the group's `<h3>`.
+ * One order of the round as a thin row of its group's list: the customer's name (the row's `<h4>`,
+ * under the group's `<h3>`) over "street · bottles", and at the row's end a round call button that
+ * dials (to ask a customer who has not answered). Under them, each on a full line: its tags (in
+ * "ביקשו מועד אחר", why it left the round and the day), and in "עוד לא אישרו" the
+ * "אישר בשיחה או בהודעה" button. The call button shows only a phone icon; the number, visually
+ * hidden inside it, is its accessible name.
  */
 function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: CardConfirm }) {
   const { contact, address } = order;
   const tags = orderTags(order);
 
   return (
-    <li className="card round-order-card">
-      <h4 className="order-card-name">{contact.name}</h4>
-      <p>
-        <a className="order-card-phone" href={`tel:${contact.phone}`}>
-          {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
+    <li className="grouped-row">
+      <div className="grouped-row-main">
+        <h4 className="grouped-row-title">{contact.name}</h4>
+        <p className="grouped-row-meta">
+          <span>
+            {address.streetName} {address.houseNumber}
+          </span>
+          {' · '}
+          <span>{bottlesText(order.bottlesEstimated)}</span>
+        </p>
+      </div>
+      <a className="call-button" href={`tel:${contact.phone}`}>
+        <Icon name="phone" />
+        {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
+        <span className="visually-hidden">
           <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>
-        </a>
-      </p>
-      <p>
-        {address.streetName} {address.houseNumber}
-      </p>
-      <p className="order-card-bottles">{bottlesText(order.bottlesEstimated)}</p>
+        </span>
+      </a>
       {tags.length > 0 && (
-        <p className="tag-list">
+        <p className="tag-list grouped-row-full">
           {tags.map((tag) => (
             <span key={tag} className="badge">
               {tag}
@@ -814,11 +876,11 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
         <>
           {/* aria-disabled, not disabled, while saving: the button keeps focus and is announced
               as unavailable; busyIdsRef ignores the extra taps. The hidden rest names the
-              customer, so a screen reader's list of buttons tells the cards apart; the visible
+              customer, so a screen reader's list of buttons tells the rows apart; the visible
               words start the name, as WCAG 2.5.3 (label in name) asks. */}
           <button
             type="button"
-            className="button button-secondary order-card-confirm"
+            className="button button-secondary order-card-confirm grouped-row-full"
             aria-disabled={confirm.saving ? true : undefined}
             onClick={confirm.onConfirm}
           >
@@ -826,7 +888,7 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
             <span className="visually-hidden">, {contact.name}</span>
           </button>
           {confirm.failed && (
-            <p className="field-error" role="alert">
+            <p className="field-error grouped-row-full" role="alert">
               {CONFIRM_FAILED_MESSAGE}
             </p>
           )}

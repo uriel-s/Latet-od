@@ -42,7 +42,24 @@ export interface CancelConfirmProps {
    * without the gap and the line that set a cancel apart from the buttons above it.
    */
   inline?: boolean;
+  /**
+   * How the opening button looks (styles.css): `danger` (default) is the red outline of a main
+   * destructive action such as "ביטול ההזמנה"; `dangerQuiet` is red text for a secondary one such as
+   * "מחיקת ההזמנה"; `secondary` is the plain tonal button, for a question that destroys nothing
+   * ("לא מתאים הפעם"). Only the look: the confirming answer keeps its own button.
+   */
+  buttonTone?: CancelConfirmButtonTone;
 }
+
+/** The looks of {@link CancelConfirm}'s opening button; see {@link CancelConfirmProps.buttonTone}. */
+export type CancelConfirmButtonTone = 'danger' | 'dangerQuiet' | 'secondary';
+
+/** The .button variant class of each opening-button tone. */
+const BUTTON_TONE_CLASS: Record<CancelConfirmButtonTone, string> = {
+  danger: 'button-danger-outline',
+  dangerQuiet: 'button-danger-quiet',
+  secondary: 'button-secondary',
+};
 
 /**
  * The cancel button and, once tapped, the question in its place. A question in the page, not
@@ -62,6 +79,7 @@ export function CancelConfirm({
   busyLabel = CANCELLING_LABEL,
   keepLabel = KEEP_LABEL,
   inline = false,
+  buttonTone = 'danger',
 }: CancelConfirmProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -121,7 +139,7 @@ export function CancelConfirm({
         <button
           ref={buttonRef}
           type="button"
-          className="button button-secondary button-block"
+          className={`button ${BUTTON_TONE_CLASS[buttonTone]} button-block`}
           onClick={() => showQuestion(true)}
         >
           {buttonLabel}

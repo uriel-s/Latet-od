@@ -28,10 +28,11 @@ import {
   type WaitingOrdersOutcome,
 } from '../api.ts';
 import { TextField } from '../components/TextField.tsx';
+import { FormCard } from '../orderForm/OrderFields.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
-import { Link, navigate } from '../router.tsx';
+import { navigate } from '../router.tsx';
+import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
-import { ORDERS_LIST_PATH } from './orderEditing.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE, bottlesText } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 
@@ -54,16 +55,21 @@ export const PERSONAL_TEXT_HINT = 'נוסף לכל בקשות האישור של 
 /** Under the pickup time: where it goes (ADR-0003). */
 export const PICKUP_BY_HINT = 'נכנסת לבקשות האישור.';
 
+// The form's three cards (mockup §6), top to bottom.
+const WHERE_CARD_TITLE = 'איפה';
+const WHEN_CARD_TITLE = 'מתי';
+const MESSAGE_CARD_TITLE = 'הודעה';
+
 const SEND_LABEL = 'שלח בקשות אישור';
 const SENDING_LABEL = 'שולח...';
 
 /** A field of the plan that shows its error next to it, in form order. */
-type PlanField = 'date' | 'region' | 'orderIds' | 'pickupFrom' | 'pickupBy' | 'personalText';
+type PlanField = 'region' | 'orderIds' | 'date' | 'pickupFrom' | 'pickupBy' | 'personalText';
 
 const PLAN_FIELDS: readonly PlanField[] = [
-  'date',
   'region',
   'orderIds',
+  'date',
   'pickupFrom',
   'pickupBy',
   'personalText',
@@ -211,10 +217,8 @@ export function PlanRoundScreen({
 
   return (
     <>
+      <BackToOrdersLink />
       <h1>תכנון סבב</h1>
-      <Link to={ORDERS_LIST_PATH} className="back-link">
-        חזרה להזמנות
-      </Link>
 
       {state.kind === 'loading' && <Skeleton />}
 
@@ -256,9 +260,10 @@ interface PlanRoundFormProps {
 }
 
 /**
- * The plan's form, top to bottom: the date, the region with its waiting-order counts, the region's
- * orders as checkboxes (all marked when the region is chosen, spec §3.5), the pickup time, the
- * personal text, and "שלח בקשות אישור". Every mistake shows next to its field, checked with the
+ * The plan's form, in three cards (mockup §6): "איפה" (the region with its waiting-order counts,
+ * then the region's orders as checkboxes, all marked when the region is chosen, spec §3.5),
+ * "מתי" (the date and the pickup window) and "הודעה" (the personal text); then
+ * "שלח בקשות אישור". Every mistake shows next to its field, checked with the
  * shared `planRoundRequestSchema` (the api's own check) before anything is sent.
  */
 function PlanRoundForm({
@@ -469,143 +474,153 @@ function PlanRoundForm({
         void submit();
       }}
     >
-      <TextField
-        label="תאריך הסבב"
-        type="date"
-        min={todayInIsrael()}
-        value={date}
-        onChange={(nextDate) => {
-          setDate(nextDate);
-          clearErrors('date');
-        }}
-        error={errors.byField.date}
-        autoComplete="off"
-      />
-
-      <fieldset
-        className="field"
-        aria-describedby={describedBy(
-          unassignedCount > 0 ? regionHintId : undefined,
-          regionError ? regionErrorId : undefined,
-        )}
-      >
-        <legend className="field-label">אזור</legend>
-        {unassignedCount > 0 && (
-          <p id={regionHintId} className="field-hint">
-            {UNASSIGNED_ORDERS_HINT}
-          </p>
-        )}
-        <div className="choice-list">
-          {regionSchema.options.map((option) => (
-            <label key={option} className="choice">
-              <input
-                type="radio"
-                name={regionGroupName}
-                value={option}
-                checked={region === option}
-                onChange={() => chooseRegion(option)}
-                aria-invalid={regionError ? true : undefined}
-              />
-              {/* The number of orders waiting there, so an empty half is seen before it is
-                  chosen. */}
-              {`${REGION_LABELS[option]} (${ordersOfRegion(groups, option).length})`}
-            </label>
-          ))}
-        </div>
-        {regionError && (
-          <p id={regionErrorId} className="field-error">
-            {regionError}
-          </p>
-        )}
-      </fieldset>
-
-      {region !== undefined && (
+      {/* Three cards, as in the mockup (§6): where (the region, and right under it its orders),
+          when, and the message. The first field with an error is focused in this DOM order. */}
+      <FormCard title={WHERE_CARD_TITLE} icon="pin">
         <fieldset
           className="field"
           aria-describedby={describedBy(
-            regionOrders.length > 0 ? ordersSummaryId : undefined,
-            ordersError ? ordersErrorId : undefined,
+            unassignedCount > 0 ? regionHintId : undefined,
+            regionError ? regionErrorId : undefined,
           )}
         >
-          <legend className="field-label">הזמנות לסבב</legend>
-          {regionOrders.length === 0 ? (
-            <p className="field-hint">{NO_REGION_ORDERS_TEXT}</p>
-          ) : (
-            <>
-              <p id={ordersSummaryId} className="field-hint">
-                {checkedSummary(checkedCount, regionOrders.length)}
-              </p>
-              <div className="choice-list">
-                {regionOrders.map((order) => (
-                  <PlanOrderRow
-                    key={order.id}
-                    order={order}
-                    checked={checkedIds.has(order.id)}
-                    invalid={Boolean(ordersError)}
-                    onToggle={toggleOrder}
-                  />
-                ))}
-              </div>
-            </>
+          <legend className="field-label">אזור</legend>
+          {unassignedCount > 0 && (
+            <p id={regionHintId} className="field-hint">
+              {UNASSIGNED_ORDERS_HINT}
+            </p>
           )}
-          {ordersError && (
-            <p id={ordersErrorId} className="field-error">
-              {ordersError}
+          {/* Choice cards with words only, as the region on the edit screen. */}
+          <div className="choice-cards">
+            {regionSchema.options.map((option) => (
+              <label key={option} className="choice-card">
+                <input
+                  type="radio"
+                  name={regionGroupName}
+                  value={option}
+                  checked={region === option}
+                  onChange={() => chooseRegion(option)}
+                  aria-invalid={regionError ? true : undefined}
+                />
+                {/* The number of orders waiting there, so an empty half is seen before it is
+                    chosen. */}
+                <span>{`${REGION_LABELS[option]} (${ordersOfRegion(groups, option).length})`}</span>
+              </label>
+            ))}
+          </div>
+          {regionError && (
+            <p id={regionErrorId} className="field-error">
+              {regionError}
             </p>
           )}
         </fieldset>
-      )}
 
-      <TextField
-        label="מאיזו שעה להוציא את הבקבוקים (לא חובה)"
-        type="time"
-        value={pickupFrom}
-        onChange={(nextTime) => {
-          setPickupFrom(nextTime);
-          clearErrors('pickupFrom', 'pickupBy');
-        }}
-        error={errors.byField.pickupFrom}
-        autoComplete="off"
-      />
-
-      <TextField
-        label="עד איזו שעה להוציא את הבקבוקים (לא חובה)"
-        type="time"
-        value={pickupBy}
-        onChange={(nextTime) => {
-          setPickupBy(nextTime);
-          clearErrors('pickupBy');
-        }}
-        error={errors.byField.pickupBy}
-        hint={PICKUP_BY_HINT}
-        autoComplete="off"
-      />
-
-      {/* A textarea, which TextField does not render: the same .field parts and wiring by hand. */}
-      <div className="field">
-        <label htmlFor={textId} className="field-label">
-          טקסט אישי (לא חובה)
-        </label>
-        <p id={textHintId} className="field-hint">
-          {PERSONAL_TEXT_HINT}
-        </p>
-        <textarea
-          id={textId}
-          value={personalText}
-          onChange={(event) => {
-            setPersonalText(event.target.value);
-            clearErrors('personalText');
-          }}
-          maxLength={PERSONAL_TEXT_MAX_LENGTH}
-          aria-invalid={textError ? true : undefined}
-          aria-describedby={describedBy(textHintId, textError ? textErrorId : undefined)}
-        />
-        {textError && (
-          <p id={textErrorId} className="field-error">
-            {textError}
-          </p>
+        {region !== undefined && (
+          <fieldset
+            className="field"
+            aria-describedby={describedBy(
+              regionOrders.length > 0 ? ordersSummaryId : undefined,
+              ordersError ? ordersErrorId : undefined,
+            )}
+          >
+            <legend className="field-label">הזמנות לסבב</legend>
+            {regionOrders.length === 0 ? (
+              <p className="field-hint">{NO_REGION_ORDERS_TEXT}</p>
+            ) : (
+              <>
+                <p id={ordersSummaryId} className="field-hint">
+                  {checkedSummary(checkedCount, regionOrders.length)}
+                </p>
+                <div className="grouped-list plan-order-list">
+                  {regionOrders.map((order) => (
+                    <PlanOrderRow
+                      key={order.id}
+                      order={order}
+                      checked={checkedIds.has(order.id)}
+                      invalid={Boolean(ordersError)}
+                      onToggle={toggleOrder}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+            {ordersError && (
+              <p id={ordersErrorId} className="field-error">
+                {ordersError}
+              </p>
+            )}
+          </fieldset>
         )}
-      </div>
+      </FormCard>
+
+      <FormCard title={WHEN_CARD_TITLE} icon="calendar">
+        <TextField
+          label="תאריך הסבב"
+          type="date"
+          min={todayInIsrael()}
+          value={date}
+          onChange={(nextDate) => {
+            setDate(nextDate);
+            clearErrors('date');
+          }}
+          error={errors.byField.date}
+          autoComplete="off"
+        />
+
+        {/* One under the other, not side by side: the full labels are long. */}
+        <TextField
+          label="מאיזו שעה להוציא את הבקבוקים (לא חובה)"
+          type="time"
+          value={pickupFrom}
+          onChange={(nextTime) => {
+            setPickupFrom(nextTime);
+            clearErrors('pickupFrom', 'pickupBy');
+          }}
+          error={errors.byField.pickupFrom}
+          autoComplete="off"
+        />
+
+        <TextField
+          label="עד איזו שעה להוציא את הבקבוקים (לא חובה)"
+          type="time"
+          value={pickupBy}
+          onChange={(nextTime) => {
+            setPickupBy(nextTime);
+            clearErrors('pickupBy');
+          }}
+          error={errors.byField.pickupBy}
+          hint={PICKUP_BY_HINT}
+          autoComplete="off"
+        />
+      </FormCard>
+
+      <FormCard title={MESSAGE_CARD_TITLE} icon="chat">
+        {/* A textarea, which TextField does not render: the same .field parts and wiring by hand. */}
+        <div className="field">
+          <label htmlFor={textId} className="field-label">
+            טקסט אישי (לא חובה)
+          </label>
+          <p id={textHintId} className="field-hint">
+            {PERSONAL_TEXT_HINT}
+          </p>
+          <textarea
+            id={textId}
+            value={personalText}
+            onChange={(event) => {
+              setPersonalText(event.target.value);
+              clearErrors('personalText');
+            }}
+            maxLength={PERSONAL_TEXT_MAX_LENGTH}
+            aria-invalid={textError ? true : undefined}
+            aria-describedby={describedBy(textHintId, textError ? textErrorId : undefined)}
+          />
+          {textError && (
+            <p id={textErrorId} className="field-error">
+              {textError}
+            </p>
+          )}
+        </div>
+      </FormCard>
 
       {errors.other && (
         <p className="form-alert" role="alert">
@@ -637,7 +652,8 @@ interface PlanOrderRowProps {
 
 /**
  * One waiting order of the region as a checkbox row: who, where, how many bottles, and its tags
- * (orderTags.ts: why it came back from a round, "בלי מיקום"). The whole row is the tap target.
+ * (orderTags.ts: why it came back from a round, "בלי מיקום"). A row of the grouped list, with a big
+ * checkbox; the whole row (64px+) is the tap target.
  * The checkbox is named by the customer's name alone and described by the rest, so a screen
  * reader says the name first and the details after.
  */
@@ -647,7 +663,7 @@ function PlanOrderRow({ order, checked, invalid, onToggle }: PlanOrderRowProps) 
   const tags = orderTags(order);
 
   return (
-    <label className="choice plan-order">
+    <label className="grouped-row plan-order">
       <input
         type="checkbox"
         checked={checked}

@@ -25,6 +25,11 @@
    * decoration only, never text and never the only edge of something to tap.
    */
   --line: #d3dfeb;
+  /*
+   * The frame of something to tap that has no fill of its own (an unchosen .choice-card): at
+   * least 3:1 on --card (WCAG 1.4.11, styles.test.ts), unlike --line.
+   */
+  --edge: #7d8fa4;
   --done: #e0e9f2; /* a handled route stop's card */
   /*
    * The header. Darker than the mockup's #4a95d0 → #f0c79f: white text there was under 3:1 where
@@ -58,23 +63,8 @@
   --shadow-1: 0 1px 2px rgb(20 30 25 / 5%), 0 6px 18px rgb(20 30 25 / 7%); /* cards */
   --shadow-btn: 0 6px 16px rgb(20 40 32 / 28%); /* the primary button */
 
-  /*
-   * The old names (spec §7 colours, before ADR-0011), kept as aliases so the screens keep working
-   * until each one moves to the names above. Remove an alias once nothing uses it. Contrast
-   * ratios quoted in the comments of the rules below were measured on the old colours.
-   */
-  --color-background: var(--bg);
-  --color-text: var(--ink);
-  --color-accent: var(--brand-soft);
-  --color-white: var(--white);
-  --color-gray: var(--line);
-  --color-muted: var(--muted);
-  --color-error: var(--error);
-  --color-handled: var(--done);
-
   /* 48px is the floor (CLAUDE.md); 3rem (54px at the default 18px) grows with the user's font. */
   --tap-target: max(48px, 3rem);
-  --radius: 0.5rem;
   --gutter: 16px;
   /*
    * The side gutters, at least --gutter and at least the screen's safe area. index.html sets
@@ -123,8 +113,8 @@ html {
 
 body {
   margin: 0;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg);
+  color: var(--ink);
   /*
    * Heebo (the @font-face above, ADR-0011). Until it loads, or if it fails, or for a character
    * outside its subset: system fonts that carry Hebrew (Segoe UI and Arial on Windows, SF on
@@ -161,7 +151,7 @@ p {
 }
 
 a {
-  color: var(--color-text);
+  color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -171,9 +161,9 @@ svg {
   max-width: 100%;
 }
 
-/* Visible keyboard focus everywhere: 3px of --color-text, 8.5:1 against the page. */
+/* Visible keyboard focus everywhere: 3px of --ink, 13.9:1 against the page (light palette). */
 :focus-visible {
-  outline: 3px solid var(--color-text);
+  outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -185,9 +175,9 @@ h1[tabindex='-1']:focus {
 /*
  * Automatic dark mode (ADR-0011): follows the phone, no switch. Only the tokens change; no screen
  * has a dark rule of its own. Same names and same pairs as :root, so styles.test.ts checks this
- * block against the same 4.5:1 list. Two names keep their meaning, not their colour:
- * --white is "text on --brand / --error", so it turns dark here (the brand colours get lighter);
- * --color-white is "a white surface", so it follows --card. --on-hdr stays light on the header.
+ * block against the same 4.5:1 list. --white keeps its meaning, not its colour:
+ * --white is "text on --brand / --error", so it turns dark here (the brand colours get lighter).
+ * Surfaces use --card, which turns dark too. --on-hdr stays light on the header.
  * Not tokens, and fine in both modes: the translucent shadows and the sheet backdrop.
  */
 @media (prefers-color-scheme: dark) {
@@ -200,6 +190,7 @@ h1[tabindex='-1']:focus {
     --ink: #e8eff7;
     --muted: #a3b2c3;
     --line: #2b3d52;
+    --edge: #64809e;
     --done: #213246;
     /* Same dawn hint as the light header, but a dim peach so it does not glare at night. */
     --hdr: linear-gradient(165deg, #173a63 0%, #2a6199 62%, #8f6d58 135%);
@@ -210,7 +201,6 @@ h1[tabindex='-1']:focus {
     --error: #ff8a8a;
     --white: #0b1522;
     --peach: #c9a07a;
-    --color-white: var(--card);
   }
 }
 
@@ -300,7 +290,7 @@ h1[tabindex='-1']:focus {
 .bunting-flag-light,
 .bunting-flag-white,
 .bunting-flag-peach {
-  stroke: var(--color-text);
+  stroke: var(--ink);
   stroke-opacity: 0.2;
   stroke-width: 1;
 }
@@ -325,10 +315,10 @@ h1[tabindex='-1']:focus {
 
 /* A quiet footer: a thin accent line like the header's, and very small centred text (about 12px,
    the smallest size in the app, chosen on purpose). The credit is legally required (ODbL), so it
-   stays readable: --color-muted on the page is about 6:1. The footer ends the page, so on a phone with
+   stays readable: --muted on the page is about 5.4:1. The footer ends the page, so on a phone with
    a home bar the OSM credit is lifted above it. */
 .site-footer {
-  border-block-start: 2px solid var(--color-accent);
+  border-block-start: 2px solid var(--brand-soft);
   padding-block: 0.25rem calc(0.25rem + env(safe-area-inset-bottom));
   font-size: 0.7rem;
 }
@@ -354,7 +344,7 @@ h1[tabindex='-1']:focus {
 
 /* Taller than the text, so the credit link is a full-size tap target too. */
 .footer-link {
-  color: var(--color-muted);
+  color: var(--muted);
   display: inline-flex;
   align-items: center;
   min-height: var(--tap-target);
@@ -381,7 +371,7 @@ h1[tabindex='-1']:focus {
 /* The error in plain words next to its field (spec §7). Bold, so red is not the only signal. */
 .field-error {
   margin: 0;
-  color: var(--color-error);
+  color: var(--error);
   font-weight: 700;
 }
 
@@ -414,10 +404,10 @@ textarea {
   width: 100%;
   min-height: var(--tap-target);
   padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
-  color: var(--color-text);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
 }
 
 textarea {
@@ -430,7 +420,7 @@ textarea {
  * Element-qualified so it outweighs the input rule above (same specificity, later wins).
  */
 :is(input, select, textarea)[aria-invalid='true'] {
-  border-color: var(--color-error);
+  border-color: var(--error);
 }
 
 /*
@@ -440,53 +430,6 @@ textarea {
 .ltr {
   direction: ltr;
   text-align: right;
-}
-
-/* A list of radio or checkbox rows, one under the other. */
-.choice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-/*
- * One radio or checkbox row: <label class="choice"><input type="radio"> text</label>.
- * The whole row is the tap target (at least 48px tall), not the small native circle.
- */
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: var(--tap-target);
-  padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
-  cursor: pointer;
-}
-
-.choice input {
-  flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin: 0;
-  accent-color: var(--color-text);
-}
-
-/* The keyboard ring goes around the whole row (the tap target), not only the small native dot. */
-.choice:has(input:focus-visible) {
-  outline: 3px solid var(--color-text);
-  outline-offset: 2px;
-}
-
-/* ...so the dot itself needs no second ring inside it. */
-.choice input:focus-visible {
-  outline: none;
-}
-
-/* The chosen row stands out by its background too, not only by the dot. */
-.choice:has(input:checked) {
-  background: var(--color-accent);
 }
 
 /* --- Buttons ------------------------------------------------------------------ */
@@ -579,6 +522,24 @@ button.button-not-ready[aria-disabled='true'] {
   color: var(--white);
 }
 
+/*
+ * The button that opens a destructive question, from the approved mockup: red says "careful"
+ * before the tap, while the "כן, לבטל" inside the question keeps its own look. Both are .button
+ * variants, so .button keeps them at least --tap-target tall; both pairs are AA in styles.test.ts.
+ * - outline: the main destructive action ("ביטול ההזמנה"), --error on --card, a currentColor frame.
+ * - quiet: a secondary destructive action ("מחיקת ההזמנה", "בטל את הסבב"), --error text, no fill.
+ */
+.button-danger-outline {
+  border: 1.5px solid currentColor;
+  background: var(--card);
+  color: var(--error);
+}
+
+.button-danger-quiet {
+  background: transparent;
+  color: var(--error);
+}
+
 /* The screen's one big action (spec §3.3, "כפתור גדול"): at least 66px, growing with the font.
    .button-large is the older name the customer's page (OrderPage.tsx) still uses. */
 .button-big,
@@ -621,7 +582,7 @@ button.button-not-ready[aria-disabled='true'] {
   padding: 0.5rem 0;
   border: 0;
   background: none;
-  color: var(--color-text);
+  color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -675,6 +636,106 @@ button.button-not-ready[aria-disabled='true'] {
   color: var(--muted);
 }
 
+/* --- Grouped list (rounds screen, history) ---------------------------------------- */
+
+/*
+ * An iOS-style inset grouped list: ONE .card (used as `card grouped-list`) holding thin rows split
+ * by a 1px line, instead of a card per order. The card's own padding goes: each row pads itself,
+ * so the line between rows runs edge to edge.
+ */
+.grouped-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+/* One row: the name/meta column at the start, a call button or a badge at the end, wrapping on a
+   narrow phone. At least 64px tall, so its buttons (48px+) fit with room around them. */
+.grouped-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-height: 4rem;
+  padding: 0.75rem 1rem;
+}
+
+/* The line between rows: --line is decoration only (too light to be an edge), the rows' words and
+   buttons carry the meaning. */
+.grouped-row + .grouped-row {
+  border-block-start: 1px solid var(--line);
+}
+
+/* The name and the "כתובת · בקבוקים" line; min-width 0 lets a long address wrap, not overflow. */
+.grouped-row-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* The customer's name (an h3, h4 or p): bold, a little above body text. */
+.grouped-row-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* --muted on --card is AA (styles.test.ts). */
+.grouped-row-meta {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Tags, a full-width button or an error: a line of its own under the row's main parts. */
+.grouped-row-full {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* A group with nothing in it ("אין"): a .card with just the quiet sentence. */
+.grouped-empty {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  color: var(--muted);
+}
+
+/* A round dialling link at a row's end: a full tap target, --brand on --brand-soft (AA). The
+   link's accessible name comes from its hidden text or aria-label, not the icon. */
+.call-button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap-target);
+  height: var(--tap-target);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.call-button svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+/* A group's title ("אישרו") with its count or action at the other end, just above its card. */
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-block: 1.5rem 0.5rem;
+  margin-inline: 0.25rem;
+}
+
+/* The head owns the spacing; `.round .group-head h3` beats `.round h3` (0,1,1) further down. */
+.group-head h2,
+.group-head h3,
+.round .group-head h3 {
+  margin: 0;
+}
+
 /* --- Street picker (streetPicker/StreetPicker.tsx) ---------------------------------- */
 
 /* The streets that match the search, one under the other, right under the input. */
@@ -688,28 +749,28 @@ button.button-not-ready[aria-disabled='true'] {
 }
 
 /*
- * One street to tap: a full-width row framed like a .choice, so the whole row (at least 48px
+ * One street to tap: a full-width row framed like a .choice-card, so the whole row (at least 48px
  * tall) is the target. text-align: start keeps the name on the right, like the text around it.
  */
 .street-result {
   width: 100%;
   min-height: var(--tap-target);
   padding: 0.5rem 0.75rem;
-  border: 2px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--card);
   text-align: start;
 }
 
 /* Feedback on the row under the finger or the mouse; :hover only where hover exists (a touch
    screen would leave the last tapped row coloured). */
 .street-result:active {
-  background: var(--color-accent);
+  background: var(--brand-soft);
 }
 
 @media (hover: hover) {
   .street-result:hover {
-    background: var(--color-accent);
+    background: var(--brand-soft);
   }
 }
 
@@ -721,22 +782,48 @@ button.button-not-ready[aria-disabled='true'] {
 
 /* --- Collector app (collector/) ----------------------------------------------------- */
 
-/* The logout action above the screen, at the end (left, in right-to-left) of the column, away
-   from where the heading starts. */
+/*
+ * The title row (mockup: .title-row / .back-row). The logout toolbar comes first in the DOM
+ * (CollectorShell.tsx) and floats to the end of the row (left, in right-to-left), so the screen's
+ * <h1>, or on the add/edit/plan screens the back link, shares the row with it without moving the
+ * button between components. `float: left` is the fallback for a browser without the logical
+ * value; the collector app is always right-to-left, where the two mean the same.
+ */
 .collector-toolbar {
-  display: flex;
-  justify-content: flex-end;
+  float: left;
+  float: inline-end;
+  margin-inline-start: 0.5rem;
 }
 
-/* .link-button has no side padding; this keeps the short word a full 48px wide target too. */
+/* A quiet action: icon and word in --muted, no underline (it overrides .link-button's look), a
+   full 48px target on both axes; the round shape shows only as the focus ring's corners. */
 .collector-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   min-width: var(--tap-target);
-  padding-inline: 0.5rem;
+  min-height: var(--tap-target);
+  padding-inline: 0.75rem;
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-/* Each screen starts with its <h1>: the toolbar above it already makes the space at the top. */
+/* A top-level screen's <h1> in the row beside the toolbar: as tall as the button and centred on
+   it. A flex box does not flow under a float, so a long heading wraps beside the button. */
 .collector-toolbar + h1 {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target);
   margin-block-start: 0;
+}
+
+/* Whatever follows the title row starts under it, even when the heading is shorter than the
+   button. */
+.collector-toolbar + h1 + *,
+.back-link + h1 {
+  clear: both;
 }
 
 /*
@@ -815,11 +902,13 @@ html:has(.bottom-nav) {
 
 /* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */
 
-/* "הוספת הזמנה" and "תכנון סבב" right under the heading, one under the other, with room before
-   the first group. */
-.orders-add,
-.orders-plan {
-  margin-block-end: 0.75rem;
+/* "הוספת הזמנה" and "תכנון סבב" right under the heading, side by side in two equal columns
+   (mockup §2), with room before the list. Each keeps .button's --tap-target height (≥48px). */
+.orders-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+  margin-block-end: 1rem;
 }
 
 /* The count and bottle total under a group's title: bold, so it reads as the group's header. */
@@ -838,13 +927,13 @@ html:has(.bottom-nav) {
 
 /*
  * One waiting order. White on the page's blue sets the card apart; the gray edge is decoration
- * only (it fails AA as an edge, see --color-gray), and nothing to tap depends on it.
+ * only (it fails AA as an edge, see --line), and nothing to tap depends on it.
  */
 .order-card {
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
 .order-card p {
@@ -870,16 +959,16 @@ html:has(.bottom-nav) {
 }
 
 /*
- * A tag ("לא אישר בזמן · 12/11", "בלי מיקום"): --color-text on --color-accent (6.5:1, AA) inside
- * a --color-text outline, so it reads as a badge by its shape, and its words say what it means.
+ * A tag ("לא אישר בזמן · 12/11", "בלי מיקום"): --ink on --brand-soft (12.4:1, AA) inside
+ * an --ink outline, so it reads as a badge by its shape, and its words say what it means.
  */
 .tag {
   display: inline-block;
   padding: 0.125rem 0.625rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--color-text);
+  background: var(--brand-soft);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -914,12 +1003,30 @@ html:has(.bottom-nav) {
 
 /* --- Add and edit order screens (collector/AddOrderScreen.tsx, EditOrderScreen.tsx) -- */
 
-/* "חזרה להזמנות" under the heading: a plain link, still a full-size tap target. */
+/*
+ * The back link (collector/BackToOrdersLink.tsx), like an iPhone back button: a chevron and
+ * "הזמנות" in --brand at the start of the title row, beside the floated logout, with the screen's
+ * <h1> under it. A flex box (not inline) so it stays beside the float; fit-content keeps its
+ * target to its own width. The negative start margin lines the chevron up with the column edge
+ * while the padding keeps the whole 48px target.
+ */
 .back-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  gap: 0.125rem;
+  width: fit-content;
   min-height: var(--tap-target);
-  margin-block-end: 1rem;
+  margin-inline-start: -0.5rem;
+  padding-inline: 0.5rem 0.75rem;
+  border-radius: 999px;
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* The heading under the back link: the row above already makes the space at the top. */
+.back-link + h1 {
+  margin-block-start: 0.5rem;
 }
 
 /* "ביטול ההזמנה" (components/CancelConfirm.tsx, also on the customer's page) sits apart from the
@@ -928,7 +1035,7 @@ html:has(.bottom-nav) {
 .cancel-order {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
-  border-block-start: 2px solid var(--color-gray);
+  border-block-start: 2px solid var(--line);
 }
 
 /* The same question among other buttons (CancelConfirm `inline`): no gap and no line above it. */
@@ -985,15 +1092,15 @@ html:has(.bottom-nav) {
   align-items: center;
   gap: 0.5rem 1rem;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
-/* An opened row: a thick --color-text bar on its start edge, next to the "נפתח ✓" words, so it
+/* An opened row: a thick --ink bar on its start edge, next to the "נפתח ✓" words, so it
    is told apart by shape and text, not by colour alone. */
 .send-row-opened {
-  border-inline-start: 6px solid var(--color-text);
+  border-inline-start: 6px solid var(--ink);
 }
 
 .send-row-name {
@@ -1002,14 +1109,14 @@ html:has(.bottom-nav) {
   font-weight: 700;
 }
 
-/* "נפתח ✓ · 20/10": a badge like .tag, --color-text on --color-accent (6.5:1, AA). */
+/* "נפתח ✓ · 20/10": a badge like .tag, --ink on --brand-soft (12.4:1, AA). */
 .send-row-mark {
   margin: 0;
   padding: 0.125rem 0.625rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--color-text);
+  background: var(--brand-soft);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -1022,18 +1129,86 @@ html:has(.bottom-nav) {
 .send-row-note {
   flex-basis: 100%;
   margin: 0;
-  color: var(--color-error);
+  color: var(--error);
+  font-weight: 700;
+}
+
+/*
+ * The grouped send list (SendList `grouped`, the rounds screen's step 1): one card of thin rows
+ * (.grouped-list / .grouped-row above) instead of a framed box per row. The list drops its flex
+ * gap, each row its own frame and background (this also drops the opened row's 6px bar), and the
+ * 1px line between rows comes back with a selector that beats the `border: 0` here.
+ */
+.send-list.grouped-list {
+  display: block;
+  gap: 0;
+}
+
+.grouped-list .send-row {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.grouped-list .send-row + .send-row {
+  border-block-start: 1px solid var(--line);
+}
+
+/* "נפתח ✓" as plain bold --green text (AA on --card, styles.test.ts); the words carry the state,
+   so the badge frame is not needed in a thin row. */
+.grouped-list .send-row-mark {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--green);
   font-weight: 700;
 }
 
 /* --- Planning screen (collector/PlanRoundScreen.tsx) ------------------------------- */
 
 /*
- * One order row of the plan: the checkbox, then the order's details one under the other. The
- * whole row is the .choice tap target; the checkbox stays at the top when the details wrap.
+ * The region's orders (mockup §6): a .grouped-list of thin rows inside the "איפה" card. That card
+ * is already the .card, so the list gets a light frame of its own instead of a second card; an
+ * error on the list turns the frame red.
+ */
+.plan-order-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.plan-order-list:has(input[aria-invalid='true']) {
+  border: 2px solid var(--error);
+}
+
+/*
+ * One order row of the plan: a big checkbox, then the order's details one under the other. The
+ * whole row is the tap target (.grouped-row: at least 64px tall); the checkbox stays at the top
+ * when the details wrap.
  */
 .plan-order {
+  flex-wrap: nowrap;
   align-items: flex-start;
+  cursor: pointer;
+}
+
+/* The big checkbox (mockup: 28px), in the brand colour when marked. */
+.plan-order input {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+/* The keyboard ring goes around the whole row (the tap target), inside the list's clipped frame. */
+.plan-order:has(input:focus-visible) {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+}
+
+.plan-order input:focus-visible {
+  outline: none;
 }
 
 /* The name, then the address, bottles and tags (.plan-order-more), each on its own line. */
@@ -1043,6 +1218,10 @@ html:has(.bottom-nav) {
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
+}
+
+.plan-order-details {
+  flex: 1 1 0;
 }
 
 /* The tags under the bottles, with a little room above. */
@@ -1147,7 +1326,7 @@ html:has(.bottom-nav) {
   font-weight: 700;
 }
 
-/* The chosen filter is filled (white on --color-text, 10.4:1): told apart by more than colour of
+/* The chosen filter is filled (--white on --brand, 6.8:1): told apart by more than colour of
    the outline, and screen readers get aria-pressed. */
 .round-picker-chip[aria-pressed='true'] {
   background: var(--brand);
@@ -1176,16 +1355,16 @@ html:has(.bottom-nav) {
   border-radius: var(--r-md);
   background: var(--card);
   box-shadow: var(--shadow-1);
-  color: var(--color-text);
+  color: var(--ink);
   font: inherit;
   text-align: start;
 }
 
-/* The round on screen: --color-accent behind (6.5:1), a thick bar on the start side and a ✓, so
+/* The round on screen: --brand-soft behind (12.4:1 under --ink), a thick start bar and a ✓, so
    it does not rely on colour alone. The tag turns white to stay visible on the accent. */
 .round-picker-row[aria-current='true'] {
   border-inline-start: 8px solid var(--brand);
-  background: var(--color-accent);
+  background: var(--brand-soft);
   font-weight: 700;
 }
 
@@ -1201,7 +1380,7 @@ html:has(.bottom-nav) {
 .round + .round {
   margin-block-start: 2rem;
   padding-block-start: 0.5rem;
-  border-block-start: 2px solid var(--color-gray);
+  border-block-start: 2px solid var(--line);
 }
 
 /* "בקשות אישור" and the group titles: under the round's <h2>, above the cards' names. */
@@ -1213,6 +1392,81 @@ html:has(.bottom-nav) {
 
 /* Yoel's personal text keeps the line breaks he typed into it. */
 .round-personal-text {
+  white-space: pre-line;
+}
+
+/* "אישרו · ממתינים · מועד אחר": three equal count tiles under the round's details. */
+.round-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-block-start: 0.875rem;
+}
+
+/* A tile: the number big, its words under it. Each colour variant sets text and background as an
+   AA pair (styles.test.ts); the words, not the colour, say which count it is. */
+.round-tile {
+  padding: 0.625rem 0.375rem;
+  border-radius: var(--r-md);
+  text-align: center;
+}
+
+.round-tile b {
+  display: block;
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+
+.round-tile span {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.round-tile-green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.round-tile-amber {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.round-tile-gray {
+  background: var(--done);
+  color: var(--muted);
+}
+
+/* The round's date, region and pickup time (used as `card round-details`). */
+.round-details {
+  margin-block-start: 0.75rem;
+}
+
+.round-details h2 {
+  margin: 0;
+}
+
+.round-details p {
+  margin-block: 0.375rem 0;
+}
+
+/* The pickup time with its clock icon, quiet. */
+.round-pickup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+}
+
+/* Yoel's personal text as a quote: --muted on --bg (AA), a decorative --brand-soft bar at the
+   start. Keeps the typed line breaks, like .round-personal-text above. */
+.round-details .round-personal-text {
+  margin-block-start: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-inline-start: 4px solid var(--brand-soft);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--muted);
   white-space: pre-line;
 }
 
@@ -1241,7 +1495,7 @@ html:has(.bottom-nav) {
 .round-build-route {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
-  border-block-start: 2px solid var(--color-gray);
+  border-block-start: 2px solid var(--line);
 }
 
 /* The close button (collector/CloseRoundConfirm.tsx) comes last in a round, apart from the step above
@@ -1255,63 +1509,71 @@ html:has(.bottom-nav) {
   margin-block-start: 0;
 }
 
-/* A round's order card (.card + this): the shared card with the old class's paragraph spacing. */
-.round-order-card p {
-  margin-block: 0 0.25rem;
-}
-
-/* The phone on a round's card dials; a full-size tap target although it reads as a link. */
-.order-card-phone {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target);
-}
-
-/* "אישר בשיחה או בהודעה" at the end of a card; .button keeps it at least 48px tall. */
+/* "אישר בשיחה או בהודעה" on a row of "עוד לא אישרו": a full line under the row (.grouped-row-full);
+   .button keeps it at least 48px tall, and the row's gap spaces it from the parts above. */
 .order-card-confirm {
-  min-width: var(--tap-target);
-  margin-block: 0.5rem 0.25rem;
+  margin: 0;
 }
 
 /* --- History tab (collector/HistoryScreen.tsx) ------------------------------------- */
 
-/* The month shown ("אוקטובר 2026"), centred over the two buttons that change it. */
+/*
+ * The month picker: one card, a round arrow button at each end and the month shown ("אוקטובר
+ * 2026") between them, apart from the totals below.
+ */
+.month-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-end: 1rem;
+  padding: 0.375rem;
+}
+
 .month-name {
-  margin-block: 0 0.5rem;
+  flex: 1;
+  margin: 0;
+  font-size: 1.2rem;
   text-align: center;
 }
 
-/* "החודש הקודם" and "החודש הבא" side by side, each half the column, apart from the totals. */
-.month-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-block-end: 1.5rem;
+/* "החודש הקודם" / "החודש הבא": a full --tap-target circle, --brand on --brand-soft (AA). Its name
+   is its aria-label; the arrow inside is decoration. */
+.month-arrow {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap-target);
+  height: var(--tap-target);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
-.month-picker .button {
-  padding-inline: 0.5rem;
+.month-arrow svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* "החודש הבא" on the current month: a gray arrow with no fill and no frame, plainly off. Inactive
+   controls are exempt from the contrast rule; the not-allowed cursor comes from button:disabled. */
+.month-arrow:disabled {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.6;
 }
 
 /*
- * "החודש הבא" on the current month. Inactive controls are exempt from the contrast rule, but the
- * text keeps AA anyway (the disabled look, --ink on --done); a dashed --muted edge sets it apart
- * from "החודש הקודם" by shape too. min-height counts the border (border-box), so the two buttons
- * stay the same height.
- */
-.month-picker .button:disabled {
-  border: 2px dashed var(--muted);
-}
-
-/*
- * The month's three totals as stat tiles (ADR-0011): each a .card with the number large in --brand
- * and its label under it in --muted (both AA on --card, styles.test.ts). The DOM keeps the label
- * (dt) before the number (dd) so a screen reader hears the name first; column-reverse puts the
- * number on top. Tiles wrap, so a long value never squeezes.
+ * The month's three totals as stat tiles (ADR-0011): the value ("שווי") is the hero, full width,
+ * then the two counts side by side under it, so no tile stands alone in a row. Each count is a
+ * .card with the number large in --brand and its label under it in --muted (both AA on --card,
+ * styles.test.ts). The DOM keeps the label (dt) before the number (dd) so a screen reader hears
+ * the name first; column-reverse puts the number on top.
  */
 .history-totals {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
   margin: 0 0 1.5rem;
 }
@@ -1321,7 +1583,9 @@ html:has(.bottom-nav) {
   flex-direction: column-reverse;
   justify-content: flex-end;
   gap: 0.25rem;
-  padding: 1rem;
+  /* A long number squeezes its own column, not the row: grid items default to min-content. */
+  min-width: 0;
+  padding: 1rem 0.5rem;
   text-align: center;
 }
 
@@ -1339,6 +1603,24 @@ html:has(.bottom-nav) {
   line-height: 1.1;
 }
 
+/* The value as the hero: the whole row, --white on the --brand-2 → --brand gradient of
+   .button-primary (both ends AA, light and dark, styles.test.ts), number and label alike. */
+.history-total-hero {
+  grid-column: 1 / -1;
+  padding: 1.25rem 1rem;
+  background: linear-gradient(160deg, var(--brand-2), var(--brand));
+  box-shadow: var(--shadow-btn);
+}
+
+.history-total-hero dt,
+.history-total-hero dd {
+  color: var(--white);
+}
+
+.history-total-hero dd {
+  font-size: 2.6rem;
+}
+
 /* --- Route stops (collector/StopCard.tsx) ------------------------------------------ */
 
 /*
@@ -1347,9 +1629,9 @@ html:has(.bottom-nav) {
  */
 .stop-card {
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-gray);
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
 .stop-card > p {
@@ -1358,12 +1640,12 @@ html:has(.bottom-nav) {
 
 /*
  * A handled stop (collected, not found, cancelled, left the round): a quieter gray background
- * (--color-handled) and a thick --color-text bar on its start edge, next to the state in words,
+ * (--done) and a thick --ink bar on its start edge, next to the state in words,
  * so it is told apart by shape and text, not by colour alone.
  */
 .stop-card-handled {
-  border-inline-start: 6px solid var(--color-text);
-  background: var(--color-handled);
+  border-inline-start: 6px solid var(--ink);
+  background: var(--done);
 }
 
 /* "עצירה 2": a small header line above the name. */
@@ -1391,15 +1673,15 @@ html:has(.bottom-nav) {
 
 /*
  * "נאסף", "לא נמצא", ...: a badge like .tag, but white inside, so it stands out on the gray of a
- * handled card (--color-text on white, 10.4:1).
+ * handled card (--ink on --card, 15.3:1).
  */
 .stop-card-state {
   display: inline-block;
   padding: 0.125rem 0.625rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-radius: 999px;
-  background: var(--color-white);
-  color: var(--color-text);
+  background: var(--card);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -1446,11 +1728,37 @@ html:has(.bottom-nav) {
 
 /* --- Customer order page (pages/OrderPage.tsx) ------------------------------------ */
 
-/* "מצב ההזמנה: ממתינה לאישור": a little larger than body text, the first thing to read. */
-.order-status {
-  /* Also a .card: the status badge sits at the top of the page. */
-  font-size: 1.15rem;
+/*
+ * The status card at the top of the page (OrderStatus): "מצב ההזמנה:" in --muted, the status as a
+ * large badge, and the sentence that explains it under them, in one .card.
+ */
+.order-status-card {
+  display: grid;
+  gap: 0.75rem;
   margin-block: 0 1rem;
+  padding: 1rem;
+}
+
+.order-status-card p {
+  margin: 0;
+}
+
+/* The label wraps above the badge on a narrow phone; --muted on --card is AA (styles.test.ts). */
+.order-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* The badge larger than in the collector's lists: the first thing the customer reads. It keeps
+   its tone's own text and background (.badge-*), so the contrast pairs stay the tested ones. */
+.order-status .badge {
+  padding: 0.375rem 1rem;
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 /* The thank-you screen's donation line (also a .card). */
@@ -1470,18 +1778,18 @@ html:has(.bottom-nav) {
    in the Buttons section. */
 
 /*
- * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --color-text on
- * white (10.4:1) instead of the error red, so it reads as news, not as a mistake. The change
+ * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --ink on
+ * --card (15.3:1) instead of the error red, so it reads as news, not as a mistake. The change
  * form's warning that a new address leaves the round looks the same: news before saving.
  */
 .order-notice,
 .order-change-warning {
   margin-block: 0 1.5rem;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-text);
+  border: 2px solid var(--ink);
   border-inline-start-width: 6px;
-  border-radius: var(--radius);
-  background: var(--color-white);
+  border-radius: var(--r-sm);
+  background: var(--card);
   font-weight: 700;
 }
 
@@ -1492,24 +1800,49 @@ html:has(.bottom-nav) {
 }
 
 .order-details h2 {
-  margin-block-start: 0;
+  margin-block: 0 0.25rem;
 }
 
 .order-details dl {
   margin: 0;
 }
 
-/* Each detail: its name in bold, the value under it. */
+/*
+ * Each detail as a settings-style row (OrderPage's DetailRow): the name at the inline start in
+ * --muted, the value at the inline end in bold, a thin line between rows. Logical properties and
+ * text-align: end, so the same rules serve Hebrew (RTL) and English (/en, LTR). A value too long
+ * for the space left wraps: first inside its own column, and below 8rem it drops to a line of its
+ * own; overflow-wrap breaks a long word, so nothing runs past the card at 390px.
+ */
+.order-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  min-height: var(--tap-target);
+  padding-block: 0.75rem;
+}
+
+/* --line is decoration only (too light to be an edge); the words carry the meaning. */
+.order-detail-row + .order-detail-row {
+  border-block-start: 1px solid var(--line);
+}
+
+/* --muted on --card is AA (styles.test.ts). */
 .order-details dt {
-  font-weight: 700;
+  flex: 0 1 auto;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .order-details dd {
-  margin: 0 0 0.75rem;
-}
-
-.order-details dd:last-child {
-  margin-block-end: 0;
+  flex: 1 1 8rem;
+  min-width: 0;
+  margin: 0;
+  font-weight: 700;
+  text-align: end;
+  overflow-wrap: anywhere;
 }
 
 /* "שינוי" right under the details card, apart from it. */
@@ -1523,11 +1856,11 @@ html:has(.bottom-nav) {
 .form-alert {
   margin-block: 0 1.5rem;
   padding: 0.75rem 1rem;
-  border: 2px solid var(--color-error);
+  border: 2px solid var(--error);
   border-inline-start-width: 6px;
-  border-radius: var(--radius);
-  background: var(--color-white);
-  color: var(--color-error);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--error);
   font-weight: 700;
 }
 
@@ -1794,7 +2127,7 @@ html:has(.bottom-nav) {
   align-items: center;
   gap: 0.75rem;
   text-align: center;
-  color: var(--color-muted);
+  color: var(--muted);
 }
 
 .empty-state svg {
@@ -1834,7 +2167,11 @@ html:has(.bottom-nav) {
   padding: var(--space-4);
 }
 
+/* A flex row, so an optional icon (FormCard `icon`) sits centred before the words. */
 .form-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0 0 var(--space-3);
   color: var(--brand);
   font-size: 1.25rem;
@@ -1860,7 +2197,7 @@ html:has(.bottom-nav) {
   gap: var(--space-2);
   min-height: max(88px, 5.5rem);
   padding: var(--space-3);
-  border: 2px solid var(--line);
+  border: 2px solid var(--edge); /* the card's only edge: 3:1 on --card (styles.test.ts) */
   border-radius: var(--r-md);
   background: var(--card);
   color: var(--ink);
@@ -1900,4 +2237,35 @@ html:has(.bottom-nav) {
 
 .choice-card:has(input[aria-invalid='true']) {
   border-color: var(--error);
+}
+
+/* Choice cards with words only (the region on the edit screen): no icon, so not as tall. */
+.choice-card:not(:has(svg)) {
+  min-height: var(--tap-target);
+}
+
+/* --- The edit screen's destructive actions (collector/EditOrderScreen.tsx) ---------------- */
+
+/*
+ * "ביטול ההזמנה" and "מחיקת ההזמנה" at the bottom, under one dividing line (mockup §5), apart
+ * from "שמירת השינויים". Each CancelConfirm brings its own gap and line (.cancel-order); here the
+ * one line above the group replaces them.
+ */
+.danger-zone {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: var(--space-5);
+}
+
+.danger-zone-divider {
+  width: 100%;
+  margin: 0 0 var(--space-2);
+  border: 0;
+  border-block-start: 1px solid var(--line); /* decoration only: the red buttons carry the meaning */
+}
+
+.danger-zone .cancel-order {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: none;
 }

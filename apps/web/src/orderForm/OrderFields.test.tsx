@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { FormErrors, OrderFormField, OrderFormValues } from './formValues.ts';
-import { OrderFields } from './OrderFields.tsx';
+import { FormCard, OrderFields } from './OrderFields.tsx';
 
 /** A form filled in with valid values, with `overrides` on top. */
 function makeValues(overrides: Partial<OrderFormValues> = {}): OrderFormValues {
@@ -151,6 +151,34 @@ describe('OrderFields', () => {
     for (const name of ['פרטים', 'כתובת', 'בקבוקים']) {
       expect(screen.getByRole('heading', { level: 2, name })).toBeDefined();
     }
+  });
+
+  it('puts the cards it is given between the address and the bottles', () => {
+    render(
+      <OrderFields
+        values={makeValues()}
+        errors={{}}
+        onFieldChange={() => {}}
+        afterAddress={
+          <FormCard title="מיקום">
+            <p>תוכן</p>
+          </FormCard>
+        }
+      />,
+    );
+    const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(titles).toEqual(['פרטים', 'כתובת', 'מיקום', 'בקבוקים']);
+  });
+
+  it('draws a FormCard icon before the title, hidden, so the heading is named by the title alone', () => {
+    render(
+      <FormCard title="מתי" icon="calendar">
+        <p>תוכן</p>
+      </FormCard>,
+    );
+    const heading = screen.getByRole('heading', { level: 2, name: 'מתי' });
+    expect(heading.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('region', { name: 'מתי' })).toBeDefined();
   });
 
   it('has no details card without the contact fields', () => {

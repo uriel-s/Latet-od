@@ -1,6 +1,6 @@
 // The customer page for an English order (`order.lang === 'en'`): every text, the date and times,
 // the change form and the new-order link in English. The Hebrew page is tested in OrderPage.test.tsx.
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   findStreet,
@@ -126,6 +126,18 @@ describe('OrderPage in English', () => {
     ).toBeDefined();
     expect(screen.getByRole('button', { name: 'Change' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Cancel the order' })).toBeDefined();
+  });
+
+  it('lays the details out as rows in English too, the phone left to right', async () => {
+    await renderEn(makeOrder());
+
+    const details = screen.getByRole('region', { name: 'Order details' });
+    const names = Array.from(details.querySelectorAll('dl > div > dt')).map(
+      (name) => name.textContent,
+    );
+    expect(names).toHaveLength(details.querySelectorAll('dl > div > dd').length);
+    expect(names[0]).toBe('Name');
+    expect(within(details).getByText('050-1234567').closest('[dir="ltr"]')).not.toBeNull();
   });
 
   it('shows a pending order with the date, the pickup hours and the confirm button', async () => {

@@ -70,4 +70,14 @@ describe('CancelConfirm', () => {
 
     expect(screen.getByRole('alert').textContent).toBe('לא הצלחנו');
   });
+
+  // Only the look (styles.css); the class is how a tone reaches it.
+  it.each([
+    [undefined, 'button-danger-outline'],
+    ['dangerQuiet', 'button-danger-quiet'],
+    ['secondary', 'button-secondary'],
+  ] as const)('gives the opening button of tone %s the class %s', (buttonTone, className) => {
+    renderConfirm(buttonTone === undefined ? {} : { buttonTone });
+    expect(screen.getByRole('button', { name: 'ביטול ההזמנה' }).classList).toContain(className);
+  });
 });

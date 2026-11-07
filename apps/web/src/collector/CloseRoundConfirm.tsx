@@ -165,6 +165,10 @@ export function CloseRoundConfirm({
   const questionRef = useRef<HTMLParagraphElement>(null);
   const questionId = useId();
   const texts = CLOSE_ROUND_TEXTS[view.round.phase];
+  // "בטל את הסבב" calls the round off: quiet red, as in the mockup. "סיימתי את הסבב" ends a drive
+  // that is done, nothing to warn about, so it stays the tonal button.
+  const openButtonTone =
+    view.round.phase === 'confirming' ? 'button-danger-quiet' : 'button-secondary';
 
   const rows = open ? thankYouRows(view, keptOrderIds) : [];
 
@@ -232,7 +236,7 @@ export function CloseRoundConfirm({
         <button
           ref={buttonRef}
           type="button"
-          className="button button-secondary button-block"
+          className={`button ${openButtonTone} button-block`}
           onClick={() => showQuestion(true)}
         >
           {texts.label}

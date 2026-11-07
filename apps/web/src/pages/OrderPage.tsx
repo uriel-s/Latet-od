@@ -501,6 +501,8 @@ export function OrderPage({
                   </button>
                   <CancelConfirm
                     inline
+                    // "Not this time" only sends the order back to waiting: nothing red about it.
+                    buttonTone="secondary"
                     buttonLabel={t(lang, 'orderPage.decline')}
                     question={t(lang, 'orderPage.declineQuestion')}
                     confirmLabel={t(lang, 'orderPage.declineConfirm')}
@@ -717,15 +719,19 @@ function ConfirmLabel({ round, lang }: { round: CustomerOrder['round']; lang: La
   return tWithDay(lang, 'orderPage.confirmDate', formatDayMonth(round.date, lang));
 }
 
-/** The status in plain words, and what it means for the customer now (spec §3.3). */
+/**
+ * The status in plain words, and what it means for the customer now (spec §3.3): one card at the
+ * top of the page, the status as a large badge and the sentence that explains it under it, so the
+ * customer reads both together (design run 6, section 4).
+ */
 function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   return (
-    <>
-      <p className="order-status card">
+    <div className="order-status-card card">
+      <p className="order-status">
         {t(lang, 'orderPage.status')} <StatusBadge status={order.status} lang={lang} />
       </p>
       <StatusText order={order} lang={lang} />
-    </>
+    </div>
   );
 }
 
@@ -787,7 +793,9 @@ function timesText(text: string, times: readonly string[]): ReactNode {
 
 /**
  * The order's details as the customer gave them: only what the api sent, which is the order's
- * own (no id, no region, nothing of another customer).
+ * own (no id, no region, nothing of another customer). Drawn as settings-style rows: each
+ * name/value pair in its own `<div>` inside the `<dl>` (valid HTML), so CSS can lay out a row
+ * with the name at the start, the value at the end and a line between rows.
  */
 function OrderDetails({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   const headingId = useId();
@@ -806,28 +814,30 @@ function OrderDetails({ order, lang }: { order: CustomerOrder; lang: Lang }) {
     <section className="order-details card" aria-labelledby={headingId}>
       <h2 id={headingId}>{t(lang, 'orderPage.details')}</h2>
       <dl>
-        <dt>{t(lang, 'orderPage.detailName')}</dt>
-        <dd>{contact.name}</dd>
-        <dt>{t(lang, 'orderPage.detailPhone')}</dt>
-        <dd>
+        <DetailRow label={t(lang, 'orderPage.detailName')}>{contact.name}</DetailRow>
+        <DetailRow label={t(lang, 'orderPage.detailPhone')}>
           {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
           <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>
-        </dd>
-        <dt>{t(lang, 'orderPage.detailAddress')}</dt>
-        <dd>
+        </DetailRow>
+        <DetailRow label={t(lang, 'orderPage.detailAddress')}>
           {streetName} {address.houseNumber}
-        </dd>
-        <dt>{t(lang, 'orderPage.detailSpot')}</dt>
-        <dd>{spot}</dd>
+        </DetailRow>
+        <DetailRow label={t(lang, 'orderPage.detailSpot')}>{spot}</DetailRow>
         {address.note !== undefined && address.note !== '' && (
-          <>
-            <dt>{t(lang, 'orderPage.detailNote')}</dt>
-            <dd>{address.note}</dd>
-          </>
+          <DetailRow label={t(lang, 'orderPage.detailNote')}>{address.note}</DetailRow>
         )}
-        <dt>{t(lang, 'orderPage.detailBottles')}</dt>
-        <dd>{order.bottlesEstimated}</dd>
+        <DetailRow label={t(lang, 'orderPage.detailBottles')}>{order.bottlesEstimated}</DetailRow>
       </dl>
     </section>
+  );
+}
+
+/** One row of {@link OrderDetails}: the detail's name (`dt`) and its value (`dd`). */
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="order-detail-row">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }

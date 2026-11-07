@@ -159,10 +159,30 @@ describe('OrdersScreen', () => {
       expect(screen.getByText('3 ממתינות · כ־150 בקבוקים')).toBeDefined();
     });
 
-    it('shows the empty summary when no order waits', async () => {
+    it('says once that no order waits, with no summary line and no groups', async () => {
       renderScreen(fakeLoad({ kind: 'loaded', groups: groupWaitingOrders([]) }).load);
-      await screen.findByRole('region', { name: 'רמת בית שמש' });
-      expect(screen.getAllByText('אין הזמנות שממתינות')).toHaveLength(4);
+
+      await screen.findByText('אין הזמנות שממתינות');
+      expect(screen.getAllByText('אין הזמנות שממתינות')).toHaveLength(1);
+      expect(screen.queryByRole('region')).toBeNull();
+      expect(screen.queryByRole('status')).toBeNull();
+      // The add and plan links stay, so Yoel can still add a customer who phones.
+      expect(screen.getByRole('link', { name: 'הוספת הזמנה' })).toBeDefined();
+      expect(screen.getByRole('link', { name: 'תכנון סבב' })).toBeDefined();
+    });
+
+    it('keeps the empty state of the other two groups when one group has an order', async () => {
+      const [first] = ORDERS;
+      if (first === undefined) throw new Error('no order');
+      renderScreen(fakeLoad({ kind: 'loaded', groups: groupWaitingOrders([first]) }).load);
+
+      const ramat = await screen.findByRole('region', { name: 'רמת בית שמש' });
+      expect(screen.getByText('ממתינה אחת · כ־40 בקבוקים')).toBeDefined();
+      expect(within(ramat).getAllByRole('listitem')).toHaveLength(1);
+      for (const name of ['בית שמש', 'בלי אזור']) {
+        const group = screen.getByRole('region', { name });
+        expect(within(group).getByText('אין הזמנות שממתינות')).toBeDefined();
+      }
     });
 
     it('shows each card a status badge', async () => {

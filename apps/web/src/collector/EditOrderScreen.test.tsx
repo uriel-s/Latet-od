@@ -298,6 +298,41 @@ describe('EditOrderScreen', () => {
       expect(descriptionOf(screen.getByRole('group', { name: 'אזור' }))).toBe(REGION_HINT);
     });
 
+    it('keeps one level of cards, with "רחוב קרוב" and "אזור" in a "מיקום" card', async () => {
+      await renderLoaded();
+
+      const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+      expect(titles).toEqual(['פרטים', 'כתובת', 'מיקום', 'בקבוקים']);
+      const location = screen.getByRole('region', { name: 'מיקום' });
+      expect(within(location).getByLabelText('רחוב קרוב')).toBeDefined();
+      expect(within(location).getByRole('group', { name: 'אזור' })).toBeDefined();
+      // No card inside a card: the form around the cards is not one, and no card holds another.
+      expect(document.querySelectorAll('.card .card')).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'שמירת השינויים' }).closest('.card')).toBeNull();
+    });
+
+    it('changes the region by tapping its choice card', async () => {
+      await renderLoaded();
+
+      fireEvent.click(regionRadio('בית שמש'));
+
+      expect(regionRadio('בית שמש').checked).toBe(true);
+      expect(regionRadio('רמת בית שמש').checked).toBe(false);
+    });
+
+    it('puts "ביטול ההזמנה" and "מחיקת ההזמנה" after a dividing line, below the save', async () => {
+      await renderLoaded();
+
+      const divider = screen.getByRole('separator');
+      const save = screen.getByRole('button', { name: 'שמירת השינויים' });
+      const follows = (element: Element, before: Element) =>
+        (before.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+      expect(follows(divider, save)).toBe(true);
+      for (const name of ['ביטול ההזמנה', 'מחיקת ההזמנה']) {
+        expect(follows(screen.getByRole('button', { name }), divider)).toBe(true);
+      }
+    });
+
     it('checks no region for an order without one', async () => {
       await renderLoaded(makeFreeTextOrder());
 

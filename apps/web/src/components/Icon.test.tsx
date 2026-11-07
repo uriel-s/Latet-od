@@ -22,6 +22,10 @@ describe('Icon', () => {
         'door',
         'building',
         'home',
+        'back',
+        'forward',
+        'logout',
+        'chat',
       ].sort(),
     );
   });

@@ -35,11 +35,17 @@ export interface OrderFieldsProps {
    * 'en'. Error messages arrive already in the right language (`errors`).
    */
   lang?: Lang;
+  /**
+   * More cards to show between the address and the bottles, such as Yoel's "מיקום" card on the
+   * edit screen (רחוב קרוב, אזור): they belong with the address, and the form keeps one level of
+   * cards. Wrap each one in {@link FormCard}.
+   */
+  afterAddress?: ReactNode;
 }
 
 /**
  * The order's fields, in form order: שם and טלפון נייד (unless `showContact` is false), רחוב,
- * מספר בית, איפה הבקבוקים, קומה ודירה (only for the apartment door), כמות בקבוקים, הערה, in three titled cards (פרטים, כתובת, בקבוקים). A
+ * מספר בית, איפה הבקבוקים, קומה ודירה (only for the apartment door), כמות בקבוקים, הערה, in three titled cards (פרטים, כתובת, בקבוקים), with any `afterAddress` cards before בקבוקים. A
  * fragment, to be placed inside the page's `<form>`. Every field shows its error next to it and carries aria-invalid while it has one,
  * which is how useOrderForm's `showErrors` finds the first wrong field.
  *
@@ -53,6 +59,7 @@ export function OrderFields({
   onFieldChange,
   showContact = true,
   lang = DEFAULT_LANG,
+  afterAddress,
 }: OrderFieldsProps) {
   const spotGroupName = useId();
   const spotErrorId = useId();
@@ -151,6 +158,8 @@ export function OrderFields({
         )}
       </FormCard>
 
+      {afterAddress}
+
       <FormCard title={t(lang, 'form.sectionBottles')}>
         <TextField
           label={t(lang, 'form.bottles')}
@@ -183,12 +192,26 @@ const SPOT_ICONS: Record<(typeof bottlesSpotSchema.options)[number], IconName> =
   buildingEntrance: 'building',
 };
 
-/** One titled group of fields on a white card; the heading names the group for screen readers. */
-function FormCard({ title, children }: { title: string; children: ReactNode }) {
+/** Props of {@link FormCard}. */
+export interface FormCardProps {
+  /** The group's heading, which also names the section for screen readers. */
+  title: string;
+  /** A decorative icon before the title (the planning screen's "איפה" / "מתי" / "הודעה"). */
+  icon?: IconName;
+  children: ReactNode;
+}
+
+/**
+ * One titled group of fields on a white card; the heading names the group for screen readers.
+ * The form's only level of cards: the page's <form> around them is not a card itself.
+ */
+export function FormCard({ title, icon, children }: FormCardProps) {
   const headingId = useId();
   return (
     <section className="card form-card" aria-labelledby={headingId}>
       <h2 id={headingId} className="form-card-title">
+        {/* Hidden from screen readers (Icon), so the heading's name stays the title alone. */}
+        {icon !== undefined && <Icon name={icon} />}
         {title}
       </h2>
       {children}
