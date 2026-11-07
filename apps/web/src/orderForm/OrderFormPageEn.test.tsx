@@ -142,6 +142,16 @@ describe('the English booking form', () => {
     ).toBeDefined();
   });
 
+  it('switches language from the rules notice itself, before accepting it', () => {
+    window.history.replaceState(null, '', '/en');
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'עברית' }));
+
+    expect(window.location.pathname).toBe('/');
+    expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+  });
+
   it('switches between the languages with the big button and sets lang and dir', () => {
     window.history.replaceState(null, '', '/en');
     render(<App />);

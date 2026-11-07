@@ -193,6 +193,8 @@ describe('App', () => {
     renderAt('/o/abc');
 
     expect(screen.getByRole('heading', { level: 1, name: 'ההזמנה שלך' })).toBeDefined();
+    // The rules notice belongs to the booking form only.
+    expect(screen.queryByRole('button', { name: 'הבנתי, להזמנה' })).toBeNull();
     // The fake api knows no order "abc".
     expect((await screen.findByRole('alert')).textContent).toBe(
       CUSTOMER_ORDER_MESSAGES.orderNotFound,

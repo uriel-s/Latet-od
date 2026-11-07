@@ -19935,9 +19935,6 @@ var HE = {
   // spec §6.1, word for word.
   "whatsapp.thankYou.thanks": "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "whatsapp.thankYou.orderAgain": "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:",
-  // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
-  // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
-  // {min} is MIN_BOTTLES.
   // The rules notice shown before the form (web: RulesNotice): what is accepted, nothing more.
   "rules.title": "\u05E9\u05D9\u05DE\u05D5 \u05DC\u05D1!",
   "rules.lead": "\u05D0\u05E0\u05D5 \u05DE\u05E7\u05D1\u05DC\u05D9\u05DD:",
@@ -19946,6 +19943,9 @@ var HE = {
   "rules.item3": "\u05DC\u05D4\u05DB\u05D9\u05DF \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05E9\u05E7\u05D9\u05EA \u05D1\u05DC\u05D1\u05D3 \u05E1\u05D2\u05D5\u05E8\u05D4 \u05D5\u05E7\u05E9\u05D5\u05E8\u05D4.",
   "rules.thanks": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   "rules.accept": "\u05D4\u05D1\u05E0\u05EA\u05D9, \u05DC\u05D4\u05D6\u05DE\u05E0\u05D4",
+  // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
+  // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
+  // {min} is MIN_BOTTLES.
   "form.title": "\u05D4\u05D6\u05DE\u05E0\u05EA \u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
   "form.intro": "\u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD, \u05D5\u05D9\u05D5\u05D0\u05DC \u05D9\u05D1\u05D5\u05D0 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD.",
   "form.privacy": "\u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05E9\u05DE\u05E9\u05D9\u05DD \u05E8\u05E7 \u05DC\u05EA\u05D9\u05D0\u05D5\u05DD \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3",
@@ -20082,7 +20082,6 @@ var EN = {
   "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "whatsapp.thankYou.orderAgain": "To order again:",
-  // The booking form and its thank-you screen.
   // The rules notice shown before the form.
   "rules.title": "Please note!",
   "rules.lead": "We accept:",
@@ -20091,6 +20090,7 @@ var EN = {
   "rules.item3": "Bottles packed only in a closed, tied bag",
   "rules.thanks": "Thank you. Latet Od",
   "rules.accept": "I understand, continue",
+  // The booking form and its thank-you screen.
   "form.title": "Book a bottle pickup",
   "form.intro": "Fill in your details and Yoel will come to collect the bottles.",
   "form.privacy": "Your details are used only to arrange the pickup",

@@ -208,6 +208,8 @@ describe('OrderFormPage', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1, name: 'תודה!' })).toBeDefined();
     expect(screen.queryByRole('button', { name: 'שליחת הזמנה' })).toBeNull();
+    // The rules notice is for the way in, never for the screen after the order.
+    expect(screen.queryByRole('button', { name: 'הבנתי, להזמנה' })).toBeNull();
     expect(requests).toEqual([
       {
         contact: { name: 'רחל כהן', phone: '+972501234567' },
