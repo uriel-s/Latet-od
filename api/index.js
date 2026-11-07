@@ -19935,6 +19935,14 @@ var HE = {
   // spec §6.1, word for word.
   "whatsapp.thankYou.thanks": "\u05D4\u05D6\u05DE\u05E0\u05EA\u05DB\u05DD \u05E0\u05D0\u05E1\u05E4\u05D4! \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "whatsapp.thankYou.orderAgain": "\u05DC\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D5\u05D6\u05E8\u05EA:",
+  // The rules notice shown before the form (web: RulesNotice): what is accepted, nothing more.
+  "rules.title": "\u05E9\u05D9\u05DE\u05D5 \u05DC\u05D1!",
+  "rules.lead": "\u05D0\u05E0\u05D5 \u05DE\u05E7\u05D1\u05DC\u05D9\u05DD:",
+  "rules.item1": "\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05E8\u05E9\u05D5\u05DD \u05E2\u05DC\u05D9\u05D4\u05DD \u05E4\u05D9\u05E7\u05D3\u05D5\u05DF 30 \u05D0\u05D2\u05D5\u05E8\u05D5\u05EA",
+  "rules.item2": "\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E8\u05D9\u05E7\u05D9\u05DD \u05D5\u05D0\u05D9\u05DF \u05D1\u05D4\u05DD \u05D6\u05D1\u05DC \u05D0\u05D5 \u05E0\u05D5\u05D6\u05DC",
+  "rules.item3": "\u05DC\u05D4\u05DB\u05D9\u05DF \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05E9\u05E7\u05D9\u05EA \u05D1\u05DC\u05D1\u05D3 \u05E1\u05D2\u05D5\u05E8\u05D4 \u05D5\u05E7\u05E9\u05D5\u05E8\u05D4.",
+  "rules.thanks": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
+  "rules.accept": "\u05D4\u05D1\u05E0\u05EA\u05D9, \u05DC\u05D4\u05D6\u05DE\u05E0\u05D4",
   // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
   // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
   // {min} is MIN_BOTTLES.
@@ -19981,8 +19989,9 @@ var HE = {
   "thankYou.title": "\u05EA\u05D5\u05D3\u05D4!",
   "thankYou.body": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3.",
   "thankYou.viewOrder": "\u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D0\u05D5 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC",
-  // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
-  "thankYou.donation": "\u05DB\u05BE{bottles} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD = \u05DB\u05BE{amount} \u05DC\u05EA\u05E4\u05D9\u05DC\u05D9\u05DF \u05DC\u05D1\u05E8 \u05DE\u05E6\u05D5\u05D5\u05D4 \u05D5\u05DC\u05D7\u05D9\u05D9\u05DC\u05D9\u05DD",
+  // The mission line: what the bottles are for. Replaces the old estimate-in-shekels line, so the
+  // screen promises no amount.
+  "thankYou.mission": "\u05EA\u05D5\u05D3\u05D4 \u05E9\u05D0\u05EA\u05DD \u05D7\u05DC\u05E7 \u05DE\u05D4\u05E2\u05E9\u05D9\u05D9\u05D4 \u05E9\u05DC\u05E0\u05D5! \u05D1\u05D6\u05DB\u05D5\u05EA\u05DB\u05DD \u05D1\u05E7\u05D1\u05D5\u05E7 \u05D4\u05D5\u05E4\u05DA \u05DC\u05DE\u05E6\u05D5\u05D5\u05D4, \u05D5\u05DE\u05D7\u05D6\u05D5\u05E8 \u05D4\u05D5\u05E4\u05DA \u05DC\u05EA\u05E4\u05D9\u05DC\u05D9\u05DF. \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   // The customer's own page (web: OrderPage). {date} is the round's day, {from}/{by} the times.
   // The Hebrew is what the page showed before English existed.
   "orderPage.heading": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05E9\u05DC\u05DA",
@@ -20073,6 +20082,14 @@ var EN = {
   "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "whatsapp.thankYou.orderAgain": "To order again:",
+  // The rules notice shown before the form.
+  "rules.title": "Please note!",
+  "rules.lead": "We accept:",
+  "rules.item1": "Bottles marked with a 30-agorot deposit",
+  "rules.item2": "Empty bottles, with no trash or liquid inside",
+  "rules.item3": "Bottles packed only in a closed, tied bag",
+  "rules.thanks": "Thank you. Latet Od",
+  "rules.accept": "I understand, continue",
   // The booking form and its thank-you screen.
   "form.title": "Book a bottle pickup",
   "form.intro": "Fill in your details and Yoel will come to collect the bottles.",
@@ -20115,7 +20132,7 @@ var EN = {
   "thankYou.title": "Thank you!",
   "thankYou.body": "We received your order. Before the round in your area we will send you a WhatsApp message with the pickup date.",
   "thankYou.viewOrder": "View or cancel the order",
-  "thankYou.donation": "About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers",
+  "thankYou.mission": "Thank you for being part of what we do! Thanks to you, a bottle becomes a mitzvah, and recycling becomes tefillin. Latet Od",
   // The customer's own page.
   "orderPage.heading": "Your order",
   "orderPage.loading": "Loading...",

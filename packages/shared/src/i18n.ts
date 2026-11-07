@@ -127,6 +127,15 @@ const HE = {
   'whatsapp.thankYou.thanks': 'הזמנתכם נאספה! תודה רבה שלקחתם חלק בלתת עוד!',
   'whatsapp.thankYou.orderAgain': 'להזמנה חוזרת:',
 
+  // The rules notice shown before the form (web: RulesNotice): what is accepted, nothing more.
+  'rules.title': 'שימו לב!',
+  'rules.lead': 'אנו מקבלים:',
+  'rules.item1': 'בקבוקים שרשום עליהם פיקדון 30 אגורות',
+  'rules.item2': 'בקבוקים ריקים ואין בהם זבל או נוזל',
+  'rules.item3': 'להכין את הבקבוקים בשקית בלבד סגורה וקשורה.',
+  'rules.thanks': 'תודה, לתת עוד',
+  'rules.accept': 'הבנתי, להזמנה',
+
   // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
   // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
   // {min} is MIN_BOTTLES.
@@ -176,8 +185,10 @@ const HE = {
   'thankYou.title': 'תודה!',
   'thankYou.body': 'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp עם מועד האיסוף.',
   'thankYou.viewOrder': 'לצפייה בהזמנה או לביטול',
-  // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
-  'thankYou.donation': 'כ־{bottles} בקבוקים = כ־{amount} לתפילין לבר מצווה ולחיילים',
+  // The mission line: what the bottles are for. Replaces the old estimate-in-shekels line, so the
+  // screen promises no amount.
+  'thankYou.mission':
+    'תודה שאתם חלק מהעשייה שלנו! בזכותכם בקבוק הופך למצווה, ומחזור הופך לתפילין. לתת עוד',
 
   // The customer's own page (web: OrderPage). {date} is the round's day, {from}/{by} the times.
   // The Hebrew is what the page showed before English existed.
@@ -286,6 +297,15 @@ const EN = {
     'Your order has been collected! Thank you for taking part in לתת עוד!',
   'whatsapp.thankYou.orderAgain': 'To order again:',
 
+  // The rules notice shown before the form.
+  'rules.title': 'Please note!',
+  'rules.lead': 'We accept:',
+  'rules.item1': 'Bottles marked with a 30-agorot deposit',
+  'rules.item2': 'Empty bottles, with no trash or liquid inside',
+  'rules.item3': 'Bottles packed only in a closed, tied bag',
+  'rules.thanks': 'Thank you. Latet Od',
+  'rules.accept': 'I understand, continue',
+
   // The booking form and its thank-you screen.
   'form.title': 'Book a bottle pickup',
   'form.intro': 'Fill in your details and Yoel will come to collect the bottles.',
@@ -333,8 +353,8 @@ const EN = {
   'thankYou.body':
     'We received your order. Before the round in your area we will send you a WhatsApp message with the pickup date.',
   'thankYou.viewOrder': 'View or cancel the order',
-  'thankYou.donation':
-    'About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers',
+  'thankYou.mission':
+    'Thank you for being part of what we do! Thanks to you, a bottle becomes a mitzvah, and recycling becomes tefillin. Latet Od',
 
   // The customer's own page.
   'orderPage.heading': 'Your order',

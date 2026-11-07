@@ -19,6 +19,7 @@ afterEach(() => {
   // Unmount first, so no rendered component reacts to the reset below.
   cleanup();
   localStorage.clear();
+  sessionStorage.clear();
   window.history.replaceState(null, '', '/');
   // Drop a visibilityState override, so jsdom's own getter on Document.prototype answers again.
   Reflect.deleteProperty(document, 'visibilityState');

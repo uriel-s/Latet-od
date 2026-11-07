@@ -32,8 +32,8 @@ export interface LayoutProps {
  * Wraps a page in the shared header and footer.
  *
  * Heading rule for every page: the header shows the app name and slogan as plain text, not as a
- * heading, and each page renders exactly one `<h1>` of its own (the form's is "הזמנת איסוף
- * בקבוקים"). So a screen reader's heading list starts at what the page is about, and pages never
+ * heading, and each page renders exactly one `<h1>` of its own (it changes with the screen: at `/` the
+ * rules notice's "שימו לב!", then the form's "הזמנת איסוף בקבוקים"). So a screen reader's heading list starts at what the page is about, and pages never
  * compete with the header for the `<h1>`.
  */
 export function Layout({

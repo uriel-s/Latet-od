@@ -15,7 +15,8 @@ import { navigate } from './router.tsx';
 
 /** One path for each route, with the heading its page settles on, for the checks every page must pass. */
 const ONE_PATH_PER_ROUTE: [path: string, heading: string][] = [
-  ['/', 'הזמנת איסוף בקבוקים'],
+  // The booking form starts with the rules notice.
+  ['/', 'שימו לב!'],
   // No order has the token "abc": the page settles on "not found", under its own heading.
   ['/o/abc', 'ההזמנה שלך'],
   ['/login', 'כניסה'],
@@ -177,8 +178,13 @@ describe('App', () => {
     await waitFor(() => expect(screen.queryByText('טוען...')).toBeNull());
   });
 
-  it('shows the booking form at /', () => {
+  it('shows the rules notice at /, and the booking form after its button', () => {
     renderAt('/');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+    expect(screen.queryByLabelText('שם')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'הבנתי, להזמנה' }));
 
     expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
   });
@@ -187,6 +193,8 @@ describe('App', () => {
     renderAt('/o/abc');
 
     expect(screen.getByRole('heading', { level: 1, name: 'ההזמנה שלך' })).toBeDefined();
+    // The rules notice belongs to the booking form only.
+    expect(screen.queryByRole('button', { name: 'הבנתי, להזמנה' })).toBeNull();
     // The fake api knows no order "abc".
     expect((await screen.findByRole('alert')).textContent).toBe(
       CUSTOMER_ORDER_MESSAGES.orderNotFound,
@@ -217,6 +225,9 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' }));
 
     expect(window.location.pathname).toBe('/');
+    // Also an order-again visit reads the rules first.
+    expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'הבנתי, להזמנה' }));
     expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
     expect(screen.getByLabelText<HTMLInputElement>('שם').value).toBe('רחל כהן');
     expect(screen.getByLabelText<HTMLInputElement>('טלפון נייד').value).toBe('050-1234567');
@@ -284,7 +295,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('link', { name: 'לטופס ההזמנה' }));
 
     expect(window.location.pathname).toBe('/');
-    expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
   });
 
   it('offers the manager a way in from the booking form header, and from no other page', () => {
@@ -369,7 +380,7 @@ describe('App', () => {
     });
 
     it.each([
-      ['/', 'הזמנת איסוף בקבוקים'],
+      ['/', 'שימו לב!'],
       [`/o/${CANCELLED_ORDER_TOKEN}`, 'ההזמנה שלך'],
       ['/no-such-page', 'העמוד לא נמצא'],
     ])('offers customers no install at %s', async (path, heading) => {
@@ -384,7 +395,7 @@ describe('App', () => {
 
       act(() => navigate('/'));
 
-      expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
+      expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
       expect(hasAnyPwaTag()).toBe(false);
     });
   });
