@@ -1747,8 +1747,8 @@ html:has(.bottom-nav) {
   font-weight: 800;
 }
 
-/* The thank-you screen's donation line (also a .card). */
-.thank-you-donation {
+/* The thank-you screen's mission sentence (also a .card). */
+.thank-you-mission {
   margin-block: 1rem;
 }
 

@@ -83,8 +83,6 @@ export function OrderFormPage({
   const [sending, setSending] = useState(false);
   // Set by a successful order: the thank-you screen replaces the form.
   const [createdToken, setCreatedToken] = useState<string | null>(null);
-  // The estimate the order was sent with, for the thank-you screen's donation line.
-  const [createdBottles, setCreatedBottles] = useState(0);
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
   // Enter that comes before it.
   const sendingRef = useRef(false);
@@ -94,8 +92,7 @@ export function OrderFormPage({
   // shows every mistake of the form, and validation sends nothing while the bottles are too few.
   const notReady = !hasEnoughBottles(values.bottlesEstimated);
 
-  if (createdToken !== null)
-    return <ThankYou token={createdToken} bottlesEstimated={createdBottles} lang={lang} />;
+  if (createdToken !== null) return <ThankYou token={createdToken} lang={lang} />;
 
   async function send(): Promise<void> {
     if (sendingRef.current) return;
@@ -127,7 +124,6 @@ export function OrderFormPage({
         // ones section 9 passed in this history entry's state.
         if (prefillFromNavigationState(navigationState) !== null)
           navigate(homePath, { replace: true });
-        setCreatedBottles(outcome.response.order.bottlesEstimated);
         setCreatedToken(outcome.response.token);
         return;
       case 'invalid':
