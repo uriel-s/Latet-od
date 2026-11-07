@@ -1,11 +1,11 @@
 // /api/o/:token: the api of the customer's own page `/o/<token>` (spec §3.3): read the order, the
-// page's three buttons: "כן, אוציא את הבקבוקים" (confirm), "לא מתאים הפעם" (decline) and "ביטול" (cancel),
-// and "שינוי" (PATCH: address, quantity, note; never the phone). Public: no login, and the order is
-// reached by its long random token only, never by its id. createApp mounts the router built here
-// before the /api 404 and NOT behind requireCollector. The shapes are the shared contract
+// page's two buttons: "לא מתאים הפעם" (decline) and "ביטול" (cancel), and "שינוי" (PATCH:
+// address, quantity, note; never the phone). Public: no login, and the order is reached by its
+// long random token only, never by its id. createApp mounts the router built here before the
+// /api 404 and NOT behind requireCollector. The shapes are the shared contract
 // (packages/shared/src/customerOrderApi.ts); orders and rounds are read and written through
 // OrdersRepo and RoundsRepo, leaving a round is rounds/leaveRound.ts, and the rules of "שינוי" are
-// customerOrderPatch.ts.
+// customerOrderPatch.ts. There is no "confirm": being in the round is the default (ADR-0012).
 import { Router, type Response } from 'express';
 import {
   CUSTOMER_ORDER_MESSAGES,
@@ -15,7 +15,6 @@ import {
   isOpenStatus,
   orderTokenSchema,
   toCustomerOrder,
-  type ConfirmationsClosedErrorBody,
   type CustomerOrderResponse,
   type CustomerUpdateOrder,
   type InvalidOrderErrorBody,
@@ -46,7 +45,7 @@ interface FoundOrder {
 type Decision =
   | { kind: 'noop' }
   | { kind: 'write'; patch: OrderPatch; ifStatus: readonly OrderStatus[] }
-  | { kind: 'refuse'; body: ConfirmationsClosedErrorBody | InvalidTransitionErrorBody };
+  | { kind: 'refuse'; body: InvalidTransitionErrorBody };
 
 /** Decides what a button does to `order` (in `round`), at `now`. Pure. */
 type Decide = (order: Order, round: Round | null, now: Date) => Decision;
@@ -55,9 +54,9 @@ type Decide = (order: Order, round: Round | null, now: Date) => Decision;
  * How many times a button reads the order, decides and writes. A write that finds another status
  * (null from the conditional update) means the order changed between the read and the write: a
  * double tap racing itself, or Yoel acting at the same moment. The order is then read once more
- * and the button decided again from its new state, so a racing second "confirm" finds `confirmed`
- * and succeeds, and a "confirm" racing a "cancel" finds `cancelled` and is refused (never bringing
- * the order back). A second lost race is answered 409 rather than retried without end.
+ * and the button decided again from its new state, so a racing second "לא מתאים הפעם" finds
+ * `waiting` and succeeds, and one racing a "cancel" finds `cancelled` and is refused (never
+ * bringing the order back). A second lost race is answered 409 rather than retried without end.
  */
 const DECIDE_ATTEMPTS = 2;
 
@@ -69,12 +68,6 @@ const ORDER_CLOSED: InvalidTransitionErrorBody = {
   message: CUSTOMER_ORDER_MESSAGES.orderClosed,
 };
 
-/** 409 `confirmations_closed`: the order is not in a round that takes confirmations now. */
-const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
-  error: 'confirmations_closed',
-  message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed,
-};
-
 /**
  * The router of /api/o. Mount it with `app.use('/api/o', createCustomerOrderRouter(deps))`, after
  * the Origin check (which refuses every POST and PATCH from another site with 403) and the JSON
@@ -84,7 +77,7 @@ const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
  * a secret link, which must never sit in a shared cache. Every 200 is a
  * {@link CustomerOrderResponse}: the order through the shared allow-list (`toCustomerOrder`), so
  * never its id, roundId, token, message log, lastMiss or Yoel's own fields; with the round's date
- * (and `pickupBy`) while the order is `pending` or `confirmed` in it.
+ * (and its pickup times) while the order is `confirmed` (or a legacy `pending`) in it.
  *
  * Every route answers 404 {@link OrderNotFoundErrorBody} (`order_not_found`) when no order has the
  * token, and the very same status and body when the token is not one at all (malformed, forged):
@@ -95,22 +88,13 @@ const CONFIRMATIONS_CLOSED: ConfirmationsClosedErrorBody = {
  * - 200, the order as it is. Writes NOTHING, whatever the status: WhatsApp's link preview sends a
  *   GET to every link in a message (spec §3.3), so a GET must never confirm or change anything.
  *
- * POST /:token/confirm — "כן, אוציא את הבקבוקים"; no body:
- * - 200: `pending` in a round that is open and still `confirming` → now `confirmed`. Already
- *   `confirmed` → as it is, nothing written (a double tap; `updatedAt` keeps the first moment).
- * - 409 {@link ConfirmationsClosedErrorBody}: the order is not in a round that takes
- *   confirmations: `pending` in a round that was routed, closed or is missing, or `waiting` (it
- *   already left its round: declined, changed its address, or did not confirm in time). The
- *   message is the spec's "האישור נסגר. נחזור אליך עם מועד חדש."
- * - 409 {@link InvalidTransitionErrorBody}: collected or cancelled.
- *
  * POST /:token/decline — "לא מתאים הפעם"; no body:
  * - 200: `pending` or `confirmed` → back to `waiting`, out of its round, `lastMiss` reason
  *   `askedOtherDate` (leaveRoundPatch), so Yoel's round screen lists it under "ביקשו מועד אחר" and
  *   the order can be planned into a later round. Already `waiting` → as it is, nothing written (a
  *   second tap: it is in no round). Allowed in any phase of the round, like cancel: the customer
  *   who cannot make it should say so even after the route was built. The page offers the button
- *   for `pending` only (spec §3.3).
+ *   for an order in a round (`confirmed`, or a legacy `pending`), ADR-0012.
  * - 409 {@link InvalidTransitionErrorBody}: collected or cancelled.
  *
  * POST /:token/cancel — "ביטול"; no body:
@@ -213,10 +197,6 @@ export function createCustomerOrderRouter(deps: Pick<AppDeps, 'orders' | 'rounds
     sendOrder(res, found.order, found.round);
   });
 
-  router.post('/:token/confirm', async (req, res) => {
-    await press(res, req.params.token, decideConfirm);
-  });
-
   router.post('/:token/decline', async (req, res) => {
     await press(res, req.params.token, decideDecline);
   });
@@ -240,26 +220,6 @@ export function createCustomerOrderRouter(deps: Pick<AppDeps, 'orders' | 'rounds
   });
 
   return router;
-}
-
-/**
- * "כן, אוציא את הבקבוקים": `pending` → `confirmed` while the order's round takes confirmations.
- * Already confirmed is a success (a double tap, or Yoel's "אישר בטלפון" came first); canTransition
- * says staying in a status is not a transition, so answering it is ours (orderStatus.ts).
- */
-function decideConfirm(order: Order, round: Round | null, now: Date): Decision {
-  if (order.status === 'confirmed') return NOOP;
-  if (!isOpenStatus(order.status)) return { kind: 'refuse', body: ORDER_CLOSED };
-  // What is left is `pending` or `waiting`. A waiting order cannot move to confirmed: it already
-  // left its round, so for the customer the confirmations of that round are closed.
-  if (!canTransition(order.status, 'confirmed') || !takesConfirmations(order, round)) {
-    return { kind: 'refuse', body: CONFIRMATIONS_CLOSED };
-  }
-  return {
-    kind: 'write',
-    patch: { status: 'confirmed', updatedAt: new Date(now) },
-    ifStatus: [order.status],
-  };
 }
 
 /**
@@ -312,19 +272,6 @@ function decideUpdate(
   };
 }
 
-/**
- * Whether `order` is in a round whose confirmations are open: the round it points at was found,
- * is open, and its phase is still `confirming` (Yoel's "סגור אישורים ובנה מסלול" makes it `routed`).
- */
-function takesConfirmations(order: Order, round: Round | null): boolean {
-  return (
-    round !== null &&
-    round.id === order.roundId &&
-    round.status === 'open' &&
-    round.phase === 'confirming'
-  );
-}
-
 /** 200 with the order as the customer's page gets it (the shared allow-list). */
 function sendOrder(res: Response, order: Order, round: Round | null): void {
   const body: CustomerOrderResponse = { order: toCustomerOrder(order, round) };
@@ -332,10 +279,7 @@ function sendOrder(res: Response, order: Order, round: Round | null): void {
 }
 
 /** 409 with the refusal's body; nothing was written. */
-function sendRefusal(
-  res: Response,
-  body: ConfirmationsClosedErrorBody | InvalidTransitionErrorBody,
-): void {
+function sendRefusal(res: Response, body: InvalidTransitionErrorBody): void {
   res.status(409).json(body);
 }
 

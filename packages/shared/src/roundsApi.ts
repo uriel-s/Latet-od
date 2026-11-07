@@ -1,6 +1,6 @@
-// The contract of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 step 1 "אישורים" and step 2
-// "מסלול"): planning a round, the round's view with its orders in three groups, its "שלח" list and
-// its route's stops, "אישר בטלפון", building the route ("סגור אישורים ובנה מסלול"), moving a stop
+// The contract of /api/collector/rounds (spec §3.5 "תכנון סבב", §3.6 step 1 and step 2 "מסלול"):
+// planning a round, the round's view with its orders in two groups, its "שלח" list and its
+// route's stops, building the route ("התחל מסלול"), moving a stop
 // up or down, the two stop actions "אספתי" (collected, with its "שלח תודה" row) and "לא נמצא"
 // (not found), closing the round ("סגור סבב", no body: its answer is the round's view), and the
 // error bodies with their plain-Hebrew messages. Every route is behind
@@ -43,7 +43,7 @@ export const ROUND_PLAN_ERRORS = {
 
 /**
  * Longest personal text the planning screen accepts, after trimming. It goes into every
- * confirmation request of the round, so a few lines is plenty; it stops a pasted essay.
+ * message of the round, so a few lines is plenty; it stops a pasted essay.
  */
 export const PERSONAL_TEXT_MAX_LENGTH = 500;
 
@@ -85,16 +85,18 @@ const pickupFromInputSchema = z
   .optional();
 
 /**
- * Body of POST /api/collector/rounds: "שלח בקשות אישור" on the planning screen (spec §3.5). A
+ * Body of POST /api/collector/rounds: "שלח הודעות" on the planning screen (spec §3.5). A
  * date, a region, and the order ids Yoel left marked; optionally his personal text and the pickup
  * time. Strict: an unknown key is refused with 400.
  *
  * The api then checks what needs the database: every id must be an order that is `waiting` and in
  * no open round (409 `orders_not_waiting` otherwise, listing the ids). It stores the round (open,
- * phase `confirming`), moves the orders to `pending` with its `roundId`, and sends each one a
- * `confirmRequest`.
+ * phase `confirming`), moves the orders straight to `confirmed` with its `roundId` (no
+ * customer confirmation, ADR-0012), and sends each one a `confirmRequest`: the message that
+ * announces the pickup.
  *
- * `pickupFrom` (optional) starts the pickup window that `pickupBy` ends. A start without an end
+ * `pickupFrom` (optional) starts the window in which Yoel comes, and is also the time the bottles
+ * must be out by; `pickupBy` ends it (ADR-0012). A start without an end
  * is refused on `pickupBy` (the missing one); a start at or after the end is refused on
  * `pickupFrom`. HH:MM strings of one day compare correctly as text.
  *
@@ -111,7 +113,7 @@ export const planRoundRequestSchema = z
       .min(1, ERR.noOrders)
       // spec §1: a round of more than 25 stops is out of the MVP.
       .max(MAX_ROUND_ORDERS, ERR.tooManyOrders)
-      // A duplicate would send the same customer two confirmation requests.
+      // A duplicate would send the same customer two messages.
       .refine((orderIds) => new Set(orderIds).size === orderIds.length, {
         error: ERR.duplicateOrders,
       }),
@@ -139,16 +141,16 @@ export type PlanRound = z.output<typeof planRoundRequestSchema>;
 // ---------------------------------------------------------------------------------------------
 
 /**
- * The groups of a round's confirmation step, in screen order (spec §3.6): who confirmed, who did
- * not yet, and who asked for another date.
+ * The groups of a round's first step (before the route), in screen order: who is in the round,
+ * and who asked for another date. There is no "did not confirm yet" group any more: the customer
+ * confirms nothing, being in the round is the default (ADR-0012).
  */
-export const ROUND_GROUP_KEYS = ['confirmed', 'pending', 'otherDate'] as const;
+export const ROUND_GROUP_KEYS = ['inRound', 'otherDate'] as const;
 export type RoundGroupKey = (typeof ROUND_GROUP_KEYS)[number];
 
-/** Hebrew title of each group (spec §3.6: "מי אישר, מי עוד לא, ומי ביקש מועד אחר"). */
+/** Hebrew title of each group. */
 export const ROUND_GROUP_LABELS: Readonly<Record<RoundGroupKey, string>> = {
-  confirmed: 'אישרו',
-  pending: 'עוד לא אישרו',
+  inRound: 'בסבב',
   otherDate: 'ביקשו מועד אחר',
 };
 
@@ -172,7 +174,7 @@ export const collectorRoundSchema = roundSchema.pick({
 });
 export type CollectorRound = z.infer<typeof collectorRoundSchema>;
 
-/** One group of the round's confirmation step, with its orders in plan order. */
+/** One group of the round's first step, with its orders in plan order. */
 export const roundOrderGroupSchema = z.object({
   key: z.enum(ROUND_GROUP_KEYS),
   orders: z.array(collectorOrderSchema),
@@ -183,7 +185,7 @@ export type RoundOrderGroup = z.infer<typeof roundOrderGroupSchema>;
  * Where one stop of the route is (spec §3.6 step 2, §4). A stop stores no state of its own: it is
  * derived from its order by {@link roundStopStateOf}, so "אספתי", "לא נמצא" and a customer's
  * cancel change only the order, and the route can never disagree with it.
- * - `toCollect`: still in this round, confirmed (or pending): Yoel has yet to stop there.
+ * - `toCollect`: still in this round, confirmed (or a legacy pending): Yoel has yet to stop there.
  * - `collected`: "אספתי" was tapped. Final.
  * - `notFound`: "לא נמצא": the order went back to `waiting`, but stays in the route, shown as
  *   handled, so Yoel sees what happened at that stop.
@@ -232,7 +234,6 @@ export type RouteStopView = z.infer<typeof routeStopViewSchema>;
 /**
  * One round with its orders, as the round screen shows it; see {@link buildRoundView}. Body of a
  * 201 from POST /api/collector/rounds, and of a 200 from GET /api/collector/rounds/:id, from
- * POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone, from
  * POST /api/collector/rounds/:id/route, from POST /api/collector/rounds/:id/stops/:orderId/move,
  * from the two stop actions POST /api/collector/rounds/:id/stops/:orderId/collected and
  * .../not-found, and from "סגור סבב" POST /api/collector/rounds/:id/close (the round `closed`,
@@ -240,9 +241,9 @@ export type RouteStopView = z.infer<typeof routeStopViewSchema>;
  */
 export const roundViewSchema = z.object({
   round: collectorRoundSchema,
-  /** Always the three groups in {@link ROUND_GROUP_KEYS} order, empty ones too. */
+  /** Always every group in {@link ROUND_GROUP_KEYS} order, empty ones too. */
   groups: z.array(roundOrderGroupSchema),
-  /** The "שלח" rows of the confirmation requests, one per customer who has not confirmed yet. */
+  /** The "שלח" rows of the round's messages, one per customer still in the round (ADR-0012). */
   sendList: z.array(messageLinkSchema),
   /**
    * The route's stops in driving order. Always present: empty until the route is built (phase
@@ -268,20 +269,20 @@ export type RoundsResponse = z.infer<typeof roundsResponseSchema>;
 
 /**
  * The group an order of the round is shown in, or `undefined` for none:
- * - still in this round (`roundId`) and `confirmed` (or already `collected`): "אישרו".
- * - still in this round and `pending`: "עוד לא אישרו".
+ * - still in this round (`roundId`) and `confirmed`, `collected`, or `pending` (an order planned
+ *   before ADR-0012, which the route build takes in like a confirmed one): "בסבב".
  * - out of this round, and it left this round because the customer asked for another date (its
  *   `lastMiss` is this round, reason `askedOtherDate`: "לא מתאים הפעם" on the customer's page):
  *   "ביקשו מועד אחר".
  * Anything else is in no group: an order cancelled while in the round, and one that left it for
- * another reason (it changed its address, or did not confirm in time), since the group's title
+ * another reason (it changed its address, or the legacy "did not confirm in time"), since the title
  * says what they asked for and they did not ask for it.
  */
 function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
   if (order.roundId === round.id) {
-    if (order.status === 'confirmed' || order.status === 'collected') return 'confirmed';
-    if (order.status === 'pending') return 'pending';
-    return undefined;
+    const inRound =
+      order.status === 'confirmed' || order.status === 'collected' || order.status === 'pending';
+    return inRound ? 'inRound' : undefined;
   }
   const askedOtherDate =
     order.lastMiss?.roundId === round.id && order.lastMiss.reason === 'askedOtherDate';
@@ -293,7 +294,7 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
  * the order alone:
  * - still in this round (`roundId`): `collected` and `cancelled` as its status says, and
  *   `toCollect` while it is `confirmed` (or `pending`, which a routed round does not normally
- *   have: building the route sends whoever did not confirm back to `waiting`).
+ *   have: building the route moves a legacy pending order to `confirmed`, ADR-0012).
  * - out of this round, and its `lastMiss` is this round with reason `notFound`: `notFound`.
  * - anything else: `left`.
  *
@@ -304,9 +305,8 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
  *
  * `notFound` works because "לא נמצא" stores `lastMiss { roundId: this round, reason: 'notFound' }`
  * and unsets `roundId`. Known limit: only one `lastMiss` is kept (spec §4), so if the same order
- * later leaves ANOTHER round uncollected (did not confirm in time, asked for another date, not
- * found again, ...), its `lastMiss` points at that round and this round's stop then shows `left`.
- * That is still a handled state, never `toCollect`, so the route screen and "סגור סבב" (which
+ * later leaves ANOTHER round uncollected (asked for another date, not found again, ...), its
+ * `lastMiss` points at that round and this round's stop then shows `left`. That is still a handled state, never `toCollect`, so the route screen and "סגור סבב" (which
  * touches only `toCollect` stops) are unaffected; only this old stop's history label loses
  * "לא נמצא".
  */
@@ -329,12 +329,13 @@ export function roundStopStateOf(round: Round, order: Order): RoundStopState {
  * - Walks `round.orderIds` in plan order and looks each up in `orders`; an id with no order given
  *   is skipped, and so is an order given whose id is not in the round.
  * - Puts each order in its group (see `roundGroupOf`), as Yoel's screens get an order
- *   ({@link toCollectorOrder}). All three groups are returned, in {@link ROUND_GROUP_KEYS} order.
+ *   ({@link toCollectorOrder}). Every group is returned, in {@link ROUND_GROUP_KEYS} order.
  *   An order that left the round is in "ביקשו מועד אחר" only for the reason `askedOtherDate`;
  *   for any other reason it is in no group.
- * - `sendList`: the latest confirmation request ({@link toMessageLink}) of each `pending` order,
- *   in the same order. A confirmed customer needs no request, so the list shrinks as people
- *   confirm; an order whose newest request is not a wa.me link has no row.
+ * - `sendList`: the latest round message (`confirmRequest`, {@link toMessageLink}) of each order
+ *   still in the round and not collected (`confirmed`, or a legacy `pending`), in the same order.
+ *   Nobody confirms any more (ADR-0012), so every such customer has a row until Yoel taps it
+ *   (`openedAt` shows it as sent); an order whose newest message is not a wa.me link has no row.
  * - `stops`: walks `round.stops` in their STORED driving order (not plan order), skipping a stop
  *   whose order is not given. Each has the order ({@link toCollectorOrder}), the stored
  *   `hasLocation`, and the state from {@link roundStopStateOf}. Empty until the route is built.
@@ -345,11 +346,7 @@ export function roundStopStateOf(round: Round, order: Order): RoundStopState {
  */
 export function buildRoundView(round: Round, orders: readonly Order[]): RoundView {
   const ordersById = new Map(orders.map((order) => [order.id, order]));
-  const ordersByGroup: Record<RoundGroupKey, Order[]> = {
-    confirmed: [],
-    pending: [],
-    otherDate: [],
-  };
+  const ordersByGroup: Record<RoundGroupKey, Order[]> = { inRound: [], otherDate: [] };
   for (const orderId of round.orderIds) {
     const order = ordersById.get(orderId);
     if (order === undefined) continue;
@@ -362,7 +359,9 @@ export function buildRoundView(round: Round, orders: readonly Order[]): RoundVie
       key,
       orders: ordersByGroup[key].map(toCollectorOrder),
     })),
-    sendList: ordersByGroup.pending
+    sendList: ordersByGroup.inRound
+      // A collected customer was already visited; their message is history, not a "שלח" row.
+      .filter((order) => order.status !== 'collected')
       .map((order) => toMessageLink(order, 'confirmRequest'))
       .filter((link) => link !== undefined),
     stops: round.stops.flatMap((stop) => {
@@ -450,10 +449,10 @@ export const ROUND_MESSAGES = {
   ordersNotWaiting: 'חלק מההזמנות כבר לא ממתינות לסבב. נא לרענן את הרשימה ולנסות שוב.',
   roundNotFound: 'הסבב לא נמצא.',
   /**
-   * "אישר בטלפון" after the round was routed or closed; also "סגור אישורים ובנה מסלול" on a round
-   * that is already routed or closed (a second tap, or another tab).
+   * "התחל מסלול" on a round that is already routed or closed (a second tap, or another tab). The
+   * key keeps its old name, from when step 1 was the customers' confirmations (ADR-0012).
    */
-  confirmationsClosed: 'האישורים לסבב הזה כבר נסגרו.',
+  confirmationsClosed: 'המסלול של הסבב הזה כבר נבנה, או שהסבב נסגר. נא לרענן את המסך.',
   /**
    * A stop action or a move on a round whose route is not built yet (phase `confirming`), or that
    * is closed: the screen is stale, so refreshing shows the round as it is.
@@ -502,11 +501,9 @@ export interface RoundNotFoundErrorBody {
 }
 
 /**
- * 409 from "אישר בטלפון" and from "סגור אישורים ובנה מסלול" (POST /api/collector/rounds/:id/route):
- * the round is closed, or its confirmations are closed (phase `routed`), so neither a phone
- * confirmation nor a second route build may change it. `message` is
- * {@link ROUND_MESSAGES}.confirmationsClosed. The customer's own confirm (customerOrderApi.ts)
- * answers the same body, with the customer's message.
+ * 409 from "התחל מסלול" (POST /api/collector/rounds/:id/route): the round is closed, or its route
+ * is already built (phase `routed`), so a second build may not change it. `message` is
+ * {@link ROUND_MESSAGES}.confirmationsClosed. The code keeps its old name (ADR-0012).
  */
 export interface ConfirmationsClosedErrorBody {
   error: 'confirmations_closed';
@@ -565,9 +562,9 @@ export interface InvalidCollectErrorBody {
 /**
  * Every error body /api/collector/rounds adds to the ones every route may answer (ApiErrorBody).
  * Also, from other files' contracts:
- * - `order_not_found` (404): "אישר בטלפון" for an order that is not in the round, and a move or
- *   a stop action ("אספתי", "לא נמצא") for an order that is not a stop of the round's route.
- * - `invalid_transition` (409): "אישר בטלפון" for an order that can no longer be confirmed.
+ * - `order_not_found` (404): a move or a stop action ("אספתי", "לא נמצא") for an order that is
+ *   not a stop of the round's route.
+ * - `invalid_transition` (409): a stop action on an order that can no longer make that move.
  * A 401 comes from the login guard: authApi.ts's `UnauthenticatedErrorBody`.
  */
 export type CollectorRoundErrorBody =

@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  CUSTOMER_ORDER_MESSAGES,
   findStreet,
   streetDisplayName,
   type CustomerOrder,
@@ -35,14 +36,14 @@ function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
 interface Options {
   update?: CustomerOrderWriteOutcome;
   cancel?: CustomerOrderWriteOutcome;
-  confirm?: CustomerOrderWriteOutcome;
+  decline?: CustomerOrderWriteOutcome;
   load?: CustomerOrderOutcome;
 }
 
 /** Renders the page and waits for its English heading. Returns the change requests sent. */
 async function renderEn(
   order: CustomerOrder,
-  { update, cancel, confirm, load }: Options = {},
+  { update, cancel, decline, load }: Options = {},
 ): Promise<CustomerUpdateOrderRequest[]> {
   window.history.replaceState(null, '', `/o/${TOKEN}`);
   const updates: CustomerUpdateOrderRequest[] = [];
@@ -50,7 +51,7 @@ async function renderEn(
     <OrderPage
       token={TOKEN}
       loadOrder={() => Promise.resolve(load ?? { kind: 'loaded', order })}
-      confirmOrder={() => Promise.resolve(confirm ?? { kind: 'saved', order })}
+      declineOrder={() => Promise.resolve(decline ?? { kind: 'saved', order })}
       cancelOrder={() => Promise.resolve(cancel ?? { kind: 'saved', order })}
       updateOrder={(_token, request) => {
         updates.push(request);
@@ -140,31 +141,34 @@ describe('OrderPage in English', () => {
     expect(within(details).getByText('050-1234567').closest('[dir="ltr"]')).not.toBeNull();
   });
 
-  it('shows a pending order with the date, the pickup hours and the confirm button', async () => {
-    await renderEn(makeOrder({ status: 'pending', round: ROUND }));
+  it('shows an order in a round with the date, the window and "Not this time", nothing to confirm', async () => {
+    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }));
 
-    expect(statusLine()).toBe('Order status: Waiting for confirmation');
+    expect(statusLine()).toBe('Order status: Scheduled');
     expect(wholeText('We will come to collect on Nov 12.')).toBeDefined();
-    expect(wholeText('Please put the bottles out between 16:00 and 18:00.')).toBeDefined();
+    // The start is said twice: the time to put the bottles out by, and when the window opens.
     expect(
-      screen.getByRole('button', { name: 'Yes, I will put the bottles out on Nov 12' }),
+      wholeText('Please put the bottles out by 16:00. We will come between 16:00 and 18:00.'),
     ).toBeDefined();
     expect(screen.getByRole('button', { name: 'Not this time' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Yes, I will put the bottles out/ })).toBeNull();
   });
 
   it('shows only the latest time when there is no start time', async () => {
     await renderEn(
-      makeOrder({ status: 'pending', round: { date: '2026-11-12', pickupBy: '18:00' } }),
+      makeOrder({ status: 'confirmed', round: { date: '2026-11-12', pickupBy: '18:00' } }),
     );
 
     expect(wholeText('Please put the bottles out by 18:00.')).toBeDefined();
   });
 
-  it('shows a confirmed order', async () => {
-    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }));
+  it('shows a legacy pending order like one in a round, with "Not this time"', async () => {
+    await renderEn(makeOrder({ status: 'pending', round: ROUND }));
 
-    expect(statusLine()).toBe('Order status: Confirmed');
-    expect(wholeText('See you on Nov 12.')).toBeDefined();
+    expect(statusLine()).toBe('Order status: Scheduled');
+    expect(wholeText('We will come to collect on Nov 12.')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Not this time' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Yes, I will put the bottles out/ })).toBeNull();
   });
 
   it('shows a collected order with thanks and a new-order button', async () => {
@@ -208,7 +212,7 @@ describe('OrderPage in English', () => {
   });
 
   it('asks in English before declining', async () => {
-    await renderEn(makeOrder({ status: 'pending', round: ROUND }));
+    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Not this time' }));
 
@@ -218,17 +222,29 @@ describe('OrderPage in English', () => {
     expect(screen.getByRole('button', { name: 'Yes, not suitable' })).toBeDefined();
   });
 
-  it('tells in English that the confirmations closed meanwhile', async () => {
-    await renderEn(makeOrder({ status: 'pending', round: ROUND }), {
-      confirm: { kind: 'closed', message: 'האישור נסגר. נחזור אליך עם מועד חדש.' },
+  it('announces a decline in English', async () => {
+    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }), {
+      decline: { kind: 'saved', order: makeOrder() },
     });
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Yes, I will put the bottles out on Nov 12' }),
+    fireEvent.click(screen.getByRole('button', { name: 'Not this time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, not suitable' }));
+
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'Got it. We will get back to you with a new date.',
     );
+  });
+
+  it('tells in English that the order closed meanwhile', async () => {
+    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }), {
+      decline: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Not this time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, not suitable' }));
 
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'Confirmation is closed. We will get back to you with a new date.',
+      'This order is already closed and cannot be changed.',
     );
   });
 
@@ -268,7 +284,7 @@ describe('OrderPage in English', () => {
     });
 
     it('warns in English that a new address takes the order out of its round', async () => {
-      await openChange(makeOrder({ status: 'pending', round: ROUND }));
+      await openChange(makeOrder({ status: 'confirmed', round: ROUND }));
 
       fireEvent.change(screen.getByLabelText('House number'), { target: { value: '14' } });
 

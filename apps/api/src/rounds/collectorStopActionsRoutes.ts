@@ -51,7 +51,7 @@ import {
  * - 409 {@link RouteNotOpenErrorBody}: the round is closed, or its route is not built yet (phase
  *   `confirming`).
  * - 404 {@link OrderNotFoundErrorBody}: the order is not one of the route's stops (another
- *   round's, one sent back at the build as `notConfirmed`, or a guess).
+ *   round's, one that left the round before the build, or a guess).
  * - 409 {@link StopHandledErrorBody}: the stop was handled another way: not found, cancelled, or
  *   it left the round.
  * - 409 {@link InvalidTransitionErrorBody}: the order is in the round but cannot be collected

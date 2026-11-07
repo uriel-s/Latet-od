@@ -1,12 +1,11 @@
 // "סגור סבב" (spec §3.6, §4 "מצבי סבב"): Yoel ends a round. The round becomes `closed` (and leaves
 // the "סבבים" tab), and every order still in it that was not handled goes back to `waiting` for the
-// next round, with the reason in `lastMiss` ("לא הגענו אליו" / "לא אישר בזמן"). The route
+// next round, with the reason in `lastMiss` ("לא הגענו אליו"). The route
 // POST /api/collector/rounds/:id/close (collectorRoundsRoutes.ts) is a thin wrapper around
 // closeRound(); the order patch is leaveRound.ts's, like every other way out of a round.
 import {
   buildRoundView,
   canTransition,
-  type MissReason,
   type Order,
   type Round,
   type RoundView,
@@ -16,7 +15,7 @@ import { leaveRoundPatch } from './leaveRound.ts';
 
 /**
  * How many times closing the round itself is tried. Each miss means another request changed the
- * round between the read and the conditional write (a "סגור אישורים ובנה מסלול" moved it to
+ * round between the read and the conditional write (a "התחל מסלול" moved it to
  * `routed`, or another close won); the next attempt reads it again. With one collector that is at
  * most one miss, so a third one is a bug or a broken database, answered 500.
  */
@@ -37,13 +36,13 @@ const SWEEP_ATTEMPTS = 2;
  * 1. The round is closed FIRST, with a write conditional on the status and phase it was read in.
  *    Its `phase` is kept, recording where it was closed (`confirming` or `routed`), and `closedAt`
  *    is now. Once it is closed, every stop action and move answers 409 `route_not_open`, and
- *    "אישר בטלפון" and the customer's confirm answer 409 `confirmations_closed`. A round already
- *    closed is a success, and is not written again: it keeps its first `closedAt`.
+ *    "התחל מסלול" answers 409 `confirmations_closed`. A round already closed is a success, and is
+ *    not written again: it keeps its first `closedAt`.
  * 2. Then the sweep, on every call, a second close too: that heals a first close whose sweep
  *    stopped half way (a 500 in the middle). Each order of the round that is still in it
- *    (`roundId`) and `pending` or `confirmed` leaves it (leaveRoundPatch): reason `notReached` for
- *    a confirmed stop of a routed round (Yoel did not get to it), `notConfirmed` otherwise (a
- *    confirming round's orders, confirmed or not, and a stray `pending` of a routed round).
+ *    (`roundId`) and `pending` or `confirmed` leaves it (leaveRoundPatch) with reason `notReached`
+ *    ("לא הגענו אליו"): Yoel did not get to it, whether the route was built or the round was
+ *    called off before ("בטל את הסבב"). Nobody leaves for "did not confirm" any more (ADR-0012).
  *    Collected, cancelled and not-found orders, and those that already left the round, are not
  *    touched. Each write is conditional on the status read (`ifStatus`), so a "אספתי" or a cancel
  *    racing the close keeps what it wrote.
@@ -82,7 +81,7 @@ async function closeRoundRecord(
     if (round === null) return null;
     if (round.status === 'closed') return round;
     // Conditional on the phase read too: a route built in between changes the phase, and the next
-    // attempt then closes the routed round (and its sweep gives `notReached`, not `notConfirmed`).
+    // attempt then closes the routed round as it is now, keeping the phase it was closed in.
     const closed = await rounds.update(
       round.id,
       { status: 'closed', closedAt: new Date(now) },
@@ -111,7 +110,7 @@ async function sendBackUnhandled(
     if (!canTransition(current.status, 'waiting')) return;
     const left = await orders.update(
       current.id,
-      leaveRoundPatch(current, round, missReasonAtClose(round, current), now),
+      leaveRoundPatch(current, round, 'notReached', now),
       { ifStatus: [current.status] },
     );
     if (left !== null) return;
@@ -126,13 +125,4 @@ async function sendBackUnhandled(
  */
 function isUnhandledIn(round: Round, order: Order): boolean {
   return order.roundId === round.id && (order.status === 'pending' || order.status === 'confirmed');
-}
-
-/**
- * Why `order` leaves `round` at its close: a confirmed stop of a routed round was on the route but
- * Yoel did not get to it ("לא הגענו אליו"); anything else did not confirm before the confirmations
- * ended ("לא אישר בזמן"), including a confirmed order of a round closed before its route was built.
- */
-function missReasonAtClose(round: Round, order: Order): MissReason {
-  return round.phase === 'routed' && order.status === 'confirmed' ? 'notReached' : 'notConfirmed';
 }

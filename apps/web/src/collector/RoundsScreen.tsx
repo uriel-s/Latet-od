@@ -2,10 +2,10 @@
 // (RoundPickerSheet.tsx) switches rounds when more than one is open; the chosen round's id lives in
 // the URL as `?round=<id>`, and without it (or with an id that is not open any more) the nearest
 // open round shows. Only open rounds are listed, so a closed round is never an option.
-// Step 1 "אישורים" (phase `confirming`): who confirmed, who did not yet, and who asked for another
-// date; the round's "שלח" list of confirmation requests (ADR-0003, SendList.tsx); "אישר בשיחה או בהודעה"
-// for a customer who confirmed in a call or in a WhatsApp reply; and "התחל מסלול",
-// asked as a question first (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
+// Step 1 "תכנון" (phase `confirming`, a name from before ADR-0012): who is in the round and who
+// asked for another date; the round's "שלח" list of messages (ADR-0003, SendList.tsx), which only
+// announce the pickup (nobody confirms, ADR-0012); and "התחל מסלול", asked as a question first
+// (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
 // stops (RouteScreen.tsx). In both steps the round ends with its close button (CloseRoundConfirm.tsx),
 // after which it leaves the tab. GET /api/collector/rounds sends the open rounds already grouped
 // and routed (the shared buildRoundView), so this screen only shows them, and after each action it
@@ -30,11 +30,9 @@ import {
 import {
   buildRoute as apiBuildRoute,
   closeRound as apiCloseRound,
-  confirmOrderByPhone,
   fetchRounds,
   type BuildRouteOutcome,
   type CloseRoundOutcome,
-  type ConfirmByPhoneOutcome,
   type RoundsOutcome,
 } from '../api.ts';
 import { Link, navigate, searchParam, useLocation } from '../router.tsx';
@@ -67,23 +65,16 @@ export const EMPTY_ROUND_GROUP_TEXT = 'אין';
 export const SEND_LIST_HINT =
   'לחיצה על "שלח" פותחת את WhatsApp עם ההודעה כבר כתובה, ושם לוחצים "שלח".';
 
-/** Next to a card whose "אישר בשיחה או בהודעה" got no usable answer; the button can be tapped again. */
-export const CONFIRM_FAILED_MESSAGE = 'לא הצלחנו לשמור. נא לנסות שוב.';
-
-/** "אישר בשיחה או בהודעה" answered 404: the order (or its round) left the round meanwhile. */
-export const ORDER_LEFT_ROUND_MESSAGE = 'ההזמנה כבר לא בסבב.';
-
-const CONFIRM_LABEL = 'אישר בשיחה או בהודעה';
-const CONFIRMING_LABEL = 'שומר...';
+/** The heading of the round's "שלח" list in step 1. */
+export const SEND_LIST_HEADING = 'הודעות ללקוחות';
 
 /**
  * The colour of each group's count tile and badge (the `round-tile-*` / `badge-*` suffix): green for
- * confirmed, amber for waiting on an answer, gray for another date. Decoration only: the words say
- * which count it is.
+ * the customers in the round, gray for another date. Decoration only: the words say which count it
+ * is.
  */
-const GROUP_COLOURS: Readonly<Record<RoundGroupKey, 'green' | 'amber' | 'gray'>> = {
-  confirmed: 'green',
-  pending: 'amber',
+const GROUP_COLOURS: Readonly<Record<RoundGroupKey, 'green' | 'gray'>> = {
+  inRound: 'green',
   otherDate: 'gray',
 };
 
@@ -97,19 +88,18 @@ export const ROUND_CLOSED_MESSAGE = 'הסבב נסגר.';
 const PLAN_ROUND_PATH = '/app/orders/plan';
 
 /**
- * The orders of the group `key`, as the api listed them (plan order). The api always sends the
- * three groups; a missing one shows as empty rather than breaking the screen.
+ * The orders of the group `key`, as the api listed them (plan order). The api always sends every
+ * group; a missing one shows as empty rather than breaking the screen.
  */
 function ordersOfGroup(groups: readonly RoundOrderGroup[], key: RoundGroupKey): CollectorOrder[] {
   return groups.find((group) => group.key === key)?.orders ?? [];
 }
 
 /**
- * The round's confirmations at a glance, in words and in {@link ROUND_GROUP_KEYS} order (spec
- * §3.6: "מי אישר, מי עוד לא, ומי ביקש מועד אחר"), e.g.
- * "אישרו: 2 · עוד לא אישרו: 3 · ביקשו מועד אחר: 1".
+ * The round's groups at a glance, in words and in {@link ROUND_GROUP_KEYS} order, e.g.
+ * "בסבב: 5 · ביקשו מועד אחר: 1".
  */
-export function confirmationSummary(groups: readonly RoundOrderGroup[]): string {
+export function roundGroupsSummary(groups: readonly RoundOrderGroup[]): string {
   return ROUND_GROUP_KEYS.map(
     (key) => `${ROUND_GROUP_LABELS[key]}: ${ordersOfGroup(groups, key).length}`,
   ).join(' · ');
@@ -131,8 +121,6 @@ export interface RoundsScreenProps {
    * not an inline arrow: a new one loads again.
    */
   loadRounds?: () => Promise<RoundsOutcome>;
-  /** Yoel's "אישר בשיחה או בהודעה". Defaults to {@link confirmOrderByPhone}; tests pass a fake. */
-  confirmByPhone?: (roundId: string, orderId: string) => Promise<ConfirmByPhoneOutcome>;
   /**
    * "התחל מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
    */
@@ -182,14 +170,10 @@ interface Notice {
  * A 401 means the session ended: to the login, like the guard in CollectorApp.tsx. A failed load
  * stays here with a retry: a dropped connection is not a logout.
  *
- * "אישר בשיחה או בהודעה" swaps in the round the api answers: the customer moves to "אישרו" and leaves the
- * "שלח" list. When the api says the order can no longer be confirmed, or is no longer in the
- * round, the screen says so under the heading, moves the focus there (the card Yoel tapped may be
- * gone after the reload), and loads the rounds again without blanking them first.
- *
- * "התחל מסלול" swaps in the routed round the api answers, so the section shows its
- * route in place of the confirmations. A route already built, or a round gone, is the same kind of
- * out-of-date screen as above: a notice and a reload. Each stop action of the route is sent by
+ * "התחל מסלול" swaps in the routed round the api answers, so the section shows its route in place
+ * of step 1. A route already built, or a round gone, means the screen is out of date: the screen
+ * says so under the heading, moves the focus there, and loads the rounds again without blanking
+ * them first. Each stop action of the route is sent by
  * RouteScreen; this screen swaps in its answer, or shows its notice and reloads.
  *
  * The close button takes the closed round off the screen and says {@link ROUND_CLOSED_MESSAGE} under the
@@ -208,7 +192,6 @@ interface Notice {
  */
 export function RoundsScreen({
   loadRounds = fetchRounds,
-  confirmByPhone = confirmOrderByPhone,
   buildRoute = apiBuildRoute,
   closeRound = apiCloseRound,
   moveStop,
@@ -217,20 +200,13 @@ export function RoundsScreen({
   markOpened,
 }: RoundsScreenProps) {
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
-  // Counts the loads asked for after the first ("לנסות שוב", a reload after a refused
-  // "אישר בשיחה או בהודעה", or Yoel coming back to the app): a new value runs the load below again.
+  // Counts the loads asked for after the first ("לנסות שוב", a reload after a refused action, or
+  // Yoel coming back to the app): a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // The orders whose "אישר בשיחה או בהודעה" is on its way ("שומר..."), and those whose last one failed.
-  // By order id: an order is in one open round at most (spec §4), and only its own round's
-  // "עוד לא אישרו" group has the button.
-  const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(() => new Set());
-  // The state above reaches the handler only after a re-render; this ref stops a second tap on the
-  // same card that comes before it, so one tap sends one request.
-  const busyIdsRef = useRef(new Set<string>());
   // The rounds whose route build is on its way ("מתחיל מסלול..."), and those whose last one failed,
-  // by round id; the ref is the same double-tap guard as busyIdsRef.
+  // by round id. The state reaches the handler only after a re-render; the ref stops a second tap
+  // that comes before it, so one tap sends one request.
   const [buildingIds, setBuildingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [buildFailedIds, setBuildFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const buildingIdsRef = useRef(new Set<string>());
@@ -308,7 +284,7 @@ export function RoundsScreen({
 
   // Back in the app: the same reload, rounds kept on screen. A notice stays: the usual trip away is
   // to WhatsApp from "שלח", and the notice still explains why the card Yoel tapped moved or left;
-  // his next "אישר בשיחה או בהודעה" or "לנסות שוב" clears it, as before. Skipped while he is typing a
+  // his next action or "לנסות שוב" clears it, as before. Skipped while he is typing a
   // quantity (see the doc comment above): nothing is lost, the next return loads.
   useReloadOnReturn(() => {
     if (typingRoundIdsRef.current.size === 0) reload();
@@ -350,50 +326,6 @@ export function RoundsScreen({
     );
   }
 
-  /** Yoel's "אישר בשיחה או בהודעה" on `orderId` of round `roundId` (spec §3.6). */
-  async function confirm(roundId: string, orderId: string): Promise<void> {
-    if (busyIdsRef.current.has(orderId)) return;
-    busyIdsRef.current.add(orderId);
-    setSavingIds((previous) => withId(previous, orderId, true));
-    setFailedIds((previous) => withId(previous, orderId, false));
-    setNotice(undefined);
-
-    let outcome: ConfirmByPhoneOutcome;
-    try {
-      outcome = await confirmByPhone(roundId, orderId);
-    } catch {
-      // confirmOrderByPhone never rejects, but a rejection must not leave the card on "שומר...".
-      outcome = { kind: 'failed' };
-    }
-    busyIdsRef.current.delete(orderId);
-    if (!mountedRef.current) return;
-    setSavingIds((previous) => withId(previous, orderId, false));
-
-    switch (outcome.kind) {
-      case 'confirmed':
-        // The api's round as it is now: the customer is in "אישרו" and has no "שלח" row.
-        replaceRound(outcome.view);
-        return;
-      case 'closed':
-        // The round's confirmations were closed, or the order was cancelled or collected
-        // meanwhile (on another phone or tab): the screen is out of date.
-        setNotice({ message: outcome.message });
-        reload();
-        return;
-      case 'notFound':
-        setNotice({ message: ORDER_LEFT_ROUND_MESSAGE });
-        reload();
-        return;
-      case 'loggedOut':
-        navigate('/login', { replace: true });
-        return;
-      case 'failed':
-        // Nothing to reload: the request may not have arrived. The button is free again.
-        setFailedIds((previous) => withId(previous, orderId, true));
-        return;
-    }
-  }
-
   /** Yoel's "כן, להתחיל" for round `roundId` (spec §3.6, "התחל מסלול"). */
   async function buildRouteOf(roundId: string): Promise<void> {
     if (buildingIdsRef.current.has(roundId)) return;
@@ -415,7 +347,7 @@ export function RoundsScreen({
 
     switch (outcome.kind) {
       case 'built':
-        // Phase `routed`: the section shows the route in place of the confirmations.
+        // Phase `routed`: the section shows the route in place of step 1.
         replaceRound(outcome.view);
         return;
       case 'closed':
@@ -544,9 +476,6 @@ export function RoundsScreen({
             key={selected.round.id}
             view={selected}
             markOpened={markOpened}
-            savingIds={savingIds}
-            failedIds={failedIds}
-            onConfirm={(orderId) => void confirm(selected.round.id, orderId)}
             buildRoute={{
               building: buildingIds.has(selected.round.id),
               failed: buildFailedIds.has(selected.round.id),
@@ -594,11 +523,6 @@ type SectionRoute = Omit<RouteScreenProps, 'view'>;
 interface RoundSectionProps {
   view: RoundView;
   markOpened: SendListProps['markOpened'];
-  /** Orders whose "אישר בשיחה או בהודעה" is on its way. */
-  savingIds: ReadonlySet<string>;
-  /** Orders whose last "אישר בשיחה או בהודעה" failed. */
-  failedIds: ReadonlySet<string>;
-  onConfirm: (orderId: string) => void;
   /** Step 1's last button. */
   buildRoute: BuildRouteControl;
   /** Step 2's route. */
@@ -609,22 +533,21 @@ interface RoundSectionProps {
 
 /**
  * One open round as a named region (its `<h2>`, the half of the city and the day, labels it), top
- * to bottom: the pickup time and the personal text that went into the requests, then the round's
+ * to bottom: the pickup times and the personal text that went into the messages, then the round's
  * step (spec §3.6).
  *
- * Step 1 (phase `confirming`): the heading, the pickup time (with a clock icon) and the personal
- * text sit in ONE details card, which ends with three coloured count tiles (אישרו / עוד לא אישרו /
- * ביקשו מועד אחר). The tiles are aria-hidden: a visually hidden live sentence
- * ({@link confirmationSummary}) says the same counts in words, so a screen reader hears them once
- * and hears the new counts after "אישר בשיחה או בהודעה". Then the grouped "שלח" list, the three
- * groups of orders as grouped lists (every group shows, an empty one too, so the layout does not
- * jump as customers confirm), and last "התחל מסלול": the step that ends step 1 comes after
- * everything Yoel checks before it, and lies apart from the "אישר בשיחה או בהודעה" buttons.
+ * Step 1 (phase `confirming`): the heading, the pickup times (with a clock icon) and the personal
+ * text sit in ONE details card, which ends with coloured count tiles (בסבב / ביקשו מועד אחר). The
+ * tiles are aria-hidden: a visually hidden live sentence ({@link roundGroupsSummary}) says the same
+ * counts in words, so a screen reader hears them once and hears the new counts after a reload. Then
+ * the grouped "שלח" list, the groups of orders as grouped lists (every group shows, an empty one
+ * too, so the layout does not jump), and last "התחל מסלול": the step that ends step 1 comes after
+ * everything Yoel checks before it. Nobody has to confirm (ADR-0012), so there is no "did not
+ * confirm" group and no "confirmed by phone" button.
  *
  * Step 2 (phase `routed`): the route alone, under the heading and texts as plain lines (no card,
- * no tiles). Its own summary takes the place of the confirmation counts (one live summary per
- * round, not two), and the groups and the "שלח" list are gone: whoever did not confirm left the
- * round when it was built.
+ * no tiles). Its own summary takes the place of the group counts (one live summary per round, not
+ * two), and the groups and the "שלח" list are gone.
  *
  * The details wrapper is rendered in both steps (only its class changes), so the `<h2>` stays
  * mounted across the build and the focus effect below can still reach it.
@@ -639,16 +562,7 @@ interface RoundSectionProps {
  * itself, or still in this section): a notice the screen focused meanwhile keeps it, and so does
  * an open close question, which stays where it was.
  */
-function RoundSection({
-  view,
-  markOpened,
-  savingIds,
-  failedIds,
-  onConfirm,
-  buildRoute,
-  route,
-  closeRound,
-}: RoundSectionProps) {
+function RoundSection({ view, markOpened, buildRoute, route, closeRound }: RoundSectionProps) {
   const headingId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -670,11 +584,13 @@ function RoundSection({
     if (focusLost) headingRef.current?.focus();
   }, [routed]);
 
+  // With both times, the start is when the bottles must be out AND when Yoel starts coming; the
+  // window is his arrival (ADR-0012), as the customers' message says it.
   const pickupText =
     round.pickupBy === undefined ? null : round.pickupFrom !== undefined ? (
       <>
-        להוציא את הבקבוקים בין <bdi dir="ltr">{round.pickupFrom}</bdi> ל-
-        <bdi dir="ltr">{round.pickupBy}</bdi>
+        להוציא את הבקבוקים עד <bdi dir="ltr">{round.pickupFrom}</bdi> · מגיעים בין{' '}
+        <bdi dir="ltr">{round.pickupFrom}</bdi> ל-<bdi dir="ltr">{round.pickupBy}</bdi>
       </>
     ) : (
       <>
@@ -708,12 +624,12 @@ function RoundSection({
 
         {!routed && (
           <>
-            {/* Polite live text: a screen reader hears the new counts after "אישר בשיחה או
-                בהודעה". Hidden, because the tiles below show the same counts to the eye. */}
+            {/* Polite live text: a screen reader hears the new counts after a reload. Hidden,
+                because the tiles below show the same counts to the eye. */}
             <p className="round-summary visually-hidden" aria-live="polite">
-              {confirmationSummary(groups)}
+              {roundGroupsSummary(groups)}
             </p>
-            {/* The same counts as three coloured tiles; aria-hidden so they are not read twice. */}
+            {/* The same counts as coloured tiles; aria-hidden so they are not read twice. */}
             <div className="round-tiles" aria-hidden="true">
               {ROUND_GROUP_KEYS.map((key) => (
                 <div key={key} className={`round-tile round-tile-${GROUP_COLOURS[key]}`}>
@@ -732,25 +648,18 @@ function RoundSection({
         <RouteScreen view={view} {...route} />
       ) : (
         <>
-          <h3>בקשות אישור</h3>
+          <h3>{SEND_LIST_HEADING}</h3>
           {sendList.length > 0 && <p className="round-hint">{SEND_LIST_HINT}</p>}
           {/* Always rendered at this place, so it stays mounted across a swapped view; it shows its
-              own text when no request is left to send. */}
+              own text when no message is left to send. */}
           <SendList rows={sendList} markOpened={markOpened} grouped />
 
           {ROUND_GROUP_KEYS.map((key) => (
-            <RoundGroupSection
-              key={key}
-              groupKey={key}
-              orders={ordersOfGroup(groups, key)}
-              savingIds={savingIds}
-              failedIds={failedIds}
-              onConfirm={onConfirm}
-            />
+            <RoundGroupSection key={key} groupKey={key} orders={ordersOfGroup(groups, key)} />
           ))}
 
           <BuildRouteConfirm
-            question={buildRouteQuestion(ordersOfGroup(groups, 'pending').length)}
+            question={buildRouteQuestion(ordersOfGroup(groups, 'inRound').length)}
             {...buildRoute}
           />
         </>
@@ -769,26 +678,16 @@ function RoundSection({
 interface RoundGroupSectionProps {
   groupKey: RoundGroupKey;
   orders: readonly CollectorOrder[];
-  savingIds: ReadonlySet<string>;
-  failedIds: ReadonlySet<string>;
-  onConfirm: (orderId: string) => void;
 }
 
 /**
- * One group of the round ("אישרו", "עוד לא אישרו", "ביקשו מועד אחר") as a named region: its title
+ * One group of the round ("בסבב", "ביקשו מועד אחר") as a named region: its title
  * with a coloured count badge next to it, then ONE grouped-list card with a thin row per order, or
  * a quiet card with {@link EMPTY_ROUND_GROUP_TEXT} and no list. The badge is aria-hidden (a bare
  * number), so a visually hidden "2 הזמנות" beside it says the count in words; it sits outside the
- * `<h3>`, so the region's name stays the group's title. Only "עוד לא אישרו" has the
- * "אישר בשיחה או בהודעה" button on its rows.
+ * `<h3>`, so the region's name stays the group's title.
  */
-function RoundGroupSection({
-  groupKey,
-  orders,
-  savingIds,
-  failedIds,
-  onConfirm,
-}: RoundGroupSectionProps) {
+function RoundGroupSection({ groupKey, orders }: RoundGroupSectionProps) {
   const headingId = useId();
 
   return (
@@ -805,19 +704,7 @@ function RoundGroupSection({
       ) : (
         <ul className="card grouped-list">
           {orders.map((order) => (
-            <RoundOrderCard
-              key={order.id}
-              order={order}
-              confirm={
-                groupKey === 'pending'
-                  ? {
-                      saving: savingIds.has(order.id),
-                      failed: failedIds.has(order.id),
-                      onConfirm: () => onConfirm(order.id),
-                    }
-                  : undefined
-              }
-            />
+            <RoundOrderCard key={order.id} order={order} />
           ))}
         </ul>
       )}
@@ -825,22 +712,14 @@ function RoundGroupSection({
   );
 }
 
-/** The "אישר בשיחה או בהודעה" part of a card in "עוד לא אישרו". */
-interface CardConfirm {
-  saving: boolean;
-  failed: boolean;
-  onConfirm: () => void;
-}
-
 /**
  * One order of the round as a thin row of its group's list: the customer's name (the row's `<h4>`,
  * under the group's `<h3>`) over "street · bottles", and at the row's end a round call button that
- * dials (to ask a customer who has not answered). Under them, each on a full line: its tags (in
- * "ביקשו מועד אחר", why it left the round and the day), and in "עוד לא אישרו" the
- * "אישר בשיחה או בהודעה" button. The call button shows only a phone icon; the number, visually
+ * dials. Under them, on a full line: its tags (in "ביקשו מועד אחר", why it left the round and the
+ * day). The call button shows only a phone icon; the number, visually
  * hidden inside it, is its accessible name.
  */
-function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: CardConfirm }) {
+function RoundOrderCard({ order }: { order: CollectorOrder }) {
   const { contact, address } = order;
   const tags = orderTags(order);
 
@@ -871,28 +750,6 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
             </span>
           ))}
         </p>
-      )}
-      {confirm !== undefined && (
-        <>
-          {/* aria-disabled, not disabled, while saving: the button keeps focus and is announced
-              as unavailable; busyIdsRef ignores the extra taps. The hidden rest names the
-              customer, so a screen reader's list of buttons tells the rows apart; the visible
-              words start the name, as WCAG 2.5.3 (label in name) asks. */}
-          <button
-            type="button"
-            className="button button-secondary order-card-confirm grouped-row-full"
-            aria-disabled={confirm.saving ? true : undefined}
-            onClick={confirm.onConfirm}
-          >
-            {confirm.saving ? CONFIRMING_LABEL : CONFIRM_LABEL}
-            <span className="visually-hidden">, {contact.name}</span>
-          </button>
-          {confirm.failed && (
-            <p className="field-error grouped-row-full" role="alert">
-              {CONFIRM_FAILED_MESSAGE}
-            </p>
-          )}
-        </>
       )}
     </li>
   );

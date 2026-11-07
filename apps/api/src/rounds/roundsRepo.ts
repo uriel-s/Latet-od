@@ -37,7 +37,7 @@ export interface RoundUpdateOptions {
 
   /**
    * Apply the patch only if the stored phase is one of these. Like `ifStatus`, the check and the
-   * write are one atomic step: of two racing "סגור אישורים ובנה מסלול" taps (`ifPhase:
+   * write are one atomic step: of two racing "התחל מסלול" taps (`ifPhase:
    * ['confirming']`, patch `{ phase: 'routed', stops }`), only the first wins and the second gets
    * null. Given with `ifStatus`, both must match. An empty list matches no round (like `$in: []`).
    */

@@ -17,8 +17,7 @@ function makeRoundView(overrides: Partial<CollectorRound> = {}): RoundView {
       ...overrides,
     },
     groups: [
-      { key: 'confirmed', orders: [] },
-      { key: 'pending', orders: [] },
+      { key: 'inRound', orders: [] },
       { key: 'otherDate', orders: [] },
     ],
     sendList: [],
@@ -106,7 +105,7 @@ describe('RoundPicker', () => {
   it('shows the selected round on the button, with the sheet closed', () => {
     render(<Harness rounds={ROUNDS} />);
     const button = trigger();
-    expect(button.textContent).toContain('28/10 · רמת בית שמש · אישרו 0 מתוך 0');
+    expect(button.textContent).toContain('28/10 · רמת בית שמש · 0 בסבב');
     expect(button.getAttribute('aria-haspopup')).toBe('dialog');
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -123,7 +122,7 @@ describe('RoundPicker', () => {
     expect(list).toHaveLength(3);
     expect(list[0]?.getAttribute('aria-current')).toBe('true');
     expect(list[1]?.getAttribute('aria-current')).toBeNull();
-    expect(list[0]?.textContent).toContain('אישורים');
+    expect(list[0]?.textContent).toContain('תכנון');
     expect(list[1]?.textContent).toContain('29/10 · בית שמש · 0 עצירות');
     expect(list[1]?.textContent).toContain('מסלול');
   });

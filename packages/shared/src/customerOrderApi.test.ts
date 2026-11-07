@@ -350,10 +350,6 @@ describe('isLocationChange', () => {
 
 describe('CUSTOMER_ORDER_MESSAGES', () => {
   it('has the plain-Hebrew messages the customer sees', () => {
-    // Word for word from spec §3.3.
-    expect(CUSTOMER_ORDER_MESSAGES.confirmationsClosed).toBe(
-      'האישור נסגר. נחזור אליך עם מועד חדש.',
-    );
     expect(CUSTOMER_ORDER_MESSAGES.orderClosed).toBe('ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.');
     expect(CUSTOMER_ORDER_MESSAGES.orderNotFound).toBe(
       'לא מצאנו את ההזמנה. ייתכן שהקישור לא הועתק עד הסוף.',

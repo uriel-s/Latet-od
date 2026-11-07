@@ -12,7 +12,6 @@ import {
 import type {
   BuildRouteOutcome,
   CloseRoundOutcome,
-  ConfirmByPhoneOutcome,
   MarkMessageOpenedOutcome,
   RoundsOutcome,
   StopActionOutcome,
@@ -20,14 +19,13 @@ import type {
 import { BUILD_ROUTE_FAILED_MESSAGE, BUILD_ROUTE_LABEL } from './BuildRouteConfirm.tsx';
 import { CLOSE_ROUND_TEXTS, UNSENT_THANK_YOUS_TITLE } from './CloseRoundConfirm.tsx';
 import {
-  CONFIRM_FAILED_MESSAGE,
   NO_OPEN_ROUND_TEXT,
-  ORDER_LEFT_ROUND_MESSAGE,
   ROUNDS_LOAD_FAILED_MESSAGE,
   ROUND_CLOSED_MESSAGE,
   RoundsScreen,
+  SEND_LIST_HEADING,
   SEND_LIST_HINT,
-  confirmationSummary,
+  roundGroupsSummary,
   type RoundsScreenProps,
 } from './RoundsScreen.tsx';
 import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
@@ -35,7 +33,7 @@ import { wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
-/** An order in round r1 still waiting for its confirmation, in רמת בית שמש; overrides change it. */
+/** An order in round r1, in רמת בית שמש: `confirmed`, as planning leaves it (ADR-0012). */
 function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
   return {
     id: 'o1',
@@ -48,7 +46,7 @@ function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
       floorApt: 'קומה 3, דירה 12',
     },
     bottlesEstimated: 40,
-    status: 'pending',
+    status: 'confirmed',
     region: 'ramat',
     source: 'form',
     createdAt: new Date('2026-10-01T08:00:00Z'),
@@ -57,9 +55,9 @@ function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
   };
 }
 
-/** Confirmed already. */
-const DANA = makeOrder({ status: 'confirmed' });
-/** Not confirmed yet. */
+/** In the round. */
+const DANA = makeOrder();
+/** In the round. */
 const MOSHE = makeOrder({
   id: 'o2',
   contact: { name: 'משה לוי', phone: '+972527654321' },
@@ -71,9 +69,13 @@ const MOSHE = makeOrder({
   },
   bottlesEstimated: 80,
 });
-/** Not confirmed yet, and no map point: its card has "בלי מיקום". */
+/**
+ * In the round as a legacy `pending` order (planned before ADR-0012), shown like a confirmed one;
+ * no map point: its card has "בלי מיקום".
+ */
 const YOSSI = makeOrder({
   id: 'o4',
+  status: 'pending',
   contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
   address: { streetCode: 101, streetName: 'הרצל', houseNumber: '3', bottlesSpot: 'privateHouse' },
   bottlesEstimated: 50,
@@ -101,7 +103,7 @@ const ROUND: CollectorRound = {
   createdAt: new Date('2026-10-20T07:00:00Z'),
 };
 
-/** The "שלח" row of `order`'s confirmation request. */
+/** The "שלח" row of `order`'s round message (kind `confirmRequest`). */
 function sendRowOf(order: CollectorOrder): MessageLink {
   return {
     orderId: order.id,
@@ -113,27 +115,24 @@ function sendRowOf(order: CollectorOrder): MessageLink {
 }
 
 /**
- * A round's view as the api builds it: the three groups in order, and by default one "שלח" row
- * per order not confirmed yet.
+ * A round's view as the api builds it: the two groups in order, and by default one "שלח" row
+ * per order in the round not collected yet.
  */
 function makeView({
   round = {},
-  confirmed = [],
-  pending = [],
+  inRound = [],
   otherDate = [],
-  sendList = pending.map(sendRowOf),
+  sendList = inRound.filter((order) => order.status !== 'collected').map(sendRowOf),
 }: {
   round?: Partial<CollectorRound>;
-  confirmed?: CollectorOrder[];
-  pending?: CollectorOrder[];
+  inRound?: CollectorOrder[];
   otherDate?: CollectorOrder[];
   sendList?: MessageLink[];
 }): RoundView {
   return {
     round: { ...ROUND, ...round },
     groups: [
-      { key: 'confirmed', orders: confirmed },
-      { key: 'pending', orders: pending },
+      { key: 'inRound', orders: inRound },
       { key: 'otherDate', orders: otherDate },
     ],
     sendList,
@@ -141,19 +140,25 @@ function makeView({
   };
 }
 
-/** Round r1 with a customer in each group, two not confirmed yet. */
-const VIEW = makeView({ confirmed: [DANA], pending: [MOSHE, YOSSI], otherDate: [RACHEL] });
-/** VIEW after "אישר בשיחה או בהודעה" for משה: he is in "אישרו" and has no "שלח" row any more. */
-const VIEW_MOSHE_CONFIRMED = makeView({
-  confirmed: [DANA, { ...MOSHE, status: 'confirmed' }],
-  pending: [YOSSI],
-  otherDate: [RACHEL],
+/** Round r1: three customers in the round, one who asked for another date. */
+const VIEW = makeView({ inRound: [DANA, MOSHE, YOSSI], otherDate: [RACHEL] });
+/** VIEW after משה tapped "לא מתאים הפעם": he asked for another date and has no "שלח" row. */
+const VIEW_MOSHE_DECLINED = makeView({
+  inRound: [DANA, YOSSI],
+  otherDate: [
+    RACHEL,
+    {
+      ...MOSHE,
+      status: 'waiting',
+      lastMiss: { date: '2026-11-19', reason: 'askedOtherDate', roundId: 'r1' },
+    },
+  ],
 });
 
-/** Round r2, a week after r1 in the other half of the city, still confirming, one customer. */
+/** Round r2, a week after r1 in the other half of the city, no route yet, one customer. */
 const SECOND = makeView({
   round: { id: 'r2', date: '2026-11-26', region: 'old' },
-  pending: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
+  inRound: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
 });
 
 const LOADED: RoundsOutcome = { kind: 'loaded', rounds: [VIEW] };
@@ -193,22 +198,6 @@ function fakeLoad(...answers: Answer<RoundsOutcome>[]): {
   let calls = 0;
   const load = (): Promise<RoundsOutcome> => answerOf(answers, calls++, LOADED);
   return { load, calls: () => calls };
-}
-
-/** A fake `confirmByPhone` that records its calls (answers {@link VIEW_MOSHE_CONFIRMED}). */
-function fakeConfirm(...answers: Answer<ConfirmByPhoneOutcome>[]): {
-  confirmByPhone: NonNullable<RoundsScreenProps['confirmByPhone']>;
-  calls: { roundId: string; orderId: string }[];
-} {
-  const calls: { roundId: string; orderId: string }[] = [];
-  const confirmByPhone = (roundId: string, orderId: string) => {
-    calls.push({ roundId, orderId });
-    return answerOf(answers, calls.length - 1, {
-      kind: 'confirmed' as const,
-      view: VIEW_MOSHE_CONFIRMED,
-    });
-  };
-  return { confirmByPhone, calls };
 }
 
 /** A fake `markOpened` that records its calls and answers `marked` on 20/10. */
@@ -260,7 +249,7 @@ function routedView(stops: RouteStopView[]): RoundView {
   return { ...makeView({ round: { phase: 'routed' }, sendList: [] }), stops };
 }
 
-/** VIEW after "התחל מסלול": משה and יוסי went back to waiting; דנה is the route. */
+/** Round r1 once its route is built: דנה and משה are its stops. */
 const ROUTED = routedView([stopOf(DANA), stopOf(MOSHE)]);
 
 /** A fake `buildRoute` that records its calls (answers built {@link ROUTED}). */
@@ -348,7 +337,6 @@ function renderScreen(
   const screenElement = (
     <RoundsScreen
       loadRounds={props.loadRounds ?? fakeLoad().load}
-      confirmByPhone={props.confirmByPhone ?? fakeConfirm().confirmByPhone}
       buildRoute={props.buildRoute ?? fakeBuildRoute().buildRoute}
       closeRound={props.closeRound ?? fakeCloseRound().closeRound}
       moveStop={props.moveStop ?? stopActions.moveStop}
@@ -420,17 +408,23 @@ function expectOneH1(): void {
   expect(screen.getByRole('heading', { level: 1, name: 'סבבים' })).toBeDefined();
 }
 
-describe('confirmationSummary', () => {
+describe('roundGroupsSummary', () => {
   it('counts each group in words, in screen order', () => {
-    expect(confirmationSummary(VIEW.groups)).toBe('אישרו: 1 · עוד לא אישרו: 2 · ביקשו מועד אחר: 1');
+    expect(roundGroupsSummary(VIEW.groups)).toBe('בסבב: 3 · ביקשו מועד אחר: 1');
   });
 
-  it('counts a missing group as none, and keeps the order whatever the order given', () => {
+  it('keeps the screen order whatever the order given', () => {
     const groups = [
-      { key: 'pending' as const, orders: [MOSHE] },
-      { key: 'confirmed' as const, orders: [DANA, YOSSI] },
+      { key: 'otherDate' as const, orders: [RACHEL] },
+      { key: 'inRound' as const, orders: [DANA, MOSHE] },
     ];
-    expect(confirmationSummary(groups)).toBe('אישרו: 2 · עוד לא אישרו: 1 · ביקשו מועד אחר: 0');
+    expect(roundGroupsSummary(groups)).toBe('בסבב: 2 · ביקשו מועד אחר: 1');
+  });
+
+  it('counts a missing group as none', () => {
+    expect(roundGroupsSummary([{ key: 'otherDate', orders: [RACHEL] }])).toBe(
+      'בסבב: 0 · ביקשו מועד אחר: 1',
+    );
   });
 });
 
@@ -443,11 +437,7 @@ describe('RoundsScreen', () => {
   it('tells the notice the planning screen sent along, once', async () => {
     window.history.replaceState({ notice: 'הסבב נוצר.' }, '', '/app/rounds');
     render(
-      <RoundsScreen
-        loadRounds={fakeLoad(LOADED).load}
-        confirmByPhone={fakeConfirm().confirmByPhone}
-        markOpened={fakeMarkOpened().markOpened}
-      />,
+      <RoundsScreen loadRounds={fakeLoad(LOADED).load} markOpened={fakeMarkOpened().markOpened} />,
     );
 
     const notice = await screen.findByText('הסבב נוצר.');
@@ -498,7 +488,7 @@ describe('RoundsScreen', () => {
       expect(screen.queryByText(NO_OPEN_ROUND_TEXT)).toBeNull();
     });
 
-    it('shows the pickup time and the personal text that went into the requests', async () => {
+    it('shows the pickup time and the personal text that went into the messages', async () => {
       const round = await renderLoaded();
 
       const pickup = within(round).getByText(/^להוציא את הבקבוקים עד/);
@@ -507,22 +497,24 @@ describe('RoundsScreen', () => {
       expect(within(round).getByText(/^טקסט אישי:/).textContent).toBe('טקסט אישי: תודה רבה!\nיואל');
     });
 
-    it('shows the window as "בין X ל-Y" when the round has a start', async () => {
-      const view = makeView({ round: { pickupFrom: '07:00' }, pending: [MOSHE] });
+    it('shows the start as the time to put the bottles out by, then the window Yoel comes in', async () => {
+      const view = makeView({ round: { pickupFrom: '07:00' }, inRound: [MOSHE] });
       const round = await renderLoaded({
         loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
       });
 
-      const pickup = within(round).getByText(/^להוציא את הבקבוקים בין/);
-      expect(pickup.textContent).toBe('להוציא את הבקבוקים בין 07:00 ל-08:30');
-      expect(within(pickup).getByText('07:00').closest('[dir="ltr"]')).not.toBeNull();
+      const pickup = within(round).getByText(/^להוציא את הבקבוקים עד/);
+      expect(pickup.textContent).toBe('להוציא את הבקבוקים עד 07:00 · מגיעים בין 07:00 ל-08:30');
+      const starts = within(pickup).getAllByText('07:00');
+      expect(starts).toHaveLength(2);
+      for (const start of starts) expect(start.closest('[dir="ltr"]')).not.toBeNull();
       expect(within(pickup).getByText('08:30').closest('[dir="ltr"]')).not.toBeNull();
     });
 
     it('leaves out the pickup time and the personal text when the round has none', async () => {
       const view = makeView({
         round: { pickupBy: undefined, personalText: undefined },
-        pending: [MOSHE],
+        inRound: [MOSHE],
       });
       const round = await renderLoaded({
         loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
@@ -532,15 +524,13 @@ describe('RoundsScreen', () => {
       expect(within(round).queryByText(/טקסט אישי/)).toBeNull();
     });
 
-    it('says in words how many confirmed, did not yet, and asked for another date', async () => {
+    it('says in words how many are in the round and how many asked for another date', async () => {
       const round = await renderLoaded();
 
-      expect(
-        within(round).getByText('אישרו: 1 · עוד לא אישרו: 2 · ביקשו מועד אחר: 1'),
-      ).toBeDefined();
+      expect(within(round).getByText('בסבב: 3 · ביקשו מועד אחר: 1')).toBeDefined();
     });
 
-    it('puts the details in one card with three count tiles, hidden from screen readers', async () => {
+    it('puts the details in one card with two count tiles, hidden from screen readers', async () => {
       const round = await renderLoaded();
 
       const details = round.querySelector('.card.round-details');
@@ -556,48 +546,43 @@ describe('RoundsScreen', () => {
           tile.querySelector('span')?.textContent,
         ]),
       ).toEqual([
-        ['round-tile round-tile-green', '1', 'אישרו'],
-        ['round-tile round-tile-amber', '2', 'עוד לא אישרו'],
+        ['round-tile round-tile-green', '3', 'בסבב'],
         ['round-tile round-tile-gray', '1', 'ביקשו מועד אחר'],
       ]);
     });
 
     it("shows each group's count as a badge next to its title, 0 for an empty group", async () => {
-      const view = makeView({ confirmed: [DANA], pending: [MOSHE, YOSSI] });
+      const view = makeView({ inRound: [DANA, MOSHE, YOSSI] });
       await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
 
       const badgeOf = (name: string) => groupRegion(name).querySelector('.group-head .badge');
-      expect(badgeOf('אישרו')?.textContent).toBe('1');
-      expect(badgeOf('אישרו')?.className).toContain('badge-green');
-      expect(badgeOf('עוד לא אישרו')?.textContent).toBe('2');
-      expect(badgeOf('עוד לא אישרו')?.className).toContain('badge-amber');
+      expect(badgeOf('בסבב')?.textContent).toBe('3');
+      expect(badgeOf('בסבב')?.className).toContain('badge-green');
       expect(badgeOf('ביקשו מועד אחר')?.textContent).toBe('0');
       expect(badgeOf('ביקשו מועד אחר')?.className).toContain('badge-gray');
-      expect(badgeOf('אישרו')?.getAttribute('aria-hidden')).toBe('true');
+      expect(badgeOf('בסבב')?.getAttribute('aria-hidden')).toBe('true');
     });
 
-    it('shows the three groups in order, each a region named by its title, with its count', async () => {
+    it('shows the two groups in order, each a region named by its title, with its count', async () => {
       const round = await renderLoaded();
 
       const groups = within(round).getAllByRole('region');
       expect(
         groups.map((group) => within(group).getByRole('heading', { level: 3 }).textContent),
-      ).toEqual(['אישרו', 'עוד לא אישרו', 'ביקשו מועד אחר']);
-      expect(within(groupRegion('אישרו')).getByText('הזמנה אחת')).toBeDefined();
-      expect(within(groupRegion('עוד לא אישרו')).getByText('2 הזמנות')).toBeDefined();
+      ).toEqual(['בסבב', 'ביקשו מועד אחר']);
+      expect(within(groupRegion('בסבב')).getByText('3 הזמנות')).toBeDefined();
       expect(within(groupRegion('ביקשו מועד אחר')).getByText('הזמנה אחת')).toBeDefined();
     });
 
-    it('puts each customer in the right group, in the order the api gave', async () => {
+    it('puts each customer in the right group, a legacy pending one in "בסבב", in the order the api gave', async () => {
       await renderLoaded();
 
-      expect(namesIn(groupRegion('אישרו'))).toEqual(['דנה כהן']);
-      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['משה לוי', 'יוסי מזרחי']);
+      expect(namesIn(groupRegion('בסבב'))).toEqual(['דנה כהן', 'משה לוי', 'יוסי מזרחי']);
       expect(namesIn(groupRegion('ביקשו מועד אחר'))).toEqual(['רחל אברהם']);
     });
 
     it('says "אין" in an empty group, with no list', async () => {
-      const view = makeView({ confirmed: [DANA], pending: [MOSHE] });
+      const view = makeView({ inRound: [DANA, MOSHE] });
       await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
 
       const otherDate = groupRegion('ביקשו מועד אחר');
@@ -626,19 +611,13 @@ describe('RoundsScreen', () => {
       expect(screen.getAllByText('בלי מיקום')).toHaveLength(1);
     });
 
-    it('has "אישר בשיחה או בהודעה" on the cards not confirmed yet only, each named after its customer', async () => {
+    it('has no "אישר בשיחה או בהודעה" button: nobody confirms (ADR-0012)', async () => {
       await renderLoaded();
 
-      const buttons = screen.getAllByRole('button', { name: /^אישר בשיחה או בהודעה/ });
-      expect(buttons.map((button) => button.textContent)).toEqual([
-        'אישר בשיחה או בהודעה, משה לוי',
-        'אישר בשיחה או בהודעה, יוסי מזרחי',
-      ]);
-      for (const button of buttons) {
-        expect(groupRegion('עוד לא אישרו').contains(button)).toBe(true);
+      expect(screen.queryByRole('button', { name: /אישר בשיחה או בהודעה/ })).toBeNull();
+      for (const name of ['דנה כהן', 'משה לוי', 'יוסי מזרחי', 'רחל אברהם']) {
+        expect(within(cardOf(name)).queryByRole('button')).toBeNull();
       }
-      expect(within(cardOf('דנה כהן')).queryByRole('button')).toBeNull();
-      expect(within(cardOf('רחל אברהם')).queryByRole('button')).toBeNull();
     });
 
     it('has no round picker when only one round is open', async () => {
@@ -673,7 +652,7 @@ describe('RoundsScreen', () => {
 
       expect(await screen.findByRole('region', { name: 'בית שמש · 26/11' })).toBeDefined();
       expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, שרה גולן' })).toBeDefined();
+      expect(screen.getByRole('heading', { level: 4, name: 'שרה גולן' })).toBeDefined();
       expect(window.location.pathname).toBe('/app/rounds');
       expect(window.location.search).toBe('?round=r2');
       expect(window.history.length).toBe(historyLength);
@@ -707,6 +686,24 @@ describe('RoundsScreen', () => {
       expect(window.location.search).toBe('?round=zzz');
     });
 
+    // The api answers one round; only that round is swapped, the other open round stays as loaded.
+    it('swaps in only the round whose route was built, leaving the other open round as it was', async () => {
+      const { buildRoute, calls } = fakeBuildRoute();
+      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load, buildRoute });
+      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
+
+      fireEvent.click(screen.getByRole('button', { name: BUILD_ROUTE_LABEL }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
+      await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
+      expect(calls).toEqual(['r1']);
+
+      pickRound('19/11', '26/11');
+
+      const second = await screen.findByRole('region', { name: 'בית שמש · 26/11' });
+      expect(within(second).getByRole('heading', { level: 4, name: 'שרה גולן' })).toBeDefined();
+      expect(within(second).getByRole('button', { name: BUILD_ROUTE_LABEL })).toBeDefined();
+    });
+
     it('follows a query that changes from outside, as the back button does', async () => {
       renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
@@ -720,16 +717,22 @@ describe('RoundsScreen', () => {
   });
 
   describe('the "שלח" list', () => {
-    it('has one "שלח" link per customer not confirmed yet, under "בקשות אישור" and a hint', async () => {
+    it('has one "שלח" link per customer in the round, under "הודעות ללקוחות" and a hint', async () => {
       const round = await renderLoaded();
 
-      expect(within(round).getByRole('heading', { level: 3, name: 'בקשות אישור' })).toBeDefined();
+      expect(SEND_LIST_HEADING).toBe('הודעות ללקוחות');
+      expect(
+        within(round).getByRole('heading', { level: 3, name: SEND_LIST_HEADING }),
+      ).toBeDefined();
+      expect(within(round).queryByRole('heading', { name: 'בקשות אישור' })).toBeNull();
       expect(within(round).getByText(SEND_LIST_HINT)).toBeDefined();
       const sendLinks = within(round).getAllByRole('link', { name: /^שלח/ });
       expect(sendLinks.map((link) => link.getAttribute('href'))).toEqual([
+        'https://wa.me/972501234567?text=x',
         'https://wa.me/972527654321?text=x',
         'https://wa.me/972501239999?text=x',
       ]);
+      expect(screen.getByRole('link', { name: 'שלח לדנה כהן' })).toBeDefined();
       expect(screen.getByRole('link', { name: 'שלח למשה לוי' })).toBeDefined();
       expect(screen.getByRole('link', { name: 'שלח ליוסי מזרחי' })).toBeDefined();
     });
@@ -744,8 +747,8 @@ describe('RoundsScreen', () => {
       expect(await screen.findByRole('link', { name: 'שלח שוב למשה לוי' })).toBeDefined();
     });
 
-    it('says there is nothing to send, with no hint, when everyone confirmed', async () => {
-      const view = makeView({ confirmed: [DANA] });
+    it('says there is nothing to send, with no hint, when no customer is left in the round', async () => {
+      const view = makeView({ otherDate: [RACHEL] });
       const round = await renderLoaded({
         loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
       });
@@ -756,192 +759,9 @@ describe('RoundsScreen', () => {
     });
   });
 
-  describe('"אישר בשיחה או בהודעה"', () => {
-    it('confirms the order of the round, and moves the customer to "אישרו" out of the "שלח" list', async () => {
-      const { confirmByPhone, calls } = fakeConfirm();
-      await renderLoaded({ confirmByPhone });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      expect(calls).toEqual([{ roundId: 'r1', orderId: 'o2' }]);
-      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toEqual(['דנה כהן', 'משה לוי']));
-      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['יוסי מזרחי']);
-      expect(screen.queryByRole('link', { name: /למשה לוי$/ })).toBeNull();
-      expect(screen.getByRole('link', { name: 'שלח ליוסי מזרחי' })).toBeDefined();
-      expect(
-        within(roundRegion()).getByText('אישרו: 2 · עוד לא אישרו: 1 · ביקשו מועד אחר: 1'),
-      ).toBeDefined();
-      expect(screen.queryByRole('button', { name: /משה לוי$/ })).toBeNull();
-      expect(screen.queryByRole('alert')).toBeNull();
-    });
-
-    it('says "שומר..." while saving and sends one request for a double tap', async () => {
-      const answer = deferred<ConfirmByPhoneOutcome>();
-      const { confirmByPhone, calls } = fakeConfirm(answer.promise);
-      await renderLoaded({ confirmByPhone });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-      const busy = screen.getByRole('button', { name: 'שומר..., משה לוי' });
-      expect(busy.getAttribute('aria-disabled')).toBe('true');
-      fireEvent.click(busy);
-
-      expect(calls).toHaveLength(1);
-      // Only that card is busy: another customer can be confirmed meanwhile.
-      const yossi = screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, יוסי מזרחי' });
-      expect(yossi.getAttribute('aria-disabled')).toBeNull();
-
-      answer.resolve({ kind: 'confirmed', view: VIEW_MOSHE_CONFIRMED });
-
-      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toContain('משה לוי'));
-      expect(calls).toHaveLength(1);
-    });
-
-    it('keeps the "שלח" rows Yoel opened marked when the round is swapped in', async () => {
-      await renderLoaded();
-      fireEvent.click(screen.getByRole('link', { name: 'שלח ליוסי מזרחי' }));
-      await screen.findByRole('link', { name: 'שלח שוב ליוסי מזרחי' });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toContain('משה לוי'));
-      // VIEW_MOSHE_CONFIRMED's row for יוסי has no openedAt: the mark is the list's own state.
-      expect(screen.getByRole('link', { name: 'שלח שוב ליוסי מזרחי' })).toBeDefined();
-    });
-
-    it('swaps in only the round the api answered', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
-      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toContain('משה לוי'));
-      // The other round is not on screen: pick it, it is as it was.
-      pickRound('19/11', '26/11');
-      const other = await screen.findByRole('region', { name: 'בית שמש · 26/11' });
-      expect(
-        within(other).getByRole('button', { name: 'אישר בשיחה או בהודעה, שרה גולן' }),
-      ).toBeDefined();
-    });
-
-    it('says the confirmations closed, moves the focus there and loads the rounds again', async () => {
-      const reload = deferred<RoundsOutcome>();
-      const rounds = fakeLoad(LOADED, reload.promise);
-      const closed: ConfirmByPhoneOutcome = {
-        kind: 'closed',
-        message: ROUND_MESSAGES.confirmationsClosed,
-      };
-      await renderLoaded({
-        loadRounds: rounds.load,
-        confirmByPhone: fakeConfirm(closed).confirmByPhone,
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      const notice = await screen.findByRole('alert');
-      expect(notice.textContent).toBe('האישורים לסבב הזה כבר נסגרו.');
-      await waitFor(() => expect(document.activeElement).toBe(notice));
-      expect(rounds.calls()).toBe(2);
-      // The rounds stay on screen while they load again.
-      expect(screen.queryByRole('status')).toBeNull();
-      expect(roundRegion()).toBeDefined();
-
-      // The round as it is now: its route built (on another phone), so משה left it and the
-      // section shows the route in place of the confirmations.
-      reload.resolve({ kind: 'loaded', rounds: [routedView([stopOf(DANA)])] });
-
-      await waitFor(() => expect(stopNames()).toEqual(['דנה כהן']));
-      expect(screen.queryByRole('button', { name: /^אישר בשיחה או בהודעה/ })).toBeNull();
-      // The notice Yoel was sent to keeps the focus: the round's heading does not take it.
-      expect(document.activeElement).toBe(screen.getByRole('alert'));
-      // The notice stays until Yoel does something else.
-      expect(screen.getByRole('alert').textContent).toBe(ROUND_MESSAGES.confirmationsClosed);
-    });
-
-    it('says the order is no longer in the round and loads the rounds again', async () => {
-      const rounds = fakeLoad(LOADED, { kind: 'loaded', rounds: [makeView({ pending: [YOSSI] })] });
-      await renderLoaded({
-        loadRounds: rounds.load,
-        confirmByPhone: fakeConfirm({ kind: 'notFound' }).confirmByPhone,
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LEFT_ROUND_MESSAGE);
-      expect(ORDER_LEFT_ROUND_MESSAGE).toBe('ההזמנה כבר לא בסבב.');
-      await waitFor(() => expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['יוסי מזרחי']));
-      expect(rounds.calls()).toBe(2);
-    });
-
-    it('clears the notice at the next "אישר בשיחה או בהודעה"', async () => {
-      const { confirmByPhone } = fakeConfirm({ kind: 'notFound' }, { kind: 'failed' });
-      await renderLoaded({ confirmByPhone });
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-      await screen.findByText(ORDER_LEFT_ROUND_MESSAGE);
-      await settle();
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, יוסי מזרחי' }));
-
-      expect(screen.queryByText(ORDER_LEFT_ROUND_MESSAGE)).toBeNull();
-    });
-
-    it('says the save failed next to the card, and the button works again', async () => {
-      const { confirmByPhone, calls } = fakeConfirm({ kind: 'failed' }, 'rejects');
-      await renderLoaded({ confirmByPhone });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      const alert = await within(cardOf('משה לוי')).findByRole('alert');
-      expect(alert.textContent).toBe(CONFIRM_FAILED_MESSAGE);
-      expect(CONFIRM_FAILED_MESSAGE).toBe('לא הצלחנו לשמור. נא לנסות שוב.');
-      expect(within(cardOf('יוסי מזרחי')).queryByRole('alert')).toBeNull();
-      const button = screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' });
-      expect(button.getAttribute('aria-disabled')).toBeNull();
-      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['משה לוי', 'יוסי מזרחי']);
-
-      // A rejection is a failed save like any other.
-      fireEvent.click(button);
-
-      expect(calls).toHaveLength(2);
-      await waitFor(() =>
-        expect(
-          screen
-            .getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' })
-            .getAttribute('aria-disabled'),
-        ).toBeNull(),
-      );
-      expect(within(cardOf('משה לוי')).getByRole('alert').textContent).toBe(CONFIRM_FAILED_MESSAGE);
-      expect(window.location.pathname).toBe('/app/rounds');
-    });
-
-    it('goes to the login, replacing the screen, when the session ended', async () => {
-      await renderLoaded({ confirmByPhone: fakeConfirm(LOGGED_OUT).confirmByPhone });
-      const historyLength = window.history.length;
-
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-
-      await waitFor(() => expect(window.location.pathname).toBe('/login'));
-      expect(window.history.length).toBe(historyLength);
-    });
-
-    it('stays where Yoel went when the answer comes after he left the tab', async () => {
-      const answer = deferred<ConfirmByPhoneOutcome>();
-      const { unmount } = renderScreen({
-        loadRounds: fakeLoad(LOADED).load,
-        confirmByPhone: fakeConfirm(answer.promise).confirmByPhone,
-      });
-      fireEvent.click(await screen.findByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-      unmount();
-      window.history.replaceState(null, '', '/app/orders');
-
-      answer.resolve(LOGGED_OUT);
-      await settle();
-
-      expect(window.location.pathname).toBe('/app/orders');
-    });
-  });
-
   describe('"התחל מסלול"', () => {
-    const QUESTION_OF_VIEW = '2 לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. להתחיל מסלול?';
+    // VIEW has three customers in "בסבב": the route takes them all in.
+    const QUESTION_OF_VIEW = 'המסלול יכלול 3 לקוחות. להתחיל מסלול?';
 
     /** Taps the button and returns the question that opens in its place. */
     function openQuestion(): HTMLElement {
@@ -960,7 +780,7 @@ describe('RoundsScreen', () => {
       );
     });
 
-    it('asks first, saying how many go back to waiting, with the focus on the question', async () => {
+    it('asks first, saying how many customers the route takes in, with the focus on the question', async () => {
       await renderLoaded();
 
       const question = openQuestion();
@@ -983,7 +803,7 @@ describe('RoundsScreen', () => {
       expect(calls).toEqual([]);
     });
 
-    it('builds once for a double tap, then shows the route in place of the confirmations', async () => {
+    it('builds once for a double tap, then shows the route in place of step 1', async () => {
       const answer = deferred<BuildRouteOutcome>();
       const { buildRoute, calls } = fakeBuildRoute(answer.promise);
       await renderLoaded({ buildRoute });
@@ -1005,9 +825,8 @@ describe('RoundsScreen', () => {
 
       await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
       const round = roundRegion();
-      expect(within(round).queryByRole('heading', { name: 'בקשות אישור' })).toBeNull();
+      expect(within(round).queryByRole('heading', { name: SEND_LIST_HEADING })).toBeNull();
       expect(within(round).queryByRole('region')).toBeNull();
-      expect(within(round).queryByRole('button', { name: /^אישר בשיחה או בהודעה/ })).toBeNull();
       expect(within(round).queryByRole('button', { name: BUILD_ROUTE_LABEL })).toBeNull();
       expect(within(round).getByText('נאספו 0 מתוך 2 · נשארו 2')).toBeDefined();
       // The question Yoel answered is gone: the focus goes to the round's heading.
@@ -1015,7 +834,7 @@ describe('RoundsScreen', () => {
       expect(calls).toEqual(['r1']);
     });
 
-    it('says the confirmations closed already and loads the rounds again', async () => {
+    it('says the route was built already and loads the rounds again', async () => {
       const rounds = fakeLoad(LOADED, { kind: 'loaded', rounds: [ROUTED] });
       await renderLoaded({
         loadRounds: rounds.load,
@@ -1112,7 +931,7 @@ describe('RoundsScreen', () => {
   describe('a routed round', () => {
     const LOADED_ROUTED: RoundsOutcome = { kind: 'loaded', rounds: [ROUTED] };
 
-    it('shows its route in driving order, with no confirmations and no "שלח" list', async () => {
+    it('shows its route in driving order, with no groups and no "שלח" list', async () => {
       const round = await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
 
       expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']);
@@ -1126,9 +945,9 @@ describe('RoundsScreen', () => {
         'רמת בית שמש · 19/11',
       );
       expect(within(round).getByText(/^להוציא את הבקבוקים עד/)).toBeDefined();
-      expect(within(round).queryByRole('heading', { name: 'בקשות אישור' })).toBeNull();
+      expect(within(round).queryByRole('heading', { name: SEND_LIST_HEADING })).toBeNull();
       expect(within(round).queryByRole('link', { name: /^שלח/ })).toBeNull();
-      expect(within(round).queryByText(/^אישרו:/)).toBeNull();
+      expect(within(round).queryByText(/^בסבב:/)).toBeNull();
       expect(within(round).queryByRole('button', { name: BUILD_ROUTE_LABEL })).toBeNull();
       // One live summary per round: the route's.
       expect(round.querySelectorAll('[aria-live]')).toHaveLength(1);
@@ -1300,9 +1119,7 @@ describe('RoundsScreen', () => {
       expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
       // The selection falls back to the round left, as it was, and the picker is gone: one round.
       const other = screen.getByRole('region', { name: 'בית שמש · 26/11' });
-      expect(
-        within(other).getByRole('button', { name: 'אישר בשיחה או בהודעה, שרה גולן' }),
-      ).toBeDefined();
+      expect(within(other).getByRole('heading', { level: 4, name: 'שרה גולן' })).toBeDefined();
       expect(screen.queryByRole('button', { name: /^סבב: 26\/11/ })).toBeNull();
       expect(screen.queryByText(NO_OPEN_ROUND_TEXT)).toBeNull();
       await settle();
@@ -1560,13 +1377,16 @@ describe('RoundsScreen', () => {
       expect(rounds.calls()).toBe(2);
       // No "טוען..." in place of the rounds while the new answer is on its way.
       expect(screen.queryByRole('status')).toBeNull();
-      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['משה לוי', 'יוסי מזרחי']);
+      expect(namesIn(groupRegion('בסבב'))).toEqual(['דנה כהן', 'משה לוי', 'יוסי מזרחי']);
 
-      // משה confirmed through his WhatsApp link meanwhile.
-      reload.resolve({ kind: 'loaded', rounds: [VIEW_MOSHE_CONFIRMED] });
+      // משה tapped "לא מתאים הפעם" through his WhatsApp link meanwhile.
+      reload.resolve({ kind: 'loaded', rounds: [VIEW_MOSHE_DECLINED] });
 
-      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toEqual(['דנה כהן', 'משה לוי']));
-      expect(namesIn(groupRegion('עוד לא אישרו'))).toEqual(['יוסי מזרחי']);
+      await waitFor(() =>
+        expect(namesIn(groupRegion('ביקשו מועד אחר'))).toEqual(['רחל אברהם', 'משה לוי']),
+      );
+      expect(namesIn(groupRegion('בסבב'))).toEqual(['דנה כהן', 'יוסי מזרחי']);
+      expect(screen.queryByRole('link', { name: /למשה לוי$/ })).toBeNull();
     });
 
     it('keeps the "שלח" rows Yoel opened marked when he is back from WhatsApp', async () => {
@@ -1583,21 +1403,22 @@ describe('RoundsScreen', () => {
       expect(screen.getByRole('link', { name: 'שלח שוב למשה לוי' })).toBeDefined();
     });
 
-    it('keeps the notice of a refused "אישר בשיחה או בהודעה"', async () => {
+    it('keeps the notice of a refused "התחל מסלול"', async () => {
       const rounds = fakeLoad(LOADED);
       await renderLoaded({
         loadRounds: rounds.load,
-        confirmByPhone: fakeConfirm({ kind: 'notFound' }).confirmByPhone,
+        buildRoute: fakeBuildRoute({ kind: 'notFound' }).buildRoute,
       });
-      fireEvent.click(screen.getByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
-      await screen.findByText(ORDER_LEFT_ROUND_MESSAGE);
+      fireEvent.click(screen.getByRole('button', { name: BUILD_ROUTE_LABEL }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
+      await screen.findByText(ROUND_MESSAGES.roundNotFound);
       await settle();
 
       returnToApp();
       await settle();
 
       expect(rounds.calls()).toBe(3);
-      expect(screen.getByRole('alert').textContent).toBe(ORDER_LEFT_ROUND_MESSAGE);
+      expect(screen.getByRole('alert').textContent).toBe(ROUND_MESSAGES.roundNotFound);
     });
   });
 
@@ -1612,13 +1433,14 @@ describe('RoundsScreen', () => {
       expect(window.location.pathname).toBe('/app/rounds');
     });
 
-    it('still shows the answer of "אישר בשיחה או בהודעה"', async () => {
-      const { confirmByPhone, calls } = fakeConfirm();
-      renderScreen({ loadRounds: fakeLoad(LOADED).load, confirmByPhone }, { strict: true });
+    it('still shows the answer of "התחל מסלול"', async () => {
+      const { buildRoute, calls } = fakeBuildRoute();
+      renderScreen({ loadRounds: fakeLoad(LOADED).load, buildRoute }, { strict: true });
 
-      fireEvent.click(await screen.findByRole('button', { name: 'אישר בשיחה או בהודעה, משה לוי' }));
+      fireEvent.click(await screen.findByRole('button', { name: BUILD_ROUTE_LABEL }));
+      fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
 
-      await waitFor(() => expect(namesIn(groupRegion('אישרו'))).toContain('משה לוי'));
+      await waitFor(() => expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']));
       expect(calls).toHaveLength(1);
     });
   });

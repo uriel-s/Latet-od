@@ -48,7 +48,7 @@ const NAME = 'רבקה לוינסון';
 const PHONE_E164 = '+972547654321';
 const HOUSE_NUMBER = '17ב';
 
-/** A confirmation request already sent as a wa.me link (ADR-0003), for orders seeded in a round. */
+/** A round message already sent as a wa.me link (ADR-0003), for orders seeded in a round. */
 const MANUAL_REQUEST: MessageLogEntry = {
   kind: 'confirmRequest',
   at: new Date('2026-11-11T17:00:00.000Z'),
@@ -144,9 +144,9 @@ afterEach(() => {
 
 /**
  * Stores a routed, open round (unless overridden) whose route is one stop per entry, in that
- * order, each a confirmed order in the round (estimate {@link ESTIMATE}, its confirmation request
+ * order, each a confirmed order in the round (estimate {@link ESTIMATE}, its round message
  * already sent) with the entry's overrides on top. `notAStop` orders are in the round's
- * `orderIds` but in no stop, like one the build sent back.
+ * `orderIds` but in no stop (a round's data the build never makes now, kept as a guard).
  */
 async function seedRoutedRound(
   entries: Partial<NewOrder>[] = [{}],
@@ -278,7 +278,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/collected: "אספתי"'
       roundId: round.id,
     });
     expectBetween(stored.collectedAt, before, after);
-    // One thank-you, to the customer, logged after the confirmation request.
+    // One thank-you, to the customer, logged after the round message.
     expect(sender.sent).toHaveLength(1);
     expect(sender.sent[0]).toMatchObject({
       kind: 'thankYou',
@@ -597,7 +597,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/collected: "אספתי"'
     expect(await storedState()).toStrictEqual(before);
   });
 
-  it('refuses a pending stop with 409 invalid_transition, changing nothing', async () => {
+  it('refuses a legacy pending stop with 409 invalid_transition, changing nothing', async () => {
     const { round, stops } = await seedRoutedRound([{ status: 'pending' }]);
     const before = await storedState();
 
@@ -703,7 +703,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצ�
       roundId: round.id,
     });
     expectBetween(stored.updatedAt, before, after);
-    // Nothing else of the order changes: its message log is the confirmation request alone.
+    // Nothing else of the order changes: its message log is the round message alone.
     expect(stored.messages).toStrictEqual([MANUAL_REQUEST]);
     expect(stored.bottlesCollected).toBeUndefined();
     // No message: "לא נמצא" sends nothing to the customer.
@@ -716,7 +716,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצ�
     expect(stopOf(view, stop.id).state).toBe('notFound');
     expect(stopOf(view, stop.id)).not.toHaveProperty('thankYou');
     expect(stopOf(view, other.id).state).toBe('toCollect');
-    // It is in none of the confirmation step's groups.
+    // It is in none of the round's groups.
     for (const group of view.groups) {
       expect(group.orders.map((o) => o.id)).not.toContain(stop.id);
     }
@@ -743,7 +743,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצ�
     expect(sender.sent).toHaveLength(0);
   });
 
-  it('sends a pending stop back to waiting as well', async () => {
+  it('sends a legacy pending stop back to waiting as well', async () => {
     const { round, stops } = await seedRoutedRound([{ status: 'pending' }]);
     const stop = first(stops);
 
@@ -916,7 +916,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצ�
 
     expect(planned.status).toBe(201);
     const newRoundId = viewOf(planned).round.id;
-    expect(await storedOrder(stop.id)).toMatchObject({ status: 'pending', roundId: newRoundId });
+    expect(await storedOrder(stop.id)).toMatchObject({ status: 'confirmed', roundId: newRoundId });
     // The old round's route still records what happened at its stop.
     const oldView = await getRound(round.id);
     expect(oldView.status).toBe(200);

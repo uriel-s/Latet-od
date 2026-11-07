@@ -94,8 +94,9 @@ const HE = {
 
   // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
   'orderStatus.waiting': 'ממתינה לסבב',
-  'orderStatus.pending': 'ממתינה לאישור',
-  'orderStatus.confirmed': 'אושרה',
+  // Legacy (ADR-0012): nothing to confirm any more, so an old pending order reads as in the round.
+  'orderStatus.pending': 'בסבב',
+  'orderStatus.confirmed': 'בסבב',
   'orderStatus.collected': 'נאספה',
   'orderStatus.cancelled': 'בוטלה',
 
@@ -104,19 +105,22 @@ const HE = {
   'createOrder.rateLimited': 'יותר מדי ניסיונות. נא לנסות שוב מאוחר יותר.',
 
   // The customer's page (customerOrderApi.ts CUSTOMER_ORDER_MESSAGES).
-  'customerOrder.confirmationsClosed': 'האישור נסגר. נחזור אליך עם מועד חדש.',
   'customerOrder.orderClosed': 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
   'customerOrder.orderNotFound': 'לא מצאנו את ההזמנה. ייתכן שהקישור לא הועתק עד הסוף.',
 
   // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
   // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
-  // already formatted for the language. The Hebrew must stay exactly as sent before English
-  // existed: messages.test.ts compares whole messages char for char.
+  // already formatted for the language. With both times, {from} is when the bottles must be out
+  // AND when Yoel starts coming, {by} when he is done (ADR-0012); with {by} alone it is the time to
+  // put them out by. The message announces the pickup, it asks for no confirmation (ADR-0012):
+  // the link is for "not this time", a change or a cancel. messages.test.ts compares whole
+  // messages char for char.
   'whatsapp.greeting': 'שלום {name},',
   'whatsapp.confirmRequest.date': 'ב-{date} נעבור לאסוף את הבקבוקים שלכם.',
-  'whatsapp.confirmRequest.pickupWindow': 'נא להוציא את הבקבוקים בין השעות {from} ל-{by}.',
+  'whatsapp.confirmRequest.pickupWindow':
+    'נא להוציא את הבקבוקים עד השעה {from}. נגיע בין השעות {from} ל-{by}.',
   'whatsapp.confirmRequest.pickupBy': 'נא להוציא את הבקבוקים עד השעה {by}.',
-  'whatsapp.confirmRequest.confirmAtLink': 'נא לאשר את האיסוף בקישור:',
+  'whatsapp.confirmRequest.changeAtLink': 'אם לא מתאים, או כדי לבטל:',
   // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
   'whatsapp.confirmRequest.signOff': 'תודה, לתת עוד',
   // spec §6.1, word for word.
@@ -170,7 +174,7 @@ const HE = {
 
   // The thank-you screen.
   'thankYou.title': 'תודה!',
-  'thankYou.body': 'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp לאישור.',
+  'thankYou.body': 'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp עם מועד האיסוף.',
   'thankYou.viewOrder': 'לצפייה בהזמנה או לביטול',
   // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
   'thankYou.donation': 'כ־{bottles} בקבוקים = כ־{amount} לתפילין לבר מצווה ולחיילים',
@@ -184,20 +188,16 @@ const HE = {
   'orderPage.toForm': 'לטופס ההזמנה',
   'orderPage.status': 'מצב ההזמנה:',
   'orderPage.waiting': 'נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.',
-  'orderPage.pendingDate': 'נעבור לאסוף ב-{date}.',
-  'orderPage.confirmedDate': 'נתראה ב-{date}.',
-  'orderPage.pickupWindow': 'נא להוציא את הבקבוקים בין השעות {from} ל-{by}.',
+  'orderPage.roundDate': 'נעבור לאסוף ב-{date}.',
+  'orderPage.pickupWindow': 'נא להוציא את הבקבוקים עד השעה {from}. נגיע בין השעות {from} ל-{by}.',
   'orderPage.pickupBy': 'נא להוציא את הבקבוקים עד השעה {by}.',
   'orderPage.collected': 'ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!',
   'orderPage.cancelled': 'תודה! אפשר להזמין איסוף חדש בכל עת.',
-  'orderPage.saved.confirm': 'תודה! האיסוף אושר.',
   'orderPage.saved.decline': 'קיבלנו. נחזור אליך עם מועד חדש.',
   'orderPage.saved.cancel': 'ההזמנה בוטלה.',
   'orderPage.saved.change': 'השינויים נשמרו.',
   'orderPage.leftRound': 'הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.',
   'orderPage.phoneNotChanged': 'את מספר הטלפון אי אפשר לשנות כאן.',
-  'orderPage.confirm': 'כן, אוציא את הבקבוקים',
-  'orderPage.confirmDate': 'כן, אוציא את הבקבוקים ב-{date}',
   'orderPage.decline': 'לא מתאים הפעם',
   'orderPage.declineQuestion': 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.',
   'orderPage.declineConfirm': 'כן, לא מתאים',
@@ -259,8 +259,8 @@ const EN = {
 
   // Order status names.
   'orderStatus.waiting': 'Waiting for a round',
-  'orderStatus.pending': 'Waiting for confirmation',
-  'orderStatus.confirmed': 'Confirmed',
+  'orderStatus.pending': 'Scheduled',
+  'orderStatus.confirmed': 'Scheduled',
   'orderStatus.collected': 'Collected',
   'orderStatus.cancelled': 'Cancelled',
 
@@ -269,8 +269,6 @@ const EN = {
   'createOrder.rateLimited': 'Too many attempts. Please try again later.',
 
   // The customer's page.
-  'customerOrder.confirmationsClosed':
-    'Confirmation is closed. We will get back to you with a new date.',
   'customerOrder.orderClosed': 'This order is already closed and cannot be changed.',
   'customerOrder.orderNotFound':
     'We could not find the order. The link may not have been copied in full.',
@@ -279,9 +277,10 @@ const EN = {
   // knows the project by, in either language.
   'whatsapp.greeting': 'Hello {name},',
   'whatsapp.confirmRequest.date': 'On {date} we will come to collect your bottles.',
-  'whatsapp.confirmRequest.pickupWindow': 'Please put the bottles out between {from} and {by}.',
+  'whatsapp.confirmRequest.pickupWindow':
+    'Please put the bottles out by {from}. We will come between {from} and {by}.',
   'whatsapp.confirmRequest.pickupBy': 'Please put the bottles out by {by}.',
-  'whatsapp.confirmRequest.confirmAtLink': 'Please confirm the pickup at this link:',
+  'whatsapp.confirmRequest.changeAtLink': 'If this does not suit you, or to cancel:',
   'whatsapp.confirmRequest.signOff': 'Thank you, לתת עוד',
   'whatsapp.thankYou.thanks':
     'Your order has been collected! Thank you for taking part in לתת עוד!',
@@ -332,7 +331,7 @@ const EN = {
   // The thank-you screen.
   'thankYou.title': 'Thank you!',
   'thankYou.body':
-    'We received your order. Before the round in your area we will send you a WhatsApp message to confirm.',
+    'We received your order. Before the round in your area we will send you a WhatsApp message with the pickup date.',
   'thankYou.viewOrder': 'View or cancel the order',
   'thankYou.donation':
     'About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers',
@@ -346,21 +345,18 @@ const EN = {
   'orderPage.toForm': 'To the order form',
   'orderPage.status': 'Order status:',
   'orderPage.waiting': 'We will send you a WhatsApp message before the round in your area.',
-  'orderPage.pendingDate': 'We will come to collect on {date}.',
-  'orderPage.confirmedDate': 'See you on {date}.',
-  'orderPage.pickupWindow': 'Please put the bottles out between {from} and {by}.',
+  'orderPage.roundDate': 'We will come to collect on {date}.',
+  'orderPage.pickupWindow':
+    'Please put the bottles out by {from}. We will come between {from} and {by}.',
   'orderPage.pickupBy': 'Please put the bottles out by {by}.',
   'orderPage.collected': 'The order was collected. Thank you for taking part in לתת עוד!',
   'orderPage.cancelled': 'Thank you! You can book a new pickup at any time.',
-  'orderPage.saved.confirm': 'Thank you! The pickup is confirmed.',
   'orderPage.saved.decline': 'Got it. We will get back to you with a new date.',
   'orderPage.saved.cancel': 'The order was cancelled.',
   'orderPage.saved.change': 'The changes were saved.',
   'orderPage.leftRound':
     'The address was updated. The order left the round, and we will get back to you with a new date.',
   'orderPage.phoneNotChanged': 'The phone number cannot be changed here.',
-  'orderPage.confirm': 'Yes, I will put the bottles out',
-  'orderPage.confirmDate': 'Yes, I will put the bottles out on {date}',
   'orderPage.decline': 'Not this time',
   'orderPage.declineQuestion': 'Not suitable this time? The order will wait for the next round.',
   'orderPage.declineConfirm': 'Yes, not suitable',

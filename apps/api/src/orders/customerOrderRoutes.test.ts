@@ -45,8 +45,8 @@ const UNKNOWN_TOKEN = 'unknown-token-'.padEnd(43, '0');
 /** Not tokens at all: too short, the right length with a character base64url has no, too long. */
 const MALFORMED_TOKENS = ['abc', `${'a'.repeat(42)}!`, 'a'.repeat(44)];
 
-/** The three buttons of the page, by their path. */
-const ACTIONS = ['confirm', 'decline', 'cancel'] as const;
+/** The page's two buttons, by their path. There is no "confirm" any more (ADR-0012). */
+const ACTIONS = ['decline', 'cancel'] as const;
 type Action = (typeof ACTIONS)[number];
 
 // The round Yoel planned.
@@ -62,7 +62,7 @@ const HOUSE_NUMBER = '17ב';
 const FLOOR_APT = 'קומה 3, דירה 12';
 const NOTE = 'ליד העגלה הכחולה';
 
-/** The order's confirmation request, already sent as a wa.me link (ADR-0003). */
+/** The order's round message (kind `confirmRequest`), already sent as a wa.me link (ADR-0003). */
 const MANUAL_REQUEST_URL = 'https://wa.me/972547654321?text=secret-confirm-link';
 const MANUAL_REQUEST: MessageLogEntry = {
   kind: 'confirmRequest',
@@ -167,7 +167,7 @@ const CANCELLED_MEANWHILE: OrderPatch = {
   cancelledAt: new Date('2026-11-11T10:00:00.000Z'),
   updatedAt: new Date('2026-11-11T10:00:00.000Z'),
 };
-/** "אישר בטלפון", or the customer's other tap, landing first. */
+/** "התחל מסלול" taking a legacy `pending` order into the route, landing first. */
 const CONFIRMED_MEANWHILE: OrderPatch = {
   status: 'confirmed',
   updatedAt: new Date('2026-11-11T10:00:00.000Z'),
@@ -213,8 +213,9 @@ function seed(overrides: Partial<NewOrder> = {}): Promise<Order> {
 
 /**
  * Stores a round (open, confirming, on {@link DATE}, pickup by {@link PICKUP_BY}, unless
- * overridden) and one order in it: `pending`, with its confirmation request in the log, unless
- * overridden. The round's `orderIds` lists the order, as planning leaves it.
+ * overridden) and one order in it: `confirmed`, with its round message in the log, unless
+ * overridden. The round's `orderIds` lists the order, as planning leaves it (ADR-0012). Pass
+ * `order: { status: 'pending' }` for a legacy order planned before ADR-0012.
  */
 async function seedInRound(
   options: { order?: Partial<NewOrder>; round?: Partial<NewRound> } = {},
@@ -223,7 +224,7 @@ async function seedInRound(
     makeNewRound({ date: DATE, pickupBy: PICKUP_BY, ...options.round }),
   );
   const order = await seed({
-    status: 'pending',
+    status: 'confirmed',
     roundId: created.id,
     messages: [MANUAL_REQUEST],
     ...options.order,
@@ -278,11 +279,11 @@ async function roundView(roundId: string): Promise<RoundView> {
   return roundViewSchema.parse(res.body);
 }
 
-/** The three groups of a round view as order ids. */
+/** The groups of a round view as order ids. */
 function groupsOf(view: RoundView): Record<RoundGroupKey, string[]> {
   const ids = (key: RoundGroupKey): string[] =>
     view.groups.find((group) => group.key === key)?.orders.map((order) => order.id) ?? [];
-  return { confirmed: ids('confirmed'), pending: ids('pending'), otherDate: ids('otherDate') };
+  return { inRound: ids('inRound'), otherDate: ids('otherDate') };
 }
 
 /** The order in a 200 body, checked against the shared contract the web page parses. */
@@ -311,16 +312,6 @@ function expectOrderClosed(res: request.Response): void {
   expect(res.body).toStrictEqual({
     error: 'invalid_transition',
     message: CUSTOMER_ORDER_MESSAGES.orderClosed,
-  });
-  expect(res.headers['cache-control']).toBe('no-store');
-}
-
-/** Expects the 409 of a confirm when the round no longer takes confirmations (spec §3.3). */
-function expectConfirmationsClosed(res: request.Response): void {
-  expect(res.status).toBe(409);
-  expect(res.body).toStrictEqual({
-    error: 'confirmations_closed',
-    message: 'האישור נסגר. נחזור אליך עם מועד חדש.',
   });
   expect(res.headers['cache-control']).toBe('no-store');
 }
@@ -360,7 +351,7 @@ describe('GET /api/o/:token', () => {
           note: NOTE,
         },
         bottlesEstimated: 55,
-        status: 'pending',
+        status: 'confirmed',
         lang: 'he',
         round: { date: DATE, pickupBy: PICKUP_BY },
       },
@@ -374,20 +365,17 @@ describe('GET /api/o/:token', () => {
     }
   });
 
-  it('shows the round date to a confirmed customer ("נתראה ב-<תאריך>")', async () => {
-    const { order } = await seedInRound({ order: { status: 'confirmed' } });
+  it('shows the round date to a legacy pending customer too', async () => {
+    const { order } = await seedInRound({ order: { status: 'pending' } });
 
     const page = orderOf(await getPage(order.token));
 
-    expect(page.status).toBe('confirmed');
+    expect(page.status).toBe('pending');
     expect(page.round).toStrictEqual({ date: DATE, pickupBy: PICKUP_BY });
   });
 
   it('shows the pickup window start when the round has one', async () => {
-    const { order } = await seedInRound({
-      order: { status: 'confirmed' },
-      round: { pickupFrom: '07:00' },
-    });
+    const { order } = await seedInRound({ round: { pickupFrom: '07:00' } });
 
     const page = orderOf(await getPage(order.token));
 
@@ -414,7 +402,7 @@ describe('GET /api/o/:token', () => {
     expect(res.status).toBe(200);
     expect(await storedState()).toStrictEqual(before);
     const stored = await storedOrder(order.id);
-    expect(stored.status).toBe('pending');
+    expect(stored.status).toBe('confirmed');
     expect(stored.updatedAt).toStrictEqual(order.updatedAt);
     expect(stored.messages).toStrictEqual([MANUAL_REQUEST]);
     expect(await rounds.findById(round.id)).toStrictEqual(round);
@@ -471,126 +459,21 @@ describe('/api/o/:token: unknown and malformed tokens', () => {
   });
 });
 
-describe('POST /api/o/:token/confirm', () => {
-  it('moves a pending order to confirmed and answers it with its round', async () => {
-    const { order } = await seedInRound();
-    const before = new Date();
-
-    const res = await press('confirm', order.token);
-
-    const after = new Date();
-    expect(res.headers['cache-control']).toBe('no-store');
-    const page = orderOf(res);
-    expect(page.status).toBe('confirmed');
-    expect(page.round).toStrictEqual({ date: DATE, pickupBy: PICKUP_BY });
-    const stored = await storedOrder(order.id);
-    expect(stored.status).toBe('confirmed');
-    expect(stored.roundId).toBe(order.roundId);
-    expectBetween(stored.updatedAt, before, after);
-  });
-
-  it('keeps the message log intact', async () => {
-    const { order } = await seedInRound();
-
-    await press('confirm', order.token);
-
-    expect((await storedOrder(order.id)).messages).toStrictEqual([MANUAL_REQUEST]);
-  });
-
-  it('answers 200 to a double tap, and the second writes nothing', async () => {
-    const { order } = await seedInRound();
-
-    const first = await press('confirm', order.token);
-    const afterFirst = await storedOrder(order.id);
-    const second = await press('confirm', order.token);
-
-    expect(orderOf(first).status).toBe('confirmed');
-    expect(orderOf(second).status).toBe('confirmed');
-    expect(await storedOrder(order.id)).toStrictEqual(afterFirst);
-  });
-
-  it.each([
-    { label: 'the route was built (phase routed)', round: { phase: 'routed' } as const },
-    { label: 'the round was closed', round: { status: 'closed' } as const },
-  ])('answers 409 confirmations_closed when $label, and the order stays pending', async (c) => {
-    const { order } = await seedInRound({ round: c.round });
+describe('POST /api/o/:token/confirm (removed, ADR-0012)', () => {
+  it('answers the api 404 and changes nothing: the customer confirms nothing any more', async () => {
+    const { order } = await seedInRound({ order: { status: 'pending' } });
     const before = await storedState();
 
-    const res = await press('confirm', order.token);
+    const res = await request(app).post(`${BASE}/${order.token}/confirm`).set(SAME_ORIGIN_HEADERS);
 
-    expectConfirmationsClosed(res);
+    expect(res.status).toBe(404);
+    expect(res.body).toStrictEqual({ error: 'not_found' });
     expect(await storedState()).toStrictEqual(before);
-    expect((await storedOrder(order.id)).status).toBe('pending');
-  });
-
-  it('answers 409 confirmations_closed for a pending order whose round is missing', async () => {
-    const order = await seed({ status: 'pending', roundId: 'cccccccccccccccccccccccc' });
-
-    expectConfirmationsClosed(await press('confirm', order.token));
-    expect((await storedOrder(order.id)).status).toBe('pending');
-  });
-
-  it('answers 409 confirmations_closed for a waiting order that already left the round', async () => {
-    const { order } = await seedInRound();
-    expect((await press('decline', order.token)).status).toBe(200);
-    const before = await storedState();
-
-    const res = await press('confirm', order.token);
-
-    expectConfirmationsClosed(res);
-    expect(await storedState()).toStrictEqual(before);
-    expect((await storedOrder(order.id)).status).toBe('waiting');
-  });
-
-  it('answers 409 confirmations_closed for a waiting order that was never in a round', async () => {
-    const order = await seed();
-
-    expectConfirmationsClosed(await press('confirm', order.token));
-    expect((await storedOrder(order.id)).status).toBe('waiting');
-  });
-
-  it.each(['cancelled', 'collected'] as const satisfies readonly OrderStatus[])(
-    'answers 409 invalid_transition for a %s order, changing nothing',
-    async (status) => {
-      const { order } = await seedInRound({ order: { status } });
-      const before = await storedState();
-
-      expectOrderClosed(await press('confirm', order.token));
-
-      expect(await storedState()).toStrictEqual(before);
-    },
-  );
-
-  it('answers 409 and leaves the order cancelled when a cancel lands just before the write', async () => {
-    const racing = new RacingOrdersRepo();
-    buildApp({ orders: racing });
-    const { order } = await seedInRound();
-    racing.racesBeforeConditionalWrite.set(order.id, [CANCELLED_MEANWHILE]);
-
-    const res = await press('confirm', order.token);
-
-    expectOrderClosed(res);
-    const stored = await storedOrder(order.id);
-    expect(stored.status).toBe('cancelled');
-    expect(stored.cancelledAt).toStrictEqual(CANCELLED_MEANWHILE.cancelledAt);
-  });
-
-  it('answers 200 when another confirm lands just before the write (a double tap racing itself)', async () => {
-    const racing = new RacingOrdersRepo();
-    buildApp({ orders: racing });
-    const { order } = await seedInRound();
-    racing.racesBeforeConditionalWrite.set(order.id, [CONFIRMED_MEANWHILE]);
-
-    const res = await press('confirm', order.token);
-
-    expect(orderOf(res).status).toBe('confirmed');
-    // The confirm that landed first stands; this one wrote nothing.
-    expect((await storedOrder(order.id)).updatedAt).toStrictEqual(CONFIRMED_MEANWHILE.updatedAt);
   });
 });
 
 describe('POST /api/o/:token/decline', () => {
-  it('takes a pending order out of its round: waiting, no roundId, lastMiss askedOtherDate', async () => {
+  it('takes the order out of its round: waiting, no roundId, lastMiss askedOtherDate', async () => {
     const { order, round } = await seedInRound();
     const before = new Date();
 
@@ -621,8 +504,7 @@ describe('POST /api/o/:token/decline', () => {
     await press('decline', order.token);
 
     expect(groupsOf(await roundView(round.id))).toStrictEqual({
-      confirmed: [],
-      pending: [],
+      inRound: [],
       otherDate: [order.id],
     });
   });
@@ -640,7 +522,7 @@ describe('POST /api/o/:token/decline', () => {
     expect(res.status).toBe(201);
     const newRound = roundViewSchema.parse(res.body).round;
     const stored = await storedOrder(order.id);
-    expect(stored.status).toBe('pending');
+    expect(stored.status).toBe('confirmed');
     expect(stored.roundId).toBe(newRound.id);
   });
 
@@ -656,8 +538,8 @@ describe('POST /api/o/:token/decline', () => {
     expect(await storedOrder(order.id)).toStrictEqual(afterFirst);
   });
 
-  it('takes a confirmed order out of its round too', async () => {
-    const { order, round } = await seedInRound({ order: { status: 'confirmed' } });
+  it('takes a legacy pending order out of its round too', async () => {
+    const { order, round } = await seedInRound({ order: { status: 'pending' } });
 
     const res = await press('decline', order.token);
 
@@ -690,10 +572,10 @@ describe('POST /api/o/:token/decline', () => {
     },
   );
 
-  it('decides again from the new status when Yoel confirms by phone just before the write', async () => {
+  it('decides again from the new status when the route build takes a legacy pending order in just before the write', async () => {
     const racing = new RacingOrdersRepo();
     buildApp({ orders: racing });
-    const { order, round } = await seedInRound();
+    const { order, round } = await seedInRound({ order: { status: 'pending' } });
     racing.racesBeforeConditionalWrite.set(order.id, [CONFIRMED_MEANWHILE]);
 
     const res = await press('decline', order.token);
@@ -770,8 +652,7 @@ describe('POST /api/o/:token/cancel', () => {
 
     expect((await storedOrder(order.id)).roundId).toBe(round.id);
     expect(groupsOf(await roundView(round.id))).toStrictEqual({
-      confirmed: [],
-      pending: [],
+      inRound: [],
       otherDate: [],
     });
   });
@@ -779,9 +660,9 @@ describe('POST /api/o/:token/cancel', () => {
   it('answers 409 when the order changes twice before its writes, without a third try', async () => {
     const racing = new RacingOrdersRepo();
     buildApp({ orders: racing });
-    const { order } = await seedInRound();
-    // Yoel confirms by phone before the first write, then the order leaves the round before the
-    // second: both writes find another status.
+    const { order } = await seedInRound({ order: { status: 'pending' } });
+    // The route build takes the legacy pending order in before the first write, then the order
+    // leaves the round before the second: both writes find another status.
     racing.racesBeforeConditionalWrite.set(order.id, [
       CONFIRMED_MEANWHILE,
       { status: 'waiting', roundId: undefined, updatedAt: new Date('2026-11-11T11:00:00.000Z') },
@@ -956,8 +837,7 @@ describe('PATCH /api/o/:token: an order in a round', () => {
       await patchOrder(order.token, { address: OLD_INPUT });
 
       expect(groupsOf(await roundView(round.id))).toStrictEqual({
-        confirmed: [],
-        pending: [],
+        inRound: [],
         otherDate: [],
       });
     },
@@ -980,7 +860,7 @@ describe('PATCH /api/o/:token: an order in a round', () => {
       expect(res.status).toBe(201);
       const newRound = roundViewSchema.parse(res.body).round;
       const stored = await storedOrder(order.id);
-      expect(stored.status).toBe('pending');
+      expect(stored.status).toBe('confirmed');
       expect(stored.roundId).toBe(newRound.id);
     },
   );
@@ -997,7 +877,7 @@ describe('PATCH /api/o/:token: an order in a round', () => {
   ];
 
   it.each(samePlaceChanges)(
-    'keeps a pending order pending in its round on a change of $label',
+    'keeps a confirmed order confirmed in its round on a change of $label',
     async ({ body }) => {
       const { order, round } = await seedInRound({
         order: { address: RAMAT_ADDRESS, region: 'ramat' },
@@ -1006,13 +886,13 @@ describe('PATCH /api/o/:token: an order in a round', () => {
       const res = await patchOrder(order.token, body);
 
       const page = orderOf(res);
-      expect(page.status).toBe('pending');
+      expect(page.status).toBe('confirmed');
       expect(page.round).toStrictEqual({ date: DATE, pickupBy: PICKUP_BY });
       const stored = await storedOrder(order.id);
-      expect(stored.status).toBe('pending');
+      expect(stored.status).toBe('confirmed');
       expect(stored.roundId).toBe(round.id);
       expect(stored).not.toHaveProperty('lastMiss');
-      expect(groupsOf(await roundView(round.id)).pending).toStrictEqual([order.id]);
+      expect(groupsOf(await roundView(round.id)).inRound).toStrictEqual([order.id]);
     },
   );
 
@@ -1131,11 +1011,11 @@ describe('PATCH /api/o/:token: refused changes', () => {
     expect(stored).not.toHaveProperty('lastMiss');
   });
 
-  it('decides again from the new status when Yoel confirms by phone just before the write', async () => {
+  it('decides again from the new status when the route build takes a legacy pending order in just before the write', async () => {
     const racing = new RacingOrdersRepo();
     buildApp({ orders: racing });
     const { order, round } = await seedInRound({
-      order: { address: RAMAT_ADDRESS, region: 'ramat' },
+      order: { status: 'pending', address: RAMAT_ADDRESS, region: 'ramat' },
     });
     racing.racesBeforeConditionalWrite.set(order.id, [CONFIRMED_MEANWHILE]);
 
@@ -1209,16 +1089,15 @@ describe('/api/o/:token: privacy', () => {
     });
 
     await getPage(order.token);
-    await press('confirm', order.token);
     await patchOrder(order.token, { address: { ...FREE_TEXT_INPUT, note: NOTE } });
     await patchOrder(order.token, { contact: { name: NAME, phone: '0541234567' } });
     await press('decline', order.token);
-    await press('confirm', order.token);
+    await press('decline', order.token);
     await press('cancel', order.token);
     await press('cancel', order.token);
     await patchOrder(order.token, VALID_UPDATE);
     await getPage(UNKNOWN_TOKEN);
-    await press('confirm', 'abc');
+    await press('decline', 'abc');
     await patchOrder('abc', VALID_UPDATE);
 
     for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();

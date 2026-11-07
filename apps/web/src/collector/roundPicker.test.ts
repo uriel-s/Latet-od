@@ -27,7 +27,7 @@ function makeOrder(id: string, overrides: Partial<CollectorOrder> = {}): Collect
       bottlesSpot: 'privateHouse',
     },
     bottlesEstimated: 40,
-    status: 'pending',
+    status: 'confirmed',
     region: 'ramat',
     source: 'form',
     createdAt: new Date('2026-10-01T08:00:00Z'),
@@ -50,7 +50,7 @@ function makeRoundView(
   counts: Partial<Record<RoundGroupKey, number>> = {},
   stops = 0,
 ): RoundView {
-  const keys: RoundGroupKey[] = ['confirmed', 'pending', 'otherDate'];
+  const keys: RoundGroupKey[] = ['inRound', 'otherDate'];
   return {
     round: {
       id: 'r1',
@@ -124,14 +124,14 @@ describe('regionsPresent', () => {
 });
 
 describe('roundPickerParts and roundPickerLabel', () => {
-  it('shows how many confirmed out of all orders while the round is confirming', () => {
-    const view = makeRoundView({}, { confirmed: 2, pending: 2, otherDate: 1 });
+  it('shows how many customers are in the round before the route, not "ביקשו מועד אחר"', () => {
+    const view = makeRoundView({}, { inRound: 4, otherDate: 1 });
     expect(roundPickerParts(view)).toEqual({
       date: '28/10',
       region: 'רמת בית שמש',
-      summary: 'אישרו 2 מתוך 5',
+      summary: '4 בסבב',
     });
-    expect(roundPickerLabel(view)).toBe('28/10 · רמת בית שמש · אישרו 2 מתוך 5');
+    expect(roundPickerLabel(view)).toBe('28/10 · רמת בית שמש · 4 בסבב');
   });
 
   it('shows the number of stops once the round is routed', () => {
@@ -139,14 +139,14 @@ describe('roundPickerParts and roundPickerLabel', () => {
     expect(roundPickerLabel(view)).toBe('02/11 · בית שמש · 7 עצירות');
   });
 
-  it('shows zero of zero for a confirming round with no orders', () => {
-    expect(roundPickerParts(makeRoundView()).summary).toBe('אישרו 0 מתוך 0');
+  it('shows zero in the round for a confirming round with no orders', () => {
+    expect(roundPickerParts(makeRoundView()).summary).toBe('0 בסבב');
   });
 });
 
 describe('roundPhaseLabel', () => {
   it('names the step of the round', () => {
-    expect(roundPhaseLabel(makeRoundView({ phase: 'confirming' }))).toBe('אישורים');
+    expect(roundPhaseLabel(makeRoundView({ phase: 'confirming' }))).toBe('תכנון');
     expect(roundPhaseLabel(makeRoundView({ phase: 'routed' }))).toBe('מסלול');
   });
 });

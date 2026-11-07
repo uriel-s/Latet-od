@@ -60,15 +60,13 @@ function roundIn(phase: CollectorRound['phase']): CollectorRound {
 
 /** A round still in step 1 with these groups; no route yet. */
 function confirmingView({
-  confirmed = [] as CollectorOrder[],
-  pending = [] as CollectorOrder[],
+  inRound = [] as CollectorOrder[],
   otherDate = [] as CollectorOrder[],
 } = {}): RoundView {
   return {
     round: roundIn('confirming'),
     groups: [
-      { key: 'confirmed', orders: confirmed },
-      { key: 'pending', orders: pending },
+      { key: 'inRound', orders: inRound },
       { key: 'otherDate', orders: otherDate },
     ],
     sendList: [],
@@ -81,8 +79,7 @@ function routedView(stops: RouteStopView[]): RoundView {
   return {
     round: roundIn('routed'),
     groups: [
-      { key: 'confirmed', orders: stops.map((stop) => stop.order) },
-      { key: 'pending', orders: [] },
+      { key: 'inRound', orders: stops.map((stop) => stop.order) },
       { key: 'otherDate', orders: [] },
     ],
     sendList: [],
@@ -191,17 +188,17 @@ describe('unsentThankYous', () => {
   });
 
   it('is empty for a round with no route', () => {
-    expect(unsentThankYous(confirmingView({ confirmed: [DANA] }))).toEqual([]);
+    expect(unsentThankYous(confirmingView({ inRound: [DANA] }))).toEqual([]);
   });
 });
 
 describe('ordersSentBackCount', () => {
-  it('counts the confirmed and pending orders of a confirming round, not "ביקשו מועד אחר"', () => {
+  it('counts the confirmed and legacy pending orders of a confirming round, not "ביקשו מועד אחר"', () => {
     const view = confirmingView({
-      confirmed: [DANA],
-      pending: [
+      inRound: [
+        DANA,
         makeOrder({ ...MOSHE, status: 'pending' }),
-        makeOrder({ ...YOSSI, status: 'pending' }),
+        makeOrder({ ...YOSSI, status: 'confirmed' }),
       ],
       otherDate: [makeOrder({ ...RINA, status: 'waiting' })],
     });
@@ -209,9 +206,9 @@ describe('ordersSentBackCount', () => {
     expect(ordersSentBackCount(view)).toBe(3);
   });
 
-  it('does not count a collected order in the "אישרו" group', () => {
+  it('does not count a collected order in the "בסבב" group', () => {
     const view = confirmingView({
-      confirmed: [DANA, makeOrder({ ...MOSHE, status: 'collected' })],
+      inRound: [DANA, makeOrder({ ...MOSHE, status: 'collected' })],
     });
 
     expect(ordersSentBackCount(view)).toBe(1);
@@ -284,10 +281,7 @@ describe('CloseRoundConfirm', () => {
 
   it('asks about every order still in a confirming round, as "בטל את הסבב"', () => {
     renderConfirm({
-      view: confirmingView({
-        confirmed: [DANA],
-        pending: [makeOrder({ ...MOSHE, status: 'pending' })],
-      }),
+      view: confirmingView({ inRound: [DANA, makeOrder({ ...MOSHE, status: 'confirmed' })] }),
     });
 
     openQuestion('בטל את הסבב');
@@ -347,7 +341,7 @@ describe('CloseRoundConfirm', () => {
   });
 
   describe('texts by phase', () => {
-    const CONFIRMING = confirmingView({ confirmed: [DANA] });
+    const CONFIRMING = confirmingView({ inRound: [DANA] });
 
     it('reads "סיימתי את הסבב" / "לסיים את הסבב?" / "כן, לסיים" once the round is routed', () => {
       renderConfirm({ view: routedView([toCollect(DANA)]) });

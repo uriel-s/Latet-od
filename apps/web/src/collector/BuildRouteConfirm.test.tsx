@@ -21,17 +21,15 @@ describe('build-route texts', () => {
 });
 
 describe('buildRouteQuestion', () => {
-  it('says how many customers who did not confirm go back to waiting', () => {
-    expect(buildRouteQuestion(3)).toBe(
-      '3 לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. להתחיל מסלול?',
-    );
+  it('says how many customers the route takes in', () => {
+    expect(buildRouteQuestion(3)).toBe('המסלול יכלול 3 לקוחות. להתחיל מסלול?');
   });
 
   it('says it of one customer in the singular', () => {
-    expect(buildRouteQuestion(1)).toBe('לקוח אחד שעוד לא אישר יחזור לחכות לסבב הבא. להתחיל מסלול?');
+    expect(buildRouteQuestion(1)).toBe('המסלול יכלול לקוח אחד. להתחיל מסלול?');
   });
 
-  it('says no one goes back to waiting when no one is pending', () => {
-    expect(buildRouteQuestion(0)).toBe('אף לקוח לא יחזור לחכות. להתחיל מסלול?');
+  it('says the route will be empty when no customer is in the round', () => {
+    expect(buildRouteQuestion(0)).toBe('אין לקוחות בסבב, המסלול יהיה ריק. להתחיל מסלול?');
   });
 });

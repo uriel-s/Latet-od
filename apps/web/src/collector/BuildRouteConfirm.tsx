@@ -1,5 +1,5 @@
-// "התחל מסלול", the last step of a round still confirming (spec §3.6): a button, and
-// once tapped a question in the page that says how many customers go back to waiting. The rounds
+// "התחל מסלול", the last step of a round before its route (spec §3.6): a button, and once tapped
+// a question in the page that says how many customers the route will take in. The rounds
 // screen (RoundsScreen.tsx) sends the build itself and tells this component whether it is on its
 // way and whether it failed; this component owns only the question being open and the focus.
 import { useId, useRef, useState } from 'react';
@@ -18,19 +18,19 @@ export const BUILDING_ROUTE_LABEL = 'מתחיל מסלול...';
 export const BUILD_ROUTE_FAILED_MESSAGE = 'לא הצלחנו להתחיל את המסלול. נא לנסות שוב.';
 
 /**
- * The question "התחל מסלול" asks first, in plain words: building the route closes the
- * confirmations, and whoever has not confirmed leaves the round and waits for the next one (spec
- * §3.6, ת5), so Yoel hears how many that is before he decides. `pendingCount` is the size of the
- * "עוד לא אישרו" group.
+ * The question "התחל מסלול" asks first, in plain words: how many customers the route takes in.
+ * Nobody is left out for not answering (ADR-0012): every customer still in the round is a stop, so
+ * `inRoundCount` is the size of the "בסבב" group. The route is computed once, so Yoel builds it
+ * when the customers who are not coming have had their chance to say so.
  *
- * With none pending it says no one goes back to waiting: true also for a round whose customers
- * all asked for another date (rare, and building it is harmless: an empty route).
+ * With none in the round (everyone asked for another date or cancelled) it says the route is
+ * empty; building it is harmless.
  */
-export function buildRouteQuestion(pendingCount: number): string {
+export function buildRouteQuestion(inRoundCount: number): string {
   const question = 'להתחיל מסלול?';
-  if (pendingCount === 0) return `אף לקוח לא יחזור לחכות. ${question}`;
-  if (pendingCount === 1) return `לקוח אחד שעוד לא אישר יחזור לחכות לסבב הבא. ${question}`;
-  return `${pendingCount} לקוחות שעוד לא אישרו יחזרו לחכות לסבב הבא. ${question}`;
+  if (inRoundCount === 0) return `אין לקוחות בסבב, המסלול יהיה ריק. ${question}`;
+  if (inRoundCount === 1) return `המסלול יכלול לקוח אחד. ${question}`;
+  return `המסלול יכלול ${inRoundCount} לקוחות. ${question}`;
 }
 
 /**

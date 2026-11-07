@@ -28,11 +28,8 @@ import {
 /** A token as the api hands it out: 43 base64url characters. */
 const TOKEN = 'Q'.repeat(43);
 
-/** The round of a pending or confirmed order: 12/11, bottles out by 18:00. */
+/** The round of an order in a round (confirmed, or a legacy pending): 12/11, out by 18:00. */
 const ROUND = { date: '2026-11-12', pickupBy: '18:00' };
-
-/** The customer's confirm button for {@link ROUND}: it names what is confirmed, and the day. */
-const CONFIRM_BUTTON = 'כן, אוציא את הבקבוקים ב-12/11';
 
 /** A waiting order, as GET /api/o/:token answers it; overrides change it. */
 function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
@@ -53,12 +50,12 @@ function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
   };
 }
 
-/** A pending order: in a round, its confirmation asked for. */
+/** A legacy pending order: planned before ADR-0012, when the customer was asked to confirm. */
 function pendingOrder(): CustomerOrder {
   return makeOrder({ status: 'pending', round: ROUND });
 }
 
-/** A confirmed order: in a round, confirmed. */
+/** An order in a round: since ADR-0012 planning moves it straight to confirmed. */
 function confirmedOrder(): CustomerOrder {
   return makeOrder({ status: 'confirmed', round: ROUND });
 }
@@ -96,8 +93,6 @@ function answersInTurn<T>(answers: Answer<T>[]): () => Promise<T> {
 interface RenderOptions {
   /** The answers of loadOrder, in turn. Default: the order loads. */
   load?: Answer<CustomerOrderOutcome>[];
-  /** The answer of confirmOrder. Default: saved, confirmed. */
-  confirm?: Answer<CustomerOrderWriteOutcome>;
   /** The answer of declineOrder. Default: saved, back to waiting with no round. */
   decline?: Answer<CustomerOrderWriteOutcome>;
   /** The answer of cancelOrder. Default: saved, cancelled with no round. */
@@ -110,7 +105,6 @@ interface RenderOptions {
 /** The token each fake was called with, in order. */
 interface Calls {
   loads: string[];
-  confirms: string[];
   declines: string[];
   cancels: string[];
   updates: { token: string; request: CustomerUpdateOrderRequest }[];
@@ -120,12 +114,11 @@ interface Calls {
 /** Opens the page of `order` at /o/<token>, with fakes that record every call. */
 function renderPage(
   order: CustomerOrder = makeOrder(),
-  { load, confirm, decline, cancel, update, strict = false }: RenderOptions = {},
+  { load, decline, cancel, update, strict = false }: RenderOptions = {},
 ): Calls {
   window.history.replaceState(null, '', `/o/${TOKEN}`);
   const calls: Omit<Calls, 'unmount'> = {
     loads: [],
-    confirms: [],
     declines: [],
     cancels: [],
     updates: [],
@@ -140,12 +133,6 @@ function renderPage(
       loadOrder={(token) => {
         calls.loads.push(token);
         return nextLoad();
-      }}
-      confirmOrder={(token) => {
-        calls.confirms.push(token);
-        return Promise.resolve(
-          confirm ?? { kind: 'saved', order: { ...order, status: 'confirmed' } },
-        );
       }}
       declineOrder={(token) => {
         calls.declines.push(token);
@@ -377,119 +364,79 @@ describe('OrderPage', () => {
       expect(screen.queryByText('הערה')).toBeNull();
     });
 
-    it('offers the cancel, and neither the confirm nor a new order', async () => {
+    it('offers the cancel, and neither "לא מתאים הפעם" nor a new order', async () => {
       await renderLoaded();
 
       expect(button('ביטול ההזמנה')).toBeDefined();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' })).toBeNull();
     });
   });
 
-  describe('a pending order', () => {
+  describe('an order in a round', () => {
     it("shows the round's day and the time to put the bottles out by, left to right", async () => {
-      await renderLoaded(pendingOrder());
+      await renderLoaded(confirmedOrder());
 
-      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
+      expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
-      // Twice: in the status line and in the confirm button.
-      expect(screen.getAllByText('12/11')).toHaveLength(2);
-      for (const date of screen.getAllByText('12/11')) expect(date.getAttribute('dir')).toBe('ltr');
+      expect(screen.getByText('12/11').getAttribute('dir')).toBe('ltr');
       expect(getByWholeText('נא להוציא את הבקבוקים עד השעה 18:00.')).toBeDefined();
       expect(screen.getByText('18:00').getAttribute('dir')).toBe('ltr');
     });
 
-    it('shows the window "בין השעות X ל-Y" when the round has a start', async () => {
+    it('says the start twice when the round has a window: out by it, and when Yoel comes', async () => {
       await renderLoaded(
         makeOrder({
-          status: 'pending',
+          status: 'confirmed',
           round: { date: '2026-11-12', pickupFrom: '16:00', pickupBy: '18:00' },
         }),
       );
 
-      expect(getByWholeText('נא להוציא את הבקבוקים בין השעות 16:00 ל-18:00.')).toBeDefined();
-      expect(screen.getByText('16:00').getAttribute('dir')).toBe('ltr');
+      expect(
+        getByWholeText('נא להוציא את הבקבוקים עד השעה 16:00. נגיע בין השעות 16:00 ל-18:00.'),
+      ).toBeDefined();
+      const starts = screen.getAllByText('16:00');
+      expect(starts).toHaveLength(2);
+      for (const start of starts) expect(start.getAttribute('dir')).toBe('ltr');
       expect(screen.getByText('18:00').getAttribute('dir')).toBe('ltr');
     });
 
     it('leaves out the time when the round has none', async () => {
-      await renderLoaded(makeOrder({ status: 'pending', round: { date: '2026-11-12' } }));
+      await renderLoaded(makeOrder({ status: 'confirmed', round: { date: '2026-11-12' } }));
 
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
       expect(screen.queryByText('נא להוציא את הבקבוקים', { exact: false })).toBeNull();
     });
 
-    it('offers "כן, אוציא את הבקבוקים", "לא מתאים הפעם" and the cancel', async () => {
-      await renderLoaded(pendingOrder());
+    it('offers "לא מתאים הפעם", the change and the cancel, and nothing to confirm', async () => {
+      await renderLoaded(confirmedOrder());
 
-      expect(button(CONFIRM_BUTTON)).toBeDefined();
       expect(button('לא מתאים הפעם')).toBeDefined();
+      expect(button('שינוי')).toBeDefined();
       expect(button('ביטול ההזמנה')).toBeDefined();
+      expect(screen.queryByRole('button', { name: /כן, אוציא את הבקבוקים/ })).toBeNull();
       expect(screen.queryByRole('button', { name: 'הזמנה חדשה עם אותם פרטים' })).toBeNull();
     });
 
-    it('says only what is confirmed, with no day, when the pending order has no round', async () => {
-      await renderLoaded(makeOrder({ status: 'pending' }));
+    it('takes the order out of the round on "לא מתאים הפעם"', async () => {
+      const calls = await renderLoaded(confirmedOrder());
 
-      expect(button('כן, אוציא את הבקבוקים')).toBeDefined();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
-    });
-
-    it('confirms on "כן, אוציא את הבקבוקים" and shows the confirmed order, with thanks', async () => {
-      const calls = await renderLoaded(pendingOrder());
-
-      click(CONFIRM_BUTTON);
+      click('לא מתאים הפעם');
+      click('כן, לא מתאים');
 
       const notice = await screen.findByRole('status');
-      expect(notice.textContent).toBe('תודה! האיסוף אושר.');
+      expect(notice.textContent).toBe('קיבלנו. נחזור אליך עם מועד חדש.');
+      // The button just tapped is gone, so the focus goes to the notice that says what happened.
       expect(document.activeElement).toBe(notice);
-      expect(statusLabel()).toBe('מצב ההזמנה: אושרה');
-      expect(getByWholeText('נתראה ב-12/11.')).toBeDefined();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
-      expect(calls.confirms).toEqual([TOKEN]);
-    });
-
-    it('sends one request for a double tap, saying "שולח..." meanwhile', async () => {
-      const answer = deferred<CustomerOrderWriteOutcome>();
-      const calls = await renderLoaded(pendingOrder(), { confirm: answer.promise });
-
-      click(CONFIRM_BUTTON);
-
-      const busy = button('שולח...');
-      expect(busy.getAttribute('aria-disabled')).toBe('true');
-      fireEvent.click(busy);
-      // "לא מתאים הפעם" only opens its question; even its "כן" sends nothing while one is on its way.
-      click('לא מתאים הפעם');
-      click('כן, לא מתאים');
-      expect(calls.confirms).toEqual([TOKEN]);
-      expect(calls.declines).toEqual([]);
-
-      answer.resolve({ kind: 'saved', order: confirmedOrder() });
-
-      expect(await screen.findByText('תודה! האיסוף אושר.')).toBeDefined();
-      expect(calls.confirms).toEqual([TOKEN]);
-    });
-
-    it('takes the order out of the round on "לא מתאים הפעם"', async () => {
-      const calls = await renderLoaded(pendingOrder());
-
-      click('לא מתאים הפעם');
-      click('כן, לא מתאים');
-
-      expect((await screen.findByRole('status')).textContent).toBe(
-        'קיבלנו. נחזור אליך עם מועד חדש.',
-      );
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
       expect(screen.getByText(WAITING_TEXT)).toBeDefined();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(calls.declines).toEqual([TOKEN]);
-      expect(calls.confirms).toEqual([]);
     });
 
     it('asks first on "לא מתאים הפעם", and sends nothing on "לא, להשאיר"', async () => {
-      const calls = await renderLoaded(pendingOrder());
+      const calls = await renderLoaded(confirmedOrder());
 
       click('לא מתאים הפעם');
 
@@ -502,84 +449,94 @@ describe('OrderPage', () => {
       expect(screen.queryByText('לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.')).toBeNull();
       expect(document.activeElement).toBe(button('לא מתאים הפעם'));
       expect(calls.declines).toEqual([]);
-      expect(button(CONFIRM_BUTTON)).toBeDefined();
     });
 
-    it('keeps the question open with the network message when "לא מתאים הפעם" fails', async () => {
-      await renderLoaded(pendingOrder(), { decline: { kind: 'failed' } });
+    it('sends one request for a double tap on "כן, לא מתאים", saying "שולח..." meanwhile', async () => {
+      const answer = deferred<CustomerOrderWriteOutcome>();
+      const calls = await renderLoaded(confirmedOrder(), { decline: answer.promise });
       click('לא מתאים הפעם');
 
       click('כן, לא מתאים');
 
-      const question = screen.getByRole('group', {
-        name: 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.',
-      });
-      expect((await within(question).findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
-      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
-    });
+      // Announced as unavailable while on its way, yet still focusable (aria-disabled, not disabled).
+      expect(button('שולח...').getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(button('שולח...'));
+      expect(calls.declines).toEqual([TOKEN]);
 
-    it('says the confirmations closed, and loads the order again keeping the message', async () => {
-      const reload = deferred<CustomerOrderOutcome>();
-      const calls = await renderLoaded(pendingOrder(), {
-        load: [{ kind: 'loaded', order: pendingOrder() }, reload.promise],
-        confirm: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed },
-      });
+      answer.resolve({ kind: 'saved', order: makeOrder() });
 
-      click(CONFIRM_BUTTON);
-
-      const alert = await screen.findByRole('alert');
-      expect(alert.textContent).toBe('האישור נסגר. נחזור אליך עם מועד חדש.');
-      expect(document.activeElement).toBe(alert);
-      expect(calls.loads).toEqual([TOKEN, TOKEN]);
-      expect(screen.getByRole('status').textContent).toBe('טוען...');
-
-      reload.resolve({ kind: 'loaded', order: makeOrder() });
-
-      expect(await screen.findByText(WAITING_TEXT)).toBeDefined();
-      expect(screen.getByRole('alert').textContent).toBe('האישור נסגר. נחזור אליך עם מועד חדש.');
-      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expectOneH1();
+      expect(await screen.findByText('קיבלנו. נחזור אליך עם מועד חדש.')).toBeDefined();
+      expect(calls.declines).toEqual([TOKEN]);
     });
 
     it.each([
       ['failed', { kind: 'failed' }],
       ['invalid', { kind: 'invalid', errors: { byField: {} } }],
     ] as const)(
-      'asks to check the connection when the confirm answers %s, and keeps the page',
+      'keeps the question open with the network message when "לא מתאים הפעם" answers %s',
       async (_kind, outcome) => {
-        const calls = await renderLoaded(pendingOrder(), { confirm: outcome });
+        const calls = await renderLoaded(confirmedOrder(), { decline: outcome });
+        click('לא מתאים הפעם');
 
-        click(CONFIRM_BUTTON);
+        click('כן, לא מתאים');
 
-        expect((await screen.findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
+        const question = screen.getByRole('group', {
+          name: 'לא מתאים לך הפעם? ההזמנה תחכה לסבב הבא.',
+        });
+        expect((await within(question).findByRole('alert')).textContent).toBe(
+          NETWORK_ERROR_MESSAGE,
+        );
         expect(NETWORK_ERROR_MESSAGE).toBe(
           'לא הצלחנו לשלוח. נא לבדוק את החיבור לאינטרנט ולנסות שוב.',
         );
-        expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
-        expect(button(CONFIRM_BUTTON).getAttribute('aria-disabled')).toBeNull();
+        expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
         expect(calls.loads).toEqual([TOKEN]);
       },
     );
 
-    it('treats a rejected confirm like a failed one', async () => {
+    it('treats a rejected "לא מתאים הפעם" like a failed one', async () => {
       render(
         <OrderPage
           token={TOKEN}
-          loadOrder={() => Promise.resolve({ kind: 'loaded', order: pendingOrder() })}
-          confirmOrder={() => Promise.reject(new Error('boom'))}
+          loadOrder={() => Promise.resolve({ kind: 'loaded', order: confirmedOrder() })}
+          declineOrder={() => Promise.reject(new Error('boom'))}
         />,
       );
+      fireEvent.click(await screen.findByRole('button', { name: 'לא מתאים הפעם' }));
 
-      fireEvent.click(await screen.findByRole('button', { name: CONFIRM_BUTTON }));
+      click('כן, לא מתאים');
 
       expect((await screen.findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
-      expect(button(CONFIRM_BUTTON)).toBeDefined();
+      expect(button('כן, לא מתאים')).toBeDefined();
     });
 
-    it('says the order was not found when the confirm answers so', async () => {
-      await renderLoaded(pendingOrder(), { confirm: { kind: 'notFound' } });
+    it('says the order closed, and loads it again keeping the message, when it was collected meanwhile', async () => {
+      const reload = deferred<CustomerOrderOutcome>();
+      const calls = await renderLoaded(confirmedOrder(), {
+        load: [{ kind: 'loaded', order: confirmedOrder() }, reload.promise],
+        decline: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed },
+      });
+      click('לא מתאים הפעם');
 
-      click(CONFIRM_BUTTON);
+      click('כן, לא מתאים');
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toBe('ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.');
+      expect(document.activeElement).toBe(alert);
+      expect(calls.loads).toEqual([TOKEN, TOKEN]);
+
+      reload.resolve({ kind: 'loaded', order: makeOrder({ status: 'collected' }) });
+
+      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(screen.getByRole('alert').textContent).toBe('ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.');
+      expectOneH1();
+    });
+
+    it('says the order was not found when "לא מתאים הפעם" answers so', async () => {
+      await renderLoaded(confirmedOrder(), { decline: { kind: 'notFound' } });
+      click('לא מתאים הפעם');
+
+      click('כן, לא מתאים');
 
       expect((await screen.findByRole('alert')).textContent).toBe(
         CUSTOMER_ORDER_MESSAGES.orderNotFound,
@@ -588,16 +545,21 @@ describe('OrderPage', () => {
     });
   });
 
-  describe('a confirmed order', () => {
-    it('says "נתראה ב-<date>" with the time, and offers the cancel only', async () => {
-      await renderLoaded(confirmedOrder());
+  describe('a legacy pending order (planned before ADR-0012)', () => {
+    it('shows the round like a confirmed one, with "לא מתאים הפעם" and nothing to confirm', async () => {
+      const calls = await renderLoaded(pendingOrder());
 
-      expect(statusLabel()).toBe('מצב ההזמנה: אושרה');
-      expect(getByWholeText('נתראה ב-12/11.')).toBeDefined();
+      expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
+      expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
       expect(getByWholeText('נא להוציא את הבקבוקים עד השעה 18:00.')).toBeDefined();
       expect(button('ביטול ההזמנה')).toBeDefined();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /כן, אוציא את הבקבוקים/ })).toBeNull();
+
+      click('לא מתאים הפעם');
+      click('כן, לא מתאים');
+
+      expect(await screen.findByText('קיבלנו. נחזור אליך עם מועד חדש.')).toBeDefined();
+      expect(calls.declines).toEqual([TOKEN]);
     });
   });
 
@@ -674,16 +636,18 @@ describe('OrderPage', () => {
 
     it('cancels once on "כן, לבטל" and shows the cancelled order', async () => {
       const answer = deferred<CustomerOrderWriteOutcome>();
-      const calls = await renderLoaded(pendingOrder(), { cancel: answer.promise });
+      const calls = await renderLoaded(confirmedOrder(), { cancel: answer.promise });
       click('ביטול ההזמנה');
 
       click('כן, לבטל');
       const busy = button('מבטל...');
       expect(busy.getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(busy);
-      click(CONFIRM_BUTTON);
+      // "לא מתאים הפעם" only opens its question; even its "כן" sends nothing while one is on its way.
+      click('לא מתאים הפעם');
+      click('כן, לא מתאים');
       expect(calls.cancels).toEqual([TOKEN]);
-      expect(calls.confirms).toEqual([]);
+      expect(calls.declines).toEqual([]);
 
       answer.resolve({ kind: 'saved', order: makeOrder({ status: 'cancelled' }) });
 
@@ -768,16 +732,16 @@ describe('OrderPage', () => {
     });
 
     it("shows the form in place of the order's details and buttons", async () => {
-      await openChange(pendingOrder());
+      await openChange(confirmedOrder());
 
       expect(screen.queryByRole('region', { name: 'פרטי ההזמנה' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'שינוי' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(button('שמירת השינויים')).toBeDefined();
       expect(button('בלי לשנות')).toBeDefined();
       // The status and the round's date stay above the form.
-      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
+      expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
     });
 
@@ -849,8 +813,8 @@ describe('OrderPage', () => {
       expect(calls.updates).toEqual([]);
     });
 
-    it('warns before saving that a new house number takes a pending order out of its round', async () => {
-      const calls = await openChange(pendingOrder(), {
+    it('warns before saving that a new house number takes an order out of its round', async () => {
+      const calls = await openChange(confirmedOrder(), {
         update: {
           kind: 'saved',
           order: makeOrder({ address: { ...makeOrder().address, houseNumber: '14' } }),
@@ -871,13 +835,13 @@ describe('OrderPage', () => {
       expect(LEFT_ROUND_MESSAGE).toBe('הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.');
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
       expect(screen.getByText(WAITING_TEXT)).toBeDefined();
-      expect(screen.queryByRole('button', { name: CONFIRM_BUTTON })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(screen.getByText('דרך רבין יצחק 14')).toBeDefined();
       expect(calls.updates[0]?.request.address?.houseNumber).toBe('14');
     });
 
     it('takes the warning back when the house number is the stored one again', async () => {
-      await openChange(pendingOrder());
+      await openChange(confirmedOrder());
 
       fillIn('מספר בית', '14');
       expect(queryLeaveRoundWarning()).not.toBeNull();
@@ -887,8 +851,8 @@ describe('OrderPage', () => {
       expect(button('שמירת השינויים').getAttribute('aria-describedby')).toBeNull();
     });
 
-    it('warns about a new street of a confirmed order too', async () => {
-      await openChange(confirmedOrder());
+    it('warns about a new street of a legacy pending order too', async () => {
+      await openChange(pendingOrder());
 
       click('הרחוב שלי לא ברשימה');
       fillIn('שם הרחוב', 'הרימון');
@@ -904,8 +868,8 @@ describe('OrderPage', () => {
       expect(queryLeaveRoundWarning()).toBeNull();
     });
 
-    it('shows no warning when only the note, the spot or the bottles of a pending order change', async () => {
-      const calls = await openChange(pendingOrder());
+    it('shows no warning when only the note, the spot or the bottles of an order in a round change', async () => {
+      const calls = await openChange(confirmedOrder());
 
       fillIn('הערה (לא חובה)', 'קוד 1234');
       fireEvent.click(input('למטה בכניסה לבניין'));
@@ -916,8 +880,8 @@ describe('OrderPage', () => {
       click('שמירת השינויים');
 
       expect((await screen.findByRole('status')).textContent).toBe('השינויים נשמרו.');
-      expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לאישור');
-      expect(button(CONFIRM_BUTTON)).toBeDefined();
+      expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
+      expect(button('לא מתאים הפעם')).toBeDefined();
       expect(calls.updates[0]?.request.bottlesEstimated).toBe(60);
     });
 

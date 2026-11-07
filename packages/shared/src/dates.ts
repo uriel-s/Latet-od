@@ -1,6 +1,6 @@
 // Calendar dates and pickup times as the app shows them, in Israel's time zone (spec §7,
 // CLAUDE.md): "DD/MM" and a 24-hour "08:00" in Hebrew, "Nov 4" and "8:00 AM" in English. Shared so
-// the collector app's tags ("לא אישר · 12/11"), the customer's page and anything the api writes
+// the collector app's tags ("לא הגענו אליו · 12/11"), the customer's page and anything the api writes
 // read a day the same way, whatever zone the code runs in (UTC on Vercel, the phone's own zone in
 // the browser). Also the calendar months of the monthly statistics (spec §3.7): which month an
 // instant counts in, and the instants a month covers, both in Israel's zone.

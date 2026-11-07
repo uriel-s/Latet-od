@@ -1,6 +1,6 @@
 // Sending one WhatsApp message for one order, and keeping a record of it (ADR-0003): build the
 // message from the order (orderMessage), hand it to the MessageSender, and append what the sender
-// answered to the order's `messages` log (sendAndLog). Round planning (section 8, "בקשת אישור")
+// answered to the order's `messages` log (sendAndLog). Round planning (section 8, the round message)
 // and "אספתי" ("תודה") call these; the collector app then shows each `manual` entry as a "שלח"
 // button (toMessageLink in packages/shared).
 import {
@@ -32,9 +32,9 @@ export interface OrderMessageOptions {
   publicBaseUrl: string;
   /** The round's calendar day in Israel, `YYYY-MM-DD`. A `confirmRequest` cannot do without it. */
   date?: string;
-  /** Time to put the bottles out by, `HH:MM` (ADR-0003). Only the confirmation request says it. */
+  /** End of Yoel's arrival window, `HH:MM`; alone, the time to put the bottles out by. Round message only. */
   pickupBy?: string;
-  /** Start of the pickup window, `HH:MM`. Only valid together with `pickupBy` (the window end). */
+  /** Start of the arrival window and the time the bottles must be out by (ADR-0012); needs `pickupBy`. */
   pickupFrom?: string;
   /** Yoel's own words for the round. Kept for `confirmRequest` only (see below). */
   personalText?: string;
@@ -42,7 +42,7 @@ export interface OrderMessageOptions {
 
 /**
  * The {@link OutgoingMessage} of `kind` for `order`: to the customer's stored phone (E.164),
- * greeting them by name, with the link to their page (to confirm the round, or to order again).
+ * greeting them by name, with the link to their page (to decline, change or cancel, or to order again).
  *
  * Only the optional values that are given are set, never as `undefined`. `personalText` is set
  * for `confirmRequest` only: the thanks are the same for everyone (spec §6.1). Nothing is checked
@@ -101,7 +101,7 @@ export interface SendAndLogResult {
 /**
  * Sends `message` with `deps.sender` and appends the outcome to `order`'s message log
  * (ADR-0003). It never changes the order's status: logging a message is not a status change
- * (a `manual` link may never be sent at all; the customer's confirmation is what moves the order).
+ * (a `manual` link may never be sent at all; planning the round is what moved the order).
  *
  * The outcome is always logged, and a failure never throws, so a caller going through a round's
  * orders keeps going when the third one fails:

@@ -540,16 +540,13 @@ button.button-not-ready[aria-disabled='true'] {
   color: var(--error);
 }
 
-/* The screen's one big action (spec §3.3, "כפתור גדול"): at least 66px, growing with the font.
-   .button-large is the older name the customer's page (OrderPage.tsx) still uses. */
-.button-big,
-.button-large {
+/* The screen's one big action (spec §3.3, "כפתור גדול"): at least 66px, growing with the font. */
+.button-big {
   min-height: max(66px, 3.67rem);
   font-size: 1.25rem;
 }
 
-.button-big svg,
-.button-large svg {
+.button-big svg {
   width: 1.5em;
   height: 1.5em;
 }
@@ -719,7 +716,7 @@ button.button-not-ready[aria-disabled='true'] {
   height: 1.35rem;
 }
 
-/* A group's title ("אישרו") with its count or action at the other end, just above its card. */
+/* A group's title ("בסבב") with its count or action at the other end, just above its card. */
 .group-head {
   display: flex;
   align-items: center;
@@ -959,7 +956,7 @@ html:has(.bottom-nav) {
 }
 
 /*
- * A tag ("לא אישר בזמן · 12/11", "בלי מיקום"): --ink on --brand-soft (12.4:1, AA) inside
+ * A tag ("לא הגענו אליו · 12/11", "בלי מיקום"): --ink on --brand-soft (12.4:1, AA) inside
  * an --ink outline, so it reads as a badge by its shape, and its words say what it means.
  */
 .tag {
@@ -1383,7 +1380,7 @@ html:has(.bottom-nav) {
   border-block-start: 2px solid var(--line);
 }
 
-/* "בקשות אישור" and the group titles: under the round's <h2>, above the cards' names. */
+/* "הודעות ללקוחות" and the group titles: under the round's <h2>, above the cards' names. */
 .round h3 {
   margin-block: 1.5rem 0.5rem;
   font-size: 1.2rem;
@@ -1395,10 +1392,10 @@ html:has(.bottom-nav) {
   white-space: pre-line;
 }
 
-/* "אישרו · ממתינים · מועד אחר": three equal count tiles under the round's details. */
+/* "בסבב · ביקשו מועד אחר": two equal count tiles under the round's details (ADR-0012). */
 .round-tiles {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
   margin-block-start: 0.875rem;
 }
@@ -1425,11 +1422,6 @@ html:has(.bottom-nav) {
 .round-tile-green {
   background: var(--green-soft);
   color: var(--green);
-}
-
-.round-tile-amber {
-  background: var(--amber-soft);
-  color: var(--amber);
 }
 
 .round-tile-gray {
@@ -1470,7 +1462,7 @@ html:has(.bottom-nav) {
   white-space: pre-line;
 }
 
-/* "אישרו: 2 · עוד לא אישרו: 3 · ...": bold, the round's state at a glance. */
+/* "בסבב: 5 · ביקשו מועד אחר: 1": bold, the round's state at a glance. */
 .round-summary {
   font-weight: 700;
 }
@@ -1490,8 +1482,8 @@ html:has(.bottom-nav) {
   margin-block: 0;
 }
 
-/* "התחל מסלול" ends step 1, under a decorative line and apart from the cards'
-   "אישר בשיחה או בהודעה", so it is not tapped by mistake. Its question uses .cancel-confirm. */
+/* "התחל מסלול" ends step 1, under a decorative line and apart from the cards above it, so it is
+   not tapped by mistake. Its question uses .cancel-confirm. */
 .round-build-route {
   margin-block-start: 2rem;
   padding-block-start: 1.5rem;
@@ -1507,12 +1499,6 @@ html:has(.bottom-nav) {
 
 .round-close h3 {
   margin-block-start: 0;
-}
-
-/* "אישר בשיחה או בהודעה" on a row of "עוד לא אישרו": a full line under the row (.grouped-row-full);
-   .button keeps it at least 48px tall, and the row's gap spaces it from the parts above. */
-.order-card-confirm {
-  margin: 0;
 }
 
 /* --- History tab (collector/HistoryScreen.tsx) ------------------------------------- */
@@ -1766,7 +1752,7 @@ html:has(.bottom-nav) {
   margin-block: 1rem;
 }
 
-/* "כן, אוציא את הבקבוקים" over "לא מתאים הפעם", with room between them against a wrong tap. */
+/* "לא מתאים הפעם" of an order in a round, apart from the details under it. */
 .order-actions {
   display: flex;
   flex-direction: column;
@@ -1774,11 +1760,8 @@ html:has(.bottom-nav) {
   margin-block: 0 1.5rem;
 }
 
-/* The page's one big action (spec §3.3, "כפתור גדול") is .button-large, styled with .button-big
-   in the Buttons section. */
-
 /*
- * What the last button did ("תודה! האיסוף אושר."): framed like .form-alert, in --ink on
+ * What the last button did ("ההזמנה בוטלה."): framed like .form-alert, in --ink on
  * --card (15.3:1) instead of the error red, so it reads as news, not as a mistake. The change
  * form's warning that a new address leaves the round looks the same: news before saving.
  */

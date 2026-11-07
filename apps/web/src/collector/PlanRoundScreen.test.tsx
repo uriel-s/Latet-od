@@ -21,6 +21,10 @@ import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import {
   NO_REGION_ORDERS_TEXT,
   PERSONAL_TEXT_HINT,
+  PICKUP_BY_HINT,
+  PICKUP_BY_LABEL,
+  PICKUP_FROM_HINT,
+  PICKUP_FROM_LABEL,
   PlanRoundScreen,
   UNASSIGNED_ORDERS_HINT,
 } from './PlanRoundScreen.tsx';
@@ -107,8 +111,7 @@ const ROUND_VIEW: RoundView = {
     createdAt: new Date('2026-10-20T07:00:00Z'),
   },
   groups: [
-    { key: 'confirmed', orders: [] },
-    { key: 'pending', orders: [] },
+    { key: 'inRound', orders: [] },
     { key: 'otherDate', orders: [] },
   ],
   sendList: [],
@@ -198,7 +201,7 @@ function renderScreen({ orders, rounds, plan, strict = false }: RenderOptions = 
 /** Opens the screen and waits for its form. */
 async function renderLoaded(options: RenderOptions = {}): Promise<Recorded> {
   const recorded = renderScreen(options);
-  await screen.findByRole('button', { name: 'שלח בקשות אישור' });
+  await screen.findByRole('button', { name: 'שלח הודעות' });
   return recorded;
 }
 
@@ -207,11 +210,20 @@ function dateInput(): HTMLInputElement {
 }
 
 function timeInput(): HTMLInputElement {
-  return screen.getByLabelText<HTMLInputElement>('עד איזו שעה להוציא את הבקבוקים (לא חובה)');
+  return screen.getByLabelText<HTMLInputElement>(PICKUP_BY_LABEL);
 }
 
 function fromInput(): HTMLInputElement {
-  return screen.getByLabelText<HTMLInputElement>('מאיזו שעה להוציא את הבקבוקים (לא חובה)');
+  return screen.getByLabelText<HTMLInputElement>(PICKUP_FROM_LABEL);
+}
+
+/** The text of everything `element` is described by (aria-describedby): its hint and error. */
+function descriptionOf(element: HTMLElement): string {
+  return (element.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter((id) => id !== '')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ');
 }
 
 function textInput(): HTMLTextAreaElement {
@@ -248,7 +260,7 @@ function orderBoxes(): [name: string, checked: boolean][] {
 }
 
 function sendButton(): HTMLElement {
-  return screen.getByRole('button', { name: /שלח בקשות אישור|שולח\.\.\./ });
+  return screen.getByRole('button', { name: /שלח הודעות|שולח\.\.\./ });
 }
 
 function send(): void {
@@ -282,7 +294,7 @@ describe('PlanRoundScreen', () => {
       expect(screen.getByRole('link', { name: 'חזרה להזמנות' }).getAttribute('href')).toBe(
         '/app/orders',
       );
-      expect(screen.queryByRole('button', { name: 'שלח בקשות אישור' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שלח הודעות' })).toBeNull();
       // Both asked before either answered: in parallel, not one after the other.
       expect(recorded.ordersCalls()).toBe(1);
       expect(recorded.roundsCalls()).toBe(1);
@@ -297,7 +309,7 @@ describe('PlanRoundScreen', () => {
 
       pendingRounds.resolve(ROUNDS_LOADED);
 
-      expect(await screen.findByRole('button', { name: 'שלח בקשות אישור' })).toBeDefined();
+      expect(await screen.findByRole('button', { name: 'שלח הודעות' })).toBeDefined();
       expect(screen.queryByRole('status')).toBeNull();
     });
   });
@@ -343,8 +355,8 @@ describe('PlanRoundScreen', () => {
       expect(where.getByRole('group', { name: 'הזמנות לסבב' })).toBeDefined();
       const when = within(screen.getByRole('region', { name: 'מתי' }));
       expect(when.getByLabelText('תאריך הסבב')).toBe(dateInput());
-      expect(when.getByLabelText('מאיזו שעה להוציא את הבקבוקים (לא חובה)')).toBe(fromInput());
-      expect(when.getByLabelText('עד איזו שעה להוציא את הבקבוקים (לא חובה)')).toBe(timeInput());
+      expect(when.getByLabelText(PICKUP_FROM_LABEL)).toBe(fromInput());
+      expect(when.getByLabelText(PICKUP_BY_LABEL)).toBe(timeInput());
       const message = within(screen.getByRole('region', { name: 'הודעה' }));
       expect(message.getByLabelText('טקסט אישי (לא חובה)')).toBe(textInput());
     });
@@ -499,9 +511,25 @@ describe('PlanRoundScreen', () => {
       expect(timeInput().value).toBe('');
     });
 
-    it('says the personal text goes into every request, and caps its length', async () => {
+    it('labels the two times as when Yoel comes, each with its hint', async () => {
       await renderLoaded();
 
+      expect(PICKUP_FROM_LABEL).toBe('מאיזו שעה מגיעים (לא חובה)');
+      expect(PICKUP_BY_LABEL).toBe('עד איזו שעה מגיעים (לא חובה)');
+      // The start is also the time the bottles must be out by (ADR-0012). Pinned as written, so a
+      // reverted wording fails here and not only against its own constant.
+      expect(PICKUP_FROM_HINT).toBe('הלקוחות יתבקשו להוציא את הבקבוקים עד השעה הזאת.');
+      expect(PICKUP_BY_HINT).toBe(
+        'בהודעה: "נגיע בין השעות". בלי שעת התחלה, יתבקשו להוציא את הבקבוקים עד השעה הזאת.',
+      );
+      expect(descriptionOf(fromInput())).toBe(PICKUP_FROM_HINT);
+      expect(descriptionOf(timeInput())).toBe(PICKUP_BY_HINT);
+    });
+
+    it('says the personal text goes into every message, and caps its length', async () => {
+      await renderLoaded();
+
+      expect(PERSONAL_TEXT_HINT).toBe('נוסף לכל ההודעות של הסבב.');
       expect(screen.getByText(PERSONAL_TEXT_HINT)).toBeDefined();
       expect(textInput().maxLength).toBe(500);
     });
@@ -848,7 +876,7 @@ describe('PlanRoundScreen', () => {
       expect(regionRadio('רמת בית שמש').checked).toBe(true);
       expect(timeInput().value).toBe('07:45');
       expect(textInput().value).toBe('תודה!');
-      expect(screen.getByRole('button', { name: 'שלח בקשות אישור' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'שלח הודעות' })).toBeDefined();
       expect(window.location.pathname).toBe('/app/orders/plan');
     });
 
@@ -870,7 +898,7 @@ describe('PlanRoundScreen', () => {
       reload.resolve(ORDERS_LOADED);
 
       expect(await screen.findByRole('alert')).toBeDefined();
-      expect(screen.getByRole('button', { name: 'שלח בקשות אישור' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'שלח הודעות' })).toBeDefined();
     });
 
     it('keeps the old list with the refused orders unmarked when it cannot load again', async () => {
@@ -947,7 +975,7 @@ describe('PlanRoundScreen', () => {
       send();
 
       expect((await screen.findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
-      expect(screen.getByRole('button', { name: 'שלח בקשות אישור' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'שלח הודעות' })).toBeDefined();
     });
 
     it('goes to the login in place of the screen when the session ended', async () => {
@@ -987,7 +1015,7 @@ describe('PlanRoundScreen', () => {
       expectOneH1();
       expect(screen.getByRole('button', { name: 'לנסות שוב' })).toBeDefined();
       expect(screen.getByRole('link', { name: 'חזרה להזמנות' })).toBeDefined();
-      expect(screen.queryByRole('button', { name: 'שלח בקשות אישור' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שלח הודעות' })).toBeNull();
       expect(window.location.pathname).toBe('/app/orders/plan');
     });
 
@@ -1004,7 +1032,7 @@ describe('PlanRoundScreen', () => {
       fireEvent.click(screen.getByRole('button', { name: 'לנסות שוב' }));
 
       expect(screen.getByRole('status').textContent).toBe('טוען...');
-      expect(await screen.findByRole('button', { name: 'שלח בקשות אישור' })).toBeDefined();
+      expect(await screen.findByRole('button', { name: 'שלח הודעות' })).toBeDefined();
       expect(recorded.ordersCalls()).toBe(2);
       expect(recorded.roundsCalls()).toBe(2);
       expect(timeInput().value).toBe('08:30');
@@ -1062,7 +1090,7 @@ describe('PlanRoundScreen', () => {
       // StrictMode mounts, unmounts and mounts again: two loads, and only the second counts.
       const recorded = renderScreen({ orders: [LOGGED_OUT, ORDERS_LOADED], strict: true });
 
-      expect(await screen.findByRole('button', { name: 'שלח בקשות אישור' })).toBeDefined();
+      expect(await screen.findByRole('button', { name: 'שלח הודעות' })).toBeDefined();
       expect(recorded.ordersCalls()).toBe(2);
       expect(window.location.pathname).toBe('/app/orders/plan');
 

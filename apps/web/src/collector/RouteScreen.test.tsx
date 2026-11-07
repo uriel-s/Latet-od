@@ -113,8 +113,7 @@ function makeView(stops: RouteStopView[]): RoundView {
   return {
     round: ROUND,
     groups: [
-      { key: 'confirmed', orders: [] },
-      { key: 'pending', orders: [] },
+      { key: 'inRound', orders: [] },
       { key: 'otherDate', orders: [] },
     ],
     sendList: [],
@@ -452,7 +451,7 @@ describe('RouteScreen progress and current stop', () => {
     expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe('יוסי מזרחי');
     expect(within(card).getByText('הרצל 3')).toBeTruthy();
     expect(within(card).getByText('בלי מיקום')).toBeTruthy();
-    expect(within(card).getByText('אושרה')).toBeTruthy();
+    expect(within(card).getByText('בסבב')).toBeTruthy();
     expect(within(card).getByRole('button', { name: 'אספתי, יוסי מזרחי' })).toBeTruthy();
     expect(within(card).getByRole('link', { name: /^חייג/ })).toBeTruthy();
     // Only one card is the current one.

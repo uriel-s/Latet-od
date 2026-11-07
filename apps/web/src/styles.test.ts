@@ -305,7 +305,7 @@ describe('styles.css tap targets', () => {
   });
 
   it('makes the big button at least 66px tall', () => {
-    expect(ruleBody(stylesCss, '.button-big, .button-large')).toMatch(/min-height:[^;]*66px/);
+    expect(ruleBody(stylesCss, '.button-big')).toMatch(/min-height:[^;]*66px/);
   });
 
   it('turns the press animation off for prefers-reduced-motion', () => {
@@ -329,7 +329,12 @@ describe('styles.css cards and badges', () => {
     },
   );
 
-  it.each(['.round-tile-green', '.round-tile-amber', '.round-tile-gray'])(
+  // Two groups since ADR-0012 ("בסבב", "ביקשו מועד אחר"): a third column would stay empty.
+  it('lays out the round count tiles in two equal columns', () => {
+    expect(ruleBody(stylesCss, '.round-tiles')).toContain('grid-template-columns: repeat(2, 1fr);');
+  });
+
+  it.each(['.round-tile-green', '.round-tile-gray'])(
     'gives %s both a text colour and a background',
     (selector) => {
       const tile = ruleBody(stylesCss, selector);

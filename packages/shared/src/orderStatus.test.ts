@@ -11,9 +11,12 @@ import {
   type OrderStatus,
 } from './orderStatus.ts';
 
-/** The arrows of the spec §4 state diagram, written out independently of ORDER_TRANSITIONS. */
+/**
+ * The arrows of the spec §4 state diagram (ADR-0012: planning goes straight to confirmed; pending
+ * is legacy), written out independently of ORDER_TRANSITIONS.
+ */
 const SPEC_EDGES: ReadonlyArray<readonly [OrderStatus, OrderStatus]> = [
-  ['waiting', 'pending'],
+  ['waiting', 'confirmed'],
   ['pending', 'confirmed'],
   ['pending', 'waiting'],
   ['confirmed', 'waiting'],
@@ -41,8 +44,8 @@ describe('ORDER_STATUS_LABELS', () => {
   it('names every status in Hebrew', () => {
     expect(ORDER_STATUS_LABELS).toEqual({
       waiting: 'ממתינה לסבב',
-      pending: 'ממתינה לאישור',
-      confirmed: 'אושרה',
+      pending: 'בסבב',
+      confirmed: 'בסבב',
       collected: 'נאספה',
       cancelled: 'בוטלה',
     });
@@ -79,12 +82,16 @@ describe('canTransition', () => {
     expect(canTransition('collected', 'cancelled')).toBe(false);
   });
 
-  it('refuses to confirm or collect an order that is not in a round', () => {
-    expect(canTransition('waiting', 'confirmed')).toBe(false);
+  it('puts a waiting order straight into a round, with no confirmation step (ADR-0012)', () => {
+    expect(canTransition('waiting', 'confirmed')).toBe(true);
+    expect(canTransition('waiting', 'pending')).toBe(false);
+  });
+
+  it('refuses to collect an order that is not in a round', () => {
     expect(canTransition('waiting', 'collected')).toBe(false);
   });
 
-  it('refuses to collect an order the customer has not confirmed', () => {
+  it('refuses to collect a legacy pending order directly', () => {
     expect(canTransition('pending', 'collected')).toBe(false);
   });
 

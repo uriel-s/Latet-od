@@ -1,5 +1,5 @@
 // The tags on an order's card in the collector's "הזמנות" tab (spec §3.5): why the order came
-// back from its last round ("לא אישר בזמן · 12/11"), and "בלי מיקום" when route planning cannot
+// back from its last round ("לא הגענו אליו · 12/11"), and "בלי מיקום" when route planning cannot
 // place it (ADR-0005). Plain text, so every badge says what it means in words, never by colour
 // alone. Pure, so the words are tested without rendering a screen.
 import {
@@ -18,7 +18,7 @@ export const NO_LOCATION_TAG = 'בלי מיקום';
 
 /**
  * The tag of an order that came back from a round uncollected: the reason in the shared words
- * (the single source of that text), then the round's day as DD/MM, e.g. "לא אישר בזמן · 12/11".
+ * (the single source of that text), then the round's day as DD/MM, e.g. "לא הגענו אליו · 12/11".
  * `lastMiss.date` is already a day in Israel, so it is reformatted, not converted.
  */
 export function lastMissTag(lastMiss: LastMiss): string {

@@ -135,8 +135,8 @@ async function seedRounds(orderIdsRamat: string[], orderIdsOld: string[]) {
   const dayFromNow = (days: number) =>
     new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
-  // Ramat: still asking for confirmations (step 1): two confirmed by phone, three not yet.
-  const ramat = await call('/rounds', {
+  // Ramat: planned, route not built yet (step 1). Everyone is in the round (ADR-0012).
+  await call('/rounds', {
     date: dayFromNow(2),
     region: 'ramat',
     orderIds: orderIdsRamat,
@@ -144,11 +144,8 @@ async function seedRounds(orderIdsRamat: string[], orderIdsOld: string[]) {
     pickupFrom: '08:00',
     pickupBy: '09:00',
   });
-  for (const orderId of orderIdsRamat.slice(0, 2)) {
-    await call(`/rounds/${ramat.round.id}/orders/${orderId}/confirm-by-phone`);
-  }
 
-  // Old city: everyone confirmed and the route built (step 2).
+  // Old city: planned and the route built (step 2).
   const old = await call('/rounds', {
     date: dayFromNow(4),
     region: 'old',
@@ -156,9 +153,6 @@ async function seedRounds(orderIdsRamat: string[], orderIdsOld: string[]) {
     personalText: '',
     pickupBy: '08:00',
   });
-  for (const orderId of orderIdsOld) {
-    await call(`/rounds/${old.round.id}/orders/${orderId}/confirm-by-phone`);
-  }
   await call(`/rounds/${old.round.id}/route`);
 }
 

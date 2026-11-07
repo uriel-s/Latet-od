@@ -1,7 +1,7 @@
 // The order-status pill (ADR-0011): one tone (green / amber / gray, the `.badge-*` classes in
 // styles.css), one icon and the status's Hebrew words. Every status has its own icon and its own
-// words, so colour is never the only signal (WCAG 1.4.1): amber "waiting" and amber "pending" differ
-// by clock vs calendar and by text, green "confirmed" and green "collected" by check vs heart.
+// words, so colour is never the only signal (WCAG 1.4.1): green "confirmed" and green "collected"
+// differ by check vs heart. The legacy "pending" looks exactly like "confirmed" (ADR-0012).
 //
 // The words come from the i18n `t()` dictionary (`orderStatus.*`): Hebrew by default (collector app),
 // the order's `lang` on the customer page (ADR-0010).
@@ -15,8 +15,8 @@ export type BadgeTone = 'green' | 'amber' | 'gray';
 /**
  * Tone and icon of each status. A Record, so a new status without a look is a type error.
  * - waiting: amber clock, waiting for a round.
- * - pending: amber calendar, in a round and waiting for the customer's reply.
- * - confirmed: green check.
+ * - confirmed: green check, in a round.
+ * - pending: legacy (ADR-0012), the same look as confirmed: nothing left to confirm.
  * - collected: green heart, the thank-you; distinct from confirmed's check.
  * - cancelled: gray minus, final and quiet.
  */
@@ -24,7 +24,7 @@ export const STATUS_BADGE_STYLES: Readonly<
   Record<OrderStatus, { tone: BadgeTone; icon: IconName }>
 > = {
   waiting: { tone: 'amber', icon: 'clock' },
-  pending: { tone: 'amber', icon: 'calendar' },
+  pending: { tone: 'green', icon: 'check' },
   confirmed: { tone: 'green', icon: 'check' },
   collected: { tone: 'green', icon: 'heart' },
   cancelled: { tone: 'gray', icon: 'minus' },

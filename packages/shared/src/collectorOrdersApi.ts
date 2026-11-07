@@ -64,7 +64,7 @@ export const collectorOrderSchema = z.object({
   bottlesEstimated: orderSchema.shape.bottlesEstimated,
   status: orderSchema.shape.status,
   region: orderSchema.shape.region,
-  /** Set when the order came back from a round uncollected: the tag "לא אישר · 12/11". */
+  /** Set when the order came back from a round uncollected: the tag "לא הגענו אליו · 12/11". */
   lastMiss: orderSchema.shape.lastMiss,
   source: orderSchema.shape.source,
   createdAt: orderSchema.shape.createdAt,

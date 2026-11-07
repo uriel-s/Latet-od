@@ -69,8 +69,8 @@ export function createApp(deps: AppDeps): Express {
   // The public booking form (spec §3.1): the per-IP rate limit, then the route (createOrderRoute.ts).
   app.post('/api/orders', ...createOrderHandlers(deps));
 
-  // The customer's own page /o/<token> (spec §3.3): GET the order, POST confirm / decline /
-  // cancel, and PATCH "שינוי" (address, quantity, note; never the phone)
+  // The customer's own page /o/<token> (spec §3.3): GET the order, POST decline / cancel, and
+  // PATCH "שינוי" (address, quantity, note; never the phone)
   // (orders/customerOrderRoutes.ts). Public, so NOT behind requireCollector: the long random token
   // in the path is the only key, and an unknown or malformed one is a 404. The POSTs and the PATCH
   // still go through the Origin check above. Every answer is `Cache-Control: no-store`.
@@ -90,9 +90,9 @@ export function createApp(deps: AppDeps): Express {
   // an order, and mark an order's WhatsApp "שלח" link as opened (orders/collectorOrdersRoutes.ts).
   app.use('/api/collector/orders', createCollectorOrdersRouter(deps));
 
-  // The round screens (spec §3.5 "תכנון סבב", §3.6): plan a round and send its confirmation
-  // requests, list the open rounds, one round, "אישר בטלפון", "סגור אישורים ובנה מסלול", moving
-  // a stop of the route up or down, and "סגור סבב" (rounds/collectorRoundsRoutes.ts).
+  // The round screens (spec §3.5 "תכנון סבב", §3.6): plan a round and send the messages that
+  // announce it, list the open rounds, one round, "התחל מסלול", moving a stop of the route up or
+  // down, and "סגור סבב" (rounds/collectorRoundsRoutes.ts).
   app.use('/api/collector/rounds', createCollectorRoundsRouter(deps));
   // The stop actions on a routed round's route, on the same path: "אספתי" and "לא נמצא"
   // (rounds/collectorStopActionsRoutes.ts). Their paths never overlap the router above.

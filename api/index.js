@@ -19907,26 +19907,29 @@ var HE = {
   "bottlesSpot.buildingEntrance": "\u05DC\u05DE\u05D8\u05D4 \u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05E0\u05D9\u05D9\u05DF",
   // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
   "orderStatus.waiting": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05E1\u05D1\u05D1",
-  "orderStatus.pending": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8",
-  "orderStatus.confirmed": "\u05D0\u05D5\u05E9\u05E8\u05D4",
+  // Legacy (ADR-0012): nothing to confirm any more, so an old pending order reads as in the round.
+  "orderStatus.pending": "\u05D1\u05E1\u05D1\u05D1",
+  "orderStatus.confirmed": "\u05D1\u05E1\u05D1\u05D1",
   "orderStatus.collected": "\u05E0\u05D0\u05E1\u05E4\u05D4",
   "orderStatus.cancelled": "\u05D1\u05D5\u05D8\u05DC\u05D4",
   // POST /api/orders messages above the form (orderApi.ts CREATE_ORDER_MESSAGES).
   "createOrder.duplicateOpenOrder": "\u05DB\u05D1\u05E8 \u05D9\u05E9 \u05D4\u05D6\u05DE\u05E0\u05D4 \u05E4\u05EA\u05D5\u05D7\u05D4 \u05DC\u05DE\u05E1\u05E4\u05E8 \u05D4\u05D6\u05D4.",
   "createOrder.rateLimited": "\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05E0\u05D9\u05E1\u05D9\u05D5\u05E0\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1 \u05DE\u05D0\u05D5\u05D7\u05E8 \u05D9\u05D5\u05EA\u05E8.",
   // The customer's page (customerOrderApi.ts CUSTOMER_ORDER_MESSAGES).
-  "customerOrder.confirmationsClosed": "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E0\u05E1\u05D2\u05E8. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
   "customerOrder.orderClosed": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D4, \u05D5\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D0\u05D5\u05EA\u05D4.",
   "customerOrder.orderNotFound": "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05D9\u05D9\u05EA\u05DB\u05DF \u05E9\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05D4\u05D5\u05E2\u05EA\u05E7 \u05E2\u05D3 \u05D4\u05E1\u05D5\u05E3.",
   // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
   // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
-  // already formatted for the language. The Hebrew must stay exactly as sent before English
-  // existed: messages.test.ts compares whole messages char for char.
+  // already formatted for the language. With both times, {from} is when the bottles must be out
+  // AND when Yoel starts coming, {by} when he is done (ADR-0012); with {by} alone it is the time to
+  // put them out by. The message announces the pickup, it asks for no confirmation (ADR-0012):
+  // the link is for "not this time", a change or a cancel. messages.test.ts compares whole
+  // messages char for char.
   "whatsapp.greeting": "\u05E9\u05DC\u05D5\u05DD {name},",
   "whatsapp.confirmRequest.date": "\u05D1-{date} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.",
-  "whatsapp.confirmRequest.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
+  "whatsapp.confirmRequest.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {from}. \u05E0\u05D2\u05D9\u05E2 \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
   "whatsapp.confirmRequest.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
-  "whatsapp.confirmRequest.confirmAtLink": "\u05E0\u05D0 \u05DC\u05D0\u05E9\u05E8 \u05D0\u05EA \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D9\u05E9\u05D5\u05E8:",
+  "whatsapp.confirmRequest.changeAtLink": "\u05D0\u05DD \u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD, \u05D0\u05D5 \u05DB\u05D3\u05D9 \u05DC\u05D1\u05D8\u05DC:",
   // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
   "whatsapp.confirmRequest.signOff": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   // spec §6.1, word for word.
@@ -19976,7 +19979,7 @@ var HE = {
   "street.foundTooMany": "\u05E0\u05DE\u05E6\u05D0\u05D5 \u05D4\u05E8\u05D1\u05D4 \u05E8\u05D7\u05D5\u05D1\u05D5\u05EA. \u05E0\u05D0 \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D0\u05EA \u05D4\u05E9\u05DD, \u05D0\u05D5 \u05DC\u05DC\u05D7\u05D5\u05E5 \u05E2\u05DC \u05D4\u05E8\u05D7\u05D5\u05D1 \u05D4\u05E0\u05DB\u05D5\u05DF.",
   // The thank-you screen.
   "thankYou.title": "\u05EA\u05D5\u05D3\u05D4!",
-  "thankYou.body": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.",
+  "thankYou.body": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3.",
   "thankYou.viewOrder": "\u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D0\u05D5 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC",
   // {bottles}: the estimate, {amount}: its worth in shekels (formatShekels).
   "thankYou.donation": "\u05DB\u05BE{bottles} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD = \u05DB\u05BE{amount} \u05DC\u05EA\u05E4\u05D9\u05DC\u05D9\u05DF \u05DC\u05D1\u05E8 \u05DE\u05E6\u05D5\u05D5\u05D4 \u05D5\u05DC\u05D7\u05D9\u05D9\u05DC\u05D9\u05DD",
@@ -19989,20 +19992,16 @@ var HE = {
   "orderPage.toForm": "\u05DC\u05D8\u05D5\u05E4\u05E1 \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4",
   "orderPage.status": "\u05DE\u05E6\u05D1 \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4:",
   "orderPage.waiting": "\u05E0\u05E9\u05DC\u05D7 \u05DC\u05DA \u05D4\u05D5\u05D3\u05E2\u05EA WhatsApp \u05DC\u05E4\u05E0\u05D9 \u05D4\u05E1\u05D1\u05D1 \u05D1\u05D0\u05D6\u05D5\u05E8 \u05E9\u05DC\u05DA.",
-  "orderPage.pendingDate": "\u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D1-{date}.",
-  "orderPage.confirmedDate": "\u05E0\u05EA\u05E8\u05D0\u05D4 \u05D1-{date}.",
-  "orderPage.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
+  "orderPage.roundDate": "\u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D1-{date}.",
+  "orderPage.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {from}. \u05E0\u05D2\u05D9\u05E2 \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
   "orderPage.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
   "orderPage.collected": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05E0\u05D0\u05E1\u05E4\u05D4. \u05EA\u05D5\u05D3\u05D4 \u05E8\u05D1\u05D4 \u05E9\u05DC\u05E7\u05D7\u05EA\u05DD \u05D7\u05DC\u05E7 \u05D1\u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "orderPage.cancelled": "\u05EA\u05D5\u05D3\u05D4! \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05D6\u05DE\u05D9\u05DF \u05D0\u05D9\u05E1\u05D5\u05E3 \u05D7\u05D3\u05E9 \u05D1\u05DB\u05DC \u05E2\u05EA.",
-  "orderPage.saved.confirm": "\u05EA\u05D5\u05D3\u05D4! \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3 \u05D0\u05D5\u05E9\u05E8.",
   "orderPage.saved.decline": "\u05E7\u05D9\u05D1\u05DC\u05E0\u05D5. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
   "orderPage.saved.cancel": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4.",
   "orderPage.saved.change": "\u05D4\u05E9\u05D9\u05E0\u05D5\u05D9\u05D9\u05DD \u05E0\u05E9\u05DE\u05E8\u05D5.",
   "orderPage.leftRound": "\u05D4\u05DB\u05EA\u05D5\u05D1\u05EA \u05E2\u05D5\u05D3\u05DB\u05E0\u05D4. \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D9\u05E6\u05D0\u05D4 \u05DE\u05D4\u05E1\u05D1\u05D1, \u05D5\u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
   "orderPage.phoneNotChanged": "\u05D0\u05EA \u05DE\u05E1\u05E4\u05E8 \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05DB\u05D0\u05DF.",
-  "orderPage.confirm": "\u05DB\u05DF, \u05D0\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
-  "orderPage.confirmDate": "\u05DB\u05DF, \u05D0\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D1-{date}",
   "orderPage.decline": "\u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD \u05D4\u05E4\u05E2\u05DD",
   "orderPage.declineQuestion": "\u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD \u05DC\u05DA \u05D4\u05E4\u05E2\u05DD? \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05EA\u05D7\u05DB\u05D4 \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D1\u05D0.",
   "orderPage.declineConfirm": "\u05DB\u05DF, \u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD",
@@ -20054,24 +20053,23 @@ var EN = {
   "bottlesSpot.buildingEntrance": "Downstairs at the building entrance",
   // Order status names.
   "orderStatus.waiting": "Waiting for a round",
-  "orderStatus.pending": "Waiting for confirmation",
-  "orderStatus.confirmed": "Confirmed",
+  "orderStatus.pending": "Scheduled",
+  "orderStatus.confirmed": "Scheduled",
   "orderStatus.collected": "Collected",
   "orderStatus.cancelled": "Cancelled",
   // POST /api/orders messages above the form.
   "createOrder.duplicateOpenOrder": "There is already an open order for this number.",
   "createOrder.rateLimited": "Too many attempts. Please try again later.",
   // The customer's page.
-  "customerOrder.confirmationsClosed": "Confirmation is closed. We will get back to you with a new date.",
   "customerOrder.orderClosed": "This order is already closed and cannot be changed.",
   "customerOrder.orderNotFound": "We could not find the order. The link may not have been copied in full.",
   // WhatsApp messages. The brand name "לתת עוד" stays in Hebrew: it is the name the customer
   // knows the project by, in either language.
   "whatsapp.greeting": "Hello {name},",
   "whatsapp.confirmRequest.date": "On {date} we will come to collect your bottles.",
-  "whatsapp.confirmRequest.pickupWindow": "Please put the bottles out between {from} and {by}.",
+  "whatsapp.confirmRequest.pickupWindow": "Please put the bottles out by {from}. We will come between {from} and {by}.",
   "whatsapp.confirmRequest.pickupBy": "Please put the bottles out by {by}.",
-  "whatsapp.confirmRequest.confirmAtLink": "Please confirm the pickup at this link:",
+  "whatsapp.confirmRequest.changeAtLink": "If this does not suit you, or to cancel:",
   "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "whatsapp.thankYou.orderAgain": "To order again:",
@@ -20115,7 +20113,7 @@ var EN = {
   "street.foundTooMany": "Many streets found. Please keep typing the name, or tap the right street.",
   // The thank-you screen.
   "thankYou.title": "Thank you!",
-  "thankYou.body": "We received your order. Before the round in your area we will send you a WhatsApp message to confirm.",
+  "thankYou.body": "We received your order. Before the round in your area we will send you a WhatsApp message with the pickup date.",
   "thankYou.viewOrder": "View or cancel the order",
   "thankYou.donation": "About {bottles} bottles = about {amount} for tefillin for bar mitzvah boys and soldiers",
   // The customer's own page.
@@ -20126,20 +20124,16 @@ var EN = {
   "orderPage.toForm": "To the order form",
   "orderPage.status": "Order status:",
   "orderPage.waiting": "We will send you a WhatsApp message before the round in your area.",
-  "orderPage.pendingDate": "We will come to collect on {date}.",
-  "orderPage.confirmedDate": "See you on {date}.",
-  "orderPage.pickupWindow": "Please put the bottles out between {from} and {by}.",
+  "orderPage.roundDate": "We will come to collect on {date}.",
+  "orderPage.pickupWindow": "Please put the bottles out by {from}. We will come between {from} and {by}.",
   "orderPage.pickupBy": "Please put the bottles out by {by}.",
   "orderPage.collected": "The order was collected. Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
   "orderPage.cancelled": "Thank you! You can book a new pickup at any time.",
-  "orderPage.saved.confirm": "Thank you! The pickup is confirmed.",
   "orderPage.saved.decline": "Got it. We will get back to you with a new date.",
   "orderPage.saved.cancel": "The order was cancelled.",
   "orderPage.saved.change": "The changes were saved.",
   "orderPage.leftRound": "The address was updated. The order left the round, and we will get back to you with a new date.",
   "orderPage.phoneNotChanged": "The phone number cannot be changed here.",
-  "orderPage.confirm": "Yes, I will put the bottles out",
-  "orderPage.confirmDate": "Yes, I will put the bottles out on {date}",
   "orderPage.decline": "Not this time",
   "orderPage.declineQuestion": "Not suitable this time? The order will wait for the next round.",
   "orderPage.declineConfirm": "Yes, not suitable",
@@ -21011,7 +21005,7 @@ var ORDER_STATUSES = [
 var orderStatusSchema = external_exports.enum(ORDER_STATUSES);
 var OPEN_ORDER_STATUSES = ["waiting", "pending", "confirmed"];
 var ORDER_TRANSITIONS = {
-  waiting: ["pending", "cancelled"],
+  waiting: ["confirmed", "cancelled"],
   pending: ["confirmed", "waiting", "cancelled"],
   confirmed: ["waiting", "collected", "cancelled"],
   collected: [],
@@ -21283,7 +21277,7 @@ var collectorOrderSchema = external_exports.object({
   bottlesEstimated: orderSchema.shape.bottlesEstimated,
   status: orderSchema.shape.status,
   region: orderSchema.shape.region,
-  /** Set when the order came back from a round uncollected: the tag "לא אישר · 12/11". */
+  /** Set when the order came back from a round uncollected: the tag "לא הגענו אליו · 12/11". */
   lastMiss: orderSchema.shape.lastMiss,
   source: orderSchema.shape.source,
   createdAt: orderSchema.shape.createdAt,
@@ -21393,7 +21387,7 @@ function confirmRequestLines(vars, personalText, lang) {
   const personal = personalText?.trim() ?? "";
   if (personal !== "") lines.push(personal);
   lines.push(
-    t(lang, "whatsapp.confirmRequest.confirmAtLink"),
+    t(lang, "whatsapp.confirmRequest.changeAtLink"),
     vars.link,
     t(lang, "whatsapp.confirmRequest.signOff")
   );
@@ -21467,7 +21461,7 @@ var roundSchema = external_exports.object({
   region: regionSchema,
   status: roundStatusSchema,
   phase: roundPhaseSchema,
-  /** Yoel's own words for the confirmation request (spec §3.5, ת11); absent when he wrote none. */
+  /** Yoel's own words for the round message (spec §3.5, ת11); absent when he wrote none. */
   personalText: external_exports.string().min(1).optional(),
   /**
    * "עד איזו שעה להוציא את הבקבוקים" (ADR-0003), `HH:MM`. The next planning screen pre-fills it
@@ -21542,7 +21536,7 @@ var planRoundRequestSchema = external_exports.strictObject({
     ctx.addIssue({ code: "custom", path: ["pickupFrom"], message: ERR2.pickupFromNotBeforeBy });
   }
 });
-var ROUND_GROUP_KEYS = ["confirmed", "pending", "otherDate"];
+var ROUND_GROUP_KEYS = ["inRound", "otherDate"];
 var collectorRoundSchema = roundSchema.pick({
   id: true,
   date: true,
@@ -21589,9 +21583,9 @@ var routeStopViewSchema = external_exports.object({
 });
 var roundViewSchema = external_exports.object({
   round: collectorRoundSchema,
-  /** Always the three groups in {@link ROUND_GROUP_KEYS} order, empty ones too. */
+  /** Always every group in {@link ROUND_GROUP_KEYS} order, empty ones too. */
   groups: external_exports.array(roundOrderGroupSchema),
-  /** The "שלח" rows of the confirmation requests, one per customer who has not confirmed yet. */
+  /** The "שלח" rows of the round's messages, one per customer still in the round (ADR-0012). */
   sendList: external_exports.array(messageLinkSchema),
   /**
    * The route's stops in driving order. Always present: empty until the route is built (phase
@@ -21612,9 +21606,8 @@ var roundsResponseSchema = external_exports.object({
 });
 function roundGroupOf(round, order) {
   if (order.roundId === round.id) {
-    if (order.status === "confirmed" || order.status === "collected") return "confirmed";
-    if (order.status === "pending") return "pending";
-    return void 0;
+    const inRound = order.status === "confirmed" || order.status === "collected" || order.status === "pending";
+    return inRound ? "inRound" : void 0;
   }
   const askedOtherDate = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "askedOtherDate";
   return askedOtherDate ? "otherDate" : void 0;
@@ -21630,11 +21623,7 @@ function roundStopStateOf(round, order) {
 }
 function buildRoundView(round, orders) {
   const ordersById = new Map(orders.map((order) => [order.id, order]));
-  const ordersByGroup = {
-    confirmed: [],
-    pending: [],
-    otherDate: []
-  };
+  const ordersByGroup = { inRound: [], otherDate: [] };
   for (const orderId of round.orderIds) {
     const order = ordersById.get(orderId);
     if (order === void 0) continue;
@@ -21647,7 +21636,7 @@ function buildRoundView(round, orders) {
       key,
       orders: ordersByGroup[key].map(toCollectorOrder)
     })),
-    sendList: ordersByGroup.pending.map((order) => toMessageLink(order, "confirmRequest")).filter((link) => link !== void 0),
+    sendList: ordersByGroup.inRound.filter((order) => order.status !== "collected").map((order) => toMessageLink(order, "confirmRequest")).filter((link) => link !== void 0),
     stops: round.stops.flatMap((stop) => {
       const order = ordersById.get(stop.orderId);
       if (order === void 0) return [];
@@ -21681,10 +21670,10 @@ var ROUND_MESSAGES = {
   ordersNotWaiting: "\u05D7\u05DC\u05E7 \u05DE\u05D4\u05D4\u05D6\u05DE\u05E0\u05D5\u05EA \u05DB\u05D1\u05E8 \u05DC\u05D0 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D5\u05EA \u05DC\u05E1\u05D1\u05D1. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05E8\u05E9\u05D9\u05DE\u05D4 \u05D5\u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1.",
   roundNotFound: "\u05D4\u05E1\u05D1\u05D1 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0.",
   /**
-   * "אישר בטלפון" after the round was routed or closed; also "סגור אישורים ובנה מסלול" on a round
-   * that is already routed or closed (a second tap, or another tab).
+   * "התחל מסלול" on a round that is already routed or closed (a second tap, or another tab). The
+   * key keeps its old name, from when step 1 was the customers' confirmations (ADR-0012).
    */
-  confirmationsClosed: "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8\u05D9\u05DD \u05DC\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D5.",
+  confirmationsClosed: "\u05D4\u05DE\u05E1\u05DC\u05D5\u05DC \u05E9\u05DC \u05D4\u05E1\u05D1\u05D1 \u05D4\u05D6\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05D1\u05E0\u05D4, \u05D0\u05D5 \u05E9\u05D4\u05E1\u05D1\u05D1 \u05E0\u05E1\u05D2\u05E8. \u05E0\u05D0 \u05DC\u05E8\u05E2\u05E0\u05DF \u05D0\u05EA \u05D4\u05DE\u05E1\u05DA.",
   /**
    * A stop action or a move on a round whose route is not built yet (phase `confirming`), or that
    * is closed: the screen is stale, so refreshing shows the round as it is.
@@ -21709,9 +21698,8 @@ var customerOrderSchema = orderSummarySchema.extend({
    */
   lang: orderSchema.shape.lang,
   /**
-   * The round the order is in, while the customer has something to do with it: present for a
-   * `pending` order (the date to confirm) and a `confirmed` one ("נתראה ב-<תאריך>"), absent
-   * otherwise. See {@link toCustomerOrder}.
+   * The round the order is in: present for a `confirmed` order (and a legacy `pending` one),
+   * absent otherwise. See {@link toCustomerOrder}.
    */
   round: customerRoundSchema.optional()
 });
@@ -21733,8 +21721,6 @@ function isLocationChange(before, after) {
   return before.streetCode !== after.streetCode || before.streetName !== after.streetName || before.houseNumber !== after.houseNumber;
 }
 var CUSTOMER_ORDER_MESSAGES = {
-  /** "כן, אוציא את הבקבוקים" after Yoel closed the confirmations. Exactly the spec's text (§3.3). */
-  confirmationsClosed: "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E0\u05E1\u05D2\u05E8. \u05E0\u05D7\u05D6\u05D5\u05E8 \u05D0\u05DC\u05D9\u05DA \u05E2\u05DD \u05DE\u05D5\u05E2\u05D3 \u05D7\u05D3\u05E9.",
   /** Any change to an order that was collected or cancelled meanwhile. */
   orderClosed: "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D4, \u05D5\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D0\u05D5\u05EA\u05D4.",
   /** An unknown token. Most likely a link cut short when it was copied, so the text says so. */
@@ -22903,10 +22889,6 @@ var ORDER_CLOSED = {
   error: "invalid_transition",
   message: CUSTOMER_ORDER_MESSAGES.orderClosed
 };
-var CONFIRMATIONS_CLOSED = {
-  error: "confirmations_closed",
-  message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed
-};
 function createCustomerOrderRouter(deps) {
   const { orders, rounds } = deps;
   const router = Router4();
@@ -22957,9 +22939,6 @@ function createCustomerOrderRouter(deps) {
     }
     sendOrder2(res, found.order, found.round);
   });
-  router.post("/:token/confirm", async (req, res) => {
-    await press(res, req.params.token, decideConfirm);
-  });
   router.post("/:token/decline", async (req, res) => {
     await press(res, req.params.token, decideDecline);
   });
@@ -22980,18 +22959,6 @@ function createCustomerOrderRouter(deps) {
     );
   });
   return router;
-}
-function decideConfirm(order, round, now) {
-  if (order.status === "confirmed") return NOOP;
-  if (!isOpenStatus(order.status)) return { kind: "refuse", body: ORDER_CLOSED };
-  if (!canTransition(order.status, "confirmed") || !takesConfirmations(order, round)) {
-    return { kind: "refuse", body: CONFIRMATIONS_CLOSED };
-  }
-  return {
-    kind: "write",
-    patch: { status: "confirmed", updatedAt: new Date(now) },
-    ifStatus: [order.status]
-  };
 }
 function decideDecline(order, round, now) {
   if (order.status === "waiting") return NOOP;
@@ -23018,9 +22985,6 @@ function decideUpdate(order, round, update, now) {
     patch: buildCustomerOrderPatch(order, update, round, now).patch,
     ifStatus: [order.status]
   };
-}
-function takesConfirmations(order, round) {
-  return round !== null && round.id === order.roundId && round.status === "open" && round.phase === "confirming";
 }
 function sendOrder2(res, order, round) {
   const body = { order: toCustomerOrder(order, round) };
@@ -23170,7 +23134,7 @@ async function sendBackUnhandled({ orders }, round, order, now) {
     if (!canTransition(current.status, "waiting")) return;
     const left = await orders.update(
       current.id,
-      leaveRoundPatch(current, round, missReasonAtClose(round, current), now),
+      leaveRoundPatch(current, round, "notReached", now),
       { ifStatus: [current.status] }
     );
     if (left !== null) return;
@@ -23179,9 +23143,6 @@ async function sendBackUnhandled({ orders }, round, order, now) {
 }
 function isUnhandledIn(round, order) {
   return order.roundId === round.id && (order.status === "pending" || order.status === "confirmed");
-}
-function missReasonAtClose(round, order) {
-  return round.phase === "routed" && order.status === "confirmed" ? "notReached" : "notConfirmed";
 }
 
 // apps/api/src/rounds/roundResponses.ts
@@ -23247,7 +23208,8 @@ function createCollectorRoundsRouter(deps) {
       if (stored === void 0) continue;
       const updated = await orders.update(
         orderId,
-        { status: "pending", roundId: round.id, updatedAt: new Date(now) },
+        // Straight to confirmed: the message announces the pickup, nobody confirms (ADR-0012).
+        { status: "confirmed", roundId: round.id, updatedAt: new Date(now) },
         { ifStatus: [stored.status] }
       );
       if (updated !== null) moved.push(updated);
@@ -23291,41 +23253,6 @@ function createCollectorRoundsRouter(deps) {
     }
     sendView(res, await loadRoundView(round));
   });
-  router.post("/:id/orders/:orderId/confirm-by-phone", async (req, res) => {
-    const { id, orderId } = req.params;
-    const round = await rounds.findById(id);
-    if (round === null) {
-      sendRoundNotFound(res);
-      return;
-    }
-    const order = await orders.findById(orderId);
-    if (order?.roundId !== round.id) {
-      sendOrderNotFound(res);
-      return;
-    }
-    if (round.status !== "open" || round.phase !== "confirming") {
-      sendConfirmationsClosed(res);
-      return;
-    }
-    if (order.status === "confirmed") {
-      sendView(res, await loadRoundView(round));
-      return;
-    }
-    if (!canTransition(order.status, "confirmed")) {
-      sendInvalidTransition2(res);
-      return;
-    }
-    const confirmed = await orders.update(
-      orderId,
-      { status: "confirmed", updatedAt: /* @__PURE__ */ new Date() },
-      { ifStatus: [order.status] }
-    );
-    if (confirmed === null) {
-      sendInvalidTransition2(res);
-      return;
-    }
-    sendView(res, await loadRoundView(round));
-  });
   router.post("/:id/route", async (req, res) => {
     const round = await rounds.findById(req.params.id);
     if (round === null) {
@@ -23342,7 +23269,7 @@ function createCollectorRoundsRouter(deps) {
     for (const orderId of round.orderIds) {
       const order = found.get(orderId);
       if (order?.roundId !== round.id) continue;
-      const settled = order.status === "pending" ? await sendBackUnconfirmed(order, round, now) : order;
+      const settled = order.status === "pending" ? await takeInLegacyPending(order, now) : order;
       if (settled?.roundId === round.id && settled.status === "confirmed") stopOrders.push(settled);
     }
     const stops = buildRouteStops(stopOrders, route.start, DROP_OFF.point, route.distance);
@@ -23401,17 +23328,19 @@ function createCollectorRoundsRouter(deps) {
     }
     sendView(res, view);
   });
-  async function sendBackUnconfirmed(order, round, now) {
-    if (!canTransition(order.status, "waiting")) return order;
-    const left = await orders.update(order.id, leaveRoundPatch(order, round, "notConfirmed", now), {
-      ifStatus: [order.status]
-    });
-    return left ?? await orders.findById(order.id);
+  async function takeInLegacyPending(order, now) {
+    if (!canTransition(order.status, "confirmed")) return order;
+    const confirmed = await orders.update(
+      order.id,
+      { status: "confirmed", updatedAt: new Date(now) },
+      { ifStatus: [order.status] }
+    );
+    return confirmed ?? await orders.findById(order.id);
   }
   return router;
 }
 function isPlannable(order) {
-  return order !== void 0 && canTransition(order.status, "pending") && order.roundId === void 0;
+  return order !== void 0 && order.status === "waiting" && order.roundId === void 0;
 }
 function newRoundFromPlan(plan, now) {
   return {

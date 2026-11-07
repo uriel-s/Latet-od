@@ -1,9 +1,9 @@
 // The customer's own page `/o/<token>` (spec §3.3), reached from the thank-you screen and from the
 // links in Yoel's WhatsApp messages, by the order's random token only. It loads the order (api.ts,
-// GET /api/o/:token) and draws what fits its status: the round's date and a big "כן, אוציא את הבקבוקים"
-// while a confirmation is asked for, "נתראה ב-<תאריך>" once confirmed, thanks and "הזמנה חדשה עם
-// אותם פרטים" once collected or cancelled, and, while the order is open, "שינוי" (the booking
-// form's fields without the contact: address, note and bottles, never the phone) and "ביטול
+// GET /api/o/:token) and draws what fits its status: while the order is in a round, the round's
+// date and times with "לא מתאים הפעם" (there is nothing to confirm: being in the round is the
+// default, ADR-0012), thanks and "הזמנה חדשה עם אותם פרטים" once collected or cancelled, and,
+// while the order is open, "שינוי" (the booking form's fields without the contact: address, note and bottles, never the phone) and "ביטול
 // ההזמנה" (with a question first). Every button is a POST or a PATCH, never a link to open:
 // WhatsApp's preview opens links. The page always draws the order the api answered with, not what
 // it expected the button to do.
@@ -34,7 +34,6 @@ import {
 } from '@bottlerun/shared';
 import {
   cancelCustomerOrder,
-  confirmCustomerOrder,
   declineCustomerOrder,
   fetchCustomerOrder,
   networkErrorMessage,
@@ -82,7 +81,6 @@ export const CANCELLED_TEXT = t('he', 'orderPage.cancelled');
 
 /** What each request of the page announces once the api stored it (Hebrew; see {@link savedMessage}). */
 export const SAVED_MESSAGES = {
-  confirm: t('he', 'orderPage.saved.confirm'),
   decline: t('he', 'orderPage.saved.decline'),
   cancel: t('he', 'orderPage.saved.cancel'),
   change: t('he', 'orderPage.saved.change'),
@@ -107,8 +105,6 @@ function savedMessage(lang: Lang, action: keyof typeof SAVED_MESSAGES): string {
  * as it is.
  */
 function closedMessageText(lang: Lang, message: string): string {
-  if (message === CUSTOMER_ORDER_MESSAGES.confirmationsClosed)
-    return t(lang, 'customerOrder.confirmationsClosed');
   if (message === CUSTOMER_ORDER_MESSAGES.orderClosed) return t(lang, 'customerOrder.orderClosed');
   if (message === CUSTOMER_ORDER_MESSAGES.orderNotFound)
     return t(lang, 'customerOrder.orderNotFound');
@@ -156,8 +152,6 @@ export interface OrderPageProps {
    * identity across renders (a module function, not an inline arrow): a new one loads again.
    */
   loadOrder?: (token: string) => Promise<CustomerOrderOutcome>;
-  /** The confirm button. Defaults to {@link confirmCustomerOrder}; tests pass a fake. */
-  confirmOrder?: SendAction;
   /** "לא מתאים הפעם". Defaults to {@link declineCustomerOrder}; tests pass a fake. */
   declineOrder?: SendAction;
   /** "כן, לבטל". Defaults to {@link cancelCustomerOrder}; tests pass a fake. */
@@ -210,7 +204,6 @@ interface Notice {
 export function OrderPage({
   token,
   loadOrder = fetchCustomerOrder,
-  confirmOrder = confirmCustomerOrder,
   declineOrder = declineCustomerOrder,
   cancelOrder = cancelCustomerOrder,
   updateOrder = updateCustomerOrder,
@@ -327,9 +320,9 @@ export function OrderPage({
   }
 
   /**
-   * The order changed under the page: Yoel closed the round's confirmations, or it was collected
-   * or cancelled meanwhile. Says why, and loads it again so the page shows its real state; the
-   * message stays above it through the reload.
+   * The order changed under the page: it was collected or cancelled meanwhile. Says why, and
+   * loads it again so the page shows its real state; the message stays above it through the
+   * reload.
    */
   function showClosed(message: string): void {
     setChanging(false);
@@ -358,8 +351,7 @@ export function OrderPage({
       case 'failed':
         // The page stays as it was, so the same button is one tap away from another try.
         if (action === 'cancel') setCancelError(networkErrorMessage(lang));
-        else if (action === 'decline') setDeclineError(networkErrorMessage(lang));
-        else setNotice({ role: 'alert', text: networkErrorMessage(lang), focus: false });
+        else setDeclineError(networkErrorMessage(lang));
         return;
     }
   }
@@ -482,23 +474,10 @@ export function OrderPage({
             />
           ) : (
             <>
-              {state.order.status === 'pending' && (
+              {/* In a round: nothing to confirm (ADR-0012), only "not this time". A legacy
+                  pending order (planned before ADR-0012) is in a round too. */}
+              {(state.order.status === 'confirmed' || state.order.status === 'pending') && (
                 <div className="order-actions">
-                  {/* aria-disabled, not disabled, while a request is on its way: the button
-                      keeps focus and is announced as unavailable; busyRef ignores the extra
-                      taps. */}
-                  <button
-                    type="button"
-                    className="button button-primary button-block button-large"
-                    aria-disabled={busy !== null ? true : undefined}
-                    onClick={() => void press('confirm', confirmOrder)}
-                  >
-                    {busy === 'confirm' ? (
-                      t(lang, 'orderPage.sending')
-                    ) : (
-                      <ConfirmLabel round={state.order.round} lang={lang} />
-                    )}
-                  </button>
                   <CancelConfirm
                     inline
                     // "Not this time" only sends the order back to waiting: nothing red about it.
@@ -710,16 +689,6 @@ function startNewOrder(order: CustomerOrder, lang: Lang): void {
 }
 
 /**
- * The confirm button's text: what is confirmed, and on which day. DD/MM reads left to right inside
- * the right-to-left text (CLAUDE.md). A pending order whose round the api did not send gets the
- * text without a day.
- */
-function ConfirmLabel({ round, lang }: { round: CustomerOrder['round']; lang: Lang }) {
-  if (round === undefined) return t(lang, 'orderPage.confirm');
-  return tWithDay(lang, 'orderPage.confirmDate', formatDayMonth(round.date, lang));
-}
-
-/**
  * The status in plain words, and what it means for the customer now (spec §3.3): one card at the
  * top of the page, the status as a large badge and the sentence that explains it under it, so the
  * customer reads both together (design run 6, section 4).
@@ -736,8 +705,10 @@ function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
 }
 
 /**
- * The lines under the status. The round's date shows for a pending or confirmed order only, and
- * only when the api sent it: an order whose round is gone has no date to promise.
+ * The lines under the status. The round's date and times show for an order in a round
+ * (`confirmed`, or a legacy `pending`) only, and only when the api sent the round: an order whose
+ * round is gone has no date to promise. With both times, the first is when the bottles must be
+ * out and the window is when Yoel comes (ADR-0012), so the start time is said twice.
  */
 function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   const { round } = order;
@@ -751,16 +722,13 @@ function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
         <>
           <p>
             {/* DD/MM and HH:MM read left to right inside the right-to-left text (CLAUDE.md). */}
-            {tWithDay(
-              lang,
-              order.status === 'pending' ? 'orderPage.pendingDate' : 'orderPage.confirmedDate',
-              formatDayMonth(round.date, lang),
-            )}
+            {tWithDay(lang, 'orderPage.roundDate', formatDayMonth(round.date, lang))}
           </p>
           {round.pickupBy !== undefined && (
             <p>
               {round.pickupFrom !== undefined
                 ? timesText(t(lang, 'orderPage.pickupWindow', TIME_PLACEHOLDERS), [
+                    round.pickupFrom,
                     round.pickupFrom,
                     round.pickupBy,
                   ])

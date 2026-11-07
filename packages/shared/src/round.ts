@@ -27,12 +27,13 @@ export type RoundStatus = z.infer<typeof roundStatusSchema>;
 
 /**
  * Where an open round is (spec §3.6):
- * - `confirming`: the confirmation requests went out, and the customers are confirming (step 1).
- * - `routed`: Yoel tapped "סגור אישורים ובנה מסלול"; whoever did not confirm left the round and
- *   the route is built and stored (step 2).
+ * - `confirming`: planned, the messages went out, no route yet (step 1, "תכנון"). The name is
+ *   from before ADR-0012, when the customers had to confirm; it is stored, so it stays.
+ * - `routed`: Yoel tapped "התחל מסלול"; every order still in the round is a stop, and the route
+ *   is built and stored (step 2).
  * "סגור סבב" does not change the phase: a closed round keeps the one it was closed in, which
- * records whether its route was ever built (and why its orders left: `notConfirmed` or
- * `notReached`).
+ * records whether its route was ever built. Its unhandled orders leave with `notReached` either
+ * way (older rounds may hold the legacy `notConfirmed`).
  */
 export const ROUND_PHASES = ['confirming', 'routed'] as const;
 export const roundPhaseSchema = z.enum(ROUND_PHASES);
@@ -74,7 +75,7 @@ export const roundSchema = z.object({
   region: regionSchema,
   status: roundStatusSchema,
   phase: roundPhaseSchema,
-  /** Yoel's own words for the confirmation request (spec §3.5, ת11); absent when he wrote none. */
+  /** Yoel's own words for the round message (spec §3.5, ת11); absent when he wrote none. */
   personalText: z.string().min(1).optional(),
   /**
    * "עד איזו שעה להוציא את הבקבוקים" (ADR-0003), `HH:MM`. The next planning screen pre-fills it

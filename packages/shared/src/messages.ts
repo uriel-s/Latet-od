@@ -24,13 +24,19 @@ import {
 export interface MessageVars {
   /** The customer's name as stored; trimmed when rendered. */
   name: string;
-  /** Absolute URL of the customer's page `/o/<token>`: to confirm, or to order again. */
+  /** Absolute URL of the customer's page `/o/<token>`: to decline, change or cancel, or to order again. */
   link: string;
   /** The round's calendar day in Israel, `YYYY-MM-DD`. Required by `confirmRequest`. */
   date?: string;
-  /** Time to put the bottles out by, `HH:MM` ({@link pickupTimeSchema}). `confirmRequest` only. */
+  /**
+   * End of the window Yoel comes in, `HH:MM` ({@link pickupTimeSchema}); alone, the time to put the
+   * bottles out by. `confirmRequest` only.
+   */
   pickupBy?: string;
-  /** Start of the pickup window, `HH:MM`; needs `pickupBy` (the end). `confirmRequest` only. */
+  /**
+   * Start of the window Yoel comes in, `HH:MM`, which is also the time the bottles must be out by
+   * (ADR-0012); needs `pickupBy` (the end). `confirmRequest` only.
+   */
   pickupFrom?: string;
 }
 
@@ -63,7 +69,9 @@ function greetingLine(vars: MessageVars, lang: Lang): string {
 }
 
 /**
- * "בקשת אישור": sent when Yoel plans a round, asking the customer to confirm the pickup. The
+ * The round message (kind `confirmRequest`, a name kept from before ADR-0012, since it is stored in
+ * every order's message log): sent when Yoel plans a round, announcing the pickup. It asks for no
+ * confirmation; the link is for "לא מתאים הפעם", a change or a cancel. The
  * sign-off (`whatsapp.confirmRequest.signOff`) ends with the app's name, `APP_NAME` in index.ts;
  * a test checks that in every language (index.ts re-exports this file, so it cannot be imported).
  */
@@ -95,6 +103,8 @@ function confirmRequestLines(
     t(lang, 'whatsapp.confirmRequest.date', { date: formatDayMonth(vars.date, lang) }),
   ];
   // Both times were validated above. Hebrew keeps the 24-hour "08:00"; English reads "8:00 AM".
+  // With both, the start appears twice: "out by {from}. we come between {from} and {by}" — the
+  // window is when Yoel comes, so the bottles must already be out when it starts (ADR-0012).
   if (vars.pickupBy !== undefined && vars.pickupFrom !== undefined) {
     lines.push(
       t(lang, 'whatsapp.confirmRequest.pickupWindow', {
@@ -112,7 +122,7 @@ function confirmRequestLines(
   const personal = personalText?.trim() ?? '';
   if (personal !== '') lines.push(personal);
   lines.push(
-    t(lang, 'whatsapp.confirmRequest.confirmAtLink'),
+    t(lang, 'whatsapp.confirmRequest.changeAtLink'),
     vars.link,
     t(lang, 'whatsapp.confirmRequest.signOff'),
   );
@@ -134,10 +144,10 @@ function thankYouLines(vars: MessageVars, lang: Lang): string[] {
  * into its link; a Cloud API sender would map `kind` to a template instead.
  *
  * - `confirmRequest`: name, the round's date, the pickup time if given, Yoel's personal text if
- *   it is not blank (trimmed, its own line breaks kept, never translated), the link to confirm,
- *   sign-off.
+ *   it is not blank (trimmed, its own line breaks kept, never translated), the link for "not this
+ *   time" or a cancel, sign-off. It asks for no confirmation (ADR-0012).
  * - `thankYou`: name, the thanks of spec §6.1, the link for ordering again. It ignores `date`,
- *   `pickupBy` and `personalText`: the personal text belongs to the confirmation request only.
+ *   `pickupBy` and `personalText`: the personal text belongs to the round message only.
  *
  * `lang` is the customer's language (`order.lang`), Hebrew by default. Hebrew writes the date as
  * DD/MM ("05/11") and times on a 24-hour clock ("08:00"); English writes "Nov 5" and "8:00 AM".

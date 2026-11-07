@@ -74,14 +74,14 @@ function thankYouLink(orderId: string, openedAt?: Date): MessageLogEntry {
   };
 }
 
-/** A stored order on a free-text street, pending in round {@link ROUND_ID} with its request. */
+/** A stored order on a free-text street, in round {@link ROUND_ID} (confirmed) with its message. */
 function makeOrder(id: string, overrides: Partial<Order> = {}): Order {
   return {
     id,
     contact: { name: `לקוח ${id}`, phone: '+972501234567', method: 'whatsapp' },
     address: { streetName: 'רחוב חדש', houseNumber: '5', bottlesSpot: 'privateHouse' },
     bottlesEstimated: 45,
-    status: 'pending',
+    status: 'confirmed',
     region: 'ramat',
     token: TOKEN,
     roundId: ROUND_ID,
@@ -261,7 +261,7 @@ describe('planRoundRequestSchema', () => {
 
 describe('ROUND_GROUP_LABELS', () => {
   it('has a Hebrew title for every group, in screen order', () => {
-    expect(ROUND_GROUP_KEYS).toEqual(['confirmed', 'pending', 'otherDate']);
+    expect(ROUND_GROUP_KEYS).toEqual(['inRound', 'otherDate']);
     expect(Object.keys(ROUND_GROUP_LABELS)).toEqual([...ROUND_GROUP_KEYS]);
   });
 });
@@ -277,7 +277,7 @@ describe('buildRoundView', () => {
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
       }),
-      makeOrder('f'),
+      makeOrder('f', { status: 'pending' }),
       makeOrder('e', { status: 'collected' }),
       makeOrder('d', {
         status: 'waiting',
@@ -285,14 +285,14 @@ describe('buildRoundView', () => {
         lastMiss: { date: '2026-11-05', reason: 'askedOtherDate', roundId: ROUND_ID },
       }),
       makeOrder('c', { status: 'confirmed' }),
-      makeOrder('b'),
+      makeOrder('b', { status: 'pending' }),
       makeOrder('a', { status: 'confirmed' }),
     ];
     const view = buildRoundView(round, orders);
     expect(view.groups.map((group) => group.key)).toEqual([...ROUND_GROUP_KEYS]);
-    expect(idsIn(view, 'confirmed')).toEqual(['a', 'c', 'e', 'h']);
-    expect(idsIn(view, 'pending')).toEqual(['b', 'f']);
-    // Only who asked for another date: 'g' left because it did not confirm, so it is in none.
+    // Confirmed, collected and legacy pending orders are all simply "in the round" (ADR-0012).
+    expect(idsIn(view, 'inRound')).toEqual(['a', 'b', 'c', 'e', 'f', 'h']);
+    // Only who asked for another date: 'g' left with the legacy "did not confirm", so it is in none.
     expect(idsIn(view, 'otherDate')).toEqual(['d']);
     expect(view.groups.flatMap((group) => group.orders.map((order) => order.id))).not.toContain(
       'g',
@@ -339,16 +339,17 @@ describe('buildRoundView', () => {
 
   it('ignores an order given that is not in orderIds, and an id with no order given', () => {
     const view = buildRoundView(makeRound(['a', 'missing']), [makeOrder('a'), makeOrder('z')]);
-    expect(idsIn(view, 'pending')).toEqual(['a']);
+    expect(idsIn(view, 'inRound')).toEqual(['a']);
     expect(view.sendList.map((link) => link.orderId)).toEqual(['a']);
   });
 
-  it('builds the send list from the pending orders only, in plan order', () => {
-    const round = makeRound(['a', 'b', 'c']);
+  it('builds the send list from every order still in the round and not collected, in plan order', () => {
+    const round = makeRound(['a', 'b', 'c', 'd']);
     const view = buildRoundView(round, [
       makeOrder('a'),
-      makeOrder('b', { status: 'confirmed' }),
-      makeOrder('c', { messages: [confirmLink('c', OPENED_AT)] }),
+      makeOrder('b', { status: 'collected' }),
+      makeOrder('c', { status: 'pending', messages: [confirmLink('c', OPENED_AT)] }),
+      makeOrder('d', { status: 'waiting', roundId: undefined }),
     ]);
     expect(view.sendList).toEqual([
       {
@@ -370,7 +371,7 @@ describe('buildRoundView', () => {
   });
 
   // An older wa.me link is an earlier round's, with its date: never offered to send again.
-  it('gives no send row to a pending order whose newest request is not a manual link', () => {
+  it('gives no send row to an order whose newest message is not a manual link', () => {
     const round = makeRound(['a', 'b']);
     const view = buildRoundView(round, [
       makeOrder('a', {
@@ -381,7 +382,7 @@ describe('buildRoundView', () => {
       }),
       makeOrder('b', { messages: [] }),
     ]);
-    expect(idsIn(view, 'pending')).toEqual(['a', 'b']);
+    expect(idsIn(view, 'inRound')).toEqual(['a', 'b']);
     expect(view.sendList).toEqual([]);
   });
 
@@ -403,15 +404,15 @@ describe('buildRoundView', () => {
     });
   });
 
-  it('returns all three groups, empty ones too, for a round with no orders found', () => {
+  it('returns every group, empty ones too, for a round with no orders found', () => {
     const view = buildRoundView(makeRound(['a']), []);
     expect(view.groups).toEqual(ROUND_GROUP_KEYS.map((key) => ({ key, orders: [] })));
     expect(view.sendList).toEqual([]);
   });
 
   it('gives each order as the collector screens get it, without token or messages', () => {
-    const [order] = buildRoundView(makeRound(['a']), [makeOrder('a')]).groups[1]?.orders ?? [];
-    expect(order).toMatchObject({ id: 'a', status: 'pending', hasLocation: false });
+    const [order] = buildRoundView(makeRound(['a']), [makeOrder('a')]).groups[0]?.orders ?? [];
+    expect(order).toMatchObject({ id: 'a', status: 'confirmed', hasLocation: false });
     expect(order).not.toHaveProperty('token');
     expect(order).not.toHaveProperty('messages');
   });
@@ -646,10 +647,10 @@ describe('moveStopRequestSchema', () => {
 });
 
 describe('roundViewSchema and roundsResponseSchema', () => {
-  /** A view with a confirmed order, a pending one with an opened link, and a closed round. */
+  /** A view with a collected order, a confirmed one with an opened link, and a closed round. */
   function makeView(): RoundView {
     return buildRoundView(makeRound(['a', 'b'], { closedAt: OPENED_AT }), [
-      makeOrder('a', { status: 'confirmed' }),
+      makeOrder('a', { status: 'collected' }),
       makeOrder('b', { messages: [confirmLink('b', OPENED_AT)] }),
     ]);
   }

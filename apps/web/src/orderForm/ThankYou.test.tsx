@@ -11,7 +11,9 @@ describe('ThankYou', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'תודה!' })).toBeDefined();
     expect(
-      screen.getByText('קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp לאישור.'),
+      screen.getByText(
+        'קיבלנו את ההזמנה. לפני הסבב באזור שלך נשלח לך הודעת WhatsApp עם מועד האיסוף.',
+      ),
     ).toBeDefined();
   });
 

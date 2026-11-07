@@ -706,7 +706,7 @@ describe('StopCard current', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'דנה כהן' })).toBeTruthy();
     expect(screen.getByText('שד נהר הדן 12')).toBeTruthy();
     expect(screen.getByText(/דלת הדירה/)).toBeTruthy();
-    expect(screen.getByText('אושרה')).toBeTruthy();
+    expect(screen.getByText('בסבב')).toBeTruthy();
     expect(screen.queryByText('בלי מיקום')).toBeNull();
     // Same Waze link as the plain card, and every name still carries the customer.
     expect(screen.getByRole('link', { name: 'נווט, דנה כהן' }).getAttribute('href')).toBe(

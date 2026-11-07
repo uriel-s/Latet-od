@@ -8,7 +8,6 @@ import type { Express } from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  CUSTOMER_ORDER_MESSAGES,
   ROUND_MESSAGES,
   roundViewSchema,
   type MessageLogEntry,
@@ -38,7 +37,7 @@ const MALFORMED_ID = 'not-an-id';
 /** When an "already closed" round was closed, long before the test runs. */
 const EARLIER_CLOSE = new Date('2026-11-12T18:00:00.000Z');
 
-/** A confirmation request already sent as a wa.me link (ADR-0003), for orders seeded in a round. */
+/** A round message already sent as a wa.me link (ADR-0003), for orders seeded in a round. */
 const MANUAL_REQUEST: MessageLogEntry = {
   kind: 'confirmRequest',
   at: new Date('2026-11-11T17:00:00.000Z'),
@@ -50,8 +49,8 @@ const MANUAL_REQUEST: MessageLogEntry = {
  * An in-memory orders repo where something happens to an order at the worst moment: just before
  * a conditional write (`ifStatus`) to an id in {@link collectBeforeConditionalWrite}, the order is
  * collected ("אספתי" on another screen won); to an id in {@link confirmOnceBeforeConditionalWrite},
- * it is confirmed, once (the customer's confirm). The write then finds another status and answers
- * null. Unconditional writes go through as usual.
+ * it is confirmed, once ("התחל מסלול" taking a legacy pending order in). The write then finds
+ * another status and answers null. Unconditional writes go through as usual.
  */
 class RacingOrdersRepo extends InMemoryOrdersRepo {
   readonly collectBeforeConditionalWrite = new Set<string>();
@@ -82,7 +81,7 @@ class RacingOrdersRepo extends InMemoryOrdersRepo {
 /**
  * An in-memory rounds repo where the round changes under the close: before the first
  * conditional write to an id in {@link routeOnceBeforeConditionalWrite}, the round is routed
- * ("סגור אישורים ובנה מסלול" on another screen won); when {@link alwaysMissConditionalWrites} is
+ * ("התחל מסלול" on another screen won); when {@link alwaysMissConditionalWrites} is
  * set, every conditional write misses, as if something kept changing the round.
  */
 class RacingRoundsRepo extends InMemoryRoundsRepo {
@@ -144,7 +143,7 @@ type OrderEntry = Partial<NewOrder> | ((round: Round) => Partial<NewOrder>);
 
 /**
  * Stores a round (open and confirming unless overridden) with one order per entry, in plan order:
- * each `confirmed` in the round, its confirmation request sent, with the entry's overrides on top.
+ * each `confirmed` in the round, its round message sent, with the entry's overrides on top.
  * With `routed`, the round is in phase `routed` and every entry is also a stop of its route, in
  * the same order.
  */
@@ -259,11 +258,6 @@ function postToRound(roundId: string, path: string, body?: object): request.Test
   return body === undefined ? req : req.send(body);
 }
 
-/** The customer's "כן, אוציא את הבקבוקים" on their own page (no login). */
-function customerConfirm(token: string): request.Test {
-  return request(app).post(`/api/o/${token}/confirm`).set(SAME_ORIGIN_HEADERS);
-}
-
 /** The round's view in a 200 body, checked against the shared contract the web app parses. */
 function viewOf(res: request.Response): RoundView {
   return roundViewSchema.parse(res.body);
@@ -283,17 +277,18 @@ function expectBetween(date: Date | undefined, before: Date, after: Date): void 
   expect(date?.getTime()).toBeLessThanOrEqual(after.getTime());
 }
 
-/** Expects `order` (as stored now) to have left `round` at its close for `reason`. */
-function expectSentBack(
-  order: Order,
-  round: Round,
-  reason: 'notReached' | 'notConfirmed',
-  before: Date,
-  after: Date,
-): void {
+/**
+ * Expects `order` (as stored now) to have left `round` at its close with reason `notReached`
+ * ("לא הגענו אליו"): the only reason a close gives, in either phase (ADR-0012).
+ */
+function expectSentBack(order: Order, round: Round, before: Date, after: Date): void {
   expect(order.status).toBe('waiting');
   expect(order).not.toHaveProperty('roundId');
-  expect(order.lastMiss).toStrictEqual({ date: round.date, reason, roundId: round.id });
+  expect(order.lastMiss).toStrictEqual({
+    date: round.date,
+    reason: 'notReached',
+    roundId: round.id,
+  });
   expectBetween(order.updatedAt, before, after);
 }
 
@@ -325,8 +320,8 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     expect(res.status).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
     // The two stops Yoel did not get to wait for the next round, with "לא הגענו אליו".
-    expectSentBack(await storedOrder(first.id), round, 'notReached', before, after);
-    expectSentBack(await storedOrder(second.id), round, 'notReached', before, after);
+    expectSentBack(await storedOrder(first.id), round, before, after);
+    expectSentBack(await storedOrder(second.id), round, before, after);
     // Every handled stop, and the order that left earlier, is exactly as it was.
     for (const untouched of [collected, notFound, cancelled, otherDate]) {
       expect(await storedOrder(untouched.id)).toStrictEqual(untouched);
@@ -350,8 +345,7 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
       [otherDate.id, 'left'],
     ]);
     expect(groupsOf(view)).toStrictEqual({
-      confirmed: [collected.id],
-      pending: [],
+      inRound: [collected.id],
       otherDate: [otherDate.id],
     });
     expect(view.sendList).toStrictEqual([]);
@@ -359,7 +353,7 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     expect((await getRound(round.id)).body).toStrictEqual(res.body);
   });
 
-  it('sends every pending and confirmed order of a confirming round back as notConfirmed', async () => {
+  it('sends every order of a round closed before its route back as notReached, a legacy pending one too', async () => {
     const { round, orders: seeded } = await seedRound([
       { status: 'pending' },
       {},
@@ -374,8 +368,8 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     const after = new Date();
 
     expect(res.status).toBe(200);
-    expectSentBack(await storedOrder(pending.id), round, 'notConfirmed', before, after);
-    expectSentBack(await storedOrder(confirmed.id), round, 'notConfirmed', before, after);
+    expectSentBack(await storedOrder(pending.id), round, before, after);
+    expectSentBack(await storedOrder(confirmed.id), round, before, after);
     expect(await storedOrder(otherDate.id)).toStrictEqual(otherDate);
     expect(await storedOrder(cancelled.id)).toStrictEqual(cancelled);
 
@@ -386,12 +380,12 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
 
     const view = viewOf(res);
     expect(view.round).toMatchObject({ status: 'closed', phase: 'confirming' });
-    expect(groupsOf(view)).toStrictEqual({ confirmed: [], pending: [], otherDate: [otherDate.id] });
+    expect(groupsOf(view)).toStrictEqual({ inRound: [], otherDate: [otherDate.id] });
     expect(view.sendList).toStrictEqual([]);
     expect(view.stops).toStrictEqual([]);
   });
 
-  it('sends a stray pending stop of a routed round back as notConfirmed', async () => {
+  it('sends a legacy pending stop of a routed round back as notReached, like a confirmed one', async () => {
     const { round, orders: seeded } = await seedRound([{ status: 'pending' }, {}], {
       routed: true,
     });
@@ -402,8 +396,8 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     expect((await close(round.id)).status).toBe(200);
     const after = new Date();
 
-    expectSentBack(await storedOrder(pending.id), round, 'notConfirmed', before, after);
-    expectSentBack(await storedOrder(confirmed.id), round, 'notReached', before, after);
+    expectSentBack(await storedOrder(pending.id), round, before, after);
+    expectSentBack(await storedOrder(confirmed.id), round, before, after);
   });
 
   it('closes a routed round with no stops', async () => {
@@ -425,7 +419,7 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
 
     expect(res.status).toBe(200);
     expect(viewOf(res).round.status).toBe('closed');
-    expect((await storedOrder(order.id)).lastMiss?.reason).toBe('notConfirmed');
+    expect((await storedOrder(order.id)).lastMiss?.reason).toBe('notReached');
   });
 
   it('answers a second close with 200 and changes nothing more', async () => {
@@ -457,8 +451,8 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     const after = new Date();
 
     expect(res.status).toBe(200);
-    expectSentBack(await storedOrder(confirmed.id), round, 'notReached', before, after);
-    expectSentBack(await storedOrder(pending.id), round, 'notConfirmed', before, after);
+    expectSentBack(await storedOrder(confirmed.id), round, before, after);
+    expectSentBack(await storedOrder(pending.id), round, before, after);
     expect(await storedOrder(collected.id)).toStrictEqual(collected);
     // The round itself is not written again: it keeps its first closedAt.
     expect(await storedRound(round.id)).toStrictEqual(round);
@@ -526,57 +520,19 @@ describe('after "סגור סבב"', () => {
     expect(await storedState()).toStrictEqual(before);
   });
 
-  it('refuses "אישר בטלפון": 409 confirmations_closed in the round, 404 for an order sent back', async () => {
-    const { round, orders: seeded } = await seedRound([{ status: 'pending' }, CANCELLED]);
-    const [swept, cancelled] = take(seeded, 2);
-    if (!swept || !cancelled) throw new Error();
+  it('refuses "התחל מסלול" with 409 confirmations_closed, changing nothing', async () => {
+    const { round } = await seedRound([{}, { status: 'pending' }]);
     expect((await close(round.id)).status).toBe(200);
     const before = await storedState();
 
-    // Still in the round (it keeps its roundId): the closed round answers first.
-    const inRound = await postToRound(round.id, `orders/${cancelled.id}/confirm-by-phone`);
-    expect(inRound.status).toBe(409);
-    expect(inRound.body).toStrictEqual({
-      error: 'confirmations_closed',
-      message: ROUND_MESSAGES.confirmationsClosed,
-    });
-    // Sent back: it is in no round any more, so it is not this round's to confirm.
-    const left = await postToRound(round.id, `orders/${swept.id}/confirm-by-phone`);
-    expect(left.status).toBe(404);
-    expect(left.body).toStrictEqual({ error: 'order_not_found' });
-    expect(await storedState()).toStrictEqual(before);
-  });
-
-  it("refuses the customer's confirm on an order sent back with 409 confirmations_closed", async () => {
-    const { round, orders: seeded } = await seedRound([{ status: 'pending' }]);
-    const [order] = take(seeded, 1);
-    if (!order) throw new Error();
-    expect((await close(round.id)).status).toBe(200);
-    const before = await storedState();
-
-    const res = await customerConfirm(order.token);
+    const res = await postToRound(round.id, 'route');
 
     expect(res.status).toBe(409);
     expect(res.body).toStrictEqual({
       error: 'confirmations_closed',
-      message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed,
+      message: ROUND_MESSAGES.confirmationsClosed,
     });
     expect(await storedState()).toStrictEqual(before);
-  });
-
-  it("refuses the customer's confirm on an order still pending in a closed round", async () => {
-    // A first close that stopped before it reached this order: the closed round answers.
-    const { orders: seeded } = await seedRound([{ status: 'pending' }], {
-      round: { status: 'closed', closedAt: new Date(EARLIER_CLOSE) },
-    });
-    const [order] = take(seeded, 1);
-    if (!order) throw new Error();
-
-    const res = await customerConfirm(order.token);
-
-    expect(res.status).toBe(409);
-    expect(res.body).toMatchObject({ error: 'confirmations_closed' });
-    expect(await storedOrder(order.id)).toStrictEqual(order);
   });
 });
 
@@ -601,12 +557,12 @@ describe('"סגור סבב" racing other screens', () => {
       roundId: round.id,
     });
     expect(await storedOrder(collectedMeanwhile.id)).not.toHaveProperty('lastMiss');
-    expectSentBack(await storedOrder(other.id), round, 'notReached', before, after);
+    expectSentBack(await storedOrder(other.id), round, before, after);
     const states = viewOf(res).stops.map((stop) => stop.state);
     expect(states).toStrictEqual(['collected', 'left']);
   });
 
-  it('sends back an order the customer confirmed between the read and the write', async () => {
+  it('sends back a legacy pending order the route build took in between the read and the write', async () => {
     const racing = new RacingOrdersRepo();
     buildApp({ orders: racing });
     const { round, orders: seeded } = await seedRound([{ status: 'pending' }]);
@@ -619,7 +575,7 @@ describe('"סגור סבב" racing other screens', () => {
     const after = new Date();
 
     // The first write missed (pending → confirmed meanwhile); the retry sent the confirmed one back.
-    expectSentBack(await storedOrder(order.id), round, 'notConfirmed', before, after);
+    expectSentBack(await storedOrder(order.id), round, before, after);
   });
 
   it('closes a round routed between the read and the write as routed, with notReached', async () => {
@@ -641,7 +597,7 @@ describe('"סגור סבב" racing other screens', () => {
     const stored = await storedRound(round.id);
     expect(stored).toMatchObject({ status: 'closed', phase: 'routed' });
     expectBetween(stored.closedAt, before, after);
-    expectSentBack(await storedOrder(order.id), round, 'notReached', before, after);
+    expectSentBack(await storedOrder(order.id), round, before, after);
   });
 
   it('answers 500 and sweeps nothing when the round keeps changing under the close', async () => {

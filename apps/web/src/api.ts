@@ -650,9 +650,9 @@ export async function fetchRounds(fetchFn: FetchFn = globalFetch): Promise<Round
   }
 }
 
-/** How POST /api/collector/rounds ("שלח בקשות אישור") ended, as the planning screen shows it. */
+/** How POST /api/collector/rounds ("שלח הודעות") ended, as the planning screen shows it. */
 export type PlanRoundOutcome =
-  /** 201: the round is planned and its orders are `pending`; `view` is the round as stored. */
+  /** 201: the round is planned and its orders are `confirmed` (ADR-0012); `view` is the round as stored. */
   | { kind: 'planned'; view: RoundView }
   /**
    * 400: the plan did not validate (normally caught by the same check before sending).
@@ -673,7 +673,7 @@ export type PlanRoundOutcome =
 
 /**
  * Plans a round (spec §3.5 "תכנון סבב") with `POST /api/collector/rounds`: the api stores it,
- * moves the orders to `pending` and writes each one's confirmation request.
+ * moves the orders into it (`confirmed`: nobody confirms, ADR-0012) and writes each one's message.
  */
 export async function planRound(
   request: PlanRoundRequest,
@@ -715,68 +715,6 @@ export async function planRound(
   }
 }
 
-/** How "אישר בשיחה או בהודעה" ended, as the round screen shows it. */
-export type ConfirmByPhoneOutcome =
-  /** 200: the order is confirmed (also when it already was); `view` is the round as it is now. */
-  | { kind: 'confirmed'; view: RoundView }
-  /**
-   * 409: the round's confirmations are closed (`confirmations_closed`), or the order can no longer
-   * be confirmed, because it was cancelled or collected (`invalid_transition`).
-   */
-  | { kind: 'closed'; message: string }
-  /** 404: the round is gone, or the order is not in it (any more). */
-  | { kind: 'notFound' }
-  /** 401: no valid session; the screen goes to /login. */
-  | { kind: 'loggedOut' }
-  /** No usable answer: a network error, a 403 or 5xx, another 409, or a body it cannot read. */
-  | { kind: 'failed' };
-
-/**
- * Yoel's "אישר בשיחה או בהודעה" (spec §3.6): marks order `orderId` of round `roundId` confirmed, with
- * `POST /api/collector/rounds/:id/orders/:orderId/confirm-by-phone` (no body). Both ids are
- * encoded into the path. An order already confirmed answers `confirmed` too, so a second tap is
- * harmless.
- */
-export async function confirmOrderByPhone(
-  roundId: string,
-  orderId: string,
-  fetchFn: FetchFn = globalFetch,
-): Promise<ConfirmByPhoneOutcome> {
-  const path = `${roundPath(roundId)}/orders/${encodeURIComponent(orderId)}/confirm-by-phone`;
-  const response = await fetchOrNull(fetchFn, path, { method: 'POST' });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const view = await roundViewOf(response);
-      return view === null ? { kind: 'failed' } : { kind: 'confirmed', view };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return { kind: 'notFound' };
-    case 409:
-      return confirmConflictOutcome(await readJson(response));
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/**
- * A 409 of "אישר בשיחה או בהודעה", told apart by the body's `error` code: both are `closed`, each with its
- * own words. A body without a known code is `failed`: guessing could tell Yoel the wrong thing.
- */
-function confirmConflictOutcome(body: unknown): ConfirmByPhoneOutcome {
-  const code = isObject(body) ? body.error : undefined;
-  switch (code) {
-    case 'confirmations_closed':
-      return { kind: 'closed', message: ROUND_MESSAGES.confirmationsClosed };
-    case 'invalid_transition':
-      return { kind: 'closed', message: COLLECTOR_ORDER_MESSAGES.orderClosed };
-    default:
-      return { kind: 'failed' };
-  }
-}
-
 /** The path of round `roundId`, both ids encoded so each stays one path segment. */
 function roundPath(roundId: string): string {
   return `${COLLECTOR_ROUNDS_PATH}/${encodeURIComponent(roundId)}`;
@@ -805,8 +743,8 @@ export type BuildRouteOutcome =
 
 /**
  * Yoel's "התחל מסלול" (spec §3.6 step 2) with `POST /api/collector/rounds/:id/route`
- * (no body): the api closes the confirmations, sends whoever did not confirm back to `waiting`,
- * and stores the route `planRoute` computes. Not retried: a build whose answer was lost is stored,
+ * (no body): every order still in the round is a stop (ADR-0012), and the api stores the route
+ * `planRoute` computes. Not retried: a build whose answer was lost is stored,
  * and a second one would only answer `closed`.
  */
 export async function buildRoute(
@@ -991,9 +929,8 @@ export type CloseRoundOutcome =
 
 /**
  * Yoel's close button ("בטל את הסבב" / "סיימתי את הסבב", spec §3.6) with `POST /api/collector/rounds/:id/close` (no body): the api
- * closes the round and sends every order it did not handle back to `waiting` (a pending or
- * confirmed order of a round still confirming as "לא אישר בזמן", a stop not reached as "לא הגענו
- * אליו"). No message is sent. Not retried: a close whose answer was lost is stored, and a second
+ * closes the round and sends every order it did not handle back to `waiting`, as "לא הגענו
+ * אליו". No message is sent. Not retried: a close whose answer was lost is stored, and a second
  * close is harmless anyway, since it answers `closed` with the round as it is.
  */
 export async function closeRound(
@@ -1082,7 +1019,7 @@ export async function fetchHistory(
 // goes into the path encoded. The same rules as the collector's routes otherwise: every message is
 // a shared constant, never the body's text, and every success body is parsed with the shared
 // schema. Nothing is retried, not even after a network error: every write is idempotent (a second
-// confirm, decline or cancel answers `saved` with the order as it is), so the customer just taps
+// decline or cancel answers `saved` with the order as it is), so the customer just taps
 // again, and an answer lost on the way is put right by that tap.
 // ---------------------------------------------------------------------------------------------
 
@@ -1096,7 +1033,7 @@ function customerOrderPath(token: string): string {
 
 /** How GET /api/o/:token ended, as the customer's page shows it. */
 export type CustomerOrderOutcome =
-  /** 200: the order as it is stored now, with its round's date while it is pending or confirmed. */
+  /** 200: the order as it is stored now, with its round's date while it is in a round. */
   | { kind: 'loaded'; order: CustomerOrder }
   /** 404: no order has this token, or the token is not one at all (the same answer for both). */
   | { kind: 'notFound' }
@@ -1105,7 +1042,7 @@ export type CustomerOrderOutcome =
 
 /**
  * Loads the customer's order from `GET /api/o/:token`. `cache: 'no-store'`, so the page never
- * shows a status the browser kept from before a confirm or a cancel.
+ * shows a status the browser kept from before a decline or a cancel.
  */
 export async function fetchCustomerOrder(
   token: string,
@@ -1132,10 +1069,7 @@ export async function fetchCustomerOrder(
 export type CustomerOrderWriteOutcome =
   /** 200: the order as stored now, which the page draws instead of what it sent. */
   | { kind: 'saved'; order: CustomerOrder }
-  /**
-   * 409: the confirmations of its round are closed (`confirmations_closed`, confirm only), or the
-   * order was collected or cancelled meanwhile (`invalid_transition`). `message` says which.
-   */
+  /** 409: the order was collected or cancelled meanwhile (`invalid_transition`). */
   | { kind: 'closed'; message: string }
   /** 400 (PATCH only): a field was refused; placed next to its field like the booking form's. */
   | { kind: 'invalid'; errors: FormErrors }
@@ -1143,19 +1077,6 @@ export type CustomerOrderWriteOutcome =
   | { kind: 'notFound' }
   /** No usable answer: a network error, a 403 or 5xx, another 409, or a body it cannot read. */
   | { kind: 'failed' };
-
-/**
- * "כן, אוציא את הבקבוקים" with `POST /api/o/:token/confirm` (no body): pending → confirmed. An order
- * already confirmed answers `saved` too; a round no longer taking confirmations answers `closed`.
- */
-export async function confirmCustomerOrder(
-  token: string,
-  fetchFn: FetchFn = globalFetch,
-): Promise<CustomerOrderWriteOutcome> {
-  return customerWriteOutcomeOf(
-    await fetchOrNull(fetchFn, `${customerOrderPath(token)}/confirm`, { method: 'POST' }),
-  );
-}
 
 /**
  * "לא מתאים הפעם" with `POST /api/o/:token/decline` (no body): the order leaves its round, back
@@ -1227,15 +1148,12 @@ async function customerWriteOutcomeOf(
 }
 
 /**
- * A 409 of the customer's page, told apart by the body's `error` code: both are `closed`, each
- * with its own words. A body without a known code is `failed`: guessing could tell the customer
- * the wrong thing.
+ * A 409 of the customer's page, told apart by the body's `error` code. A body without a known code
+ * is `failed`: guessing could tell the customer the wrong thing.
  */
 function customerConflictOutcome(body: unknown): CustomerOrderWriteOutcome {
   const code = isObject(body) ? body.error : undefined;
   switch (code) {
-    case 'confirmations_closed':
-      return { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.confirmationsClosed };
     case 'invalid_transition':
       return { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed };
     default:

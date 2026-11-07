@@ -22,8 +22,6 @@ import {
   cancelCustomerOrder,
   closeRound,
   collectStop,
-  confirmCustomerOrder,
-  confirmOrderByPhone,
   createOrder,
   declineCustomerOrder,
   deleteCollectorOrder,
@@ -1055,7 +1053,7 @@ describe('markMessageOpened', () => {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * A planned round with one pending order and its "שלח" row, as the api answers it. JSON.stringify
+ * A planned round with one order in it and its "שלח" row, as the api answers it. JSON.stringify
  * writes the Dates as ISO strings, so a parsed answer equal to this one has turned them back.
  */
 const ROUND_VIEW: RoundView = {
@@ -1070,8 +1068,7 @@ const ROUND_VIEW: RoundView = {
     createdAt: new Date('2026-10-20T07:00:00.000Z'),
   },
   groups: [
-    { key: 'confirmed', orders: [] },
-    { key: 'pending', orders: [{ ...ORDER, status: 'pending' }] },
+    { key: 'inRound', orders: [{ ...ORDER, status: 'confirmed' }] },
     { key: 'otherDate', orders: [] },
   ],
   sendList: [
@@ -1084,17 +1081,6 @@ const ROUND_VIEW: RoundView = {
     },
   ],
   stops: [],
-};
-
-/** The same round once its customer confirmed: no "שלח" row left. */
-const CONFIRMED_VIEW: RoundView = {
-  ...ROUND_VIEW,
-  groups: [
-    { key: 'confirmed', orders: [{ ...ORDER, status: 'confirmed' }] },
-    { key: 'pending', orders: [] },
-    { key: 'otherDate', orders: [] },
-  ],
-  sendList: [],
 };
 
 /** Bodies of a success that are not a `RoundView`: each must answer `failed`. */
@@ -1133,7 +1119,7 @@ describe('fetchRounds', () => {
     expect(outcome).toEqual({ kind: 'loaded', rounds: [ROUND_VIEW], previousPickupBy: '08:30' });
     if (outcome.kind !== 'loaded') throw new Error('expected loaded');
     expect(outcome.rounds[0]?.round.createdAt).toBeInstanceOf(Date);
-    expect(outcome.rounds[0]?.groups[1]?.orders[0]?.createdAt).toBeInstanceOf(Date);
+    expect(outcome.rounds[0]?.groups[0]?.orders[0]?.createdAt).toBeInstanceOf(Date);
   });
 
   it('carries previousPickupFrom next to previousPickupBy', async () => {
@@ -1341,131 +1327,6 @@ describe('planRound', () => {
   });
 });
 
-describe('confirmOrderByPhone', () => {
-  it('posts to /api/collector/rounds/:id/orders/:orderId/confirm-by-phone, both ids encoded, no body', async () => {
-    const { fetchFn, calls } = makeFakeFetch({ status: 200, body: CONFIRMED_VIEW });
-
-    await confirmOrderByPhone(ODD_ID, 'e/f?g', fetchFn);
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.input).toBe(
-      `/api/collector/rounds/${ODD_ID_IN_PATH}/orders/e%2Ff%3Fg/confirm-by-phone`,
-    );
-    expect(calls[0]?.init?.method).toBe('POST');
-    expect(calls[0]?.init?.body).toBeUndefined();
-    expect(calls[0]?.init?.headers).toBeUndefined();
-  });
-
-  it('answers confirmed with the round view on 200, Dates parsed', async () => {
-    const { fetchFn } = makeFakeFetch({ status: 200, body: CONFIRMED_VIEW });
-
-    const outcome = await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn);
-
-    expect(outcome).toEqual({ kind: 'confirmed', view: CONFIRMED_VIEW });
-    if (outcome.kind !== 'confirmed') throw new Error('expected confirmed');
-    expect(outcome.view.groups[0]?.orders[0]?.createdAt).toBeInstanceOf(Date);
-  });
-
-  it('answers failed on a 200 whose body is not a round view', async () => {
-    for (const answer of NOT_A_ROUND_VIEW) {
-      const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
-      expect(
-        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
-        JSON.stringify(answer),
-      ).toEqual({ kind: 'failed' });
-    }
-  });
-
-  it('answers closed with the shared message on a 409 confirmations_closed', async () => {
-    const { fetchFn } = makeFakeFetch({
-      status: 409,
-      body: { error: 'confirmations_closed', message: 'anything' },
-    });
-
-    expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
-      kind: 'closed',
-      message: 'האישורים לסבב הזה כבר נסגרו.',
-    });
-  });
-
-  it('answers closed with the order message on a 409 invalid_transition', async () => {
-    const { fetchFn } = makeFakeFetch({
-      status: 409,
-      body: { error: 'invalid_transition', message: 'anything' },
-    });
-
-    expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
-      kind: 'closed',
-      message: 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
-    });
-  });
-
-  it('answers failed on a 409 whose body has no known error code', async () => {
-    for (const answer of [
-      { status: 409, body: { error: 'orders_not_waiting', message: 'x', orderIds: [] } },
-      { status: 409, body: { message: 'x' } },
-      { status: 409, body: ['confirmations_closed'] },
-      { status: 409, text: 'Conflict' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(
-        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
-        JSON.stringify(answer),
-      ).toEqual({ kind: 'failed' });
-    }
-  });
-
-  it('answers notFound on a 404, for a missing round and a missing order alike', async () => {
-    for (const answer of [
-      { status: 404, body: { error: 'round_not_found' } },
-      { status: 404, body: { error: 'order_not_found' } },
-      { status: 404, text: 'Not Found' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(
-        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
-        JSON.stringify(answer),
-      ).toEqual({ kind: 'notFound' });
-    }
-  });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn)).toEqual({
-        kind: 'loggedOut',
-      });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [201, 400, 403, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'x' } },
-        { status: 200, body: CONFIRMED_VIEW },
-      );
-      expect(
-        await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn),
-        String(status),
-      ).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: CONFIRMED_VIEW });
-      expect(await confirmOrderByPhone(ROUND_VIEW.round.id, ORDER.id, fetchFn), answer).toEqual({
-        kind: 'failed',
-      });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
-});
-
 /** A second order of the routed round, still to collect, at a street with no map point. */
 const SECOND_ORDER: CollectorOrder = {
   ...ORDER,
@@ -1482,8 +1343,7 @@ const ROUTED_VIEW: RoundView = {
   ...ROUND_VIEW,
   round: { ...ROUND_VIEW.round, phase: 'routed' },
   groups: [
-    { key: 'confirmed', orders: [{ ...ORDER, status: 'collected' }, SECOND_ORDER] },
-    { key: 'pending', orders: [] },
+    { key: 'inRound', orders: [{ ...ORDER, status: 'collected' }, SECOND_ORDER] },
     { key: 'otherDate', orders: [] },
   ],
   sendList: [],
@@ -1551,7 +1411,7 @@ describe('buildRoute', () => {
 
     expect(await buildRoute(ROUND_VIEW.round.id, fetchFn)).toEqual({
       kind: 'closed',
-      message: 'האישורים לסבב הזה כבר נסגרו.',
+      message: 'המסלול של הסבב הזה כבר נבנה, או שהסבב נסגר. נא לרענן את המסך.',
     });
   });
 
@@ -2095,7 +1955,7 @@ const TOKEN = 'Ab3_-'.repeat(8) + 'xyz';
 const ODD_TOKEN = 'a/b?c#d';
 const ODD_TOKEN_IN_PATH = 'a%2Fb%3Fc%23d';
 
-/** A pending order of the customer's page, with its round's date and pickup time. */
+/** An order of the customer's page in a round, with its round's date and pickup time. */
 const CUSTOMER_ORDER: CustomerOrder = {
   contact: { name: 'משה כהן', phone: '+972501234567' },
   address: {
@@ -2106,7 +1966,7 @@ const CUSTOMER_ORDER: CustomerOrder = {
     floorApt: 'קומה 3, דירה 12',
   },
   bottlesEstimated: 45,
-  status: 'pending',
+  status: 'confirmed',
   lang: 'he',
   round: { date: '2026-11-12', pickupBy: '18:00' },
 };
@@ -2218,7 +2078,6 @@ describe('fetchCustomerOrder', () => {
 });
 
 describe.each([
-  ['confirmCustomerOrder', confirmCustomerOrder, 'confirm'],
   ['declineCustomerOrder', declineCustomerOrder, 'decline'],
   ['cancelCustomerOrder', cancelCustomerOrder, 'cancel'],
 ] as const)('%s', (_name, press, action) => {
@@ -2249,15 +2108,14 @@ describe('updateCustomerOrder', () => {
   });
 });
 
-/** One of the four writes of the customer's page, called with a fake fetch. */
+/** One of the three writes of the customer's page, called with a fake fetch. */
 interface CustomerWrite {
   name: string;
   write: (fetchFn: FetchFn) => Promise<CustomerOrderWriteOutcome>;
 }
 
-/** The four writes answer alike: every route's success is a 200 with the order as it is now. */
+/** The three writes answer alike: every route's success is a 200 with the order as it is now. */
 const CUSTOMER_WRITES: CustomerWrite[] = [
-  { name: 'confirmCustomerOrder', write: (fetchFn) => confirmCustomerOrder(TOKEN, fetchFn) },
   { name: 'declineCustomerOrder', write: (fetchFn) => declineCustomerOrder(TOKEN, fetchFn) },
   { name: 'cancelCustomerOrder', write: (fetchFn) => cancelCustomerOrder(TOKEN, fetchFn) },
   {
@@ -2268,10 +2126,10 @@ const CUSTOMER_WRITES: CustomerWrite[] = [
 
 describe.each(CUSTOMER_WRITES)('$name answers', ({ write }) => {
   it('saved with the stored order on 200', async () => {
-    const confirmed: CustomerOrder = { ...CUSTOMER_ORDER, status: 'confirmed' };
-    const { fetchFn } = makeFakeFetch({ status: 200, body: { order: confirmed } });
+    const stored: CustomerOrder = { ...CUSTOMER_ORDER, bottlesEstimated: 60 };
+    const { fetchFn } = makeFakeFetch({ status: 200, body: { order: stored } });
 
-    expect(await write(fetchFn)).toEqual({ kind: 'saved', order: confirmed });
+    expect(await write(fetchFn)).toEqual({ kind: 'saved', order: stored });
   });
 
   it('failed on a 200 whose body is not an order', async () => {
@@ -2279,18 +2137,6 @@ describe.each(CUSTOMER_WRITES)('$name answers', ({ write }) => {
       const { fetchFn } = makeFakeFetch({ status: 200, ...answer });
       expect(await write(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
     }
-  });
-
-  it("closed with the spec's words on a 409 confirmations_closed, not the body's", async () => {
-    const { fetchFn } = makeFakeFetch({
-      status: 409,
-      body: { error: 'confirmations_closed', message: 'anything' },
-    });
-
-    expect(await write(fetchFn)).toEqual({
-      kind: 'closed',
-      message: 'האישור נסגר. נחזור אליך עם מועד חדש.',
-    });
   });
 
   it('closed with the shared message on a 409 invalid_transition', async () => {
@@ -2308,6 +2154,8 @@ describe.each(CUSTOMER_WRITES)('$name answers', ({ write }) => {
   it('failed on a 409 whose body has no known error code', async () => {
     for (const answer of [
       { status: 409, body: { error: 'duplicate_open_order', message: 'x' } },
+      // Only the customer's confirm, gone since ADR-0012, answered this one: no words for it now.
+      { status: 409, body: { error: 'confirmations_closed', message: 'x' } },
       { status: 409, body: { message: 'x' } },
       { status: 409, body: ['confirmations_closed'] },
       { status: 409, text: 'Conflict' },

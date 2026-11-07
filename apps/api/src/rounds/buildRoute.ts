@@ -1,5 +1,5 @@
-// The stored route of a round (spec §3.6 "סגור אישורים ובנה מסלול", ADR-0005): the round's
-// confirmed orders, ordered for driving from the start (Yoel's home) to the drop-off, as the
+// The stored route of a round (spec §3.6 "התחל מסלול", ADR-0005): the orders still in the
+// round, ordered for driving from the start (Yoel's home) to the drop-off, as the
 // `RoundStop`s the round keeps; and Yoel's manual move of one stop up or down in it (spec §3.6
 // step 2). Pure: collectorRoundsRoutes.ts decides which orders are stops, passes the start, end
 // and distances from its deps, writes the built route once, and writes each move.

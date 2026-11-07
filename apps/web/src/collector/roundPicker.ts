@@ -14,9 +14,10 @@ import {
 /** What the sheet's chips can select: one region, or every round. */
 export type RegionFilter = Region | 'all';
 
-/** Short Hebrew name of the step a round is in (spec §3.6: step 1 "אישורים", step 2 "מסלול"). */
+/** Short Hebrew name of the step a round is in (spec §3.6: step 1 "תכנון", step 2 "מסלול"). */
 export const ROUND_PHASE_LABELS: Readonly<Record<RoundPhase, string>> = {
-  confirming: 'אישורים',
+  // `confirming` is the phase's name from before ADR-0012: the round is planned, no route yet.
+  confirming: 'תכנון',
   routed: 'מסלול',
 };
 
@@ -60,14 +61,13 @@ export type RoundPickerParts = {
   date: string;
   /** "רמת בית שמש" or "בית שמש". */
   region: string;
-  /** Numbers only: "אישרו 3 מתוך 5" while confirming, "7 עצירות" once routed. */
+  /** Numbers only: "5 בסבב" before the route, "7 עצירות" once routed. */
   summary: string;
 };
 
 /**
- * The words of one round's row. While confirming, the number that matters is how many customers
- * confirmed out of all of the round's orders (all three groups); once routed it is the count of
- * stops in the route.
+ * The words of one round's row. Before the route, the number that matters is how many customers
+ * are in the round (the "בסבב" group); once routed it is the count of stops in the route.
  */
 export function roundPickerParts(view: RoundView): RoundPickerParts {
   const { round, groups, stops } = view;
@@ -75,9 +75,8 @@ export function roundPickerParts(view: RoundView): RoundPickerParts {
   if (round.phase === 'routed') {
     summary = `${stops.length} עצירות`;
   } else {
-    const total = groups.reduce((sum, group) => sum + group.orders.length, 0);
-    const confirmed = groups.find((group) => group.key === 'confirmed')?.orders.length ?? 0;
-    summary = `${ROUND_GROUP_LABELS.confirmed} ${confirmed} מתוך ${total}`;
+    const inRound = groups.find((group) => group.key === 'inRound')?.orders.length ?? 0;
+    summary = `${inRound} ${ROUND_GROUP_LABELS.inRound}`;
   }
   return { date: formatDayMonth(round.date), region: REGION_LABELS[round.region], summary };
 }
@@ -88,7 +87,7 @@ export function roundPickerLabel(view: RoundView): string {
   return `${date} · ${region} · ${summary}`;
 }
 
-/** Short tag of the round's step: "אישורים" or "מסלול". */
+/** Short tag of the round's step: "תכנון" or "מסלול". */
 export function roundPhaseLabel(view: RoundView): string {
   return ROUND_PHASE_LABELS[view.round.phase];
 }

@@ -18,7 +18,7 @@ One developer maintains it alone. Priorities, in order: **zero cost, minimum mov
 
 Sources of truth — read these before changing behaviour:
 - `docs/spec.md` — spec v2 (Hebrew). Supersedes the v1 `.docx` in the root.
-- `docs/decisions/` — ADRs 0001-0006. Where an ADR and the spec disagree, the ADR is newer and wins (its README lists what it changes in the spec).
+- `docs/decisions/` — ADRs 0001-0012. Where an ADR and the spec disagree, the ADR is newer and wins (its README lists what it changes in the spec).
 - `ARCHITECTURE.md` — components, order flow, workspace boundaries.
 
 ### Glossary (for developers and AI)
@@ -39,7 +39,7 @@ UI text is Hebrew; code, identifiers and commit messages are English.
 | רחוב / רחוב קרוב | `streetCode` / `nearStreetCode` | Street from the official data.gov.il list; "near street" maps a free-text address onto a known street for region + location (ADR-0005). |
 | איפה הבקבוקים | `bottlesSpot` | Private-house entrance / apartment door / building entrance. |
 | עמוד ההזמנה | `/o/<token>` | The customer's page. Reached only by a long random `token`, never by id. |
-| בקשת אישור | `confirmRequest` | WhatsApp message sent when a round is planned. |
+| הודעת סבב | `confirmRequest` | WhatsApp message sent when a round is planned. Announces the pickup; asks for no confirmation (ADR-0012), the name is historical. |
 | תודה | `thankYou` | WhatsApp message sent on "אספתי". |
 | שולח הודעות | `MessageSender` | Interface for WhatsApp; MVP implementation `WaMeLinkSender` (Yoel taps "send"), fake `FakeSender` (ADR-0003). |
 
@@ -48,12 +48,12 @@ UI text is Hebrew; code, identifiers and commit messages are English.
 | Code | Hebrew | When |
 |---|---|---|
 | `waiting` | ממתינה לסבב | Created, or back from a round that did not collect it. |
-| `pending` | ממתינה לאישור | In a round; confirmation request sent. |
-| `confirmed` | אושרה | Customer confirmed, or Yoel marked "אישר בשיחה או בהודעה". |
+| `pending` | ממתינה לאישור | Legacy (ADR-0012): nothing enters it; old orders in it are taken into the route by "התחל מסלול". |
+| `confirmed` | בסבב | In a round: Yoel planned it and the message went out. No customer confirmation (ADR-0012). |
 | `collected` | נאספה | Yoel tapped "אספתי". Final. |
 | `cancelled` | בוטלה | Customer or Yoel cancelled. Final. |
 
-Leaving a round is a **reason, not a status**: the order returns to `waiting` and `lastMiss` stores date + reason (לא אישר בזמן, ביקש מועד אחר, לא נמצא במקום, לא הגענו אליו, שינה כתובת). There is no `archived` and no "כתובת לבדיקה" status — an order without a location gets a "בלי מיקום" tag instead.
+Leaving a round is a **reason, not a status**: the order returns to `waiting` and `lastMiss` stores date + reason (ביקש מועד אחר, לא נמצא במקום, לא הגענו אליו, שינה כתובת; "לא אישר בזמן" is legacy, ADR-0012). There is no `archived` and no "כתובת לבדיקה" status — an order without a location gets a "בלי מיקום" tag instead.
 
 ## Project Structure
 

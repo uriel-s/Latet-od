@@ -1,7 +1,8 @@
 // "תכנון סבב" in the collector app (spec §3.5), at /app/orders/plan: Yoel picks a date and a half
 // of the city; every order waiting in that region starts marked, and he unmarks the ones that stay
-// out. An optional pickup time (pre-filled from the last round, ADR-0003) and an optional personal
-// text go into every confirmation request. "שלח בקשות אישור" plans the round
+// out. Optional pickup times (pre-filled from the last round, ADR-0003, ADR-0012) and an optional
+// personal text go into every message; the message announces the pickup, nobody confirms
+// (ADR-0012). "שלח הודעות" plans the round
 // (POST /api/collector/rounds) and opens the "סבבים" tab, where the round's "שלח" list waits.
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -50,17 +51,28 @@ export const UNASSIGNED_ORDERS_HINT =
   'הזמנות בלי אזור לא מופיעות כאן. קודם בוחרים להן אזור בעריכה.';
 
 /** Under "טקסט אישי": where the text goes (spec §3.5, ת11). */
-export const PERSONAL_TEXT_HINT = 'נוסף לכל בקשות האישור של הסבב.';
+export const PERSONAL_TEXT_HINT = 'נוסף לכל ההודעות של הסבב.';
 
-/** Under the pickup time: where it goes (ADR-0003). */
-export const PICKUP_BY_HINT = 'נכנסת לבקשות האישור.';
+/**
+ * Under the window's start: the start is also the time the bottles must be out by (ADR-0012), so
+ * nobody puts them out after Yoel has started coming.
+ */
+export const PICKUP_FROM_HINT = 'הלקוחות יתבקשו להוציא את הבקבוקים עד השעה הזאת.';
+
+/** Under the window's end: what the message says, and what it says when it is the only time. */
+export const PICKUP_BY_HINT =
+  'בהודעה: "נגיע בין השעות". בלי שעת התחלה, יתבקשו להוציא את הבקבוקים עד השעה הזאת.';
+
+/** The labels of the two time fields (ADR-0012: the window is when Yoel comes). */
+export const PICKUP_FROM_LABEL = 'מאיזו שעה מגיעים (לא חובה)';
+export const PICKUP_BY_LABEL = 'עד איזו שעה מגיעים (לא חובה)';
 
 // The form's three cards (mockup §6), top to bottom.
 const WHERE_CARD_TITLE = 'איפה';
 const WHEN_CARD_TITLE = 'מתי';
 const MESSAGE_CARD_TITLE = 'הודעה';
 
-const SEND_LABEL = 'שלח בקשות אישור';
+const SEND_LABEL = 'שלח הודעות';
 const SENDING_LABEL = 'שולח...';
 
 /** A field of the plan that shows its error next to it, in form order. */
@@ -263,7 +275,7 @@ interface PlanRoundFormProps {
  * The plan's form, in three cards (mockup §6): "איפה" (the region with its waiting-order counts,
  * then the region's orders as checkboxes, all marked when the region is chosen, spec §3.5),
  * "מתי" (the date and the pickup window) and "הודעה" (the personal text); then
- * "שלח בקשות אישור". Every mistake shows next to its field, checked with the
+ * "שלח הודעות". Every mistake shows next to its field, checked with the
  * shared `planRoundRequestSchema` (the api's own check) before anything is sent.
  */
 function PlanRoundForm({
@@ -569,7 +581,7 @@ function PlanRoundForm({
 
         {/* One under the other, not side by side: the full labels are long. */}
         <TextField
-          label="מאיזו שעה להוציא את הבקבוקים (לא חובה)"
+          label={PICKUP_FROM_LABEL}
           type="time"
           value={pickupFrom}
           onChange={(nextTime) => {
@@ -577,11 +589,12 @@ function PlanRoundForm({
             clearErrors('pickupFrom', 'pickupBy');
           }}
           error={errors.byField.pickupFrom}
+          hint={PICKUP_FROM_HINT}
           autoComplete="off"
         />
 
         <TextField
-          label="עד איזו שעה להוציא את הבקבוקים (לא חובה)"
+          label={PICKUP_BY_LABEL}
           type="time"
           value={pickupBy}
           onChange={(nextTime) => {

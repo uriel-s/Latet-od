@@ -75,8 +75,8 @@ export function unsentThankYous(view: RoundView): MessageLink[] {
  * How many orders closing `view`'s round sends back to waiting (spec §3.6; the api's
  * closeRound.ts does the same):
  * - phase `confirming` (e.g. a round called off for rain): every order still in the round, i.e.
- *   the "אישרו" and "עוד לא אישרו" groups. Counted by status, `confirmed` or `pending`, since the
- *   "אישרו" group also holds `collected` orders (roundGroupOf), which a closed round keeps.
+ *   the "בסבב" group. Counted by status, `confirmed` or a legacy `pending`, since the group also
+ *   holds `collected` orders (roundGroupOf), which a closed round keeps.
  * - phase `routed`: the stops still `toCollect`; collected, not found, cancelled and left stops
  *   are already handled.
  */
@@ -85,7 +85,7 @@ export function ordersSentBackCount(view: RoundView): number {
     return view.stops.filter((stop) => stop.state === 'toCollect').length;
   }
   return view.groups
-    .filter((group) => group.key === 'confirmed' || group.key === 'pending')
+    .filter((group) => group.key === 'inRound')
     .flatMap((group) => group.orders)
     .filter((order) => order.status === 'confirmed' || order.status === 'pending').length;
 }

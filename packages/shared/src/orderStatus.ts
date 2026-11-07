@@ -13,9 +13,12 @@ export const ORDER_STATUSES = [
 ] as const;
 
 /**
- * Where an order is in its life (spec §4): `waiting` for a round, `pending` the customer's
- * confirmation, `confirmed`, then `collected` or `cancelled`, both final. Leaving a round is not
- * a status: the order goes back to `waiting` and `lastMiss` records why.
+ * Where an order is in its life (spec §4, ADR-0012): `waiting` for a round, `confirmed` once Yoel
+ * puts it in a round ("בסבב": the customer confirms nothing, the name is from before ADR-0012), then
+ * `collected` or `cancelled`, both final. `pending` (once "ממתינה לאישור") is legacy: no order enters
+ * it any more, but orders planned before ADR-0012 may still be in it, so it stays readable and can
+ * leave the way it always could. Leaving a round is not a status: the order goes back to `waiting`
+ * and `lastMiss` records why.
  */
 export const orderStatusSchema = z.enum(ORDER_STATUSES);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
@@ -26,8 +29,9 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>;
  */
 export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
   waiting: 'ממתינה לסבב',
-  pending: 'ממתינה לאישור',
-  confirmed: 'אושרה',
+  // Legacy (ADR-0012): shown like `confirmed`, since there is nothing left for the customer to do.
+  pending: 'בסבב',
+  confirmed: 'בסבב',
   collected: 'נאספה',
   cancelled: 'בוטלה',
 };
@@ -41,15 +45,17 @@ export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = ['waiting', 'pending'
 
 /**
  * Allowed moves, exactly the arrows of the spec §4 diagram, by the action behind each:
- * - waiting → pending: Yoel plans a round with it and the confirmation request goes out.
- * - pending → confirmed: the customer confirms, or Yoel marks "אישר בטלפון".
+ * - waiting → confirmed: Yoel plans a round with it and the message announcing the pickup goes
+ *   out. No customer confirmation in between (ADR-0012).
+ * - pending → confirmed: legacy. "התחל מסלול" takes an order still pending from before ADR-0012
+ *   into the route.
  * - pending / confirmed → waiting: it leaves the round uncollected (reason in `lastMiss`).
  * - confirmed → collected: Yoel taps "אספתי". A pending order cannot be collected directly.
  * - waiting / pending / confirmed → cancelled: the customer or Yoel cancels.
  * - collected, cancelled: final, no way out.
  */
 export const ORDER_TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
-  waiting: ['pending', 'cancelled'],
+  waiting: ['confirmed', 'cancelled'],
   pending: ['confirmed', 'waiting', 'cancelled'],
   confirmed: ['waiting', 'collected', 'cancelled'],
   collected: [],
@@ -60,7 +66,7 @@ export const ORDER_TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatu
  * Whether an order in status `from` may move to `to`.
  *
  * Staying in the same status is not a transition, so `canTransition('confirmed', 'confirmed')`
- * is false. A repeated action (the customer taps "confirm" twice, or cancels an already
+ * is false. A repeated action (the customer taps "לא מתאים הפעם" twice, or cancels an already
  * cancelled order) is the api's to answer as an idempotent success; this table only says which
  * changes are allowed.
  */

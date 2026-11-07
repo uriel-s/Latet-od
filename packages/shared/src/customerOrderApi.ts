@@ -7,13 +7,14 @@
 //
 // The routes, each answering 200 with a CustomerOrderResponse (the order as it is now):
 // - GET    /api/o/:token          the page. Changes nothing: WhatsApp's link preview sends a GET.
-// - POST   /api/o/:token/confirm  "כן, אוציא את הבקבוקים": pending → confirmed. A second tap succeeds too.
 // - POST   /api/o/:token/decline  "לא מתאים הפעם": the order leaves its round, back to `waiting`
 //                                 with `lastMiss` reason `askedOtherDate`, so Yoel's round screen
 //                                 shows it under "ביקשו מועד אחר".
 // - POST   /api/o/:token/cancel   "ביטול": → cancelled. A second tap succeeds too.
 // - PATCH  /api/o/:token          "שינוי": address, quantity, note; body
 //                                 customerUpdateOrderRequestSchema.
+// There is no "confirm": being in the round is the default, the customer only acts to leave it
+// (ADR-0012).
 import { z } from 'zod';
 import type { InvalidTransitionErrorBody, OrderNotFoundErrorBody } from './collectorOrdersApi.ts';
 import {
@@ -26,15 +27,14 @@ import {
 import { orderSummarySchema, type InvalidOrderErrorBody } from './orderApi.ts';
 import type { OrderStatus } from './orderStatus.ts';
 import { roundSchema, type Round } from './round.ts';
-import type { ConfirmationsClosedErrorBody } from './roundsApi.ts';
 
 // ---------------------------------------------------------------------------------------------
 // Success response (200)
 // ---------------------------------------------------------------------------------------------
 
 /**
- * The round as the customer's page shows it: its day ("נתראה ב-<תאריך>", spec §3.3) and, when
- * Yoel set one, the time to put the bottles out by (ADR-0003). Picked from the stored round's own
+ * The round as the customer's page shows it: its day ("נעבור לאסוף ב-<תאריך>", spec §3.3) and,
+ * when Yoel set them, the pickup times (ADR-0009, ADR-0012). Picked from the stored round's own
  * schema, so never its id, region, orders or stops: those would tell the customer about others.
  */
 const customerRoundSchema = roundSchema.pick({ date: true, pickupBy: true, pickupFrom: true });
@@ -61,18 +61,17 @@ export const customerOrderSchema = orderSummarySchema.extend({
    */
   lang: orderSchema.shape.lang,
   /**
-   * The round the order is in, while the customer has something to do with it: present for a
-   * `pending` order (the date to confirm) and a `confirmed` one ("נתראה ב-<תאריך>"), absent
-   * otherwise. See {@link toCustomerOrder}.
+   * The round the order is in: present for a `confirmed` order (and a legacy `pending` one),
+   * absent otherwise. See {@link toCustomerOrder}.
    */
   round: customerRoundSchema.optional(),
 });
 export type CustomerOrder = z.infer<typeof customerOrderSchema>;
 
 /**
- * The statuses whose page shows the round's date (spec §3.3): `pending` asks to confirm that
- * date, `confirmed` says "נתראה ב-<תאריך>". A `waiting` order is in no round, and a collected or
- * cancelled one is done: its page shows thanks and "הזמנה חדשה", not a date.
+ * The statuses whose page shows the round's date (spec §3.3): `confirmed` (and the legacy
+ * `pending`, ADR-0012) says "נעבור לאסוף ב-<תאריך>". A `waiting` order is in no round, and a
+ * collected or cancelled one is done: its page shows thanks and "הזמנה חדשה", not a date.
  */
 const ROUND_SHOWN_STATUSES: readonly OrderStatus[] = ['pending', 'confirmed'];
 
@@ -98,7 +97,7 @@ export function toCustomerOrder(order: Order, round: Round | null | undefined): 
 }
 
 /**
- * Body of a 200 from every /api/o/:token route: GET, POST confirm / decline / cancel and PATCH.
+ * Body of a 200 from every /api/o/:token route: GET, POST decline / cancel and PATCH.
  * The order as it is now, so the page draws what was stored rather than what it sent. The web
  * page parses the response with this schema.
  */
@@ -181,8 +180,6 @@ export function isLocationChange(before: AddressPlace, after: AddressPlace): boo
  * `customerOrder.*`: change both.
  */
 export const CUSTOMER_ORDER_MESSAGES = {
-  /** "כן, אוציא את הבקבוקים" after Yoel closed the confirmations. Exactly the spec's text (§3.3). */
-  confirmationsClosed: 'האישור נסגר. נחזור אליך עם מועד חדש.',
   /** Any change to an order that was collected or cancelled meanwhile. */
   orderClosed: 'ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.',
   /** An unknown token. Most likely a link cut short when it was copied, so the text says so. */
@@ -196,10 +193,6 @@ export const CUSTOMER_ORDER_MESSAGES = {
  * - 404 `order_not_found` (`OrderNotFoundErrorBody`), from every route: no order has this token,
  *   or the token is not one at all (malformed, forged). The identical body for both, so an answer
  *   never tells a guess anything. The page shows {@link CUSTOMER_ORDER_MESSAGES}.orderNotFound.
- * - 409 `confirmations_closed` (`ConfirmationsClosedErrorBody`), from confirm: the order is not in
- *   a round whose confirmations are open. It left its round (back to `waiting`), or the round's
- *   phase is `routed`, or the round is closed. `message` is
- *   {@link CUSTOMER_ORDER_MESSAGES}.confirmationsClosed.
  * - 409 `invalid_transition` (`InvalidTransitionErrorBody`): the order is collected or cancelled,
  *   so nothing on it changes any more. `message` is {@link CUSTOMER_ORDER_MESSAGES}.orderClosed.
  * - 400 `invalid_order` (`InvalidOrderErrorBody`), from PATCH: the body did not validate.
@@ -208,7 +201,4 @@ export const CUSTOMER_ORDER_MESSAGES = {
  *   show it, so it adds nothing to `fieldErrors`: a body refused only for that has `{}`.
  */
 export type CustomerOrderErrorBody =
-  | OrderNotFoundErrorBody
-  | InvalidOrderErrorBody
-  | ConfirmationsClosedErrorBody
-  | InvalidTransitionErrorBody;
+  OrderNotFoundErrorBody | InvalidOrderErrorBody | InvalidTransitionErrorBody;

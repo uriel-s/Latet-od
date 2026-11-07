@@ -179,7 +179,7 @@ describe('MESSAGES', () => {
     expect(t('en', 'whatsapp.greeting', { name: 'Moshe' })).toBe('Hello Moshe,');
     expect(
       t('en', 'whatsapp.confirmRequest.pickupWindow', { from: '7:00 AM', by: '8:30 AM' }),
-    ).toBe('Please put the bottles out between 7:00 AM and 8:30 AM.');
+    ).toBe('Please put the bottles out by 7:00 AM. We will come between 7:00 AM and 8:30 AM.');
   });
 
   // The brand is a name, not a word to translate: English WhatsApp texts that mention it keep it
