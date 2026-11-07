@@ -277,7 +277,7 @@ describe('styles.css tap targets', () => {
     'leaves the height of %s to .button, and gives it --error text',
     (selector) => {
       const variant = ruleBody(stylesCss, selector);
-      expect(variant).not.toMatch(/(^|[s;])(min-)?height:/);
+      expect(variant).not.toMatch(/(^|[\s;])(min-)?height:/);
       expect(variant).toContain('color: var(--error);');
     },
   );

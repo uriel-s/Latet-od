@@ -257,8 +257,7 @@ function outcomeText(order: HistoryOrder): string {
  */
 function HistoryOrderCard({ order }: { order: HistoryOrder }) {
   return (
-    // round-order-card: shared with RoundsScreen's rows (styles.css).
-    <li className="grouped-row round-order-card">
+    <li className="grouped-row">
       <div className="grouped-row-main">
         <h3 className="grouped-row-title">{order.contact.name}</h3>
         <p className="grouped-row-meta">

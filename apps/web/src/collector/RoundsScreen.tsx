@@ -845,8 +845,7 @@ function RoundOrderCard({ order, confirm }: { order: CollectorOrder; confirm?: C
   const tags = orderTags(order);
 
   return (
-    // round-order-card: shared with HistoryScreen's rows (styles.css).
-    <li className="grouped-row round-order-card">
+    <li className="grouped-row">
       <div className="grouped-row-main">
         <h4 className="grouped-row-title">{contact.name}</h4>
         <p className="grouped-row-meta">
