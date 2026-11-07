@@ -1747,6 +1747,19 @@ html:has(.bottom-nav) {
   font-weight: 800;
 }
 
+/* The rules notice before the booking form: the accepted-bottles list sits on a .card. The extra
+   padding at the start side is the room for the item numbers, which stay inside the card; the
+   text stays at the 1rem base (18px). */
+.rules-list {
+  margin-block: 0.5rem 1rem;
+  padding: 1rem;
+  padding-inline-start: 2.75rem;
+}
+
+.rules-list li + li {
+  margin-top: 0.75rem;
+}
+
 /* The thank-you screen's mission sentence (also a .card). */
 .thank-you-mission {
   margin-block: 1rem;

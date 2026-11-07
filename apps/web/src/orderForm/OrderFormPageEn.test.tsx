@@ -27,7 +27,13 @@ function renderEnglishForm(outcome: CreateOrderOutcome): { requests: CreateOrder
       }}
     />,
   );
+  acceptNotice();
   return { requests };
+}
+
+/** Presses "I understand, continue": the rules notice gives way to the form. */
+function acceptNotice(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'I understand, continue' }));
 }
 
 function typeInto(label: string, text: string): void {
@@ -63,6 +69,20 @@ const CREATED: CreateOrderOutcome = {
 };
 
 describe('the English booking form', () => {
+  it('shows the rules notice in English first, then the form', () => {
+    render(<OrderFormPage lang="en" />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Please note!' })).toBeDefined();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.queryByLabelText('Name')).toBeNull();
+    expect(screen.getByRole('link', { name: 'עברית' }).getAttribute('href')).toBe('/');
+
+    acceptNotice();
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Book a bottle pickup' })).toBeDefined();
+    expect(screen.getByLabelText('Name')).toBeDefined();
+  });
+
   it('groups the fields in cards titled in English and offers the spot as radios', () => {
     renderEnglishForm(CREATED);
     for (const name of ['Details', 'Address', 'Bottles']) {
@@ -126,19 +146,25 @@ describe('the English booking form', () => {
     window.history.replaceState(null, '', '/en');
     render(<App />);
 
+    // The button is on the rules notice too, so the language can be changed before accepting.
     expect(document.documentElement.lang).toBe('en');
     expect(document.documentElement.dir).toBe('ltr');
-    expect(screen.getByRole('heading', { level: 1, name: 'Book a bottle pickup' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Please note!' })).toBeDefined();
     expect(screen.queryByRole('link', { name: 'כניסת מנהל' })).toBeNull();
+    acceptNotice();
+    expect(screen.getByRole('heading', { level: 1, name: 'Book a bottle pickup' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('link', { name: 'עברית' }));
     expect(window.location.pathname).toBe('/');
     expect(document.documentElement.lang).toBe('he');
     expect(document.documentElement.dir).toBe('rtl');
+    // The other language's page starts with its own notice.
+    expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'הבנתי, להזמנה' }));
     expect(screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('link', { name: 'English' }));
     expect(window.location.pathname).toBe('/en');
-    expect(screen.getByRole('heading', { level: 1, name: 'Book a bottle pickup' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Please note!' })).toBeDefined();
   });
 });

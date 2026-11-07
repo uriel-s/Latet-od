@@ -4,7 +4,7 @@
 // screens), the request in api.ts and the returning customer's prefill in savedDetails.ts: this
 // file is the screen itself, the parts only the public form has (the honeypot, the privacy line),
 // and what happens after each answer.
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   DEFAULT_LANG,
   MIN_BOTTLES,
@@ -30,6 +30,7 @@ import {
   prefillFromNavigationState,
   saveDetails,
 } from './savedDetails.ts';
+import { RulesNotice } from './RulesNotice.tsx';
 import { ThankYou } from './ThankYou.tsx';
 import { useOrderForm } from './useOrderForm.ts';
 
@@ -59,8 +60,13 @@ export interface OrderFormPageProps {
 }
 
 /**
- * The public booking form page (spec §3.1), and the thank-you screen (spec §3.2) after a
- * successful order. Renders the page's only `<h1>` (Layout's heading rule) on either screen.
+ * The public booking form page (spec §3.1), preceded by the rules notice, and followed by the
+ * thank-you screen (spec §3.2) after a successful order. Renders the page's only `<h1>` (Layout's
+ * heading rule) on each of the three screens.
+ *
+ * The notice comes first on EVERY entry, also when the form opens filled in from "order again with
+ * the same details", and nothing remembers that it was read: the rules reach everyone, and a
+ * stored flag would be one more thing to go stale.
  *
  * The form is checked with the shared schema before anything is sent, and every mistake is shown
  * in plain words next to its field, with focus on the first one. Nothing is sent while a field
@@ -81,6 +87,9 @@ export function OrderFormPage({
     initialFormValues(navigationState),
   );
   const [sending, setSending] = useState(false);
+  // Plain component state, not storage: false on every visit (see the doc comment above).
+  const [noticeAccepted, setNoticeAccepted] = useState(false);
+  const formHeadingRef = useRef<HTMLHeadingElement>(null);
   // Set by a successful order: the thank-you screen replaces the form.
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
@@ -92,7 +101,36 @@ export function OrderFormPage({
   // shows every mistake of the form, and validation sends nothing while the bottles are too few.
   const notReady = !hasEnoughBottles(values.bottlesEstimated);
 
+  // The notice's button is gone when the form replaces it, and focus would fall back to the page.
+  // Moving it to the form's heading announces the form and scrolls the phone to the top (the
+  // heading is what ThankYou focuses too). Not on a first render: only once the notice is accepted.
+  useEffect(() => {
+    if (noticeAccepted) formHeadingRef.current?.focus();
+  }, [noticeAccepted]);
+
+  // The big button at the top: a plain link, so it works as a direct address too. It stays on the
+  // notice as well, so someone who lands on the wrong language can switch before reading on.
+  const languageSwitch = (
+    <Link
+      to={otherLangPath}
+      className="button button-secondary button-block lang-switch"
+      // The button is written in the other language, so it is read in it.
+      lang={lang === 'en' ? 'he' : 'en'}
+    >
+      {t(lang, 'form.switchLanguage')}
+    </Link>
+  );
+
   if (createdToken !== null) return <ThankYou token={createdToken} lang={lang} />;
+
+  if (!noticeAccepted) {
+    return (
+      <>
+        {languageSwitch}
+        <RulesNotice lang={lang} onAccept={() => setNoticeAccepted(true)} />
+      </>
+    );
+  }
 
   async function send(): Promise<void> {
     if (sendingRef.current) return;
@@ -144,16 +182,11 @@ export function OrderFormPage({
 
   return (
     <>
-      {/* The big button at the top: a plain link, so it works as a direct address too. */}
-      <Link
-        to={otherLangPath}
-        className="button button-secondary button-block lang-switch"
-        // The button is written in the other language, so it is read in it.
-        lang={lang === 'en' ? 'he' : 'en'}
-      >
-        {t(lang, 'form.switchLanguage')}
-      </Link>
-      <h1>{t(lang, 'form.title')}</h1>
+      {languageSwitch}
+      {/* tabIndex -1: focusable from code (see the effect above), not a stop when tabbing. */}
+      <h1 ref={formHeadingRef} tabIndex={-1}>
+        {t(lang, 'form.title')}
+      </h1>
       <p>{t(lang, 'form.intro')}</p>
 
       {/* noValidate: the browser's own bubbles would show English-shaped messages in the wrong

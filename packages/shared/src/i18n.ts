@@ -130,6 +130,14 @@ const HE = {
   // The booking form and its thank-you screen (web: OrderFormPage, OrderFields, ThankYou). Plain
   // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
   // {min} is MIN_BOTTLES.
+  // The rules notice shown before the form (web: RulesNotice): what is accepted, nothing more.
+  'rules.title': 'שימו לב!',
+  'rules.lead': 'אנו מקבלים:',
+  'rules.item1': 'בקבוקים שרשום עליהם פיקדון 30 אגורות',
+  'rules.item2': 'בקבוקים ריקים ואין בהם זבל או נוזל',
+  'rules.item3': 'להכין את הבקבוקים בשקית בלבד סגורה וקשורה.',
+  'rules.thanks': 'תודה, לתת עוד',
+  'rules.accept': 'הבנתי, להזמנה',
   'form.title': 'הזמנת איסוף בקבוקים',
   'form.intro': 'ממלאים את הפרטים, ויואל יבוא לאסוף את הבקבוקים.',
   'form.privacy': 'הפרטים משמשים רק לתיאום האיסוף',
@@ -289,6 +297,14 @@ const EN = {
   'whatsapp.thankYou.orderAgain': 'To order again:',
 
   // The booking form and its thank-you screen.
+  // The rules notice shown before the form.
+  'rules.title': 'Please note!',
+  'rules.lead': 'We accept:',
+  'rules.item1': 'Bottles marked with a 30-agorot deposit',
+  'rules.item2': 'Empty bottles, with no trash or liquid inside',
+  'rules.item3': 'Bottles packed only in a closed, tied bag',
+  'rules.thanks': 'Thank you. Latet Od',
+  'rules.accept': 'I understand, continue',
   'form.title': 'Book a bottle pickup',
   'form.intro': 'Fill in your details and Yoel will come to collect the bottles.',
   'form.privacy': 'Your details are used only to arrange the pickup',

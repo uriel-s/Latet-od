@@ -62,11 +62,20 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
+/** Presses "הבנתי, להזמנה": the rules notice gives way to the form. */
+function acceptNotice(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'הבנתי, להזמנה' }));
+}
+
 /**
- * Renders the form with a fake `submitOrder` that records every request and answers `outcome`.
+ * Renders the page with a fake `submitOrder` that records every request and answers `outcome`,
+ * and goes past the rules notice to the form (`passNotice: false` stays on the notice).
  * Returns the requests, in order.
  */
-function renderForm(outcome: CreateOrderOutcome | Promise<CreateOrderOutcome> = CREATED): {
+function renderForm(
+  outcome: CreateOrderOutcome | Promise<CreateOrderOutcome> = CREATED,
+  passNotice = true,
+): {
   requests: CreateOrderRequest[];
   container: HTMLElement;
   unmount: () => void;
@@ -77,6 +86,7 @@ function renderForm(outcome: CreateOrderOutcome | Promise<CreateOrderOutcome> = 
     return Promise.resolve(outcome);
   };
   const { container, unmount } = render(<OrderFormPage submitOrder={submitOrder} />);
+  if (passNotice) acceptNotice();
   return { requests, container, unmount };
 }
 
@@ -120,6 +130,58 @@ function descriptionOf(element: HTMLElement): string {
 }
 
 describe('OrderFormPage', () => {
+  describe('rules notice', () => {
+    it('shows the notice first, with none of the form', () => {
+      renderForm(CREATED, false);
+
+      expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(screen.queryByLabelText('שם')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שליחת הזמנה' })).toBeNull();
+      // The language button stays, so a visitor can switch before accepting.
+      expect(screen.getByRole('link', { name: 'English' }).getAttribute('href')).toBe('/en');
+    });
+
+    it('shows the form, with its own heading focused, after the button', () => {
+      renderForm(CREATED, false);
+
+      acceptNotice();
+
+      const heading = screen.getByRole('heading', { level: 1, name: 'הזמנת איסוף בקבוקים' });
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(screen.queryByRole('button', { name: 'הבנתי, להזמנה' })).toBeNull();
+      expect(input('שם')).toBeDefined();
+      expect(document.activeElement).toBe(heading);
+    });
+
+    it('shows the notice again on the next visit: nothing is stored', () => {
+      const { unmount } = renderForm();
+      expect(localStorage.length).toBe(0);
+      expect(sessionStorage.length).toBe(0);
+
+      unmount();
+      renderForm(CREATED, false);
+
+      expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+    });
+
+    it('shows the notice before a form opened with "the same details", then the filled form', () => {
+      window.history.replaceState(
+        orderFormNavigationState(makePrefill({ name: 'מעמוד ההזמנה' })),
+        '',
+        '/',
+      );
+      renderForm(CREATED, false);
+
+      expect(screen.getByRole('heading', { level: 1, name: 'שימו לב!' })).toBeDefined();
+      expect(screen.queryByLabelText('שם')).toBeNull();
+
+      acceptNotice();
+
+      expect(input('שם').value).toBe('מעמוד ההזמנה');
+    });
+  });
+
   it('groups the fields in three titled cards and offers the spot as radios', () => {
     renderForm();
     for (const name of ['פרטים', 'כתובת', 'בקבוקים']) {
