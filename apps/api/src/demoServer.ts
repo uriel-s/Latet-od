@@ -140,7 +140,7 @@ async function seedRounds(orderIdsRamat: string[], orderIdsOld: string[]) {
     date: dayFromNow(2),
     region: 'ramat',
     orderIds: orderIdsRamat,
-    personalText: 'שלום, יואל מתנדב לאיסוף בקבוקים למען תפילין לבר מצווה',
+    personalText: 'שלום, איסוף בקבוקים למען תפילין לבר מצווה',
     pickupFrom: '08:00',
     pickupBy: '09:00',
   });

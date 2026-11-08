@@ -19947,7 +19947,7 @@ var HE = {
   // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
   // {min} is MIN_BOTTLES.
   "form.title": "\u05D4\u05D6\u05DE\u05E0\u05EA \u05D0\u05D9\u05E1\u05D5\u05E3 \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD",
-  "form.intro": "\u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD, \u05D5\u05D9\u05D5\u05D0\u05DC \u05D9\u05D1\u05D5\u05D0 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD.",
+  "form.intro": "\u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD, \u05D5\u05E0\u05D2\u05D9\u05E2 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD.",
   "form.privacy": "\u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05E9\u05DE\u05E9\u05D9\u05DD \u05E8\u05E7 \u05DC\u05EA\u05D9\u05D0\u05D5\u05DD \u05D4\u05D0\u05D9\u05E1\u05D5\u05E3",
   "form.submit": "\u05E9\u05DC\u05D9\u05D7\u05EA \u05D4\u05D6\u05DE\u05E0\u05D4",
   "form.sending": "\u05E9\u05D5\u05DC\u05D7...",
@@ -20092,7 +20092,7 @@ var EN = {
   "rules.accept": "I understand, continue",
   // The booking form and its thank-you screen.
   "form.title": "Book a bottle pickup",
-  "form.intro": "Fill in your details and Yoel will come to collect the bottles.",
+  "form.intro": "Fill in your details and we will come to collect the bottles.",
   "form.privacy": "Your details are used only to arrange the pickup",
   "form.submit": "Send order",
   "form.sending": "Sending...",

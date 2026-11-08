@@ -1,7 +1,7 @@
 {
   "name": "לתת עוד",
   "short_name": "לתת עוד",
-  "description": "האפליקציה של יואל לאיסוף בקבוקים בבית שמש",
+  "description": "אפליקציה לאיסוף בקבוקים בבית שמש",
   "start_url": "/app",
   "scope": "/app",
   "display": "standalone",

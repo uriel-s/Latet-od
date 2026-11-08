@@ -140,7 +140,7 @@ const HE = {
   // texts with no copy elsewhere; the Hebrew is what the form showed before English existed.
   // {min} is MIN_BOTTLES.
   'form.title': 'הזמנת איסוף בקבוקים',
-  'form.intro': 'ממלאים את הפרטים, ויואל יבוא לאסוף את הבקבוקים.',
+  'form.intro': 'ממלאים את הפרטים, ונגיע לאסוף את הבקבוקים.',
   'form.privacy': 'הפרטים משמשים רק לתיאום האיסוף',
   'form.submit': 'שליחת הזמנה',
   'form.sending': 'שולח...',
@@ -308,7 +308,7 @@ const EN = {
 
   // The booking form and its thank-you screen.
   'form.title': 'Book a bottle pickup',
-  'form.intro': 'Fill in your details and Yoel will come to collect the bottles.',
+  'form.intro': 'Fill in your details and we will come to collect the bottles.',
   'form.privacy': 'Your details are used only to arrange the pickup',
   'form.submit': 'Send order',
   'form.sending': 'Sending...',
