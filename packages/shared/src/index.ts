@@ -46,6 +46,8 @@ export * from './roundsApi.ts';
 export * from './customerOrderApi.ts';
 // The /api/collector/history contract: a month's totals and closed orders (spec §3.7).
 export * from './historyApi.ts';
+// The /api/collector/push/* contract and Web Push notification payload (ADR-0013).
+export * from './pushApi.ts';
 
 /**
  * Body of GET /api/health. The web app calls it when the form loads to warm up the function, and
