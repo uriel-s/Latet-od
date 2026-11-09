@@ -96,6 +96,21 @@ export function formatDayMonth(value: string | Date, lang: Lang = 'he'): string 
   return dayMonthIn(lang, day, month);
 }
 
+/**
+ * A date and 24-hour time as the collector app shows an order's timestamp (`createdAt`), in
+ * {@link APP_TIME_ZONE}: `"DD/MM · HH:MM"`, two digits for every field (e.g. `"12/11 · 08:05"`).
+ *
+ * @throws RangeError for an invalid `Date`.
+ */
+export function formatDayMonthTime(value: Date): string {
+  if (Number.isNaN(value.getTime())) {
+    throw new RangeError('formatDayMonthTime: invalid Date');
+  }
+  const wall = wallClockPartsInAppZone(value);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${pad(wall.day)}/${pad(wall.month)} · ${pad(wall.hour)}:${pad(wall.minute)}`;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Pickup times (a round's "from" and "by", ADR-0003)
 // ---------------------------------------------------------------------------------------------

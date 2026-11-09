@@ -5,6 +5,7 @@ import {
   formatIsraeliMobileLocal,
   israeliMobileSchema,
   normalizeIsraeliMobile,
+  waMeChatUrl,
 } from './phone.ts';
 
 const E164 = '+972501234567';
@@ -179,5 +180,20 @@ describe('formatIsraeliMobileLocal', () => {
     ]) {
       expect(formatIsraeliMobileLocal(input), input).toBe(input);
     }
+  });
+});
+
+describe('waMeChatUrl', () => {
+  it('builds a clean wa.me link from an E.164 number with the leading + stripped and no text query parameter', () => {
+    const url = waMeChatUrl(E164);
+    expect(url).toBe('https://wa.me/972501234567');
+    expect(url).not.toContain('?');
+    expect(url).not.toContain('text=');
+    expect(url).not.toContain('+');
+  });
+
+  it('handles other 05X prefixes and a number already without a leading +', () => {
+    expect(waMeChatUrl('+972529876543')).toBe('https://wa.me/972529876543');
+    expect(waMeChatUrl('972501234567')).toBe('https://wa.me/972501234567');
   });
 });

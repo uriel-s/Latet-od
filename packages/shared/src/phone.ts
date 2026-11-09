@@ -78,3 +78,13 @@ export function formatIsraeliMobileLocal(e164: string): string {
   const [, prefix, number] = parts;
   return `0${prefix}-${number}`;
 }
+
+/**
+ * A direct WhatsApp chat URL (`https://wa.me/9725XXXXXXXX`) for a stored E.164 phone number,
+ * with the leading `+` stripped and no `?text=` parameter — so the collector can open a chat
+ * with the customer from an order card without pre-filling a message.
+ */
+export function waMeChatUrl(e164: string): string {
+  const digits = e164.startsWith('+') ? e164.slice(1) : e164;
+  return `https://wa.me/${digits}`;
+}

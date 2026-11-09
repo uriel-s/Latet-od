@@ -4,6 +4,7 @@ import {
   addMonths,
   calendarMonthSchema,
   formatDayMonth,
+  formatDayMonthTime,
   formatPickupTime,
   monthInAppZone,
   monthRangeInAppZone,
@@ -74,6 +75,28 @@ describe('formatDayMonth', () => {
     it('throws a RangeError for an invalid Date', () => {
       expect(() => formatDayMonth(new Date('not a date'))).toThrow(RangeError);
     });
+  });
+});
+
+describe('formatDayMonthTime', () => {
+  it('formats date and 24-hour time in Israel in winter (UTC+2)', () => {
+    expect(formatDayMonthTime(new Date('2026-11-11T23:30:00Z'))).toBe('12/11 · 01:30');
+    expect(formatDayMonthTime(new Date('2026-11-12T12:45:00Z'))).toBe('12/11 · 14:45');
+  });
+
+  it('formats date and 24-hour time in Israel in summer (UTC+3)', () => {
+    expect(formatDayMonthTime(new Date('2026-07-01T21:30:00Z'))).toBe('02/07 · 00:30');
+    expect(formatDayMonthTime(new Date('2026-07-01T15:05:00Z'))).toBe('01/07 · 18:05');
+  });
+
+  it('formats Israeli midnight as 00:00 (not 24:00) and pads single-digit day, month, hour, and minute', () => {
+    // 2026-01-04T22:00:00Z is 00:00 on 05/01 in Israel (winter, UTC+2)
+    expect(formatDayMonthTime(new Date('2026-01-04T22:00:00Z'))).toBe('05/01 · 00:00');
+    expect(formatDayMonthTime(new Date('2026-01-05T06:07:00Z'))).toBe('05/01 · 08:07');
+  });
+
+  it('throws a RangeError for an invalid Date', () => {
+    expect(() => formatDayMonthTime(new Date('not a date'))).toThrow(RangeError);
   });
 });
 
