@@ -992,10 +992,16 @@ html:has(.bottom-nav) {
   margin-block: 0;
 }
 
-/* "עריכה" at the end of the card; .button keeps it at least 48px tall, min-width as wide. */
+/* "עריכה" and "הודעה" side by side at the end of the card; .button keeps each at least 48px tall. */
+.order-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
+}
+
 .order-card-edit {
   min-width: var(--tap-target);
-  margin-block-start: 0.5rem;
 }
 
 /* --- Add and edit order screens (collector/AddOrderScreen.tsx, EditOrderScreen.tsx) -- */

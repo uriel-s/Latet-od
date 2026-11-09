@@ -1,6 +1,7 @@
 // The "הזמנות" tab of the collector app (spec §3.5): the orders waiting for a round, in the three
 // groups of GET /api/collector/orders (רמת בית שמש, בית שמש, בלי אזור), each with its order count
-// and bottle total, and each order as a card with its tags (orderTags.ts) and an "עריכה" link.
+// and bottle total, and each order as a card with its tags (orderTags.ts), an "עריכה" link and a
+// WhatsApp "הודעה" link.
 // "הוספת הזמנה" and "עריכה" lead to /app/orders/new and /app/orders/<id>, the add and edit screens
 // built from the booking form's parts (OrderFields); "תכנון סבב" leads to /app/orders/plan
 // (PlanRoundScreen.tsx). The cards here only show.
@@ -11,7 +12,9 @@ import {
   BOTTLES_SPOT_LABELS,
   ORDER_GROUP_LABELS,
   findStreet,
+  formatDayMonthTime,
   formatIsraeliMobileLocal,
+  waMeChatUrl,
   type CollectorOrder,
   type OrderGroup,
 } from '@bottlerun/shared';
@@ -234,9 +237,9 @@ function OrderGroupSection({ group }: { group: OrderGroup }) {
 }
 
 /**
- * One waiting order: who, how to reach them, where the bottles wait and how many, its tags, and
- * the link to edit it. The customer's name is the card's `<h3>`, so a screen reader can jump from
- * order to order.
+ * One waiting order: who, how to reach them, when they booked, where the bottles wait and how
+ * many, its tags, and the links to edit it or open a WhatsApp chat. The customer's name is the
+ * card's `<h3>`, so a screen reader can jump from order to order.
  */
 function OrderCard({ order }: { order: CollectorOrder }) {
   const { contact, address } = order;
@@ -262,6 +265,10 @@ function OrderCard({ order }: { order: CollectorOrder }) {
         <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>
       </p>
       <p>
+        {/* DD/MM · HH:MM in Israel time reads left to right inside the right-to-left text. */}
+        <bdi dir="ltr">{formatDayMonthTime(order.createdAt)}</bdi>
+      </p>
+      <p>
         {address.streetName} {address.houseNumber}
       </p>
       <p>{spot}</p>
@@ -277,12 +284,22 @@ function OrderCard({ order }: { order: CollectorOrder }) {
           ))}
         </p>
       )}
-      {/* The visible word alone would be "עריכה" in every card; the hidden rest names the
-          customer, so a screen reader's list of links tells the cards apart. The visible word
+      {/* The visible words alone would be "עריכה" and "הודעה" in every card; the hidden rest names
+          the customer, so a screen reader's list of links tells the cards apart. The visible word
           starts the name, as WCAG 2.5.3 (label in name) asks, so voice control finds it. */}
-      <Link to={editOrderPath(order.id)} className="button button-secondary order-card-edit">
-        עריכה<span className="visually-hidden">, ההזמנה של {contact.name}</span>
-      </Link>
+      <div className="order-card-actions">
+        <Link to={editOrderPath(order.id)} className="button button-secondary order-card-edit">
+          עריכה<span className="visually-hidden">, ההזמנה של {contact.name}</span>
+        </Link>
+        <a
+          href={waMeChatUrl(contact.phone)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="button button-secondary order-card-edit"
+        >
+          הודעה<span className="visually-hidden">, ההזמנה של {contact.name}</span>
+        </a>
+      </div>
     </li>
   );
 }

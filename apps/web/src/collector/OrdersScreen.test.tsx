@@ -275,12 +275,14 @@ describe('OrdersScreen', () => {
       ).toEqual(['דנה כהן', 'משה לוי']);
     });
 
-    it("shows a card's name, phone left to right, address, spot, note and bottles", async () => {
+    it("shows a card's name, phone and creation date-time left to right, address, spot, note and bottles", async () => {
       await renderLoaded();
 
       const card = cardOf('דנה כהן');
       const phone = within(card).getByText('050-1234567');
       expect(phone.closest('[dir="ltr"]')).not.toBeNull();
+      const createdAt = within(card).getByText('01/10 · 11:00');
+      expect(createdAt.closest('[dir="ltr"]')).not.toBeNull();
       expect(within(card).getByText('שד נהר הדן 12')).toBeDefined();
       expect(within(card).getByText('בבניין - ליד דלת הדירה · קומה 3, דירה 12')).toBeDefined();
       expect(within(card).getByText('הערה: לדפוק חזק')).toBeDefined();
@@ -362,6 +364,19 @@ describe('OrdersScreen', () => {
 
       const edit = await screen.findByRole('link', { name: 'עריכה, ההזמנה של דנה כהן' });
       expect(edit.getAttribute('href')).toBe('/app/orders/a%2Fb%3Fc');
+    });
+
+    it('links each card\'s "הודעה" button to a clean WhatsApp chat in a new tab, named after the customer', async () => {
+      await renderLoaded();
+
+      const card = cardOf('משה לוי');
+      const message = within(card).getByRole('link', {
+        name: 'הודעה, ההזמנה של משה לוי',
+      });
+      expect(message.getAttribute('href')).toBe('https://wa.me/972527654321');
+      expect(message.getAttribute('target')).toBe('_blank');
+      expect(message.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(message.textContent).toContain('הודעה');
     });
 
     it('links "הוספת הזמנה" to the add screen', async () => {

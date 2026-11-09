@@ -19905,6 +19905,7 @@ var HE = {
   "bottlesSpot.privateHouse": "\u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05D9\u05EA \u05E4\u05E8\u05D8\u05D9",
   "bottlesSpot.apartmentDoor": "\u05D1\u05D1\u05E0\u05D9\u05D9\u05DF - \u05DC\u05D9\u05D3 \u05D3\u05DC\u05EA \u05D4\u05D3\u05D9\u05E8\u05D4",
   "bottlesSpot.buildingEntrance": "\u05DC\u05DE\u05D8\u05D4 \u05D1\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D1\u05E0\u05D9\u05D9\u05DF",
+  "bottlesSpot.other": "\u05D0\u05D7\u05E8 (\u05D0\u05E4\u05E8\u05D8 \u05D1\u05D4\u05E2\u05E8\u05D5\u05EA)",
   // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
   "orderStatus.waiting": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05E1\u05D1\u05D1",
   // Legacy (ADR-0012): nothing to confirm any more, so an old pending order reads as in the round.
@@ -20060,6 +20061,7 @@ var EN = {
   "bottlesSpot.privateHouse": "At the entrance of a private house",
   "bottlesSpot.apartmentDoor": "In a building - by the apartment door",
   "bottlesSpot.buildingEntrance": "Downstairs at the building entrance",
+  "bottlesSpot.other": "Other (I will specify in the note)",
   // Order status names.
   "orderStatus.waiting": "Waiting for a round",
   "orderStatus.pending": "Scheduled",
@@ -21072,7 +21074,12 @@ var FORM_ERROR_KEY_BY_MESSAGE = new Map(
     key
   ])
 );
-var bottlesSpotSchema = external_exports.enum(["privateHouse", "apartmentDoor", "buildingEntrance"]);
+var bottlesSpotSchema = external_exports.enum([
+  "privateHouse",
+  "apartmentDoor",
+  "buildingEntrance",
+  "other"
+]);
 var missReasonSchema = external_exports.enum([
   "notConfirmed",
   "askedOtherDate",
