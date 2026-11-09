@@ -235,6 +235,7 @@ describe('labels', () => {
     expect(Object.keys(BOTTLES_SPOT_LABELS)).toEqual(bottlesSpotSchema.options);
     expect(Object.keys(MISS_REASON_LABELS)).toEqual(missReasonSchema.options);
     expect(BOTTLES_SPOT_LABELS.apartmentDoor).toBe('בבניין - ליד דלת הדירה');
+    expect(BOTTLES_SPOT_LABELS.other).toBe('אחר (אפרט בהערות)');
   });
 
   it('documents a token length that matches its random bytes', () => {
@@ -392,6 +393,19 @@ describe('orderFormSchema', () => {
     const form = parseForm(makeFormInput());
     expect(form.address.bottlesSpot).toBe('privateHouse');
     expect(form.address.floorApt).toBeUndefined();
+  });
+
+  it('accepts "other" as the bottles spot without floorApt and without note', () => {
+    const form = parseForm(
+      makeFormWithAddress({
+        streetName: 'רחוב חדש',
+        houseNumber: '12',
+        bottlesSpot: 'other',
+      }),
+    );
+    expect(form.address.bottlesSpot).toBe('other');
+    expect(form.address.floorApt).toBeUndefined();
+    expect(form.address.note).toBeUndefined();
   });
 
   it('reports every mistake at once, also the floor and apartment next to other address errors', () => {

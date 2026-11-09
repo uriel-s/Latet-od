@@ -169,6 +169,8 @@ describe('MESSAGES', () => {
       `At least ${MIN_BOTTLES} bottles are needed`,
     );
     expect(t('en', 'bottlesSpot.apartmentDoor')).toBe('In a building - by the apartment door');
+    expect(t('en', 'bottlesSpot.other')).toBe('Other (I will specify in the note)');
+    expect(t('he', 'bottlesSpot.other')).toBe('אחר (אפרט בהערות)');
     expect(t('en', 'orderStatus.waiting')).toBe('Waiting for a round');
     expect(t('en', 'createOrder.duplicateOpenOrder')).toBe(
       'There is already an open order for this number.',

@@ -91,6 +91,7 @@ const HE = {
   'bottlesSpot.privateHouse': 'בכניסה לבית פרטי',
   'bottlesSpot.apartmentDoor': 'בבניין - ליד דלת הדירה',
   'bottlesSpot.buildingEntrance': 'למטה בכניסה לבניין',
+  'bottlesSpot.other': 'אחר (אפרט בהערות)',
 
   // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
   'orderStatus.waiting': 'ממתינה לסבב',
@@ -267,6 +268,7 @@ const EN = {
   'bottlesSpot.privateHouse': 'At the entrance of a private house',
   'bottlesSpot.apartmentDoor': 'In a building - by the apartment door',
   'bottlesSpot.buildingEntrance': 'Downstairs at the building entrance',
+  'bottlesSpot.other': 'Other (I will specify in the note)',
 
   // Order status names.
   'orderStatus.waiting': 'Waiting for a round',

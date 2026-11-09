@@ -95,7 +95,12 @@ export function formErrorText(lang: Lang, message: string): string {
  * Where the customer leaves the bottles (spec §3.1). In buildings some customers bring them down
  * and some need Yoel to come up (ת4); only `apartmentDoor` needs a floor and apartment.
  */
-export const bottlesSpotSchema = z.enum(['privateHouse', 'apartmentDoor', 'buildingEntrance']);
+export const bottlesSpotSchema = z.enum([
+  'privateHouse',
+  'apartmentDoor',
+  'buildingEntrance',
+  'other',
+]);
 export type BottlesSpot = z.infer<typeof bottlesSpotSchema>;
 
 /**
@@ -108,6 +113,7 @@ export const BOTTLES_SPOT_LABELS: Readonly<Record<BottlesSpot, string>> = {
   // and the customer must see that this one is for a flat inside a building.
   apartmentDoor: 'בבניין - ליד דלת הדירה',
   buildingEntrance: 'למטה בכניסה לבניין',
+  other: 'אחר (אפרט בהערות)',
 };
 
 /**
