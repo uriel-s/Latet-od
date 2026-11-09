@@ -139,10 +139,17 @@ describe('validateOrderForm', () => {
   });
 
   it('does not send floor and apartment text left over when another spot is chosen', () => {
-    for (const bottlesSpot of ['privateHouse', 'buildingEntrance'] as const) {
+    for (const bottlesSpot of ['privateHouse', 'buildingEntrance', 'other'] as const) {
       const request = requestOf(makeValues({ bottlesSpot, floorApt: 'קומה 3, דירה 12' }));
       expect(request.address, bottlesSpot).not.toHaveProperty('floorApt');
     }
+  });
+
+  it('accepts "other" as the bottles spot without a note or floor and apartment', () => {
+    const request = requestOf(makeValues({ bottlesSpot: 'other', floorApt: '', note: '' }));
+    expect(request.address.bottlesSpot).toBe('other');
+    expect(request.address).not.toHaveProperty('floorApt');
+    expect(request.address).not.toHaveProperty('note');
   });
 
   it('sends a note, trimmed, and leaves out a blank one', () => {
@@ -289,9 +296,17 @@ describe('validateCustomerChange', () => {
   });
 
   it('does not send floor and apartment text left over when another spot is chosen', () => {
-    const request = changeOf(makeValues({ bottlesSpot: 'buildingEntrance', floorApt: 'קומה 3' }));
+    for (const bottlesSpot of ['privateHouse', 'buildingEntrance', 'other'] as const) {
+      const request = changeOf(makeValues({ bottlesSpot, floorApt: 'קומה 3' }));
+      expect(request.address, bottlesSpot).not.toHaveProperty('floorApt');
+    }
+  });
 
+  it('accepts "other" as the bottles spot without a note or floor and apartment', () => {
+    const request = changeOf(makeValues({ bottlesSpot: 'other', floorApt: '', note: '' }));
+    expect(request.address?.bottlesSpot).toBe('other');
     expect(request.address).not.toHaveProperty('floorApt');
+    expect(request.address).not.toHaveProperty('note');
   });
 
   it('gives the address errors of the booking form, each next to its field', () => {

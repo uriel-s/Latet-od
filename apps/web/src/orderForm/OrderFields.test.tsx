@@ -79,8 +79,11 @@ describe('OrderFields', () => {
   });
 
   it('asks for the floor and apartment only when the bottles wait at the apartment door', () => {
-    renderFields(makeValues({ bottlesSpot: 'buildingEntrance', floorApt: 'קומה 3' }));
-    expect(screen.queryByLabelText('קומה ודירה')).toBeNull();
+    for (const bottlesSpot of ['privateHouse', 'buildingEntrance', 'other'] as const) {
+      const { container } = renderFields(makeValues({ bottlesSpot, floorApt: 'קומה 3' }));
+      expect(screen.queryByLabelText('קומה ודירה')).toBeNull();
+      container.remove();
+    }
   });
 
   it('shows the floor and apartment, with its hint, for the apartment door', () => {
@@ -194,11 +197,20 @@ describe('OrderFields', () => {
     expect(screen.getByRole('heading', { name: 'כתובת' })).toBeDefined();
   });
 
-  it('offers where the bottles are as three radios, one chosen at a time', () => {
+  it('offers where the bottles are as four radios, one chosen at a time', () => {
     const { changes } = renderFields();
-    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
     fireEvent.click(screen.getByRole('radio', { name: 'למטה בכניסה לבניין' }));
-    expect(changes).toEqual([['bottlesSpot', 'buildingEntrance']]);
+    fireEvent.click(screen.getByRole('radio', { name: 'אחר (אפרט בהערות)' }));
+    expect(changes).toEqual([
+      ['bottlesSpot', 'buildingEntrance'],
+      ['bottlesSpot', 'other'],
+    ]);
+  });
+
+  it('shows the English spot labels when lang is "en"', () => {
+    render(<OrderFields values={makeValues()} errors={{}} onFieldChange={() => {}} lang="en" />);
+    expect(screen.getByRole('radio', { name: 'Other (I will specify in the note)' })).toBeDefined();
   });
 
   it('shows the hints of the phone and the number of bottles', () => {

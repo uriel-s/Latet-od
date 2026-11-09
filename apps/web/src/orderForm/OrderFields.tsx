@@ -190,6 +190,7 @@ const SPOT_ICONS: Record<(typeof bottlesSpotSchema.options)[number], IconName> =
   privateHouse: 'home',
   apartmentDoor: 'door',
   buildingEntrance: 'building',
+  other: 'chat',
 };
 
 /** Props of {@link FormCard}. */
