@@ -21798,6 +21798,43 @@ function buildHistory(month, closedOrders) {
   };
 }
 
+// packages/shared/src/pushApi.ts
+var PUSH_ENDPOINT_MAX_LENGTH = 2048;
+var PUSH_KEY_MAX_LENGTH = 256;
+var pushSubscriptionSchema = external_exports.strictObject({
+  endpoint: external_exports.url({ protocol: /^https$/ }).max(PUSH_ENDPOINT_MAX_LENGTH),
+  keys: external_exports.strictObject({
+    p256dh: external_exports.string().trim().min(1).max(PUSH_KEY_MAX_LENGTH),
+    auth: external_exports.string().trim().min(1).max(PUSH_KEY_MAX_LENGTH)
+  })
+});
+var unsubscribePushRequestSchema = external_exports.strictObject({
+  endpoint: pushSubscriptionSchema.shape.endpoint
+});
+var pushConfigResponseSchema = external_exports.discriminatedUnion("enabled", [
+  external_exports.strictObject({
+    enabled: external_exports.literal(true),
+    publicKey: external_exports.string().trim().min(1)
+  }),
+  external_exports.strictObject({
+    enabled: external_exports.literal(false)
+  })
+]);
+var NEW_ORDER_PUSH_TITLE = "\u05D4\u05D6\u05DE\u05E0\u05D4 \u05D7\u05D3\u05E9\u05D4 \u2014 \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3";
+var NEW_ORDER_PUSH_URL = "/app/orders";
+var pushNotificationPayloadSchema = external_exports.strictObject({
+  title: external_exports.string().min(1),
+  body: external_exports.string().min(1),
+  url: external_exports.string().min(1)
+});
+function buildNewOrderPushPayload(order) {
+  return {
+    title: NEW_ORDER_PUSH_TITLE,
+    body: `${order.contact.name} \xB7 ${order.address.streetName} ${order.address.houseNumber} \xB7 \u05DB\u05BE${order.bottlesEstimated} \u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD`,
+    url: NEW_ORDER_PUSH_URL
+  };
+}
+
 // apps/api/src/db/objectId.ts
 import { ObjectId } from "mongodb";
 var OBJECT_ID_HEX_PATTERN = /^[0-9a-f]{24}$/;
@@ -21961,6 +21998,60 @@ function violatesIndex(error62, indexName, field) {
   return error62.message.includes(`index: ${indexName} `);
 }
 
+// apps/api/src/push/mongoPushSubscriptionsRepo.ts
+var PUSH_SUBSCRIPTION_ENDPOINT_INDEX = "endpoint_unique";
+var PUSH_SUBSCRIPTION_INDEXES = [
+  { key: { endpoint: 1 }, name: PUSH_SUBSCRIPTION_ENDPOINT_INDEX, unique: true }
+];
+var MongoPushSubscriptionsRepo = class {
+  subscriptions;
+  ensureIndexes;
+  constructor(db) {
+    this.subscriptions = db.collection("pushSubscriptions");
+    this.ensureIndexes = indexesOnce(this.subscriptions, PUSH_SUBSCRIPTION_INDEXES);
+  }
+  async save(subscription) {
+    await this.ensureIndexes();
+    await this.subscriptions.updateOne(
+      endpointFilter(subscription.endpoint),
+      toPushSubscriptionUpdate(subscription),
+      { upsert: true }
+    );
+  }
+  async removeByEndpoint(endpoint) {
+    await this.ensureIndexes();
+    const result = await this.subscriptions.deleteOne(endpointFilter(endpoint));
+    return result.deletedCount === 1;
+  }
+  async list() {
+    await this.ensureIndexes();
+    const docs = await this.subscriptions.find({}).toArray();
+    return docs.map(toPushSubscription);
+  }
+};
+function endpointFilter(endpoint) {
+  return { endpoint: { $eq: endpoint } };
+}
+function toPushSubscriptionUpdate(subscription) {
+  return {
+    $set: {
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth
+      }
+    }
+  };
+}
+function toPushSubscription(doc) {
+  if (typeof doc === "object" && doc !== null && "_id" in doc) {
+    const copy = { ...doc };
+    delete copy._id;
+    return pushSubscriptionSchema.parse(copy);
+  }
+  return pushSubscriptionSchema.parse(doc);
+}
+
 // apps/api/src/rounds/mongoRoundsRepo.ts
 import { ObjectId as ObjectId3 } from "mongodb";
 var MongoRoundsRepo = class {
@@ -22065,6 +22156,7 @@ function createMongoDeps(uri) {
   return {
     orders: new MongoOrdersRepo(db),
     rounds: new MongoRoundsRepo(db),
+    pushSubscriptions: new MongoPushSubscriptionsRepo(db),
     attempts: new MongoAttemptStore(db),
     db: { ping: () => pingMongo(db) }
   };
@@ -22160,6 +22252,260 @@ function messagingDepsFromEnv(env) {
   };
 }
 
+// apps/api/src/push/pushSender.ts
+var DisabledPushSender = class {
+  send() {
+    return Promise.resolve({ status: "failed", reason: "disabled" });
+  }
+};
+
+// apps/api/src/push/webPushSender.ts
+import {
+  createCipheriv,
+  createECDH,
+  createPrivateKey,
+  hkdfSync,
+  randomBytes as randomBytes2,
+  sign
+} from "node:crypto";
+var P256_UNCOMPRESSED_PUBLIC_KEY_BYTES = 65;
+var P256_PRIVATE_KEY_BYTES = 32;
+var WEB_PUSH_AUTH_SECRET_BYTES = 16;
+var AES128GCM_SALT_BYTES = 16;
+var AES128GCM_RECORD_SIZE = 4096;
+var VAPID_EXPIRATION_SECONDS = 12 * 60 * 60;
+var DEFAULT_PUSH_TTL_SECONDS = "86400";
+var BASE64URL_ONLY = /^[A-Za-z0-9_-]+$/u;
+var BASE64_OR_BASE64URL = /^[A-Za-z0-9+/_-]+={0,2}$/u;
+var KEY_INFO_PREFIX = Buffer.from("WebPush: info\0", "ascii");
+var CEK_INFO = Buffer.from("Content-Encoding: aes128gcm\0", "ascii");
+var NONCE_INFO = Buffer.from("Content-Encoding: nonce\0", "ascii");
+var RECORD_DELIMITER = Buffer.from([2]);
+var JWT_HEADER_BASE64URL = Buffer.from(JSON.stringify({ typ: "JWT", alg: "ES256" })).toString(
+  "base64url"
+);
+function decodeStrictBase64Url(value) {
+  if (!BASE64URL_REGEX_TEST(value)) return null;
+  const decoded = Buffer.from(value, "base64url");
+  if (decoded.toString("base64url") !== value) return null;
+  return decoded;
+}
+function BASE64URL_REGEX_TEST(value) {
+  return BASE64URL_ONLY.test(value);
+}
+function decodeSubscriptionKey(value) {
+  if (!BASE64_OR_BASE64URL.test(value)) return null;
+  const normalized = value.replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/u, "");
+  if (!normalized) return null;
+  const decoded = Buffer.from(normalized, "base64url");
+  if (decoded.toString("base64url") !== normalized) return null;
+  return decoded;
+}
+function parseVapidKeys(publicKeyBase64Url, privateKeyBase64Url) {
+  const pubBytes = decodeStrictBase64Url(publicKeyBase64Url);
+  if (!pubBytes || pubBytes.length !== P256_UNCOMPRESSED_PUBLIC_KEY_BYTES || pubBytes[0] !== 4) {
+    throw new Error(
+      "VAPID_PUBLIC_KEY is invalid: it must be a 65-byte uncompressed P-256 public key (starting with 0x04) in base64url."
+    );
+  }
+  const privBytes = decodeStrictBase64Url(privateKeyBase64Url);
+  if (!privBytes || privBytes.length !== P256_PRIVATE_KEY_BYTES) {
+    throw new Error(
+      "VAPID_PRIVATE_KEY is invalid: it must be a 32-byte P-256 private key in base64url."
+    );
+  }
+  let derivedPublic;
+  try {
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(privBytes);
+    derivedPublic = ecdh.getPublicKey();
+  } catch {
+    throw new Error("VAPID_PRIVATE_KEY is invalid: it is not a valid P-256 private scalar.");
+  }
+  if (!derivedPublic.equals(pubBytes)) {
+    throw new Error(
+      "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY do not match: the public key does not correspond to the private key."
+    );
+  }
+  const privateKey = createPrivateKey({
+    key: {
+      kty: "EC",
+      crv: "P-256",
+      x: pubBytes.subarray(1, 33).toString("base64url"),
+      y: pubBytes.subarray(33, 65).toString("base64url"),
+      d: privBytes.toString("base64url")
+    },
+    format: "jwk"
+  });
+  return {
+    publicKey: publicKeyBase64Url,
+    publicKeyBytes: pubBytes,
+    privateKey
+  };
+}
+function buildVapidAuthHeader(params) {
+  const endpointUrl = new URL(params.endpoint);
+  if (endpointUrl.protocol !== "https:") {
+    throw new Error("Push endpoint must use https.");
+  }
+  const nowMs = params.nowMs ?? Date.now();
+  const payloadBase64Url = Buffer.from(
+    JSON.stringify({
+      aud: endpointUrl.origin,
+      exp: Math.floor(nowMs / 1e3) + VAPID_EXPIRATION_SECONDS,
+      sub: params.subject
+    })
+  ).toString("base64url");
+  const signingInput = `${JWT_HEADER_BASE64URL}.${payloadBase64Url}`;
+  const signature = sign("sha256", Buffer.from(signingInput, "ascii"), {
+    key: params.vapidKeys.privateKey,
+    dsaEncoding: "ieee-p1363"
+  }).toString("base64url");
+  return `vapid t=${signingInput}.${signature}, k=${params.vapidKeys.publicKey}`;
+}
+function encryptWebPushPayload(subscriptionKeys, payload) {
+  const uaPublic = decodeSubscriptionKey(subscriptionKeys.p256dh);
+  if (!uaPublic || uaPublic.length !== P256_UNCOMPRESSED_PUBLIC_KEY_BYTES || uaPublic[0] !== 4) {
+    throw new Error("Invalid subscription p256dh key.");
+  }
+  const authSecret = decodeSubscriptionKey(subscriptionKeys.auth);
+  if (!authSecret || authSecret.length !== WEB_PUSH_AUTH_SECRET_BYTES) {
+    throw new Error("Invalid subscription auth secret.");
+  }
+  const asEcdh = createECDH("prime256v1");
+  const asPublic = asEcdh.generateKeys();
+  const sharedSecret = asEcdh.computeSecret(uaPublic);
+  const salt = randomBytes2(AES128GCM_SALT_BYTES);
+  const keyInfo = Buffer.concat([KEY_INFO_PREFIX, uaPublic, asPublic]);
+  const ikm = Buffer.from(hkdfSync("sha256", sharedSecret, authSecret, keyInfo, 32));
+  const cek = Buffer.from(hkdfSync("sha256", ikm, salt, CEK_INFO, 16));
+  const nonce = Buffer.from(hkdfSync("sha256", ikm, salt, NONCE_INFO, 12));
+  const plaintext = Buffer.concat([Buffer.from(JSON.stringify(payload), "utf8"), RECORD_DELIMITER]);
+  const cipher = createCipheriv("aes-128-gcm", cek, nonce);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  const header = Buffer.alloc(AES128GCM_SALT_BYTES + 4 + 1 + asPublic.length);
+  salt.copy(header, 0);
+  header.writeUInt32BE(AES128GCM_RECORD_SIZE, AES128GCM_SALT_BYTES);
+  header.writeUInt8(asPublic.length, AES128GCM_SALT_BYTES + 4);
+  asPublic.copy(header, AES128GCM_SALT_BYTES + 5);
+  return Buffer.concat([header, ciphertext, authTag]);
+}
+var WebPushSender = class {
+  vapidKeys;
+  subject;
+  fetchFn;
+  now;
+  constructor(options) {
+    this.vapidKeys = parseVapidKeys(options.publicKey, options.privateKey);
+    this.subject = options.subject;
+    this.fetchFn = options.fetchFn ?? fetch;
+    this.now = options.now ?? (() => /* @__PURE__ */ new Date());
+  }
+  async send(subscription, payload) {
+    let body;
+    let authorization;
+    try {
+      authorization = buildVapidAuthHeader({
+        endpoint: subscription.endpoint,
+        subject: this.subject,
+        vapidKeys: this.vapidKeys,
+        nowMs: this.now().getTime()
+      });
+      body = encryptWebPushPayload(subscription.keys, payload);
+    } catch {
+      return { status: "failed", reason: "invalid_subscription" };
+    }
+    let response;
+    try {
+      response = await this.fetchFn(subscription.endpoint, {
+        method: "POST",
+        headers: {
+          "content-encoding": "aes128gcm",
+          "content-type": "application/octet-stream",
+          ttl: DEFAULT_PUSH_TTL_SECONDS,
+          urgency: "normal",
+          authorization
+        },
+        body: new Uint8Array(body)
+      });
+    } catch {
+      return { status: "failed", reason: "network_error" };
+    }
+    if (response.ok) {
+      return { status: "sent" };
+    }
+    if (response.status === 404 || response.status === 410) {
+      return { status: "gone" };
+    }
+    return { status: "failed", reason: `http_${response.status}` };
+  }
+};
+
+// apps/api/src/push/pushConfig.ts
+var ENV_HINT2 = "Set them in apps/api/.env (see .env.example) or in the hosting env.";
+var VAPID_KEY_RECIPE = `node -e "const c=require('node:crypto').createECDH('prime256v1');c.generateKeys();console.log('VAPID_PUBLIC_KEY='+c.getPublicKey('base64url'));console.log('VAPID_PRIVATE_KEY='+c.getPrivateKey('base64url'))"`;
+var SIMPLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+function parseVapidSubject(value) {
+  let url2;
+  try {
+    url2 = new URL(value);
+  } catch {
+    throw new Error(
+      `VAPID_SUBJECT is not a valid URI: use "mailto:<email>" or "https://<your-domain>". ${ENV_HINT2}`
+    );
+  }
+  if (url2.protocol === "mailto:") {
+    if (!url2.pathname || !SIMPLE_EMAIL.test(url2.pathname) || url2.search !== "" || url2.hash !== "") {
+      throw new Error(
+        `VAPID_SUBJECT mailto URI must be a plain email address, e.g. "mailto:example@gmail.com". ${ENV_HINT2}`
+      );
+    }
+    return value;
+  }
+  if (url2.protocol === "https:") {
+    if (url2.username !== "" || url2.password !== "") {
+      throw new Error(
+        `VAPID_SUBJECT must not contain a username or password: use "https://<your-domain>". ${ENV_HINT2}`
+      );
+    }
+    return value;
+  }
+  throw new Error(
+    `VAPID_SUBJECT must start with "mailto:" or "https://", e.g. "mailto:example@gmail.com". ${ENV_HINT2}`
+  );
+}
+function pushDepsFromEnv(env) {
+  const publicKey = env.VAPID_PUBLIC_KEY ?? "";
+  const privateKey = env.VAPID_PRIVATE_KEY ?? "";
+  const subject = env.VAPID_SUBJECT ?? "";
+  if (publicKey === "" && privateKey === "" && subject === "") {
+    return {
+      publicKey: null,
+      sender: new DisabledPushSender()
+    };
+  }
+  const missing = [];
+  if (publicKey === "") missing.push("VAPID_PUBLIC_KEY");
+  if (privateKey === "") missing.push("VAPID_PRIVATE_KEY");
+  if (subject === "") missing.push("VAPID_SUBJECT");
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.join(", ")} not set: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must all be set together to enable Web Push (or all left unset to disable it). Generate keys with ${VAPID_KEY_RECIPE}. ${ENV_HINT2}`
+    );
+  }
+  const validSubject = parseVapidSubject(subject);
+  const sender = new WebPushSender({
+    publicKey,
+    privateKey,
+    subject: validSubject
+  });
+  return {
+    publicKey,
+    sender
+  };
+}
+
 // apps/api/src/config.ts
 var DROP_OFF = {
   address: DROP_OFF_ADDRESS,
@@ -22168,29 +22514,29 @@ var DROP_OFF = {
 };
 
 // apps/api/src/route/routeConfig.ts
-var ENV_HINT2 = "Set it in apps/api/.env (see .env.example) or in the hosting env.";
+var ENV_HINT3 = "Set it in apps/api/.env (see .env.example) or in the hosting env.";
 var ROUTE_START_FORMAT = '"lat,lng" in decimal degrees, latitude first, e.g. "<lat>,<lng>" of a point in Beit Shemesh';
 var MAX_START_DISTANCE_METERS = 3e4;
 var LAT_LNG = /^\s*(?<lat>[+-]?\d+(?:\.\d+)?)\s*,\s*(?<lng>[+-]?\d+(?:\.\d+)?)\s*$/u;
 function parseRouteStart(value) {
   if (!value) {
     throw new Error(
-      `ROUTE_START is not set: it is where every route starts (Yoel's home), ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+      `ROUTE_START is not set: it is where every route starts (Yoel's home), ${ROUTE_START_FORMAT}. ${ENV_HINT3}`
     );
   }
   const groups = LAT_LNG.exec(value)?.groups;
   if (!groups?.lat || !groups.lng) {
-    throw new Error(`ROUTE_START is not two numbers: use ${ROUTE_START_FORMAT}. ${ENV_HINT2}`);
+    throw new Error(`ROUTE_START is not two numbers: use ${ROUTE_START_FORMAT}. ${ENV_HINT3}`);
   }
   const point = { lat: Number(groups.lat), lng: Number(groups.lng) };
   if (Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
     throw new Error(
-      `ROUTE_START is out of range: the latitude must be within \xB190 and the longitude within \xB1180. Use ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+      `ROUTE_START is out of range: the latitude must be within \xB190 and the longitude within \xB1180. Use ${ROUTE_START_FORMAT}. ${ENV_HINT3}`
     );
   }
   if (haversine(point, DROP_OFF.point) > MAX_START_DISTANCE_METERS) {
     throw new Error(
-      `ROUTE_START is more than ${MAX_START_DISTANCE_METERS / 1e3} km from the drop-off point: check that the latitude comes first, ${ROUTE_START_FORMAT}. ${ENV_HINT2}`
+      `ROUTE_START is more than ${MAX_START_DISTANCE_METERS / 1e3} km from the drop-off point: check that the latitude comes first, ${ROUTE_START_FORMAT}. ${ENV_HINT3}`
     );
   }
   return point;
@@ -22210,7 +22556,8 @@ function depsFromEnv(env, createDbDeps = createMongoDeps) {
   const auth = authDepsFromEnv(env);
   const messaging = messagingDepsFromEnv(env);
   const route = routeDepsFromEnv(env);
-  return { ...createDbDeps(uri), auth, messaging, route };
+  const push = pushDepsFromEnv(env);
+  return { ...createDbDeps(uri), auth, messaging, route, push };
 }
 function envErrorMessage(error62) {
   return error62 instanceof Error ? error62.message : "api could not start: invalid env";
@@ -22524,9 +22871,9 @@ function createCollectorHistoryRouter(deps) {
 import { Router as Router3 } from "express";
 
 // apps/api/src/orders/newOrderFromForm.ts
-import { randomBytes as randomBytes2 } from "node:crypto";
+import { randomBytes as randomBytes3 } from "node:crypto";
 function newOrderToken() {
-  return randomBytes2(ORDER_TOKEN_BYTES).toString("base64url");
+  return randomBytes3(ORDER_TOKEN_BYTES).toString("base64url");
 }
 function newOrderFromForm(form, options) {
   const order = {
@@ -22794,6 +23141,29 @@ function sendDuplicateOpenOrder(res) {
   res.status(409).json(body);
 }
 
+// apps/api/src/push/notifyNewOrder.ts
+async function notifyNewOrder(deps, order) {
+  try {
+    if (deps.push.publicKey === null) {
+      return;
+    }
+    const payload = buildNewOrderPushPayload(order);
+    const subscriptions = await deps.pushSubscriptions.list();
+    for (const sub of subscriptions) {
+      try {
+        const result = await deps.push.sender.send(sub, payload);
+        if (result.status === "gone") {
+          await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
+        }
+      } catch (error62) {
+        logError(error62);
+      }
+    }
+  } catch (error62) {
+    logError(error62);
+  }
+}
+
 // apps/api/src/orders/createOrderRoute.ts
 var ORDER_RATE_LIMIT = { max: 10, windowMs: 60 * 60 * 1e3 };
 function createOrderHandlers(deps) {
@@ -22834,6 +23204,10 @@ function createOrderHandlers(deps) {
         return;
       }
       throw error62;
+    }
+    try {
+      await notifyNewOrder(deps, order);
+    } catch {
     }
     const created = { token: order.token, order: toOrderSummary(order) };
     res.status(201).json(created);
@@ -23019,8 +23393,39 @@ function sendNotFound2(res) {
   res.status(404).json(body);
 }
 
-// apps/api/src/rounds/collectorRoundsRoutes.ts
+// apps/api/src/push/collectorPushRoutes.ts
 import { Router as Router5 } from "express";
+function createCollectorPushRouter(deps) {
+  const router = Router5();
+  router.get("/config", (_req, res) => {
+    const body = deps.push.publicKey !== null ? { enabled: true, publicKey: deps.push.publicKey } : { enabled: false };
+    res.json(body);
+  });
+  router.post("/subscriptions", async (req, res) => {
+    const parsed = pushSubscriptionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const error62 = { error: "invalid_push_subscription" };
+      res.status(400).json(error62);
+      return;
+    }
+    await deps.pushSubscriptions.save(parsed.data);
+    res.status(204).end();
+  });
+  router.delete("/subscriptions", async (req, res) => {
+    const parsed = unsubscribePushRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const error62 = { error: "invalid_push_subscription" };
+      res.status(400).json(error62);
+      return;
+    }
+    await deps.pushSubscriptions.removeByEndpoint(parsed.data.endpoint);
+    res.status(204).end();
+  });
+  return router;
+}
+
+// apps/api/src/rounds/collectorRoundsRoutes.ts
+import { Router as Router6 } from "express";
 
 // apps/api/src/messages/sendAndLog.ts
 function orderPageUrl(publicBaseUrl, token) {
@@ -23200,7 +23605,7 @@ function sendInvalidCollect(res, fieldErrors) {
 // apps/api/src/rounds/collectorRoundsRoutes.ts
 function createCollectorRoundsRouter(deps) {
   const { orders, rounds, messaging, route } = deps;
-  const router = Router5();
+  const router = Router6();
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
@@ -23416,10 +23821,10 @@ function sendStopAtEdge(res) {
 }
 
 // apps/api/src/rounds/collectorStopActionsRoutes.ts
-import { Router as Router6 } from "express";
+import { Router as Router7 } from "express";
 function createCollectorStopActionsRouter(deps) {
   const { orders, rounds, messaging } = deps;
-  const router = Router6();
+  const router = Router7();
   async function loadRoundView(round) {
     return buildRoundView(round, await orders.list({ ids: round.orderIds }));
   }
@@ -23571,6 +23976,7 @@ function createApp(deps) {
   app.use("/api/o", createCustomerOrderRouter(deps));
   app.use("/api/auth", createAuthRouter(deps));
   app.use("/api/collector", requireCollector(deps.auth));
+  app.use("/api/collector/push", createCollectorPushRouter(deps));
   app.use("/api/collector/orders", createCollectorOrdersRouter(deps));
   app.use("/api/collector/rounds", createCollectorRoundsRouter(deps));
   app.use("/api/collector/rounds", createCollectorStopActionsRouter(deps));

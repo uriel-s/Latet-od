@@ -14,6 +14,7 @@ import { createCollectorHistoryRouter } from './history/collectorHistoryRoutes.t
 import { createCollectorOrdersRouter } from './orders/collectorOrdersRoutes.ts';
 import { createOrderHandlers } from './orders/createOrderRoute.ts';
 import { createCustomerOrderRouter } from './orders/customerOrderRoutes.ts';
+import { createCollectorPushRouter } from './push/collectorPushRoutes.ts';
 import { createCollectorRoundsRouter } from './rounds/collectorRoundsRoutes.ts';
 import { createCollectorStopActionsRouter } from './rounds/collectorStopActionsRoutes.ts';
 import { requireSameOrigin } from './sameOrigin.ts';
@@ -85,6 +86,10 @@ export function createApp(deps: AppDeps): Express {
   // route is mounted under /api/collector, AFTER this line, and is therefore protected. With a
   // valid cookie, a path no route serves falls through to the 404 below.
   app.use('/api/collector', requireCollector(deps.auth));
+
+  // Web Push subscription management and config (ADR-0013): GET /config, POST /subscriptions,
+  // DELETE /subscriptions.
+  app.use('/api/collector/push', createCollectorPushRouter(deps));
 
   // The "הזמנות" screen (spec §3.5): list the waiting orders by region, get, edit, cancel and add
   // an order, and mark an order's WhatsApp "שלח" link as opened (orders/collectorOrdersRoutes.ts).

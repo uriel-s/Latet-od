@@ -16,6 +16,7 @@ import {
   type Order,
 } from '@bottlerun/shared';
 import type { AppDeps } from '../deps.ts';
+import { notifyNewOrder } from '../push/notifyNewOrder.ts';
 import { rateLimitByIp } from '../rateLimit.ts';
 import { newOrderFromForm, newOrderToken } from './newOrderFromForm.ts';
 import { DuplicateOpenOrderError } from './ordersRepo.ts';
@@ -45,7 +46,9 @@ export const ORDER_RATE_LIMIT = { max: 10, windowMs: 60 * 60 * 1000 } as const;
  * Logs nothing itself: the body holds a phone and an address (spec §7, no request content in the
  * logs). An unexpected error goes to the app's error handler, which logs it safely and answers 500.
  */
-export function createOrderHandlers(deps: Pick<AppDeps, 'orders' | 'attempts'>): RequestHandler[] {
+export function createOrderHandlers(
+  deps: Pick<AppDeps, 'orders' | 'attempts' | 'pushSubscriptions' | 'push'>,
+): RequestHandler[] {
   // Runs before the route, so every request counts: invalid, duplicate and honeypot ones too.
   // Counting the 409s also slows anyone probing which phones have an open order.
   const rateLimit = rateLimitByIp({
@@ -104,6 +107,13 @@ export function createOrderHandlers(deps: Pick<AppDeps, 'orders' | 'attempts'>):
       }
       // A bug or an outage: the error handler logs it without its message and answers 500.
       throw error;
+    }
+
+    // Web Push notification to the collector (ADR-0013): best-effort, never fails the booking.
+    try {
+      await notifyNewOrder(deps, order);
+    } catch {
+      // notifyNewOrder already catches all errors, but we guard here defensively.
     }
 
     const created: CreateOrderResponse = { token: order.token, order: toOrderSummary(order) };
