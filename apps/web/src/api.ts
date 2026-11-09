@@ -15,6 +15,7 @@ import {
   historyResponseSchema,
   meResponseSchema,
   messageOpenedResponseSchema,
+  pushConfigResponseSchema,
   roundViewSchema,
   roundsResponseSchema,
   t,
@@ -31,8 +32,11 @@ import {
   type MoveStopRequest,
   type OrderGroup,
   type PlanRoundRequest,
+  type PushConfigResponse,
+  type PushSubscription,
   type RoundView,
   type SessionUser,
+  type UnsubscribePushRequest,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors, type FormErrors } from './orderForm/formValues.ts';
@@ -1165,4 +1169,84 @@ function customerConflictOutcome(body: unknown): CustomerOrderWriteOutcome {
 async function customerOrderOf(response: Response): Promise<CustomerOrder | null> {
   const parsed = customerOrderResponseSchema.safeParse(await readJson(response));
   return parsed.success ? parsed.data.order : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Collector Web Push: /api/collector/push/* (ADR-0013)
+// ---------------------------------------------------------------------------------------------
+
+const COLLECTOR_PUSH_PATH = '/api/collector/push';
+
+/** How GET /api/collector/push/config ended. */
+export type PushConfigOutcome =
+  { kind: 'loaded'; config: PushConfigResponse } | { kind: 'loggedOut' } | { kind: 'failed' };
+
+/** Fetches whether Web Push is enabled and its public VAPID key from GET /api/collector/push/config. */
+export async function fetchPushConfig(fetchFn: FetchFn = globalFetch): Promise<PushConfigOutcome> {
+  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/config`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 200: {
+      const parsed = pushConfigResponseSchema.safeParse(await readJson(response));
+      return parsed.success ? { kind: 'loaded', config: parsed.data } : { kind: 'failed' };
+    }
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How saving a push subscription ended. */
+export type SavePushSubscriptionOutcome =
+  { kind: 'saved' } | { kind: 'loggedOut' } | { kind: 'failed' };
+
+/** Saves a Web Push subscription with POST /api/collector/push/subscriptions. */
+export async function savePushSubscription(
+  subscription: PushSubscription,
+  fetchFn: FetchFn = globalFetch,
+): Promise<SavePushSubscriptionOutcome> {
+  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/subscriptions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(subscription),
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 204:
+      return { kind: 'saved' };
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
+}
+
+/** How deleting a push subscription ended. */
+export type DeletePushSubscriptionOutcome =
+  { kind: 'deleted' } | { kind: 'loggedOut' } | { kind: 'failed' };
+
+/** Deletes a Web Push subscription with DELETE /api/collector/push/subscriptions. */
+export async function deletePushSubscription(
+  endpoint: string,
+  fetchFn: FetchFn = globalFetch,
+): Promise<DeletePushSubscriptionOutcome> {
+  const request: UnsubscribePushRequest = { endpoint };
+  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/subscriptions`, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (response === null) return { kind: 'failed' };
+  switch (response.status) {
+    case 204:
+      return { kind: 'deleted' };
+    case 401:
+      return { kind: 'loggedOut' };
+    default:
+      return { kind: 'failed' };
+  }
 }

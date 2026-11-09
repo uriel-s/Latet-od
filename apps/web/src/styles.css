@@ -899,6 +899,36 @@ html:has(.bottom-nav) {
 
 /* --- Orders tab (collector/OrdersScreen.tsx) ---------------------------------------- */
 
+/* Web Push notifications toggle (collector/PushNotificationsControl.tsx) */
+.push-control {
+  margin-block-end: 1rem;
+}
+
+.push-control .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.push-control .push-active {
+  background: var(--green-soft);
+  color: var(--green);
+  border: 2px solid var(--green);
+}
+
+.push-control-blocked {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-sm);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-weight: 700;
+}
+
 /* "הוספת הזמנה" and "תכנון סבב" right under the heading, side by side in two equal columns
    (mockup §2), with room before the list. Each keeps .button's --tap-target height (≥48px). */
 .orders-actions {

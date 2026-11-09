@@ -39,6 +39,7 @@ export const ICON_NAMES = [
   'forward',
   'logout',
   'chat',
+  'bell',
 ] as const;
 
 /** One of the icons the app can draw. */
@@ -130,6 +131,13 @@ const ICON_SHAPES: Record<IconName, ReactNode> = {
   logout: <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10" />,
   // A speech bubble with its tail at the start corner: a message (the plan's personal text).
   chat: <path d="M4 5h16v11H9l-5 4z" />,
+  // A bell: push notifications.
+  bell: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
 };
 
 /** Props of {@link Icon}. */

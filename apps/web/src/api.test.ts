@@ -25,9 +25,11 @@ import {
   createOrder,
   declineCustomerOrder,
   deleteCollectorOrder,
+  deletePushSubscription,
   fetchCollectorOrder,
   fetchCustomerOrder,
   fetchHistory,
+  fetchPushConfig,
   fetchRounds,
   fetchSession,
   fetchWaitingOrders,
@@ -37,6 +39,7 @@ import {
   markStopNotFound,
   moveStop,
   planRound,
+  savePushSubscription,
   updateCollectorOrder,
   updateCustomerOrder,
   warmUp,
@@ -2225,5 +2228,130 @@ describe.each(CUSTOMER_WRITES)('$name answers', ({ write }) => {
       expect(await write(fetchFn), answer).toEqual({ kind: 'failed' });
       expect(calls, answer).toHaveLength(1);
     }
+  });
+});
+
+describe('fetchPushConfig', () => {
+  it('asks GET /api/collector/push/config, past browser cache', async () => {
+    const { fetchFn, calls } = makeFakeFetch({
+      status: 200,
+      body: { enabled: true, publicKey: 'test-key' },
+    });
+    const outcome = await fetchPushConfig(fetchFn);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/push/config');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.cache).toBe('no-store');
+    expect(outcome).toEqual({
+      kind: 'loaded',
+      config: { enabled: true, publicKey: 'test-key' },
+    });
+  });
+
+  it('answers loaded with disabled config', async () => {
+    const { fetchFn } = makeFakeFetch({
+      status: 200,
+      body: { enabled: false },
+    });
+    const outcome = await fetchPushConfig(fetchFn);
+    expect(outcome).toEqual({
+      kind: 'loaded',
+      config: { enabled: false },
+    });
+  });
+
+  it('answers loggedOut on 401', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
+    expect(await fetchPushConfig(fetchFn)).toEqual({ kind: 'loggedOut' });
+  });
+
+  it('answers failed on invalid 200 or 500', async () => {
+    const { fetchFn: invalid200 } = makeFakeFetch({ status: 200, body: { enabled: true } });
+    expect(await fetchPushConfig(invalid200)).toEqual({ kind: 'failed' });
+
+    const { fetchFn: serverError } = makeFakeFetch({ status: 500, body: { error: 'internal' } });
+    expect(await fetchPushConfig(serverError)).toEqual({ kind: 'failed' });
+  });
+
+  it('answers failed on network error', async () => {
+    const { fetchFn } = makeFakeFetch('networkError');
+    expect(await fetchPushConfig(fetchFn)).toEqual({ kind: 'failed' });
+  });
+});
+
+describe('savePushSubscription', () => {
+  const subscription = {
+    endpoint: 'https://push.example/sub1',
+    keys: { p256dh: 'p256dhKey', auth: 'authKey' },
+  };
+
+  it('sends POST /api/collector/push/subscriptions and answers saved on 204', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 204, noBody: true });
+    const outcome = await savePushSubscription(subscription, fetchFn);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/push/subscriptions');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(calls[0]?.init?.body).toBe(JSON.stringify(subscription));
+    expect(outcome).toEqual({ kind: 'saved' });
+  });
+
+  it('answers loggedOut on 401', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
+    expect(await savePushSubscription(subscription, fetchFn)).toEqual({ kind: 'loggedOut' });
+  });
+
+  it('answers failed on 400, 500 or network error', async () => {
+    const { fetchFn: badReq } = makeFakeFetch({
+      status: 400,
+      body: { error: 'invalid_push_subscription' },
+    });
+    expect(await savePushSubscription(subscription, badReq)).toEqual({ kind: 'failed' });
+
+    const { fetchFn: serverErr } = makeFakeFetch({ status: 500, body: { error: 'internal' } });
+    expect(await savePushSubscription(subscription, serverErr)).toEqual({ kind: 'failed' });
+
+    const { fetchFn: netErr } = makeFakeFetch('networkError');
+    expect(await savePushSubscription(subscription, netErr)).toEqual({ kind: 'failed' });
+  });
+});
+
+describe('deletePushSubscription', () => {
+  it('sends DELETE /api/collector/push/subscriptions and answers deleted on 204', async () => {
+    const { fetchFn, calls } = makeFakeFetch({ status: 204, noBody: true });
+    const outcome = await deletePushSubscription('https://push.example/sub1', fetchFn);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe('/api/collector/push/subscriptions');
+    expect(calls[0]?.init?.method).toBe('DELETE');
+    expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({ endpoint: 'https://push.example/sub1' }));
+    expect(outcome).toEqual({ kind: 'deleted' });
+  });
+
+  it('answers loggedOut on 401', async () => {
+    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
+    expect(await deletePushSubscription('https://push.example/sub1', fetchFn)).toEqual({
+      kind: 'loggedOut',
+    });
+  });
+
+  it('answers failed on 400, 500 or network error', async () => {
+    const { fetchFn: badReq } = makeFakeFetch({
+      status: 400,
+      body: { error: 'invalid_push_subscription' },
+    });
+    expect(await deletePushSubscription('https://push.example/sub1', badReq)).toEqual({
+      kind: 'failed',
+    });
+
+    const { fetchFn: serverErr } = makeFakeFetch({ status: 500, body: { error: 'internal' } });
+    expect(await deletePushSubscription('https://push.example/sub1', serverErr)).toEqual({
+      kind: 'failed',
+    });
+
+    const { fetchFn: netErr } = makeFakeFetch('networkError');
+    expect(await deletePushSubscription('https://push.example/sub1', netErr)).toEqual({
+      kind: 'failed',
+    });
   });
 });
