@@ -9,6 +9,8 @@ import type { DbDeps } from './deps.ts';
 import { depsFromEnv, envErrorMessage } from './envDeps.ts';
 import { createFakeDeps } from './fakeDeps.ts';
 import { WaMeLinkSender } from './messages/waMeLinkSender.ts';
+import { DisabledPushSender } from './push/pushSender.ts';
+import { generateVapidKeys, WebPushSender } from './push/webPushSender.ts';
 
 /** Test-only values. The URI's password is what must never reach an error message. */
 const URI_PASSWORD = 'db-password-never-logged';
@@ -41,8 +43,8 @@ function envWith(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 
 /** In-memory database pieces, taken from createFakeDeps: what a fake createDbDeps returns. */
 function fakeDbDeps(): DbDeps {
-  const { orders, rounds, attempts, db } = createFakeDeps();
-  return { orders, rounds, attempts, db };
+  const { orders, rounds, pushSubscriptions, attempts, db } = createFakeDeps();
+  return { orders, rounds, pushSubscriptions, attempts, db };
 }
 
 /** A fake database factory that records the URI it was given, never creating a client. */
@@ -62,7 +64,7 @@ function startupError(env: NodeJS.ProcessEnv, createDbDeps = fakeCreateDbDeps())
 }
 
 describe('depsFromEnv', () => {
-  it('builds every dependency from a complete env', async () => {
+  it('builds every dependency from a complete env (with Web Push disabled by default)', async () => {
     const dbDeps = fakeDbDeps();
     const createDbDeps = fakeCreateDbDeps(dbDeps);
 
@@ -72,6 +74,7 @@ describe('depsFromEnv', () => {
     expect(createDbDeps).toHaveBeenCalledWith(URI);
     expect(deps.orders).toBe(dbDeps.orders);
     expect(deps.rounds).toBe(dbDeps.rounds);
+    expect(deps.pushSubscriptions).toBe(dbDeps.pushSubscriptions);
     expect(deps.attempts).toBe(dbDeps.attempts);
     expect(deps.db).toBe(dbDeps.db);
     expect(deps.auth.sessionSecret).toBe(SECRET);
@@ -80,6 +83,23 @@ describe('depsFromEnv', () => {
     expect(deps.messaging.publicBaseUrl).toBe(PUBLIC_BASE_URL);
     expect(deps.route.start).toEqual({ lat: 31.7, lng: 35 });
     expect(deps.route.distance).toBe(straightLineDistance);
+    expect(deps.push.publicKey).toBeNull();
+    expect(deps.push.sender).toBeInstanceOf(DisabledPushSender);
+  });
+
+  it('enables Web Push when VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT are set', () => {
+    const { publicKey, privateKey } = generateVapidKeys();
+    const deps = depsFromEnv(
+      envWith({
+        VAPID_PUBLIC_KEY: publicKey,
+        VAPID_PRIVATE_KEY: privateKey,
+        VAPID_SUBJECT: 'mailto:yoel@example.com',
+      }),
+      fakeCreateDbDeps(),
+    );
+
+    expect(deps.push.publicKey).toBe(publicKey);
+    expect(deps.push.sender).toBeInstanceOf(WebPushSender);
   });
 
   describe('refuses to start', () => {
@@ -126,6 +146,29 @@ describe('depsFromEnv', () => {
       ['ROUTE_START is missing', { ROUTE_START: undefined }, /^ROUTE_START is not set/u],
       ['ROUTE_START is malformed', { ROUTE_START: '31.7;35.0' }, /^ROUTE_START is not two/u],
       ['ROUTE_START is swapped', { ROUTE_START: '35.0,31.7' }, /^ROUTE_START is more than/u],
+      [
+        'VAPID vars are partially set',
+        { VAPID_PUBLIC_KEY: 'some-key' },
+        /VAPID_PRIVATE_KEY, VAPID_SUBJECT not set/u,
+      ],
+      [
+        'VAPID_SUBJECT is invalid',
+        {
+          VAPID_PUBLIC_KEY: 'some-pub',
+          VAPID_PRIVATE_KEY: 'some-priv',
+          VAPID_SUBJECT: 'not-a-uri',
+        },
+        /^VAPID_SUBJECT is not a valid URI/u,
+      ],
+      [
+        'VAPID_PUBLIC_KEY is invalid',
+        {
+          VAPID_PUBLIC_KEY: 'bad-pub-key',
+          VAPID_PRIVATE_KEY: 'bad-priv-key',
+          VAPID_SUBJECT: 'mailto:yoel@example.com',
+        },
+        /^VAPID_PUBLIC_KEY is invalid/u,
+      ],
     ])('when %s, without creating the database deps', (_label, overrides, expected) => {
       const createDbDeps = fakeCreateDbDeps();
 
@@ -148,6 +191,7 @@ describe('depsFromEnv', () => {
   });
 
   it('never repeats a value from env in its error messages', () => {
+    const vapidSecret = 'vapid-private-secret-never-logged';
     const messages = [
       startupError(envWith({ MONGODB_URI: '' })),
       startupError(envWith({ SESSION_SECRET: undefined })),
@@ -157,12 +201,21 @@ describe('depsFromEnv', () => {
       startupError(envWith({ ROUTE_START: undefined })),
       startupError(envWith({ ROUTE_START: '31.7;35.0' })),
       startupError(envWith({ ROUTE_START: '35.0,31.7' })),
+      startupError(envWith({ VAPID_PRIVATE_KEY: vapidSecret })),
+      startupError(
+        envWith({
+          VAPID_PUBLIC_KEY: 'bad-pub',
+          VAPID_PRIVATE_KEY: vapidSecret,
+          VAPID_SUBJECT: 'mailto:yoel@example.com',
+        }),
+      ),
     ];
 
     for (const message of messages) {
       expect(message).not.toContain(URI_PASSWORD);
       expect(message).not.toContain(SECRET);
       expect(message).not.toContain(passwordHash);
+      expect(message).not.toContain(vapidSecret);
       // ROUTE_START is Yoel's home: neither the valid one nor a bad one is ever repeated.
       expect(message).not.toContain(ROUTE_START);
       expect(message).not.toContain('31.7');
