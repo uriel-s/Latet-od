@@ -47,24 +47,35 @@ describe('Collector push routes: authentication', () => {
     expect(res.body).toStrictEqual({ error: 'unauthenticated' });
   });
 
-  it('answers 401 unauthenticated for POST /subscriptions without a session', async () => {
-    const res = await request(app)
-      .post('/api/collector/push/subscriptions')
-      .set(SAME_ORIGIN_HEADERS)
-      .send(VALID_SUBSCRIPTION);
+  it.each([
+    { path: '/api/collector/push/subscribe', body: VALID_SUBSCRIPTION },
+    { path: '/api/collector/push/unsubscribe', body: { endpoint: VALID_SUBSCRIPTION.endpoint } },
+  ])('answers 401 unauthenticated for POST $path without a session', async ({ path, body }) => {
+    const res = await request(app).post(path).set(SAME_ORIGIN_HEADERS).send(body);
 
     expect(res.status).toBe(401);
     expect(res.body).toStrictEqual({ error: 'unauthenticated' });
   });
 
-  it('answers 401 unauthenticated for DELETE /subscriptions without a session', async () => {
-    const res = await request(app)
-      .delete('/api/collector/push/subscriptions')
-      .set(SAME_ORIGIN_HEADERS)
-      .send({ endpoint: VALID_SUBSCRIPTION.endpoint });
+  it.each([
+    { path: '/api/collector/push/subscribe', body: VALID_SUBSCRIPTION },
+    { path: '/api/collector/push/unsubscribe', body: { endpoint: VALID_SUBSCRIPTION.endpoint } },
+  ])('refuses a foreign Origin on POST $path with 403', async ({ path, body }) => {
+    const auth = createFakeAuth();
+    const cookie = loggedInCookie(auth, new Date());
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(VALID_SUBSCRIPTION);
+    const originApp = createApp(createFakeDeps({ auth, pushSubscriptions }));
 
-    expect(res.status).toBe(401);
-    expect(res.body).toStrictEqual({ error: 'unauthenticated' });
+    const res = await request(originApp)
+      .post(path)
+      .set({ ...SAME_ORIGIN_HEADERS, Origin: 'https://evil.example.com' })
+      .set('Cookie', cookie)
+      .send(body);
+
+    expect(res.status).toBe(403);
+    // Nothing was changed by the refused request.
+    expect(await pushSubscriptions.list()).toStrictEqual([VALID_SUBSCRIPTION]);
   });
 });
 
@@ -101,13 +112,14 @@ describe('GET /api/collector/push/config', () => {
   });
 });
 
-describe('POST /api/collector/push/subscriptions', () => {
+describe('POST /api/collector/push/subscribe', () => {
   let pushSubscriptions: InMemoryPushSubscriptionsRepo;
+  let auth: ReturnType<typeof createFakeAuth>;
   let cookie: string;
   let app: Express;
 
   beforeEach(() => {
-    const auth = createFakeAuth();
+    auth = createFakeAuth();
     cookie = loggedInCookie(auth, new Date());
     pushSubscriptions = new InMemoryPushSubscriptionsRepo();
     app = createApp(createFakeDeps({ auth, pushSubscriptions }));
@@ -115,7 +127,7 @@ describe('POST /api/collector/push/subscriptions', () => {
 
   it('stores a valid push subscription and answers 204 with no content', async () => {
     const res = await request(app)
-      .post('/api/collector/push/subscriptions')
+      .post('/api/collector/push/subscribe')
       .set(SAME_ORIGIN_HEADERS)
       .set('Cookie', cookie)
       .send(VALID_SUBSCRIPTION);
@@ -133,7 +145,7 @@ describe('POST /api/collector/push/subscriptions', () => {
     };
 
     const res = await request(app)
-      .post('/api/collector/push/subscriptions')
+      .post('/api/collector/push/subscribe')
       .set(SAME_ORIGIN_HEADERS)
       .set('Cookie', cookie)
       .send(updated);
@@ -169,7 +181,7 @@ describe('POST /api/collector/push/subscriptions', () => {
     { label: 'empty body', body: {} },
   ])('refuses $label with 400 invalid_push_subscription', async ({ body }) => {
     const res = await request(app)
-      .post('/api/collector/push/subscriptions')
+      .post('/api/collector/push/subscribe')
       .set(SAME_ORIGIN_HEADERS)
       .set('Cookie', cookie)
       .send(body);
@@ -178,9 +190,29 @@ describe('POST /api/collector/push/subscriptions', () => {
     expect(res.body).toStrictEqual({ error: 'invalid_push_subscription' });
     expect(await pushSubscriptions.list()).toEqual([]);
   });
+
+  it('answers 503 push_not_configured when Web Push is disabled', async () => {
+    const disabledApp = createApp(
+      createFakeDeps({
+        // The same auth as the cookie was signed with, or the request would be a 401.
+        auth,
+        pushSubscriptions,
+        push: { sender: new DisabledPushSender(), publicKey: null },
+      }),
+    );
+    const res = await request(disabledApp)
+      .post('/api/collector/push/subscribe')
+      .set(SAME_ORIGIN_HEADERS)
+      .set('Cookie', cookie)
+      .send(VALID_SUBSCRIPTION);
+
+    expect(res.status).toBe(503);
+    expect(res.body).toStrictEqual({ error: 'push_not_configured' });
+    expect(await pushSubscriptions.list()).toEqual([]);
+  });
 });
 
-describe('DELETE /api/collector/push/subscriptions', () => {
+describe('POST /api/collector/push/unsubscribe', () => {
   let pushSubscriptions: InMemoryPushSubscriptionsRepo;
   let cookie: string;
   let app: Express;
@@ -196,7 +228,7 @@ describe('DELETE /api/collector/push/subscriptions', () => {
 
   it('removes an existing subscription and answers 204 with no content', async () => {
     const res = await request(app)
-      .delete('/api/collector/push/subscriptions')
+      .post('/api/collector/push/unsubscribe')
       .set(SAME_ORIGIN_HEADERS)
       .set('Cookie', cookie)
       .send({ endpoint: VALID_SUBSCRIPTION.endpoint });
@@ -208,7 +240,7 @@ describe('DELETE /api/collector/push/subscriptions', () => {
 
   it('is idempotent: answers 204 even if subscription endpoint does not exist', async () => {
     const res = await request(app)
-      .delete('/api/collector/push/subscriptions')
+      .post('/api/collector/push/unsubscribe')
       .set(SAME_ORIGIN_HEADERS)
       .set('Cookie', cookie)
       .send({ endpoint: 'https://push.example.com/non-existent' });
@@ -227,7 +259,7 @@ describe('DELETE /api/collector/push/subscriptions', () => {
     },
   ])('refuses $label with 400 invalid_push_subscription', async ({ body }) => {
     const res = await request(app)
-      .delete('/api/collector/push/subscriptions')
+      .post('/api/collector/push/unsubscribe')
       .set(SAME_ORIGIN_HEADERS)
       .set('Cookie', cookie)
       .send(body);

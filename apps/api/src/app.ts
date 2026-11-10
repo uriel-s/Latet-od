@@ -87,8 +87,8 @@ export function createApp(deps: AppDeps): Express {
   // valid cookie, a path no route serves falls through to the 404 below.
   app.use('/api/collector', requireCollector(deps.auth));
 
-  // Web Push subscription management and config (ADR-0013): GET /config, POST /subscriptions,
-  // DELETE /subscriptions.
+  // Web Push subscription management and config (ADR-0013): GET /config, POST /subscribe and
+  // POST /unsubscribe.
   app.use('/api/collector/push', createCollectorPushRouter(deps));
 
   // The "הזמנות" screen (spec §3.5): list the waiting orders by region, get, edit, cancel and add

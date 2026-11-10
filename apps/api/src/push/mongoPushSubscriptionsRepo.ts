@@ -66,7 +66,23 @@ export class MongoPushSubscriptionsRepo implements PushSubscriptionsRepo {
   async list(): Promise<PushSubscription[]> {
     await this.ensureIndexes();
     const docs = await this.subscriptions.find({}).toArray();
-    return docs.map(toPushSubscription);
+    // One malformed document must not stop a notification to every other device, so it is skipped
+    // and counted in the log (a count only: the document itself may hold a push endpoint).
+    const subscriptions: PushSubscription[] = [];
+    let skipped = 0;
+    for (const doc of docs) {
+      try {
+        subscriptions.push(toPushSubscription(doc));
+      } catch {
+        skipped += 1;
+      }
+    }
+    if (skipped > 0) {
+      console.warn(
+        JSON.stringify({ level: 'warn', event: 'push_subscriptions_invalid_skipped', skipped }),
+      );
+    }
+    return subscriptions;
   }
 }
 

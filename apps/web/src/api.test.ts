@@ -2285,11 +2285,11 @@ describe('savePushSubscription', () => {
     keys: { p256dh: 'p256dhKey', auth: 'authKey' },
   };
 
-  it('sends POST /api/collector/push/subscriptions and answers saved on 204', async () => {
+  it('sends POST /api/collector/push/subscribe and answers saved on 204', async () => {
     const { fetchFn, calls } = makeFakeFetch({ status: 204, noBody: true });
     const outcome = await savePushSubscription(subscription, fetchFn);
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.input).toBe('/api/collector/push/subscriptions');
+    expect(calls[0]?.input).toBe('/api/collector/push/subscribe');
     expect(calls[0]?.init?.method).toBe('POST');
     expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
     expect(calls[0]?.init?.body).toBe(JSON.stringify(subscription));
@@ -2317,12 +2317,12 @@ describe('savePushSubscription', () => {
 });
 
 describe('deletePushSubscription', () => {
-  it('sends DELETE /api/collector/push/subscriptions and answers deleted on 204', async () => {
+  it('sends POST /api/collector/push/unsubscribe and answers deleted on 204', async () => {
     const { fetchFn, calls } = makeFakeFetch({ status: 204, noBody: true });
     const outcome = await deletePushSubscription('https://push.example/sub1', fetchFn);
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.input).toBe('/api/collector/push/subscriptions');
-    expect(calls[0]?.init?.method).toBe('DELETE');
+    expect(calls[0]?.input).toBe('/api/collector/push/unsubscribe');
+    expect(calls[0]?.init?.method).toBe('POST');
     expect(calls[0]?.init?.headers).toEqual({ 'content-type': 'application/json' });
     expect(calls[0]?.init?.body).toBe(JSON.stringify({ endpoint: 'https://push.example/sub1' }));
     expect(outcome).toEqual({ kind: 'deleted' });

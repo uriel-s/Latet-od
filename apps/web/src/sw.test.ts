@@ -15,6 +15,8 @@ describe('sw.js static guarantees', () => {
   it('registers push and notificationclick event listeners', () => {
     expect(swSource).toMatch(/addEventListener\(\s*['"]push['"]/);
     expect(swSource).toMatch(/addEventListener\(\s*['"]notificationclick['"]/);
+    expect(swSource).toMatch(/addEventListener\(\s*['"]install['"]/);
+    expect(swSource).toMatch(/addEventListener\(\s*['"]activate['"]/);
   });
 });
 
@@ -24,12 +26,16 @@ describe('sw.js runtime behavior', () => {
   let showNotificationMock: ReturnType<typeof vi.fn>;
   let openWindowMock: ReturnType<typeof vi.fn>;
   let matchAllMock: ReturnType<typeof vi.fn>;
+  let skipWaitingMock: ReturnType<typeof vi.fn>;
+  let claimMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     listeners = {};
     showNotificationMock = vi.fn().mockResolvedValue(undefined);
     openWindowMock = vi.fn().mockResolvedValue(undefined);
     matchAllMock = vi.fn().mockResolvedValue([]);
+    skipWaitingMock = vi.fn();
+    claimMock = vi.fn().mockResolvedValue(undefined);
 
     const mockSelf = {
       location: { origin: 'https://latet-od.test' },
@@ -42,12 +48,32 @@ describe('sw.js runtime behavior', () => {
       clients: {
         matchAll: matchAllMock,
         openWindow: openWindowMock,
+        claim: claimMock,
       },
+      skipWaiting: skipWaitingMock,
     };
 
     vm.runInNewContext(swSource, {
       self: mockSelf,
       URL,
+    });
+  });
+
+  describe('lifecycle events', () => {
+    it('calls skipWaiting on install', () => {
+      listeners['install']?.({});
+      expect(skipWaitingMock).toHaveBeenCalled();
+    });
+
+    it('claims clients on activate', async () => {
+      let waitPromise: Promise<unknown> | undefined;
+      listeners['activate']?.({
+        waitUntil: (p: Promise<unknown>) => {
+          waitPromise = p;
+        },
+      });
+      await waitPromise;
+      expect(claimMock).toHaveBeenCalled();
     });
   });
 
@@ -168,6 +194,59 @@ describe('sw.js runtime behavior', () => {
 
       expect(closeMock).toHaveBeenCalled();
       expect(openWindowMock).toHaveBeenCalledWith('https://latet-od.test/app/orders');
+    });
+
+    it('defends against open redirect by falling back to /app/orders', async () => {
+      matchAllMock.mockResolvedValue([]);
+      const closeMock = vi.fn();
+      let waitPromise: Promise<unknown> | undefined;
+
+      listeners['notificationclick']?.({
+        notification: {
+          close: closeMock,
+          data: { url: 'https://evil.example.com/phish' },
+        },
+        waitUntil: (p: Promise<unknown>) => {
+          waitPromise = p;
+        },
+      });
+
+      await waitPromise;
+
+      expect(closeMock).toHaveBeenCalled();
+      expect(openWindowMock).toHaveBeenCalledWith('https://latet-od.test/app/orders');
+    });
+
+    it('navigates and focuses existing /app client window on different subroute', async () => {
+      const focusMock = vi.fn().mockResolvedValue(undefined);
+      const navigateMock = vi.fn().mockResolvedValue({ focus: focusMock });
+      matchAllMock.mockResolvedValue([
+        {
+          url: 'https://latet-od.test/app/rounds',
+          focus: focusMock,
+          navigate: navigateMock,
+        },
+      ]);
+
+      const closeMock = vi.fn();
+      let waitPromise: Promise<unknown> | undefined;
+
+      listeners['notificationclick']?.({
+        notification: {
+          close: closeMock,
+          data: { url: '/app/orders' },
+        },
+        waitUntil: (p: Promise<unknown>) => {
+          waitPromise = p;
+        },
+      });
+
+      await waitPromise;
+
+      expect(closeMock).toHaveBeenCalled();
+      expect(navigateMock).toHaveBeenCalledWith('https://latet-od.test/app/orders');
+      expect(focusMock).toHaveBeenCalled();
+      expect(openWindowMock).not.toHaveBeenCalled();
     });
   });
 });

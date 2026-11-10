@@ -1204,12 +1204,12 @@ export async function fetchPushConfig(fetchFn: FetchFn = globalFetch): Promise<P
 export type SavePushSubscriptionOutcome =
   { kind: 'saved' } | { kind: 'loggedOut' } | { kind: 'failed' };
 
-/** Saves a Web Push subscription with POST /api/collector/push/subscriptions. */
+/** Saves a Web Push subscription with POST /api/collector/push/subscribe (ADR-0013). */
 export async function savePushSubscription(
   subscription: PushSubscription,
   fetchFn: FetchFn = globalFetch,
 ): Promise<SavePushSubscriptionOutcome> {
-  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/subscriptions`, {
+  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/subscribe`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(subscription),
@@ -1229,14 +1229,14 @@ export async function savePushSubscription(
 export type DeletePushSubscriptionOutcome =
   { kind: 'deleted' } | { kind: 'loggedOut' } | { kind: 'failed' };
 
-/** Deletes a Web Push subscription with DELETE /api/collector/push/subscriptions. */
+/** Deletes a Web Push subscription with POST /api/collector/push/unsubscribe (ADR-0013). */
 export async function deletePushSubscription(
   endpoint: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<DeletePushSubscriptionOutcome> {
   const request: UnsubscribePushRequest = { endpoint };
-  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/subscriptions`, {
-    method: 'DELETE',
+  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/unsubscribe`, {
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),
   });

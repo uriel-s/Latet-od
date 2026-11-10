@@ -11,6 +11,7 @@ import {
   type PushConfigOutcome,
 } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
+import { navigate } from '../router.tsx';
 
 /** Converts a base64url-encoded VAPID public key into a Uint8Array for PushManager.subscribe. */
 export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -86,7 +87,7 @@ export function PushNotificationsControl({
 
       // 4. Check active registration and subscription
       try {
-        const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+        const registration = await navigator.serviceWorker.getRegistration();
         if (!active) return;
         if (!registration) {
           setState('inactive');
@@ -115,12 +116,23 @@ export function PushNotificationsControl({
     try {
       if (state === 'active') {
         // Turn notifications off: unsubscribe device and delete from server
-        const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+        const registration = await navigator.serviceWorker.getRegistration();
         const existingSub = await registration?.pushManager.getSubscription();
         if (existingSub) {
-          const endpoint = existingSub.endpoint;
+          // Server first, device second: if the server call fails we stop with the device still
+          // subscribed and the state still "active", so the screen tells the truth and a retry
+          // works. (The server delete is idempotent, so a retry after a failed
+          // `unsubscribe()` is safe too.)
+          const deleteOutcome = await deleteSub(existingSub.endpoint);
+          if (deleteOutcome.kind === 'loggedOut') {
+            navigate('/login', { replace: true });
+            return;
+          }
+          if (deleteOutcome.kind === 'failed') {
+            setErrorMessage('לא הצלחנו להסיר את המנוי מהשרת.');
+            return;
+          }
           await existingSub.unsubscribe();
-          await deleteSub(endpoint);
         }
         setState('inactive');
       } else if (state === 'inactive') {
@@ -165,6 +177,8 @@ export function PushNotificationsControl({
 
         if (saveOutcome.kind === 'saved') {
           setState('active');
+        } else if (saveOutcome.kind === 'loggedOut') {
+          navigate('/login', { replace: true });
         } else {
           setErrorMessage('לא הצלחנו לשמור את ההתראות בשרת.');
         }

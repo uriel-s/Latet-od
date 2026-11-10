@@ -13,7 +13,6 @@ import { makeNewOrder } from '../orders/makeOrder.ts';
 import { FakePushSender } from './fakePushSender.ts';
 import { InMemoryPushSubscriptionsRepo } from './inMemoryPushSubscriptionsRepo.ts';
 import { notifyNewOrder } from './notifyNewOrder.ts';
-import { DisabledPushSender } from './pushSender.ts';
 import type { PushSubscriptionsRepo } from './pushSubscriptionsRepo.ts';
 
 const SUB_1: PushSubscription = {
@@ -110,12 +109,36 @@ describe('notifyNewOrder', () => {
     expect(await pushSubscriptions.list()).toHaveLength(2);
   });
 
+  it('logs a failed send as one warn line with the reason code only', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB_1);
+    const sender = new FakePushSender(() => ({ status: 'failed', reason: 'http_401' }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await notifyNewOrder({ pushSubscriptions, push: createFakePush({ sender }) }, SAMPLE_ORDER);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]?.[0]);
+      expect(JSON.parse(line)).toStrictEqual({
+        level: 'warn',
+        event: 'push_failed',
+        reason: 'http_401',
+      });
+      // Privacy: the endpoint of the device never reaches the log.
+      expect(line).not.toContain(SUB_1.endpoint);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('does nothing when Web Push is disabled (publicKey is null)', async () => {
     const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
     await pushSubscriptions.save(SUB_1);
 
+    // The sender is injected so the test fails if the `publicKey === null` guard is removed.
     const sender = new FakePushSender();
-    const push = { sender: new DisabledPushSender(), publicKey: null };
+    const push = createFakePush({ sender, publicKey: null });
 
     await notifyNewOrder({ pushSubscriptions, push }, SAMPLE_ORDER);
 

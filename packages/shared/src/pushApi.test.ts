@@ -198,4 +198,28 @@ describe('pushNotificationPayloadSchema & buildNewOrderPushPayload', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('rejects non-relative, external or protocol-relative URLs in pushNotificationPayloadSchema', () => {
+    expect(
+      pushNotificationPayloadSchema.safeParse({
+        title: 'כותרת',
+        body: 'גוף',
+        url: 'https://evil.example.com',
+      }).success,
+    ).toBe(false);
+    expect(
+      pushNotificationPayloadSchema.safeParse({
+        title: 'כותרת',
+        body: 'גוף',
+        url: '//evil.example.com',
+      }).success,
+    ).toBe(false);
+    expect(
+      pushNotificationPayloadSchema.safeParse({
+        title: 'כותרת',
+        body: 'גוף',
+        url: 'app/orders',
+      }).success,
+    ).toBe(false);
+  });
 });

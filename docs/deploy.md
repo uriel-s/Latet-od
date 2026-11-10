@@ -68,6 +68,7 @@ Settings → Environment Variables, בסביבה **Production**. ההסבר המ
 | `MESSAGE_SENDER` | מוגדר | `wame`. |
 | `NODE_ENV` | לא מגדירים | Vercel קובע `production` בעצמו. **אסור `development`:** ה-cookie של ההתחברות יאבד את `Secure`. |
 | `ROUTE_START` | **חסר** | חובה מה-section של המסלול והלאה. `"lat,lng"`, קו רוחב קודם (הפורמט ואיך מוצאים אותו: `apps/api/.env.example`). בלעדיו, או עם ערך לא תקין, `depsFromEnv` מסרב, ו**כל ה-api** עונה 500 `invalid_env` (גם הטופס הציבורי). פרטי (הבית של יואל): רק ב-env, אף פעם לא בקוד ולא במסמכים. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | אופציונלי | התראות Web Push ליואל על הזמנה חדשה (ADR-0013). **שלושתם או אף אחד:** בלי שלושתם ההתראות כבויות וה-api רגיל. שלושתם חייבים להיות תקינים, ואם רק חלקם מוגדרים או שהם פגומים, `depsFromEnv` מסרב ו**כל ה-api** עונה 500 `invalid_env`. מייצרים זוג מפתחות פעם אחת עם הפקודה שב-`apps/api/.env.example` (רק Node, בלי התקנה), ושומרים את המפתח הפרטי ב-Vercel בלבד. אחרי Redeploy יואל מפעיל התראות ב-`/app/orders`, באייפון מהאפליקציה שהותקנה למסך הבית (סעיף 11). |
 
 `PORT` לא צריך ב-Vercel: רק `server.ts` קורא אותו.
 

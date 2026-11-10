@@ -21825,7 +21825,7 @@ var NEW_ORDER_PUSH_URL = "/app/orders";
 var pushNotificationPayloadSchema = external_exports.strictObject({
   title: external_exports.string().min(1),
   body: external_exports.string().min(1),
-  url: external_exports.string().min(1)
+  url: external_exports.string().regex(/^\/[^/\\]/u, "url must be a relative path starting with /")
 });
 function buildNewOrderPushPayload(order) {
   return {
@@ -22026,7 +22026,21 @@ var MongoPushSubscriptionsRepo = class {
   async list() {
     await this.ensureIndexes();
     const docs = await this.subscriptions.find({}).toArray();
-    return docs.map(toPushSubscription);
+    const subscriptions = [];
+    let skipped = 0;
+    for (const doc of docs) {
+      try {
+        subscriptions.push(toPushSubscription(doc));
+      } catch {
+        skipped += 1;
+      }
+    }
+    if (skipped > 0) {
+      console.warn(
+        JSON.stringify({ level: "warn", event: "push_subscriptions_invalid_skipped", skipped })
+      );
+    }
+    return subscriptions;
   }
 };
 function endpointFilter(endpoint) {
@@ -22275,6 +22289,7 @@ var AES128GCM_SALT_BYTES = 16;
 var AES128GCM_RECORD_SIZE = 4096;
 var VAPID_EXPIRATION_SECONDS = 12 * 60 * 60;
 var DEFAULT_PUSH_TTL_SECONDS = "86400";
+var DEFAULT_PUSH_TIMEOUT_MS = 4e3;
 var BASE64URL_ONLY = /^[A-Za-z0-9_-]+$/u;
 var BASE64_OR_BASE64URL = /^[A-Za-z0-9+/_-]+={0,2}$/u;
 var KEY_INFO_PREFIX = Buffer.from("WebPush: info\0", "ascii");
@@ -22396,11 +22411,13 @@ var WebPushSender = class {
   subject;
   fetchFn;
   now;
+  timeoutMs;
   constructor(options) {
     this.vapidKeys = parseVapidKeys(options.publicKey, options.privateKey);
     this.subject = options.subject;
     this.fetchFn = options.fetchFn ?? fetch;
     this.now = options.now ?? (() => /* @__PURE__ */ new Date());
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_PUSH_TIMEOUT_MS;
   }
   async send(subscription, payload) {
     let body;
@@ -22427,7 +22444,8 @@ var WebPushSender = class {
           urgency: "normal",
           authorization
         },
-        body: new Uint8Array(body)
+        body: new Uint8Array(body),
+        signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch {
       return { status: "failed", reason: "network_error" };
@@ -23149,16 +23167,22 @@ async function notifyNewOrder(deps, order) {
     }
     const payload = buildNewOrderPushPayload(order);
     const subscriptions = await deps.pushSubscriptions.list();
-    for (const sub of subscriptions) {
-      try {
-        const result = await deps.push.sender.send(sub, payload);
-        if (result.status === "gone") {
-          await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          const result = await deps.push.sender.send(sub, payload);
+          if (result.status === "gone") {
+            await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
+          } else if (result.status === "failed") {
+            console.warn(
+              JSON.stringify({ level: "warn", event: "push_failed", reason: result.reason })
+            );
+          }
+        } catch (error62) {
+          logError(error62);
         }
-      } catch (error62) {
-        logError(error62);
-      }
-    }
+      })
+    );
   } catch (error62) {
     logError(error62);
   }
@@ -23401,7 +23425,12 @@ function createCollectorPushRouter(deps) {
     const body = deps.push.publicKey !== null ? { enabled: true, publicKey: deps.push.publicKey } : { enabled: false };
     res.json(body);
   });
-  router.post("/subscriptions", async (req, res) => {
+  const handleSubscribe = async (req, res) => {
+    if (deps.push.publicKey === null) {
+      const error62 = { error: "push_not_configured" };
+      res.status(503).json(error62);
+      return;
+    }
     const parsed = pushSubscriptionSchema.safeParse(req.body);
     if (!parsed.success) {
       const error62 = { error: "invalid_push_subscription" };
@@ -23410,8 +23439,8 @@ function createCollectorPushRouter(deps) {
     }
     await deps.pushSubscriptions.save(parsed.data);
     res.status(204).end();
-  });
-  router.delete("/subscriptions", async (req, res) => {
+  };
+  const handleUnsubscribe = async (req, res) => {
     const parsed = unsubscribePushRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       const error62 = { error: "invalid_push_subscription" };
@@ -23420,7 +23449,9 @@ function createCollectorPushRouter(deps) {
     }
     await deps.pushSubscriptions.removeByEndpoint(parsed.data.endpoint);
     res.status(204).end();
-  });
+  };
+  router.post("/subscribe", handleSubscribe);
+  router.post("/unsubscribe", handleUnsubscribe);
   return router;
 }
 

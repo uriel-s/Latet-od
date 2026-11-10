@@ -34,6 +34,9 @@ const VAPID_EXPIRATION_SECONDS = 12 * 60 * 60;
 /** Default Push message Time-To-Live in seconds (24 hours). */
 const DEFAULT_PUSH_TTL_SECONDS = '86400';
 
+/** Default timeout for pushing to an external push service endpoint (4 seconds). */
+const DEFAULT_PUSH_TIMEOUT_MS = 4000;
+
 const BASE64URL_ONLY = /^[A-Za-z0-9_-]+$/u;
 const BASE64_OR_BASE64URL = /^[A-Za-z0-9+/_-]+={0,2}$/u;
 
@@ -254,6 +257,8 @@ export interface WebPushSenderOptions {
   fetchFn?: typeof fetch;
   /** Clock for JWT `exp` calculation in tests; defaults to `() => new Date()`. */
   now?: () => Date;
+  /** Request timeout in milliseconds; defaults to 4000. */
+  timeoutMs?: number;
 }
 
 /**
@@ -266,12 +271,14 @@ export class WebPushSender implements PushSender {
   private readonly subject: string;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => Date;
+  private readonly timeoutMs: number;
 
   constructor(options: WebPushSenderOptions) {
     this.vapidKeys = parseVapidKeys(options.publicKey, options.privateKey);
     this.subject = options.subject;
     this.fetchFn = options.fetchFn ?? fetch;
     this.now = options.now ?? (() => new Date());
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_PUSH_TIMEOUT_MS;
   }
 
   async send(
@@ -304,6 +311,7 @@ export class WebPushSender implements PushSender {
           authorization,
         },
         body: new Uint8Array(body),
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
       return { status: 'failed', reason: 'network_error' };

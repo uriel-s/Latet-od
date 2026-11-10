@@ -12,8 +12,8 @@ import { logError } from '../errors.ts';
  * Best-effort (ADR-0013):
  * - If Web Push is disabled (`publicKey === null`), returns immediately without doing anything.
  * - Subscriptions returning `{ status: 'gone' }` are automatically pruned from the repository.
- * - Failed sends (`{ status: 'failed' }`) or network errors for one subscription do not prevent
- *   sending to remaining subscriptions.
+ * - Failed sends (`{ status: 'failed' }`) or network errors for one subscription are logged (reason
+ *   code only) and do not prevent sending to remaining subscriptions.
  * - Any thrown error is caught and logged safely with {@link logError}; this function NEVER rejects.
  */
 export async function notifyNewOrder(
@@ -28,16 +28,25 @@ export async function notifyNewOrder(
     const payload = buildNewOrderPushPayload(order);
     const subscriptions = await deps.pushSubscriptions.list();
 
-    for (const sub of subscriptions) {
-      try {
-        const result = await deps.push.sender.send(sub, payload);
-        if (result.status === 'gone') {
-          await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          const result = await deps.push.sender.send(sub, payload);
+          if (result.status === 'gone') {
+            await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
+          } else if (result.status === 'failed') {
+            // ADR-0013 §3: a failed send is logged, never silent. Without this line, wrong VAPID
+            // keys (http_401/403) or a push-service outage would leave Yoel with no notifications
+            // and no trace. `reason` is a short code with no subscription or customer data.
+            console.warn(
+              JSON.stringify({ level: 'warn', event: 'push_failed', reason: result.reason }),
+            );
+          }
+        } catch (error) {
+          logError(error);
         }
-      } catch (error) {
-        logError(error);
-      }
-    }
+      }),
+    );
   } catch (error) {
     logError(error);
   }

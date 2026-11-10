@@ -18,7 +18,7 @@ One developer maintains it alone. Priorities, in order: **zero cost, minimum mov
 
 Sources of truth — read these before changing behaviour:
 - `docs/spec.md` — spec v2 (Hebrew). Supersedes the v1 `.docx` in the root.
-- `docs/decisions/` — ADRs 0001-0012. Where an ADR and the spec disagree, the ADR is newer and wins (its README lists what it changes in the spec).
+- `docs/decisions/` — ADRs 0001-0013. Where an ADR and the spec disagree, the ADR is newer and wins (its README lists what it changes in the spec).
 - `ARCHITECTURE.md` — components, order flow, workspace boundaries.
 
 ### Glossary (for developers and AI)
@@ -197,5 +197,5 @@ Maintainer who merges locally and pushes `main`: `git config claude.allowTrunkPu
 
 ## Configuration
 
-- **Env vars** (`apps/api/.env`, template in `.env.example`): `PORT`, `MONGODB_URI`, `NODE_ENV`, `COLLECTOR_PASSWORD_HASH`, `SESSION_SECRET`, `PUBLIC_BASE_URL`, `MESSAGE_SENDER` (default `wame`), `ROUTE_START` (required, `"lat,lng"`, latitude first; must be within 30 km of the drop-off) are in use; the api refuses to start (locally) or answers 500 (Vercel) if one is missing or malformed. `MONGODB_BACKUP_URI` is a GitHub secret for the backup workflow only. Deploy steps: `docs/deploy.md`.
+- **Env vars** (`apps/api/.env`, template in `.env.example`): `PORT`, `MONGODB_URI`, `NODE_ENV`, `COLLECTOR_PASSWORD_HASH`, `SESSION_SECRET`, `PUBLIC_BASE_URL`, `MESSAGE_SENDER` (default `wame`), `ROUTE_START` (required, `"lat,lng"`, latitude first; must be within 30 km of the drop-off) are in use, and `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` (optional Web Push, ADR-0013: all three or none); the api refuses to start (locally) or answers 500 (Vercel) if one is missing or malformed. `MONGODB_BACKUP_URI` is a GitHub secret for the backup workflow only. Deploy steps: `docs/deploy.md`.
 - **Settings in code, no settings screen** (ADR-0005): bottle value (20 agorot) `BOTTLE_VALUE_AGOROT` in `packages/shared/src/config.ts`, drop-off point `DROP_OFF` in `apps/api/src/config.ts`, start point from `ROUTE_START`.

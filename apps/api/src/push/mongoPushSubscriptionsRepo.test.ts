@@ -1,6 +1,6 @@
 // Unit tests of MongoPushSubscriptionsRepo's pure helpers (index specs, filter, update builder,
 // document parser) and its collection wiring against an in-memory fake Mongo Db/Collection.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ObjectId, type Db, type Filter, type IndexDescription } from 'mongodb';
 import type { PushSubscription } from '@bottlerun/shared';
 import { describePushSubscriptionsRepoContract } from './pushSubscriptionsRepo.contract.ts';
@@ -33,6 +33,7 @@ function makeFakeDb(): {
   db: Db;
   collectionNames: string[];
   createdIndexBatches: IndexDescription[][];
+  docs: Map<string, PushSubscriptionDocument & { _id: ObjectId }>;
 } {
   const docs = new Map<string, PushSubscriptionDocument & { _id: ObjectId }>();
   const collectionNames: string[] = [];
@@ -81,7 +82,7 @@ function makeFakeDb(): {
     },
   } as unknown as Db;
 
-  return { db, collectionNames, createdIndexBatches };
+  return { db, collectionNames, createdIndexBatches, docs };
 }
 
 function extractEqEndpoint(filter: Filter<PushSubscriptionDocument>): string {
@@ -216,6 +217,36 @@ describe('MongoPushSubscriptionsRepo', () => {
 
     expect(collectionNames).toEqual(['pushSubscriptions']);
     expect(createdIndexBatches).toEqual([[...PUSH_SUBSCRIPTION_INDEXES]]);
+  });
+
+  it('list() skips a malformed stored document, keeps the valid ones, and logs only a count', async () => {
+    const { db, docs } = makeFakeDb();
+    const repo = new MongoPushSubscriptionsRepo(db);
+    const valid = makeSubscription();
+    await repo.save(valid);
+    const badEndpoint = 'https://fcm.googleapis.com/fcm/send/corrupt';
+    docs.set(badEndpoint, {
+      _id: new ObjectId(),
+      endpoint: badEndpoint,
+      keys: { p256dh: '', auth: '' },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      expect(await repo.list()).toEqual([valid]);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]?.[0]);
+      expect(JSON.parse(line)).toEqual({
+        level: 'warn',
+        event: 'push_subscriptions_invalid_skipped',
+        skipped: 1,
+      });
+      // The corrupt document (it holds a push endpoint) never reaches the log.
+      expect(line).not.toContain(badEndpoint);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

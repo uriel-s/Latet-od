@@ -91,15 +91,53 @@ describe('PushNotificationsControl', () => {
   });
 
   it('renders nothing when push is disabled on the server', async () => {
-    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
+    let resolveConfig!: (value: PushConfigOutcome) => void;
+    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveConfig = resolve;
+        }),
+    );
+
+    const { container } = render(<PushNotificationsControl loadConfig={loadConfig} />);
+
+    // Initially in checking state
+    expect(container.firstChild).toBeNull();
+    expect(loadConfig).toHaveBeenCalled();
+
+    // Resolve with enabled: false
+    resolveConfig({
       kind: 'loaded',
       config: { enabled: false },
     });
 
-    const { container } = render(<PushNotificationsControl loadConfig={loadConfig} />);
+    await waitFor(() => {
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(container.firstChild).toBeNull();
+    });
+  });
 
-    await waitFor(() => expect(loadConfig).toHaveBeenCalled());
-    expect(container.firstChild).toBeNull();
+  it('renders nothing when browser does not support ServiceWorker or PushManager', async () => {
+    const originalSW = navigator.serviceWorker;
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: undefined,
+      configurable: true,
+    });
+
+    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
+      kind: 'loaded',
+      config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
+    });
+
+    const { container } = render(<PushNotificationsControl loadConfig={loadConfig} />);
+    await waitFor(() => {
+      expect(container.firstChild).toBeNull();
+    });
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: originalSW,
+      configurable: true,
+    });
   });
 
   it('renders blocked notice when Notification.permission is denied', async () => {
@@ -111,7 +149,7 @@ describe('PushNotificationsControl', () => {
 
     render(<PushNotificationsControl loadConfig={loadConfig} />);
 
-    expect(await screen.findByText('התראות חסומות בהגדרות הדפדפן')).toBeDefined();
+    expect(await screen.findByText('התראות חסומות בהגדרות הדפדפן')).toBeTruthy();
   });
 
   it('renders "הפעל התראות" when push is enabled and device is not subscribed', async () => {
@@ -150,15 +188,28 @@ describe('PushNotificationsControl', () => {
     const button = await screen.findByRole('button', { name: 'הפעל התראות' });
     fireEvent.click(button);
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'התראות פעילות' })).toBeDefined(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'התראות פעילות' })).toBeTruthy());
     expect(requestPermissionMock).toHaveBeenCalled();
     expect(subscribeMock).toHaveBeenCalled();
     expect(saveSub).toHaveBeenCalledWith({
       endpoint: FAKE_ENDPOINT,
       keys: { p256dh: 'p256dh_key_base64', auth: 'auth_key_base64' },
     });
+  });
+
+  it('renders blocked state when user denies permission in browser prompt', async () => {
+    requestPermissionMock.mockResolvedValue('denied');
+    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
+      kind: 'loaded',
+      config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
+    });
+
+    render(<PushNotificationsControl loadConfig={loadConfig} />);
+
+    const button = await screen.findByRole('button', { name: 'הפעל התראות' });
+    fireEvent.click(button);
+
+    expect(await screen.findByText('התראות חסומות בהגדרות הדפדפן')).toBeTruthy();
   });
 
   it('renders "התראות פעילות" when already subscribed, and unsubscribes on click', async () => {
@@ -187,9 +238,40 @@ describe('PushNotificationsControl', () => {
 
     fireEvent.click(button);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'הפעל התראות' })).toBeDefined());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'הפעל התראות' })).toBeTruthy());
     expect(fakeSub.unsubscribe).toHaveBeenCalled();
     expect(deleteSub).toHaveBeenCalledWith(FAKE_ENDPOINT);
+  });
+
+  it('displays error message if unsubscribing fails on the server', async () => {
+    const fakeSub = makeFakeSub();
+    getSubscriptionMock.mockResolvedValue(fakeSub);
+
+    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
+      kind: 'loaded',
+      config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
+    });
+    const deleteSub = vi
+      .fn<() => Promise<DeletePushSubscriptionOutcome>>()
+      .mockResolvedValue({ kind: 'failed' });
+
+    render(
+      <PushNotificationsControl
+        loadConfig={loadConfig}
+        deleteSub={
+          deleteSub as unknown as (endpoint: string) => Promise<DeletePushSubscriptionOutcome>
+        }
+      />,
+    );
+
+    const button = await screen.findByRole('button', { name: 'התראות פעילות' });
+    fireEvent.click(button);
+
+    expect(await screen.findByText('לא הצלחנו להסיר את המנוי מהשרת.')).toBeTruthy();
+    // The server delete comes first: when it fails the device stays subscribed and the control
+    // still says "active", so the screen matches reality and a retry works.
+    expect(fakeSub.unsubscribe).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'התראות פעילות' })).toBeTruthy();
   });
 
   it('displays error message if saving subscription fails', async () => {
@@ -213,6 +295,6 @@ describe('PushNotificationsControl', () => {
     const button = await screen.findByRole('button', { name: 'הפעל התראות' });
     fireEvent.click(button);
 
-    expect(await screen.findByText('לא הצלחנו לשמור את ההתראות בשרת.')).toBeDefined();
+    expect(await screen.findByText('לא הצלחנו לשמור את ההתראות בשרת.')).toBeTruthy();
   });
 });

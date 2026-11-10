@@ -76,7 +76,7 @@ export const NEW_ORDER_PUSH_URL = '/app/orders';
 export const pushNotificationPayloadSchema = z.strictObject({
   title: z.string().min(1),
   body: z.string().min(1),
-  url: z.string().min(1),
+  url: z.string().regex(/^\/[^/\\]/u, 'url must be a relative path starting with /'),
 });
 export type PushNotificationPayload = z.infer<typeof pushNotificationPayloadSchema>;
 
