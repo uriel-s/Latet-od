@@ -1,13 +1,16 @@
 // What the api needs from the world outside its own code, passed to createApp(deps). Production
 // builds the Mongo implementations once per process (db/mongoDeps.ts), and the login's, the
-// WhatsApp messages' and the route's settings from env (auth/authConfig.ts,
-// messages/messagingConfig.ts, route/routeConfig.ts); envDeps.ts joins them for both entry points.
-// Tests pass in-memory fakes (fakeDeps.ts), so no test touches the network or Atlas.
+// WhatsApp messages', the route's and the Web Push settings from env (auth/authConfig.ts,
+// messages/messagingConfig.ts, route/routeConfig.ts, push/pushConfig.ts); envDeps.ts joins them
+// for both entry points. Tests pass in-memory fakes (fakeDeps.ts), so no test touches the network
+// or Atlas.
 import type { DistanceMatrix, GeoPoint } from '@bottlerun/shared';
 import type { AttemptStore } from './attempts/attemptStore.ts';
 import type { VerifyCredentials } from './auth/credentials.ts';
 import type { MessageSender } from './messages/messageSender.ts';
 import type { OrdersRepo } from './orders/ordersRepo.ts';
+import type { PushSender } from './push/pushSender.ts';
+import type { PushSubscriptionsRepo } from './push/pushSubscriptionsRepo.ts';
 import type { RoundsRepo } from './rounds/roundsRepo.ts';
 
 /** Everything the app talks to outside itself; tests pass fakes (CLAUDE.md: every external call behind an interface). */
@@ -16,6 +19,8 @@ export interface AppDeps {
   orders: OrdersRepo;
   /** Stored rounds (collection `rounds`). */
   rounds: RoundsRepo;
+  /** Stored collector Web Push subscriptions (collection `pushSubscriptions`, ADR-0013). */
+  pushSubscriptions: PushSubscriptionsRepo;
   /** Attempt counts for login limits and the form's rate limit (ADR-0004). */
   attempts: AttemptStore;
   /** Whether the database answers, for /api/health. */
@@ -26,14 +31,16 @@ export interface AppDeps {
   messaging: MessagingDeps;
   /** Where routes start and how far apart two points are, for planning a round (ADR-0005). */
   route: RouteDeps;
+  /** Web Push sender and VAPID public key (ADR-0013). */
+  push: PushDeps;
 }
 
 /**
- * The {@link AppDeps} pieces that live in the database: everything but `auth`, `messaging` and
- * `route`, which come from env. Production builds them with createMongoDeps (db/mongoDeps.ts),
- * and depsFromEnv (envDeps.ts) joins them with the other three.
+ * The {@link AppDeps} pieces that live in the database: everything but `auth`, `messaging`,
+ * `route` and `push`, which come from env. Production builds them with createMongoDeps
+ * (db/mongoDeps.ts), and depsFromEnv (envDeps.ts) joins them with the other four.
  */
-export type DbDeps = Omit<AppDeps, 'auth' | 'messaging' | 'route'>;
+export type DbDeps = Omit<AppDeps, 'auth' | 'messaging' | 'route' | 'push'>;
 
 /** Whether the database answers. /api/health uses it, which also opens the connection early (warm-up, ADR-0002). */
 export interface DbHealth {
@@ -83,4 +90,21 @@ export interface RouteDeps {
   start: GeoPoint;
   /** How far apart two points are: straight-line distance today (ADR-0005). */
   distance: DistanceMatrix;
+}
+
+/**
+ * What Web Push notifications need (ADR-0013). Production builds it from env
+ * (pushDepsFromEnv, push/pushConfig.ts); tests use createFakePush (fakeDeps.ts).
+ */
+export interface PushDeps {
+  /**
+   * Sends a Web Push notification (`WebPushSender` when VAPID is configured, or
+   * `DisabledPushSender` when VAPID env vars are unset).
+   */
+  sender: PushSender;
+  /**
+   * The base64url VAPID public key (`VAPID_PUBLIC_KEY`) exposed by `GET /api/collector/push/config`,
+   * or `null` when Web Push is disabled (all three `VAPID_*` env vars unset).
+   */
+  publicKey: string | null;
 }

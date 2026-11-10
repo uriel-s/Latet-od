@@ -15,6 +15,7 @@ async function freshModules(): Promise<{
   client: typeof import('./mongoClient.ts');
   orders: typeof import('../orders/mongoOrdersRepo.ts');
   rounds: typeof import('../rounds/mongoRoundsRepo.ts');
+  pushSubscriptions: typeof import('../push/mongoPushSubscriptionsRepo.ts');
   attempts: typeof import('../attempts/mongoAttemptStore.ts');
 }> {
   vi.resetModules();
@@ -23,6 +24,7 @@ async function freshModules(): Promise<{
     client: await import('./mongoClient.ts'),
     orders: await import('../orders/mongoOrdersRepo.ts'),
     rounds: await import('../rounds/mongoRoundsRepo.ts'),
+    pushSubscriptions: await import('../push/mongoPushSubscriptionsRepo.ts'),
     attempts: await import('../attempts/mongoAttemptStore.ts'),
   };
 }
@@ -87,12 +89,13 @@ describe('databaseNameFromUri', () => {
 
 describe('createMongoDeps', () => {
   it('builds the Mongo repos without connecting', async () => {
-    const { deps, orders, rounds, attempts } = await freshModules();
+    const { deps, orders, rounds, pushSubscriptions, attempts } = await freshModules();
 
     const appDeps = deps.createMongoDeps(URI);
 
     expect(appDeps.orders).toBeInstanceOf(orders.MongoOrdersRepo);
     expect(appDeps.rounds).toBeInstanceOf(rounds.MongoRoundsRepo);
+    expect(appDeps.pushSubscriptions).toBeInstanceOf(pushSubscriptions.MongoPushSubscriptionsRepo);
     expect(appDeps.attempts).toBeInstanceOf(attempts.MongoAttemptStore);
     // Not called: a ping would try to reach the placeholder address.
     expect(appDeps.db).toEqual({ ping: expect.any(Function) as unknown });

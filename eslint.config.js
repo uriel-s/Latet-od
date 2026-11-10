@@ -22,7 +22,7 @@ export default tseslint.config(
       parserOptions: {
         projectService: {
           // Root config files belong to no workspace tsconfig.
-          allowDefaultProject: ['*.js', '*.ts'],
+          allowDefaultProject: ['*.js', '*.ts', 'apps/web/public/*.js'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -43,6 +43,11 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'no-restricted-imports': ['error', { patterns: [appPattern('api')] }],
     },
+  },
+  {
+    files: ['apps/web/public/sw.js'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: { globals: globals.serviceworker },
   },
   {
     files: ['apps/api/**'],

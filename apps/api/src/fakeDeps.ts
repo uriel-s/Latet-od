@@ -3,9 +3,11 @@
 import { randomBytes } from 'node:crypto';
 import { straightLineDistance, type GeoPoint } from '@bottlerun/shared';
 import { InMemoryAttemptStore } from './attempts/inMemoryAttemptStore.ts';
-import type { AppDeps, AuthDeps, MessagingDeps, RouteDeps } from './deps.ts';
+import type { AppDeps, AuthDeps, MessagingDeps, PushDeps, RouteDeps } from './deps.ts';
 import { FakeSender } from './messages/fakeSender.ts';
 import { InMemoryOrdersRepo } from './orders/inMemoryOrdersRepo.ts';
+import { FAKE_VAPID_PUBLIC_KEY, FakePushSender } from './push/fakePushSender.ts';
+import { InMemoryPushSubscriptionsRepo } from './push/inMemoryPushSubscriptionsRepo.ts';
 import { InMemoryRoundsRepo } from './rounds/inMemoryRoundsRepo.ts';
 
 /**
@@ -67,11 +69,23 @@ export function createFakeRoute(overrides: Partial<RouteDeps> = {}): RouteDeps {
 }
 
 /**
+ * Web Push settings for tests (ADR-0013): a fresh {@link FakePushSender} and
+ * {@link FAKE_VAPID_PUBLIC_KEY}.
+ *
+ * @param overrides E.g. `{ publicKey: null, sender: new DisabledPushSender() }` to test with Web
+ *   Push disabled, or a custom {@link FakePushSender} to inspect or steer sent notifications.
+ */
+export function createFakePush(overrides: Partial<PushDeps> = {}): PushDeps {
+  return { sender: new FakePushSender(), publicKey: FAKE_VAPID_PUBLIC_KEY, ...overrides };
+}
+
+/**
  * Fresh, empty fakes for every dependency: an {@link InMemoryOrdersRepo}, an
- * {@link InMemoryRoundsRepo}, an {@link InMemoryAttemptStore} on the real clock, a database whose
- * ping always answers, {@link createFakeAuth}'s login, {@link createFakeMessaging}'s WhatsApp
- * sender and {@link createFakeRoute}'s route settings. Each call makes new instances, so tests
- * never share state.
+ * {@link InMemoryRoundsRepo}, an {@link InMemoryPushSubscriptionsRepo}, an
+ * {@link InMemoryAttemptStore} on the real clock, a database whose ping always answers,
+ * {@link createFakeAuth}'s login, {@link createFakeMessaging}'s WhatsApp sender,
+ * {@link createFakeRoute}'s route settings and {@link createFakePush}'s Web Push settings. Each
+ * call makes new instances, so tests never share state.
  *
  * @param overrides Pieces to use instead, e.g. `{ db: { ping: () => Promise.reject(...) } }` for a
  *   database that is down, or a repo the test keeps a reference to and inspects.
@@ -80,11 +94,13 @@ export function createFakeDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
     orders: new InMemoryOrdersRepo(),
     rounds: new InMemoryRoundsRepo(),
+    pushSubscriptions: new InMemoryPushSubscriptionsRepo(),
     attempts: new InMemoryAttemptStore(),
     db: { ping: () => Promise.resolve() },
     auth: createFakeAuth(),
     messaging: createFakeMessaging(),
     route: createFakeRoute(),
+    push: createFakePush(),
     ...overrides,
   };
 }

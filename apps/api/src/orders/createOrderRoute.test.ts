@@ -9,6 +9,8 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import {
   CREATE_ORDER_MESSAGES,
+  NEW_ORDER_PUSH_TITLE,
+  NEW_ORDER_PUSH_URL,
   ORDER_FORM_ERRORS,
   PHONE_ERROR,
   STREETS,
@@ -19,10 +21,13 @@ import {
   type InvalidOrderErrorBody,
   type Order,
   type OrderSummary,
+  type PushSubscription,
 } from '@bottlerun/shared';
 import { createApp } from '../app.ts';
 import { InMemoryAttemptStore } from '../attempts/inMemoryAttemptStore.ts';
-import { createFakeDeps } from '../fakeDeps.ts';
+import { createFakeDeps, createFakePush } from '../fakeDeps.ts';
+import { FakePushSender } from '../push/fakePushSender.ts';
+import { InMemoryPushSubscriptionsRepo } from '../push/inMemoryPushSubscriptionsRepo.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { ORDER_RATE_LIMIT } from './createOrderRoute.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
@@ -505,6 +510,120 @@ describe('POST /api/orders: the Origin check', () => {
 
     expect(res.status).toBe(201);
     expect(await orders.list()).toHaveLength(1);
+  });
+});
+
+describe('POST /api/orders: Web Push notifications', () => {
+  const SUB: PushSubscription = {
+    endpoint: 'https://push.example.com/device-1',
+    keys: { p256dh: 'p256dh-key', auth: 'auth-key' },
+  };
+
+  it('triggers a Web Push notification to all subscriptions on 201 order creation', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB);
+    const pushSender = new FakePushSender();
+    const target = createApp(
+      createFakeDeps({
+        orders,
+        attempts,
+        pushSubscriptions,
+        push: createFakePush({ sender: pushSender }),
+      }),
+    );
+
+    const res = await postOrder(validBody(), IP, target);
+
+    expect(res.status).toBe(201);
+    expect(pushSender.sent).toHaveLength(1);
+    expect(pushSender.sent[0]).toStrictEqual({
+      subscription: SUB,
+      payload: {
+        title: NEW_ORDER_PUSH_TITLE,
+        body: `${NAME} · ${STREET.name} ${HOUSE_NUMBER} · כ־40 בקבוקים`,
+        url: NEW_ORDER_PUSH_URL,
+      },
+    });
+  });
+
+  it('does not trigger a push notification when the honeypot is filled', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB);
+    const pushSender = new FakePushSender();
+    const target = createApp(
+      createFakeDeps({
+        orders,
+        attempts,
+        pushSubscriptions,
+        push: createFakePush({ sender: pushSender }),
+      }),
+    );
+
+    const res = await postOrder({ ...validBody(), website: 'https://spam.example' }, IP, target);
+
+    expect(res.status).toBe(201);
+    expect(pushSender.sent).toHaveLength(0);
+  });
+
+  it('does not trigger a push notification on duplicate open order (409)', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB);
+    const pushSender = new FakePushSender();
+    const target = createApp(
+      createFakeDeps({
+        orders,
+        attempts,
+        pushSubscriptions,
+        push: createFakePush({ sender: pushSender }),
+      }),
+    );
+
+    const first = await postOrder(validBody(), IP, target);
+    expect(first.status).toBe(201);
+    expect(pushSender.sent).toHaveLength(1);
+
+    const second = await postOrder(validBody(), IP, target);
+    expect(second.status).toBe(409);
+    expect(pushSender.sent).toHaveLength(1);
+  });
+
+  it('push sender failure or error does not prevent 201 order creation', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB);
+    const failingSender = new FakePushSender(() => ({
+      status: 'failed',
+      reason: '503 Service Unavailable',
+    }));
+    const targetFailing = createApp(
+      createFakeDeps({
+        orders,
+        attempts,
+        pushSubscriptions,
+        push: createFakePush({ sender: failingSender }),
+      }),
+    );
+
+    const resFailing = await postOrder(validBody(), IP, targetFailing);
+    expect(resFailing.status).toBe(201);
+    expect(failingSender.sent).toHaveLength(1);
+
+    // Also verify when sender throws an unexpected error
+    const crashingSender = new FakePushSender(() => {
+      throw new Error('Push service network connection refused');
+    });
+    const targetCrashing = createApp(
+      createFakeDeps({
+        orders,
+        attempts,
+        pushSubscriptions,
+        push: createFakePush({ sender: crashingSender }),
+      }),
+    );
+
+    const resCrashing = await postOrder(bodyWithPhone('052-1111111'), IP, targetCrashing);
+    expect(resCrashing.status).toBe(201);
+    expect(crashingSender.sent).toHaveLength(1);
+    expect(await orders.list()).toHaveLength(2);
   });
 });
 

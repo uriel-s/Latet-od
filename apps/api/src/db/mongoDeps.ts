@@ -6,6 +6,7 @@
 import type { DbDeps } from '../deps.ts';
 import { MongoAttemptStore } from '../attempts/mongoAttemptStore.ts';
 import { MongoOrdersRepo } from '../orders/mongoOrdersRepo.ts';
+import { MongoPushSubscriptionsRepo } from '../push/mongoPushSubscriptionsRepo.ts';
 import { MongoRoundsRepo } from '../rounds/mongoRoundsRepo.ts';
 import { getMongoDb, pingMongo } from './mongoClient.ts';
 
@@ -64,6 +65,7 @@ export function createMongoDeps(uri: string): DbDeps {
   return {
     orders: new MongoOrdersRepo(db),
     rounds: new MongoRoundsRepo(db),
+    pushSubscriptions: new MongoPushSubscriptionsRepo(db),
     attempts: new MongoAttemptStore(db),
     db: { ping: () => pingMongo(db) },
   };

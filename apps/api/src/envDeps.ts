@@ -8,6 +8,7 @@ import { authDepsFromEnv } from './auth/authConfig.ts';
 import { createMongoDeps } from './db/mongoDeps.ts';
 import type { AppDeps, DbDeps } from './deps.ts';
 import { messagingDepsFromEnv } from './messages/messagingConfig.ts';
+import { pushDepsFromEnv } from './push/pushConfig.ts';
 import { routeDepsFromEnv } from './route/routeConfig.ts';
 
 /**
@@ -41,7 +42,8 @@ export function depsFromEnv(
   const auth = authDepsFromEnv(env);
   const messaging = messagingDepsFromEnv(env);
   const route = routeDepsFromEnv(env);
-  return { ...createDbDeps(uri), auth, messaging, route };
+  const push = pushDepsFromEnv(env);
+  return { ...createDbDeps(uri), auth, messaging, route, push };
 }
 
 /**

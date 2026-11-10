@@ -22,6 +22,7 @@ import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api.ts';
 import { Link, navigate } from '../router.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
+import { PushNotificationsControl } from './PushNotificationsControl.tsx';
 import { orderTags } from './orderTags.ts';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
 
@@ -161,6 +162,7 @@ export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenPr
       <h1>הזמנות</h1>
       {/* What the screen Yoel just left did ("ההזמנה נשמרה"): its form is gone, so this tells it. */}
       <FlashNotice />
+      <PushNotificationsControl />
       {/* Side by side in one row of two columns, like an app's action bar (mockup §2). */}
       <div className="orders-actions">
         <Link to={ADD_ORDER_PATH} className="button button-primary button-block">
