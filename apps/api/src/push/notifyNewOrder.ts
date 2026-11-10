@@ -24,16 +24,19 @@ export async function notifyNewOrder(
 ): Promise<void> {
   try {
     if (deps.push.publicKey === null) {
+      logPushSummary({ enabled: false });
       return;
     }
 
     const payload = buildNewOrderPushPayload(order);
     const subscriptions = await deps.pushSubscriptions.list();
+    const counts = { sent: 0, gone: 0, failed: 0 };
 
     await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
           const result = await deps.push.sender.send(sub, payload);
+          counts[result.status] += 1;
           if (result.status === 'gone') {
             await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
           } else if (result.status === 'failed') {
@@ -49,7 +52,24 @@ export async function notifyNewOrder(
         }
       }),
     );
+
+    logPushSummary({ enabled: true, subscriptions: subscriptions.length, ...counts });
   } catch (error) {
     logError(error);
   }
+}
+
+/**
+ * Logs ONE info line per new order saying what the notification step did. Without it a successful
+ * send, "no subscription stored" and "Web Push disabled" all leave the logs empty, so "Yoel gets
+ * no notification" cannot be diagnosed on Vercel. Counts only: no endpoint, name or address.
+ */
+function logPushSummary(summary: {
+  enabled: boolean;
+  subscriptions?: number;
+  sent?: number;
+  gone?: number;
+  failed?: number;
+}): void {
+  console.info(JSON.stringify({ level: 'info', event: 'push_summary', ...summary }));
 }

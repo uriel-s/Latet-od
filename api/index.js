@@ -23172,14 +23172,17 @@ function sendDuplicateOpenOrder(res) {
 async function notifyNewOrder(deps, order) {
   try {
     if (deps.push.publicKey === null) {
+      logPushSummary({ enabled: false });
       return;
     }
     const payload = buildNewOrderPushPayload(order);
     const subscriptions = await deps.pushSubscriptions.list();
+    const counts = { sent: 0, gone: 0, failed: 0 };
     await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
           const result = await deps.push.sender.send(sub, payload);
+          counts[result.status] += 1;
           if (result.status === "gone") {
             await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
           } else if (result.status === "failed") {
@@ -23192,9 +23195,13 @@ async function notifyNewOrder(deps, order) {
         }
       })
     );
+    logPushSummary({ enabled: true, subscriptions: subscriptions.length, ...counts });
   } catch (error62) {
     logError(error62);
   }
+}
+function logPushSummary(summary) {
+  console.info(JSON.stringify({ level: "info", event: "push_summary", ...summary }));
 }
 
 // apps/api/src/orders/createOrderRoute.ts

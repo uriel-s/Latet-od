@@ -132,6 +132,91 @@ describe('notifyNewOrder', () => {
     }
   });
 
+  it('logs one push_summary line with counts only (no endpoint or customer data)', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB_1);
+    await pushSubscriptions.save(SUB_2);
+    await pushSubscriptions.save(SUB_3);
+    const sender = new FakePushSender((call) => {
+      if (call.subscription.endpoint === SUB_2.endpoint) return { status: 'gone' };
+      if (call.subscription.endpoint === SUB_3.endpoint) {
+        return { status: 'failed', reason: 'http_403' };
+      }
+      return { status: 'sent' };
+    });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await notifyNewOrder({ pushSubscriptions, push: createFakePush({ sender }) }, SAMPLE_ORDER);
+
+      expect(info).toHaveBeenCalledTimes(1);
+      const line = String(info.mock.calls[0]?.[0]);
+      expect(JSON.parse(line)).toStrictEqual({
+        level: 'info',
+        event: 'push_summary',
+        enabled: true,
+        subscriptions: 3,
+        sent: 1,
+        gone: 1,
+        failed: 1,
+      });
+      expect(line).not.toContain('push1.example.com');
+      expect(line).not.toContain(SAMPLE_ORDER.contact.name);
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('logs push_summary with zero subscriptions when none is stored', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    try {
+      await notifyNewOrder(
+        {
+          pushSubscriptions: new InMemoryPushSubscriptionsRepo(),
+          push: createFakePush({ sender: new FakePushSender() }),
+        },
+        SAMPLE_ORDER,
+      );
+
+      expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toStrictEqual({
+        level: 'info',
+        event: 'push_summary',
+        enabled: true,
+        subscriptions: 0,
+        sent: 0,
+        gone: 0,
+        failed: 0,
+      });
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it('logs push_summary with enabled false when Web Push is disabled', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    try {
+      await notifyNewOrder(
+        {
+          pushSubscriptions: new InMemoryPushSubscriptionsRepo(),
+          push: createFakePush({ sender: new FakePushSender(), publicKey: null }),
+        },
+        SAMPLE_ORDER,
+      );
+
+      expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toStrictEqual({
+        level: 'info',
+        event: 'push_summary',
+        enabled: false,
+      });
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it('does nothing when Web Push is disabled (publicKey is null)', async () => {
     const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
     await pushSubscriptions.save(SUB_1);
