@@ -1,7 +1,9 @@
 // How the collector (Yoel) is notified when a new order arrives from the public form (ADR-0013):
 // builds the Hebrew payload, fans out to every subscribed browser device, and automatically prunes
 // subscriptions that have expired or been revoked (HTTP 404/410 "gone"). Best-effort: failures never
-// fail or delay order creation.
+// fail order creation. The caller awaits this (a serverless function can be frozen once the
+// response is sent), so a slow push service delays the customer's reply by at most the sender's
+// timeout.
 import { buildNewOrderPushPayload, type Order } from '@bottlerun/shared';
 import type { AppDeps } from '../deps.ts';
 import { logError } from '../errors.ts';

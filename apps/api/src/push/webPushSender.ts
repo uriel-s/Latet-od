@@ -37,6 +37,9 @@ const DEFAULT_PUSH_TTL_SECONDS = '86400';
 /** Default timeout for pushing to an external push service endpoint (4 seconds). */
 const DEFAULT_PUSH_TIMEOUT_MS = 4000;
 
+/** How many stripped leading zero bytes a private key may have (1 in 256 keys loses one, 1 in 65,536 two). */
+const MAX_STRIPPED_ZERO_BYTES = 2;
+
 const BASE64URL_ONLY = /^[A-Za-z0-9_-]+$/u;
 const BASE64_OR_BASE64URL = /^[A-Za-z0-9+/_-]+={0,2}$/u;
 
@@ -61,14 +64,10 @@ export interface ParsedVapidKeys {
 
 /** Strict base64url decoder that rejects non-base64url characters, padding, or non-canonical bits. */
 function decodeStrictBase64Url(value: string): Buffer | null {
-  if (!BASE64URL_REGEX_TEST(value)) return null;
+  if (!BASE64URL_ONLY.test(value)) return null;
   const decoded = Buffer.from(value, 'base64url');
   if (decoded.toString('base64url') !== value) return null;
   return decoded;
-}
-
-function BASE64URL_REGEX_TEST(value: string): boolean {
-  return BASE64URL_ONLY.test(value);
 }
 
 /**
@@ -108,8 +107,10 @@ export function generateVapidKeys(): { publicKey: string; privateKey: string } {
  * signing `KeyObject`.
  *
  * - `publicKeyBase64Url` must decode to 65 bytes starting with `0x04`.
- * - `privateKeyBase64Url` must decode to 32 bytes, be a valid P-256 scalar, and derive the exact
- *   same public key.
+ * - `privateKeyBase64Url` must decode to 30-32 bytes (a shorter one is left-padded with zeros:
+ *   OpenSSL, and so the `createECDH(...).getPrivateKey()` one-liner in `.env.example`, drops leading
+ *   0x00 bytes for ~1 key in 256, and the scalar is the same), be a valid P-256 scalar, and derive
+ *   the exact same public key.
  *
  * @throws Error naming `VAPID_PUBLIC_KEY` and/or `VAPID_PRIVATE_KEY` without repeating their values.
  */
@@ -124,12 +125,22 @@ export function parseVapidKeys(
     );
   }
 
-  const privBytes = decodeStrictBase64Url(privateKeyBase64Url);
-  if (!privBytes || privBytes.length !== P256_PRIVATE_KEY_BYTES) {
+  const decodedPrivate = decodeStrictBase64Url(privateKeyBase64Url);
+  if (
+    !decodedPrivate ||
+    decodedPrivate.length < P256_PRIVATE_KEY_BYTES - MAX_STRIPPED_ZERO_BYTES ||
+    decodedPrivate.length > P256_PRIVATE_KEY_BYTES
+  ) {
     throw new Error(
       'VAPID_PRIVATE_KEY is invalid: it must be a 32-byte P-256 private key in base64url.',
     );
   }
+  // Left-pad a key whose leading zero bytes were stripped, so a valid generated key never takes
+  // the whole api down at startup.
+  const privBytes = Buffer.concat([
+    Buffer.alloc(P256_PRIVATE_KEY_BYTES - decodedPrivate.length),
+    decodedPrivate,
+  ]);
 
   let derivedPublic: Buffer;
   try {

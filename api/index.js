@@ -22290,6 +22290,7 @@ var AES128GCM_RECORD_SIZE = 4096;
 var VAPID_EXPIRATION_SECONDS = 12 * 60 * 60;
 var DEFAULT_PUSH_TTL_SECONDS = "86400";
 var DEFAULT_PUSH_TIMEOUT_MS = 4e3;
+var MAX_STRIPPED_ZERO_BYTES = 2;
 var BASE64URL_ONLY = /^[A-Za-z0-9_-]+$/u;
 var BASE64_OR_BASE64URL = /^[A-Za-z0-9+/_-]+={0,2}$/u;
 var KEY_INFO_PREFIX = Buffer.from("WebPush: info\0", "ascii");
@@ -22300,13 +22301,10 @@ var JWT_HEADER_BASE64URL = Buffer.from(JSON.stringify({ typ: "JWT", alg: "ES256"
   "base64url"
 );
 function decodeStrictBase64Url(value) {
-  if (!BASE64URL_REGEX_TEST(value)) return null;
+  if (!BASE64URL_ONLY.test(value)) return null;
   const decoded = Buffer.from(value, "base64url");
   if (decoded.toString("base64url") !== value) return null;
   return decoded;
-}
-function BASE64URL_REGEX_TEST(value) {
-  return BASE64URL_ONLY.test(value);
 }
 function decodeSubscriptionKey(value) {
   if (!BASE64_OR_BASE64URL.test(value)) return null;
@@ -22323,12 +22321,16 @@ function parseVapidKeys(publicKeyBase64Url, privateKeyBase64Url) {
       "VAPID_PUBLIC_KEY is invalid: it must be a 65-byte uncompressed P-256 public key (starting with 0x04) in base64url."
     );
   }
-  const privBytes = decodeStrictBase64Url(privateKeyBase64Url);
-  if (!privBytes || privBytes.length !== P256_PRIVATE_KEY_BYTES) {
+  const decodedPrivate = decodeStrictBase64Url(privateKeyBase64Url);
+  if (!decodedPrivate || decodedPrivate.length < P256_PRIVATE_KEY_BYTES - MAX_STRIPPED_ZERO_BYTES || decodedPrivate.length > P256_PRIVATE_KEY_BYTES) {
     throw new Error(
       "VAPID_PRIVATE_KEY is invalid: it must be a 32-byte P-256 private key in base64url."
     );
   }
+  const privBytes = Buffer.concat([
+    Buffer.alloc(P256_PRIVATE_KEY_BYTES - decodedPrivate.length),
+    decodedPrivate
+  ]);
   let derivedPublic;
   try {
     const ecdh = createECDH("prime256v1");

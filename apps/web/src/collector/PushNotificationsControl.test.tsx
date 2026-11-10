@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushSubscription } from '@bottlerun/shared';
 import type {
@@ -23,6 +23,15 @@ function makeFakeSub(endpoint = FAKE_ENDPOINT) {
       },
     }),
   };
+}
+
+/** A `saveSub` stub that always succeeds, typed as the component's prop. */
+function savedSubStub() {
+  return vi
+    .fn<() => Promise<SavePushSubscriptionOutcome>>()
+    .mockResolvedValue({ kind: 'saved' }) as unknown as (
+    sub: PushSubscription,
+  ) => Promise<SavePushSubscriptionOutcome>;
 }
 
 describe('urlBase64ToUint8Array', () => {
@@ -111,33 +120,46 @@ describe('PushNotificationsControl', () => {
       config: { enabled: false },
     });
 
-    await waitFor(() => {
-      expect(screen.queryByRole('button')).toBeNull();
-      expect(container.firstChild).toBeNull();
+    // Let React apply the state change from the resolved config before asserting. Without this
+    // flush the assertions would run while the state is still "checking" (also null) and could
+    // never fail.
+    await act(async () => {
+      await Promise.resolve();
     });
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(container.firstChild).toBeNull();
   });
 
-  it('renders nothing when browser does not support ServiceWorker or PushManager', async () => {
-    const originalSW = navigator.serviceWorker;
-    Object.defineProperty(navigator, 'serviceWorker', {
-      value: undefined,
-      configurable: true,
-    });
-
+  // Each case removes one browser API for real (`delete`, not `value: undefined`, because the
+  // control checks `'serviceWorker' in navigator`). `beforeEach`/`afterEach` put them back.
+  it.each([
+    {
+      name: 'ServiceWorker',
+      remove: () => delete (navigator as unknown as Record<string, unknown>).serviceWorker,
+    },
+    {
+      name: 'PushManager',
+      remove: () => delete (window as unknown as Record<string, unknown>).PushManager,
+    },
+    {
+      name: 'Notification',
+      remove: () => delete (window as unknown as Record<string, unknown>).Notification,
+    },
+  ])('renders nothing and skips the server when the browser lacks $name', async ({ remove }) => {
+    remove();
     const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
       kind: 'loaded',
       config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
     });
 
     const { container } = render(<PushNotificationsControl loadConfig={loadConfig} />);
-    await waitFor(() => {
-      expect(container.firstChild).toBeNull();
+    await act(async () => {
+      await Promise.resolve();
     });
 
-    Object.defineProperty(navigator, 'serviceWorker', {
-      value: originalSW,
-      configurable: true,
-    });
+    expect(container.firstChild).toBeNull();
+    expect(loadConfig).not.toHaveBeenCalled();
   });
 
   it('renders blocked notice when Notification.permission is denied', async () => {
@@ -227,6 +249,7 @@ describe('PushNotificationsControl', () => {
     render(
       <PushNotificationsControl
         loadConfig={loadConfig}
+        saveSub={savedSubStub()}
         deleteSub={
           deleteSub as unknown as (endpoint: string) => Promise<DeletePushSubscriptionOutcome>
         }
@@ -258,6 +281,7 @@ describe('PushNotificationsControl', () => {
     render(
       <PushNotificationsControl
         loadConfig={loadConfig}
+        saveSub={savedSubStub()}
         deleteSub={
           deleteSub as unknown as (endpoint: string) => Promise<DeletePushSubscriptionOutcome>
         }
@@ -296,5 +320,42 @@ describe('PushNotificationsControl', () => {
     fireEvent.click(button);
 
     expect(await screen.findByText('לא הצלחנו לשמור את ההתראות בשרת.')).toBeTruthy();
+  });
+
+  it('re-sends an existing device subscription to the server on mount before showing "active"', async () => {
+    getSubscriptionMock.mockResolvedValue(makeFakeSub());
+    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
+      kind: 'loaded',
+      config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
+    });
+    const saveSub = savedSubStub();
+
+    render(<PushNotificationsControl loadConfig={loadConfig} saveSub={saveSub} />);
+
+    expect(await screen.findByRole('button', { name: 'התראות פעילות' })).toBeTruthy();
+    expect(saveSub).toHaveBeenCalledWith({
+      endpoint: FAKE_ENDPOINT,
+      keys: { p256dh: 'p256dh_key_base64', auth: 'auth_key_base64' },
+    });
+  });
+
+  it('does not claim "active" when the server could not be given the existing subscription', async () => {
+    // Earlier save failed: the device is subscribed, the server has nothing. After a reload the
+    // screen must not say notifications are on.
+    getSubscriptionMock.mockResolvedValue(makeFakeSub());
+    const loadConfig = vi.fn<() => Promise<PushConfigOutcome>>().mockResolvedValue({
+      kind: 'loaded',
+      config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
+    });
+    const saveSub = vi
+      .fn<() => Promise<SavePushSubscriptionOutcome>>()
+      .mockResolvedValue({ kind: 'failed' }) as unknown as (
+      sub: PushSubscription,
+    ) => Promise<SavePushSubscriptionOutcome>;
+
+    render(<PushNotificationsControl loadConfig={loadConfig} saveSub={saveSub} />);
+
+    expect(await screen.findByRole('button', { name: 'הפעל התראות' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'התראות פעילות' })).toBeNull();
   });
 });

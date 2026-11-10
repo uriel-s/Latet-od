@@ -4,6 +4,7 @@
 // configured on the server (GET /api/collector/push/config), registers /sw.js, manages device
 // PushSubscription, and syncs subscription state with the server.
 import { useEffect, useState } from 'react';
+import type { PushSubscription as PushSubscriptionBody } from '@bottlerun/shared';
 import {
   deletePushSubscription,
   fetchPushConfig,
@@ -24,6 +25,13 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuf
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+/** Builds the request body for the server from a browser subscription; null if it lacks endpoint or keys. */
+function toServerSubscription(sub: PushSubscription): PushSubscriptionBody | null {
+  const json = sub.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return null;
+  return { endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } };
 }
 
 export type PushControlState =
@@ -95,7 +103,27 @@ export function PushNotificationsControl({
         }
         const existingSub = await registration.pushManager.getSubscription();
         if (!active) return;
-        setState(existingSub ? 'active' : 'inactive');
+        if (!existingSub) {
+          setState('inactive');
+          return;
+        }
+
+        // The device is subscribed, but the server may have lost it (an earlier save failed, the
+        // push service rotated the endpoint, or it was pruned). Re-send it (the server upsert is
+        // idempotent) so "active" on screen means the server really has it; otherwise Yoel would
+        // silently get no notifications.
+        const body = toServerSubscription(existingSub);
+        if (!body) {
+          setState('inactive');
+          return;
+        }
+        const syncOutcome = await saveSub(body);
+        if (!active) return;
+        if (syncOutcome.kind === 'loggedOut') {
+          navigate('/login', { replace: true });
+          return;
+        }
+        setState(syncOutcome.kind === 'saved' ? 'active' : 'inactive');
       } catch {
         if (active) setState('inactive');
       }
@@ -106,7 +134,7 @@ export function PushNotificationsControl({
     return () => {
       active = false;
     };
-  }, [loadConfig]);
+  }, [loadConfig, saveSub]);
 
   async function toggle(): Promise<void> {
     if (busy || !publicKey) return;
@@ -165,15 +193,15 @@ export function PushNotificationsControl({
           });
         }
 
-        const json = sub.toJSON();
-        if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+        const body = toServerSubscription(sub);
+        if (!body) {
           throw new Error('PushSubscription keys missing');
         }
 
-        const saveOutcome = await saveSub({
-          endpoint: json.endpoint,
-          keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-        });
+        // If this save fails the device stays subscribed; the control stays "inactive" with an
+        // error, and the next mount (or a retry) re-sends it, so the screen never claims "active"
+        // for a subscription the server does not have.
+        const saveOutcome = await saveSub(body);
 
         if (saveOutcome.kind === 'saved') {
           setState('active');

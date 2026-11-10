@@ -82,6 +82,19 @@ describe('generateVapidKeys & parseVapidKeys', () => {
     expect(parsed.publicKeyBytes[0]).toBe(0x04);
   });
 
+  it('accepts a private key whose leading zero byte was stripped (the .env.example recipe)', () => {
+    // A scalar with a leading 0x00: `getPrivateKey()` returns only 31 bytes for such a key.
+    const fullScalar = Buffer.concat([Buffer.from([0x00]), Buffer.alloc(31, 0x11)]);
+    const ecdh = createECDH('prime256v1');
+    ecdh.setPrivateKey(fullScalar);
+    const publicKey = ecdh.getPublicKey().toString('base64url');
+    const strippedPrivate = fullScalar.subarray(1).toString('base64url');
+
+    const parsed = parseVapidKeys(publicKey, strippedPrivate);
+
+    expect(parsed.publicKey).toBe(publicKey);
+  });
+
   it('rejects a mismatched public and private key pair without leaking either value', () => {
     const first = generateVapidKeys();
     const second = generateVapidKeys();
