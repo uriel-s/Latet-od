@@ -18,6 +18,16 @@ describe('sw.js static guarantees', () => {
     expect(swSource).toMatch(/addEventListener\(\s*['"]install['"]/);
     expect(swSource).toMatch(/addEventListener\(\s*['"]activate['"]/);
   });
+
+  it('uses a status-bar badge that exists and is a transparent, single-color PNG', () => {
+    // Android draws the badge as a silhouette: a colored or opaque picture becomes a white square.
+    const badge = fs.readFileSync(path.join(import.meta.dirname, '../public/badge-96.png'));
+    const colorTypeRgba = 6; // PNG IHDR color type 6 = truecolor with an alpha channel
+    expect(badge.subarray(1, 4).toString('ascii')).toBe('PNG');
+    expect(badge.readUInt32BE(16)).toBe(96); // width
+    expect(badge.readUInt32BE(20)).toBe(96); // height
+    expect(badge[25]).toBe(colorTypeRgba);
+  });
 });
 
 describe('sw.js runtime behavior', () => {
@@ -113,7 +123,8 @@ describe('sw.js runtime behavior', () => {
       expect(showNotificationMock).toHaveBeenCalledWith('הזמנה חדשה — לתת עוד', {
         body: 'דוד כהן · נחל נחשון 5 · כ־40 בקבוקים',
         icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        badge: '/badge-96.png',
+        vibrate: [200, 100, 200],
         dir: 'rtl',
         lang: 'he',
         data: { url: '/app/orders' },
@@ -140,7 +151,8 @@ describe('sw.js runtime behavior', () => {
       expect(showNotificationMock).toHaveBeenCalledWith('הזמנה חדשה — לתת עוד', {
         body: 'הזמנה חדשה התקבלה',
         icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        badge: '/badge-96.png',
+        vibrate: [200, 100, 200],
         dir: 'rtl',
         lang: 'he',
         data: { url: '/app/orders' },

@@ -29,8 +29,13 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'הזמנה חדשה — לתת עוד';
   const options = {
     body: payload.body || '',
+    // The large colored picture shown beside the text.
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    // The small status-bar icon. Android draws it as a single-color silhouette, so it must be white
+    // on a transparent background; a colored picture here becomes a plain white square.
+    badge: '/badge-96.png',
+    // Two short buzzes, so a new order is noticed even with the sound off.
+    vibrate: [200, 100, 200],
     dir: 'rtl',
     lang: 'he',
     data: {
