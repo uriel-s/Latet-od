@@ -128,12 +128,13 @@ flowchart TB
 | `api` (ה-function של Vercel) | `apps/api`, Node | `apps/web` | ESLint `no-restricted-imports` |
 
 **מה שייך ל-shared:** כל דבר ששני הצדדים צריכים להסכים עליו: צורת ההזמנה (zod), קודי סטטוס, כללי validation
-(טלפון ישראלי, מינימום 30), טקסט ההודעות (`renderMessage`), רשימת הרחובות, ושווי בקבוק.
+(טלפון ישראלי, מינימום 20), טקסט ההודעות (`renderMessage`), רשימת הרחובות, ושווי בקבוק.
 **מה לא שייך:** גישה ל-DB, סודות, ונקודת ההתחלה (הבית של יואל).
 
 ## ממשקים מול העולם החיצון
 
-כל אחד עם fake לבדיקות, כך שהבדיקות לא נוגעות ברשת ולא ב-Atlas:
+כל אחד עם fake לבדיקות, כך שהבדיקות לא נוגעות ברשת ולא ב-Atlas (חוץ מה-contract של מימושי Mongo, שרץ גם מול
+MongoDB אמיתי כש-`MONGODB_TEST_URI` מוגדר, מחוץ לירוק):
 
 | ממשק | מימוש אמיתי | fake | ADR |
 |---|---|---|---|
@@ -152,4 +153,5 @@ flowchart TB
 
 ## בדיקות ו"ירוק"
 `bash .claude/checks.sh all`: lint (כולל הגבולות), format, types, sec, test, build. פירוט ב-`CLAUDE.md`.
-מחוץ לירוק, ידני: ה-deploy, ה-smoke מול האתר האמיתי, בדיקות האבטחה, ה-cold start והאפליקציה המותקנת באייפון (`docs/deploy.md`).
+מחוץ לירוק, ידני: ה-deploy, ה-smoke מול האתר האמיתי, בדיקות האבטחה, ה-cold start והאפליקציה המותקנת באייפון (`docs/deploy.md`),
+וה-contract של מימושי Mongo מול MongoDB אמיתי (`MONGODB_TEST_URI`, הפקודה ב-`apps/api/src/db/testMongo.ts`).

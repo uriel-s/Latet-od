@@ -128,7 +128,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 
 **What green does NOT cover:**
 - Real WhatsApp sending — tests use `FakeSender`.
-- The real database on Atlas — tests use in-memory fakes behind the repo interfaces.
+- The real database on Atlas — tests use in-memory fakes behind the repo interfaces. The repo contracts also run against a real MongoDB (6.0+) when `MONGODB_TEST_URI` names a database whose name contains "test"; the command is in `apps/api/src/db/testMongo.ts`.
 - Deploy (Vercel config, env vars, cold start).
 - How it looks on a phone and in RTL — use /ui-test or check by hand on a real phone.
 
@@ -153,7 +153,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 - **Hebrew and RTL.** The collector app is Hebrew only, and so are the Open Graph tags. The booking form (`/` Hebrew, `/en` English) and the customer page `/o/<token>` follow the order's `lang` (`he`|`en`, ADR-0010): texts come from the `t()` dictionary in `packages/shared/src/i18n.ts`, no i18n library, and the document `lang`/`dir` switch with it (`rtl` for Hebrew). Hebrew pages use `dir="rtl"`. Phone numbers and digits render LTR inside the text (`<bdi>` / `dir="ltr"`). Dates `DD/MM`. Time zone `Asia/Jerusalem`, also for monthly statistics.
 - **Mobile first, built for elderly customers.** Single column, font ≥18px, tap targets ≥48px, WCAG AA contrast, numeric keyboard for phone and quantity, errors in plain words next to the field.
 - **No secrets in code.** Everything secret or private comes from env; `apps/api/.env.example` lists every variable with no real values; `.env` is git-ignored. Yoel's home address (`ROUTE_START`) counts as private.
-- **Every external call sits behind an interface with a fake for tests.** Today: WhatsApp → `MessageSender` (ADR-0003). Also MongoDB → repositories (`OrdersRepo`, `RoundsRepo`), rate-limit store → `AttemptStore` (ADR-0004), distances → `DistanceMatrix` (ADR-0005). Tests never touch the network or Atlas.
+- **Every external call sits behind an interface with a fake for tests.** Today: WhatsApp → `MessageSender` (ADR-0003). Also MongoDB → repositories (`OrdersRepo`, `RoundsRepo`), rate-limit store → `AttemptStore` (ADR-0004), distances → `DistanceMatrix` (ADR-0005). Tests never touch the network or Atlas, except the opt-in Mongo contract runs (`MONGODB_TEST_URI`, outside green).
 - **Privacy.** No public page shows another customer's data; the customer page is reached by random token only; never log request bodies (phones, addresses).
 - **Serverless.** The api runs as a Vercel function: no in-memory state shared between requests, no background jobs, no cron.
 - **Boundaries.** `apps/web` and `apps/api` never import each other; `packages/shared` imports neither app nor express/react. ESLint enforces this.

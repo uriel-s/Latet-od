@@ -1,6 +1,6 @@
 // Unit tests of MongoOrdersRepo's pure parts: ids, documents, queries, updates, the duplicate-key
-// mapping and the index specs. No test connects to a database: the class only hands these to the
-// driver, and its behaviour against Atlas is checked by hand with the contract suite (outside green).
+// mapping and the index specs. No test here connects to a database: the class only hands these to
+// the driver. mongoOrdersRepo.contract.test.ts checks its behaviour on a real MongoDB (opt-in).
 import { describe, expect, it } from 'vitest';
 import { MongoServerError, ObjectId } from 'mongodb';
 import { OPEN_ORDER_STATUSES } from '@bottlerun/shared';

@@ -1,5 +1,7 @@
 // Unit tests of MongoPushSubscriptionsRepo's pure helpers (index specs, filter, update builder,
-// document parser) and its collection wiring against an in-memory fake Mongo Db/Collection.
+// document parser) and its collection wiring against an in-memory fake Mongo Db/Collection. The
+// fake shows the wiring, not the server's behaviour: mongoPushSubscriptionsRepo.contract.test.ts
+// runs the contract on a real MongoDB (opt-in).
 import { describe, expect, it, vi } from 'vitest';
 import { ObjectId, type Db, type Filter, type IndexDescription } from 'mongodb';
 import type { PushSubscription } from '@bottlerun/shared';

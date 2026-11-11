@@ -2,8 +2,9 @@
 // in-memory fake for tests). Like OrdersRepo it is dumb storage: the round service decides status,
 // phase, timestamps and which orders go in. Nothing about rounds needs a unique index (the rule
 // "an order is in at most one open round", spec §4, lives on the order's `roundId`), so unlike
-// OrdersRepo it throws no domain error. The same contract suite (roundsRepo.contract.ts) runs
-// against every implementation.
+// OrdersRepo it throws no domain error. Both implementations run one contract suite
+// (roundsRepo.contract.ts): the fake in green, the Mongo repo only in the opt-in run on a real
+// MongoDB (mongoRoundsRepo.contract.test.ts).
 import type { NewRound, Round, RoundPhase, RoundStatus } from '@bottlerun/shared';
 
 /** Fields an update may change. `id` and `createdAt` are fixed once the round exists. */

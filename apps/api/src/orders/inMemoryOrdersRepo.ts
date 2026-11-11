@@ -1,4 +1,4 @@
-// In-memory OrdersRepo: the fake the api tests run against (ADR-0001), so no test touches Atlas.
+// In-memory OrdersRepo: the fake the api tests run against (ADR-0001), so they never touch Atlas.
 // It behaves like the Mongo repo where tests can see it: ObjectId-shaped ids, the
 // one-open-order-per-phone rule and the unique token (the Mongo indexes), `$set`/`$unset`
 // patches, undefined fields left out, and a copy for every order handed out.

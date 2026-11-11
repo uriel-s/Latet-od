@@ -1,6 +1,8 @@
 // The behaviour every PushSubscriptionsRepo must have, as a reusable Vitest suite: the in-memory
-// fake runs it in inMemoryPushSubscriptionsRepo.test.ts and the Mongo repo satisfies the same
-// contract. Deliberately not named *.test.ts: it only declares tests when an implementation calls it.
+// fake runs it in inMemoryPushSubscriptionsRepo.test.ts; the Mongo repo on a fake Db in
+// mongoPushSubscriptionsRepo.test.ts, and on a real MongoDB in
+// mongoPushSubscriptionsRepo.contract.test.ts (only when MONGODB_TEST_URI is set). Deliberately not
+// named *.test.ts: it only declares tests when an implementation calls it.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PushSubscription } from '@bottlerun/shared';
 import type { PushSubscriptionsRepo } from './pushSubscriptionsRepo.ts';

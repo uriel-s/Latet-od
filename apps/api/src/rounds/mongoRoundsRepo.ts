@@ -2,7 +2,7 @@
 // no Mongoose (ADR-0001). Every document read is parsed with `roundSchema` from shared, the single
 // source of the data's shape, so a malformed document fails loudly instead of reaching a screen.
 // Query and update building is pure and unit-tested; the class itself only passes them to the
-// driver, and is checked against Atlas outside green (see below).
+// driver; an opt-in run checks it on a real MongoDB (see below).
 //
 // No indexes: Yoel plans a few rounds a week, so the collection holds a few hundred documents after
 // years, and scanning and sorting them costs less than keeping an index. Nothing about rounds must
@@ -21,16 +21,8 @@ export type RoundDocument = NewRound & { _id: ObjectId };
  * {@link RoundsRepo} on the `rounds` collection of `db`. Create one per process, next to the client
  * (`getMongoDb`), like the other repos.
  *
- * Its behaviour is the same contract the in-memory fake passes. To run that suite against Atlas
- * by hand (outside green, and never committed: tests must not touch the network), put this in a
- * scratch `*.test.ts`, with `db` from a `MongoClient` (`MONGO_CLIENT_OPTIONS`) on a throwaway
- * database, and drop that database and close the client in `afterAll`:
- *
- * @example
- * describeRoundsRepoContract('MongoRoundsRepo', async () => {
- *   await db.collection('rounds').deleteMany({}); // the suite needs an empty repo
- *   return new MongoRoundsRepo(db);
- * });
+ * It meets the contract the in-memory fake passes (roundsRepo.contract.ts); the opt-in run of that
+ * contract on a real MongoDB is mongoRoundsRepo.contract.test.ts.
  */
 export class MongoRoundsRepo implements RoundsRepo {
   private readonly rounds: Collection<RoundDocument>;

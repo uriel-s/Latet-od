@@ -1,7 +1,8 @@
 // The behaviour every RoundsRepo must have, as a reusable Vitest suite. The in-memory fake runs it
-// in inMemoryRoundsRepo.test.ts; the Mongo repo runs the same suite by hand against Atlas (see
-// MongoRoundsRepo), so the fake the other tests rely on is proven to behave like the real
-// database. Deliberately not named *.test.ts: it only declares tests when an implementation calls it.
+// in inMemoryRoundsRepo.test.ts; the Mongo repo in mongoRoundsRepo.contract.test.ts, on a real
+// MongoDB and only when MONGODB_TEST_URI is set (outside green). That run is what proves the fake
+// the other tests rely on behaves like the real database. Deliberately not named *.test.ts: it
+// only declares tests when an implementation calls it.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { roundSchema, type Round, type RoundStop } from '@bottlerun/shared';
 import { makeNewRound, MADE_ROUND_CREATED_AT } from './makeRound.ts';
