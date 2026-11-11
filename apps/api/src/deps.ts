@@ -2,8 +2,8 @@
 // builds the Mongo implementations once per process (db/mongoDeps.ts), and the login's, the
 // WhatsApp messages', the route's and the Web Push settings from env (auth/authConfig.ts,
 // messages/messagingConfig.ts, route/routeConfig.ts, push/pushConfig.ts); envDeps.ts joins them
-// for both entry points. Tests pass in-memory fakes (fakeDeps.ts), so no test touches the network
-// or Atlas.
+// for both entry points. Tests pass in-memory fakes (fakeDeps.ts), so the app's tests never touch
+// the network or Atlas.
 import type { DistanceMatrix, GeoPoint } from '@bottlerun/shared';
 import type { AttemptStore } from './attempts/attemptStore.ts';
 import type { VerifyCredentials } from './auth/credentials.ts';

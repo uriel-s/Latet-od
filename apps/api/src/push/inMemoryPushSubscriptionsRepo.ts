@@ -1,5 +1,5 @@
-// In-memory PushSubscriptionsRepo: the fake that api and push tests run against (ADR-0013), so no
-// test touches MongoDB Atlas.
+// In-memory PushSubscriptionsRepo: the fake that api and push tests run against (ADR-0013), so they
+// never touch MongoDB Atlas.
 import type { PushSubscription } from '@bottlerun/shared';
 import type { PushSubscriptionsRepo } from './pushSubscriptionsRepo.ts';
 

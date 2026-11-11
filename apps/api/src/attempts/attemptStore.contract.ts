@@ -1,6 +1,7 @@
 // The behaviour every AttemptStore must have, as a reusable Vitest suite: the in-memory fake runs
-// it in inMemoryAttemptStore.test.ts and the Mongo store runs the same one. Deliberately not
-// named *.test.ts: it only declares tests when an implementation calls it.
+// it in inMemoryAttemptStore.test.ts, the Mongo store in mongoAttemptStore.contract.test.ts (on a
+// real MongoDB, only when MONGODB_TEST_URI is set). Deliberately not named *.test.ts: it only
+// declares tests when an implementation calls it.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AttemptStore } from './attemptStore.ts';
 

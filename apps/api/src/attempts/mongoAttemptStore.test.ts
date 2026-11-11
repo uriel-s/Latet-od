@@ -1,5 +1,5 @@
 // Unit tests of MongoAttemptStore's pure parts: the stored document, the window query and the
-// index specs. No test connects to a database (the contract suite runs on Atlas only by hand).
+// index specs, with no database (mongoAttemptStore.contract.test.ts runs on one, opt-in).
 import { describe, expect, it } from 'vitest';
 import { ATTEMPT_INDEXES, attemptDocument, inWindowFilter } from './mongoAttemptStore.ts';
 

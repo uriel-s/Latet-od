@@ -3,7 +3,7 @@
 // source of the data's shape, so a malformed document fails loudly instead of reaching a screen.
 // The rules a database must enforce atomically are unique indexes: one open order per phone
 // (spec §3.1) and a unique token. Query and update building is pure and unit-tested; the class
-// itself only passes them to the driver, and is checked against Atlas outside green (see below).
+// itself only passes them to the driver; an opt-in run checks it on a real MongoDB (see below).
 import {
   MongoServerError,
   ObjectId,
@@ -66,16 +66,8 @@ const DUPLICATE_KEY_CODE = 11000;
  * Create one per process, next to the client (`getMongoDb`), not one per request: each instance
  * creates the indexes before its first operation.
  *
- * Its behaviour is the same contract the in-memory fake passes. To run that suite against Atlas
- * by hand (outside green, and never committed: tests must not touch the network), put this in a
- * scratch `*.test.ts`, with `db` from a `MongoClient` (`MONGO_CLIENT_OPTIONS`) on a throwaway
- * database, and drop that database and close the client in `afterAll`:
- *
- * @example
- * describeOrdersRepoContract('MongoOrdersRepo', async () => {
- *   await db.collection('orders').deleteMany({}); // the suite needs an empty repo
- *   return new MongoOrdersRepo(db);
- * });
+ * It meets the contract the in-memory fake passes (ordersRepo.contract.ts); the opt-in run of that
+ * contract on a real MongoDB is mongoOrdersRepo.contract.test.ts.
  */
 export class MongoOrdersRepo implements OrdersRepo {
   private readonly orders: Collection<OrderDocument>;

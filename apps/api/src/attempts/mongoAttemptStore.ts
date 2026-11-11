@@ -35,15 +35,8 @@ export const ATTEMPT_INDEXES: readonly IndexDescription[] = [
  * `hit` is an insert and then a count, not one atomic step: two attempts at the same moment may
  * both count each other. For a limit that only errs toward blocking a little early, that is fine.
  *
- * It meets the same contract as the in-memory fake (attemptStore.contract.ts). To run that suite
- * against Atlas by hand, as for MongoOrdersRepo (a scratch test file on a throwaway database,
- * outside green and never committed):
- *
- * @example
- * describeAttemptStoreContract('MongoAttemptStore', async (now) => {
- *   await db.collection('loginAttempts').deleteMany({}); // the suite needs an empty store
- *   return new MongoAttemptStore(db, { now });
- * });
+ * It meets the same contract as the in-memory fake (attemptStore.contract.ts); the opt-in run of
+ * that contract on a real MongoDB is mongoAttemptStore.contract.test.ts.
  */
 export class MongoAttemptStore implements AttemptStore {
   private readonly attempts: Collection<AttemptDocument>;

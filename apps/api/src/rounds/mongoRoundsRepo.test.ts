@@ -1,6 +1,6 @@
-// Unit tests of MongoRoundsRepo's pure parts: documents, queries and updates. No test connects to
-// a database: the class only hands these to the driver, and its behaviour against Atlas is checked
-// by hand with the contract suite (outside green).
+// Unit tests of MongoRoundsRepo's pure parts: documents, queries and updates. No test here connects
+// to a database: the class only hands these to the driver. mongoRoundsRepo.contract.test.ts checks
+// its behaviour on a real MongoDB (opt-in).
 import { describe, expect, it } from 'vitest';
 import { ObjectId } from 'mongodb';
 import type { RoundPhase } from '@bottlerun/shared';

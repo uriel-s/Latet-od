@@ -1,8 +1,9 @@
 // The only door to stored orders (ADR-0001: the database is reached through repositories, with
 // an in-memory fake for tests). A repository is dumb storage: the services decide status,
 // timestamps and token. The repo enforces only what a database index would: one open order per
-// phone (spec §3.1) and a unique token. The same contract suite (ordersRepo.contract.ts) runs
-// against every implementation, so the fake and the Mongo repo cannot drift apart.
+// phone (spec §3.1) and a unique token. Both implementations run one contract suite
+// (ordersRepo.contract.ts): the fake in green, the Mongo repo only in the opt-in run on a real
+// MongoDB (mongoOrdersRepo.contract.test.ts), the run that catches the two drifting apart.
 import type { NewOrder, Order, OrderStatus } from '@bottlerun/shared';
 
 /**

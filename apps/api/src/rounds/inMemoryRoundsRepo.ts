@@ -1,4 +1,4 @@
-// In-memory RoundsRepo: the fake the api tests run against (ADR-0001), so no test touches Atlas.
+// In-memory RoundsRepo: the fake the api tests run against (ADR-0001), so they never touch Atlas.
 // It behaves like the Mongo repo where tests can see it: ObjectId-shaped ids, the same sort
 // orders, `$set`/`$unset` patches, undefined fields left out, and a copy for every round handed out.
 import { randomBytes } from 'node:crypto';

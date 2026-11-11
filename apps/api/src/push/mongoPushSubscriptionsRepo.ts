@@ -33,11 +33,8 @@ export interface PushSubscriptionUpdate {
  * Create one per process alongside the Mongo client: each instance ensures `PUSH_SUBSCRIPTION_INDEXES`
  * before its first operation.
  *
- * @example
- * describePushSubscriptionsRepoContract('MongoPushSubscriptionsRepo', async () => {
- *   await db.collection('pushSubscriptions').deleteMany({});
- *   return new MongoPushSubscriptionsRepo(db);
- * });
+ * It meets the same contract as the in-memory fake (pushSubscriptionsRepo.contract.ts); the opt-in
+ * run of that contract on a real MongoDB is mongoPushSubscriptionsRepo.contract.test.ts.
  */
 export class MongoPushSubscriptionsRepo implements PushSubscriptionsRepo {
   private readonly subscriptions: Collection<PushSubscriptionDocument>;
