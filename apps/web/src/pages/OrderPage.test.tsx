@@ -380,7 +380,7 @@ describe('OrderPage', () => {
       expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
       expect(screen.getByText('12/11').getAttribute('dir')).toBe('ltr');
-      expect(getByWholeText('נא להוציא את הבקבוקים עד השעה 18:00.')).toBeDefined();
+      expect(getByWholeText('נא להוציא את הבקבוקים החוצה עד השעה 18:00.')).toBeDefined();
       expect(screen.getByText('18:00').getAttribute('dir')).toBe('ltr');
     });
 
@@ -393,7 +393,9 @@ describe('OrderPage', () => {
       );
 
       expect(
-        getByWholeText('נא להוציא את הבקבוקים עד השעה 16:00. נגיע בין השעות 16:00 ל-18:00.'),
+        getByWholeText(
+          'נא להוציא את הבקבוקים החוצה עד השעה 16:00. נגיע לאסוף בין השעות 16:00 עד 18:00.',
+        ),
       ).toBeDefined();
       const starts = screen.getAllByText('16:00');
       expect(starts).toHaveLength(2);
@@ -551,7 +553,7 @@ describe('OrderPage', () => {
 
       expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
-      expect(getByWholeText('נא להוציא את הבקבוקים עד השעה 18:00.')).toBeDefined();
+      expect(getByWholeText('נא להוציא את הבקבוקים החוצה עד השעה 18:00.')).toBeDefined();
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(screen.queryByRole('button', { name: /כן, אוציא את הבקבוקים/ })).toBeNull();
 

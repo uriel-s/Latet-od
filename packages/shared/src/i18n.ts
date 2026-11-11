@@ -203,8 +203,9 @@ const HE = {
   'orderPage.status': 'מצב ההזמנה:',
   'orderPage.waiting': 'נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.',
   'orderPage.roundDate': 'נעבור לאסוף ב-{date}.',
-  'orderPage.pickupWindow': 'נא להוציא את הבקבוקים עד השעה {from}. נגיע בין השעות {from} ל-{by}.',
-  'orderPage.pickupBy': 'נא להוציא את הבקבוקים עד השעה {by}.',
+  'orderPage.pickupWindow':
+    'נא להוציא את הבקבוקים החוצה עד השעה {from}. נגיע לאסוף בין השעות {from} עד {by}.',
+  'orderPage.pickupBy': 'נא להוציא את הבקבוקים החוצה עד השעה {by}.',
   'orderPage.collected': 'ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!',
   'orderPage.cancelled': 'תודה! אפשר להזמין איסוף חדש בכל עת.',
   'orderPage.saved.decline': 'קיבלנו. נחזור אליך עם מועד חדש.',
@@ -371,8 +372,8 @@ const EN = {
   'orderPage.waiting': 'We will send you a WhatsApp message before the round in your area.',
   'orderPage.roundDate': 'We will come to collect on {date}.',
   'orderPage.pickupWindow':
-    'Please put the bottles out by {from}. We will come between {from} and {by}.',
-  'orderPage.pickupBy': 'Please put the bottles out by {by}.',
+    'Please put the bottles outside by {from}. We will come to collect between {from} and {by}.',
+  'orderPage.pickupBy': 'Please put the bottles outside by {by}.',
   'orderPage.collected': 'The order was collected. Thank you for taking part in לתת עוד!',
   'orderPage.cancelled': 'Thank you! You can book a new pickup at any time.',
   'orderPage.saved.decline': 'Got it. We will get back to you with a new date.',
