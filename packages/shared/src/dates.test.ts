@@ -6,9 +6,55 @@ import {
   formatDayMonth,
   formatDayMonthTime,
   formatPickupTime,
+  formatWeekday,
   monthInAppZone,
   monthRangeInAppZone,
 } from './dates.ts';
+
+describe('formatWeekday', () => {
+  // 8 to 14 November 2026, Sunday to Saturday: every entry of both lists once.
+  const WEEK: readonly (readonly [string, string, string])[] = [
+    ['2026-11-08', 'יום ראשון', 'Sunday'],
+    ['2026-11-09', 'יום שני', 'Monday'],
+    ['2026-11-10', 'יום שלישי', 'Tuesday'],
+    ['2026-11-11', 'יום רביעי', 'Wednesday'],
+    ['2026-11-12', 'יום חמישי', 'Thursday'],
+    ['2026-11-13', 'יום שישי', 'Friday'],
+    ['2026-11-14', 'שבת', 'Saturday'],
+  ];
+
+  it.each(WEEK)('names %s in Hebrew as %s', (date, hebrew) => {
+    expect(formatWeekday(date)).toBe(hebrew);
+  });
+
+  it.each(WEEK)('names %s in English (%s) as %s', (date, _hebrew, english) => {
+    expect(formatWeekday(date, 'en')).toBe(english);
+  });
+
+  it('writes Saturday as "שבת", without "יום"', () => {
+    expect(formatWeekday('2027-01-09')).toBe('שבת');
+  });
+
+  it('reads a leap day and a year boundary correctly', () => {
+    expect(formatWeekday('2028-02-29')).toBe('יום שלישי');
+    expect(formatWeekday('2026-12-31')).toBe('יום חמישי');
+    expect(formatWeekday('2027-01-01')).toBe('יום שישי');
+  });
+
+  it('throws a RangeError, without the value, for a date that is not a real YYYY-MM-DD', () => {
+    for (const value of ['11/11/2026', '2026-02-30', '2026-13-01']) {
+      let error: unknown;
+      try {
+        formatWeekday(value);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error, value).toBeInstanceOf(RangeError);
+      expect((error as RangeError).message, value).not.toContain(value);
+    }
+    expect(() => formatWeekday('')).toThrow(RangeError);
+  });
+});
 
 describe('APP_TIME_ZONE', () => {
   it('is Israel', () => {

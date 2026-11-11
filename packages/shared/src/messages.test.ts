@@ -60,7 +60,7 @@ describe('renderMessage', () => {
       expect(renderMessage('confirmRequest', makeVars())).toBe(
         [
           'שלום משה כהן,',
-          'ב-05/11 נעבור לאסוף את הבקבוקים שלכם.',
+          'ב-05/11 יום חמישי נעבור לאסוף את הבקבוקים שלכם.',
           'אם לא מתאים, או כדי לבטל:',
           LINK,
           'תודה, לתת עוד',
@@ -77,8 +77,8 @@ describe('renderMessage', () => {
       expect(text).toBe(
         [
           'שלום משה כהן,',
-          'ב-05/11 נעבור לאסוף את הבקבוקים שלכם.',
-          'נא להוציא את הבקבוקים עד השעה 08:30.',
+          'ב-05/11 יום חמישי נעבור לאסוף את הבקבוקים שלכם.',
+          'נא להוציא את הבקבוקים החוצה עד השעה 08:30.',
           'השבוע נגיע מוקדם.',
           'תודה על הסבלנות',
           'אם לא מתאים, או כדי לבטל:',
@@ -92,7 +92,7 @@ describe('renderMessage', () => {
       const text = renderMessage('confirmRequest', makeVars(), 'נא לא לשים בשקית');
       expect(text.split('\n')).toEqual([
         'שלום משה כהן,',
-        'ב-05/11 נעבור לאסוף את הבקבוקים שלכם.',
+        'ב-05/11 יום חמישי נעבור לאסוף את הבקבוקים שלכם.',
         'נא לא לשים בשקית',
         'אם לא מתאים, או כדי לבטל:',
         LINK,
@@ -102,7 +102,7 @@ describe('renderMessage', () => {
 
     it('adds the pickup time without a personal text', () => {
       const text = renderMessage('confirmRequest', makeVars({ pickupBy: '18:00' }));
-      expect(text.split('\n')).toContain('נא להוציא את הבקבוקים עד השעה 18:00.');
+      expect(text.split('\n')).toContain('נא להוציא את הבקבוקים החוצה עד השעה 18:00.');
       expect(text.split('\n')).toHaveLength(6);
     });
 
@@ -111,8 +111,17 @@ describe('renderMessage', () => {
         'confirmRequest',
         makeVars({ pickupFrom: '07:00', pickupBy: '08:30' }),
       );
-      expect(text.split('\n')).toContain(
-        'נא להוציא את הבקבוקים עד השעה 07:00. נגיע בין השעות 07:00 ל-08:30.',
+      // Two separate lines, the put-out line first.
+      expect(text).toBe(
+        [
+          'שלום משה כהן,',
+          'ב-05/11 יום חמישי נעבור לאסוף את הבקבוקים שלכם.',
+          'נא להוציא את הבקבוקים החוצה עד השעה 07:00.',
+          'נגיע לאסוף בין השעות 07:00 עד 08:30.',
+          'אם לא מתאים, או כדי לבטל:',
+          LINK,
+          'תודה, לתת עוד',
+        ].join('\n'),
       );
       // The window is when Yoel comes (ADR-0012), never "put them out between".
       expect(text).not.toContain('להוציא את הבקבוקים בין');
@@ -135,7 +144,7 @@ describe('renderMessage', () => {
 
     it('shows the round date as DD/MM', () => {
       expect(renderMessage('confirmRequest', makeVars({ date: '2027-01-09' }))).toContain(
-        'ב-09/01 ',
+        'ב-09/01 שבת ',
       );
     });
 
@@ -242,11 +251,11 @@ describe('renderMessage', () => {
     const englishVars = (overrides: Partial<MessageVars> = {}): MessageVars =>
       makeVars({ name: 'Moshe Cohen', ...overrides });
 
-    it('writes name, the date as "Nov 5", link and sign-off, line by line', () => {
+    it('writes name, the weekday and the date as "Thursday, Nov 5", link and sign-off, line by line', () => {
       expect(renderMessage('confirmRequest', englishVars(), undefined, 'en')).toBe(
         [
           'Hello Moshe Cohen,',
-          'On Nov 5 we will come to collect your bottles.',
+          'On Thursday, Nov 5 we will come to collect your bottles.',
           'If this does not suit you, or to cancel:',
           LINK,
           'Thank you, לתת עוד',
@@ -260,8 +269,8 @@ describe('renderMessage', () => {
       ).toBe(
         [
           'Hello Moshe Cohen,',
-          'On Nov 5 we will come to collect your bottles.',
-          'Please put the bottles out by 8:30 AM.',
+          'On Thursday, Nov 5 we will come to collect your bottles.',
+          'Please put the bottles outside by 8:30 AM.',
           'If this does not suit you, or to cancel:',
           LINK,
           'Thank you, לתת עוד',
@@ -278,8 +287,9 @@ describe('renderMessage', () => {
       );
       expect(text.split('\n')).toEqual([
         'Hello Moshe Cohen,',
-        'On Nov 5 we will come to collect your bottles.',
-        'Please put the bottles out by 12:30 AM. We will come between 12:30 AM and 1:05 PM.',
+        'On Thursday, Nov 5 we will come to collect your bottles.',
+        'Please put the bottles outside by 12:30 AM.',
+        'We will come to collect between 12:30 AM and 1:05 PM.',
         'If this does not suit you, or to cancel:',
         LINK,
         'Thank you, לתת עוד',
@@ -295,8 +305,8 @@ describe('renderMessage', () => {
       );
       expect(text.split('\n')).toEqual([
         'Hello Moshe Cohen,',
-        'On Nov 5 we will come to collect your bottles.',
-        'Please put the bottles out by 6:00 PM.',
+        'On Thursday, Nov 5 we will come to collect your bottles.',
+        'Please put the bottles outside by 6:00 PM.',
         'נאסוף אחרי מנחה',
         'We come after 6 PM',
         'If this does not suit you, or to cancel:',

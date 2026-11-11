@@ -19920,16 +19920,19 @@ var HE = {
   "customerOrder.orderClosed": "\u05D4\u05D4\u05D6\u05DE\u05E0\u05D4 \u05DB\u05D1\u05E8 \u05E0\u05E1\u05D2\u05E8\u05D4, \u05D5\u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E9\u05E0\u05D5\u05EA \u05D0\u05D5\u05EA\u05D4.",
   "customerOrder.orderNotFound": "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05E0\u05D5 \u05D0\u05EA \u05D4\u05D4\u05D6\u05DE\u05E0\u05D4. \u05D9\u05D9\u05EA\u05DB\u05DF \u05E9\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05D4\u05D5\u05E2\u05EA\u05E7 \u05E2\u05D3 \u05D4\u05E1\u05D5\u05E3.",
   // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
-  // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
-  // already formatted for the language. With both times, {from} is when the bottles must be out
+  // {name} is the customer's trimmed name, {date} the round's day, {weekday} its weekday name
+  // ("יום רביעי", "שבת", "Wednesday") and {from}/{by} the pickup times, already formatted for the
+  // language. With both times, {from} is when the bottles must be out
   // AND when Yoel starts coming, {by} when he is done (ADR-0012); with {by} alone it is the time to
   // put them out by. The message announces the pickup, it asks for no confirmation (ADR-0012):
   // the link is for "not this time", a change or a cancel. messages.test.ts compares whole
   // messages char for char.
   "whatsapp.greeting": "\u05E9\u05DC\u05D5\u05DD {name},",
-  "whatsapp.confirmRequest.date": "\u05D1-{date} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.",
-  "whatsapp.confirmRequest.pickupWindow": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {from}. \u05E0\u05D2\u05D9\u05E2 \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05DC-{by}.",
-  "whatsapp.confirmRequest.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
+  "whatsapp.confirmRequest.date": "\u05D1-{date} {weekday} \u05E0\u05E2\u05D1\u05D5\u05E8 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05E9\u05DC\u05DB\u05DD.",
+  // With both times: two lines. {from} is when the bottles must be out, and the start of the window.
+  "whatsapp.confirmRequest.putOutBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D4\u05D7\u05D5\u05E6\u05D4 \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {from}.",
+  "whatsapp.confirmRequest.arrivalWindow": "\u05E0\u05D2\u05D9\u05E2 \u05DC\u05D0\u05E1\u05D5\u05E3 \u05D1\u05D9\u05DF \u05D4\u05E9\u05E2\u05D5\u05EA {from} \u05E2\u05D3 {by}.",
+  "whatsapp.confirmRequest.pickupBy": "\u05E0\u05D0 \u05DC\u05D4\u05D5\u05E6\u05D9\u05D0 \u05D0\u05EA \u05D4\u05D1\u05E7\u05D1\u05D5\u05E7\u05D9\u05DD \u05D4\u05D7\u05D5\u05E6\u05D4 \u05E2\u05D3 \u05D4\u05E9\u05E2\u05D4 {by}.",
   "whatsapp.confirmRequest.changeAtLink": "\u05D0\u05DD \u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DD, \u05D0\u05D5 \u05DB\u05D3\u05D9 \u05DC\u05D1\u05D8\u05DC:",
   // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
   "whatsapp.confirmRequest.signOff": "\u05EA\u05D5\u05D3\u05D4, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
@@ -20077,9 +20080,10 @@ var EN = {
   // WhatsApp messages. The brand name "לתת עוד" stays in Hebrew: it is the name the customer
   // knows the project by, in either language.
   "whatsapp.greeting": "Hello {name},",
-  "whatsapp.confirmRequest.date": "On {date} we will come to collect your bottles.",
-  "whatsapp.confirmRequest.pickupWindow": "Please put the bottles out by {from}. We will come between {from} and {by}.",
-  "whatsapp.confirmRequest.pickupBy": "Please put the bottles out by {by}.",
+  "whatsapp.confirmRequest.date": "On {weekday}, {date} we will come to collect your bottles.",
+  "whatsapp.confirmRequest.putOutBy": "Please put the bottles outside by {from}.",
+  "whatsapp.confirmRequest.arrivalWindow": "We will come to collect between {from} and {by}.",
+  "whatsapp.confirmRequest.pickupBy": "Please put the bottles outside by {by}.",
   "whatsapp.confirmRequest.changeAtLink": "If this does not suit you, or to cancel:",
   "whatsapp.confirmRequest.signOff": "Thank you, \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3",
   "whatsapp.thankYou.thanks": "Your order has been collected! Thank you for taking part in \u05DC\u05EA\u05EA \u05E2\u05D5\u05D3!",
@@ -20917,6 +20921,33 @@ function formatDayMonth(value, lang = "he") {
   }
   return dayMonthIn(lang, day, month);
 }
+var HEBREW_WEEKDAYS = [
+  "\u05D9\u05D5\u05DD \u05E8\u05D0\u05E9\u05D5\u05DF",
+  "\u05D9\u05D5\u05DD \u05E9\u05E0\u05D9",
+  "\u05D9\u05D5\u05DD \u05E9\u05DC\u05D9\u05E9\u05D9",
+  "\u05D9\u05D5\u05DD \u05E8\u05D1\u05D9\u05E2\u05D9",
+  "\u05D9\u05D5\u05DD \u05D7\u05DE\u05D9\u05E9\u05D9",
+  "\u05D9\u05D5\u05DD \u05E9\u05D9\u05E9\u05D9",
+  "\u05E9\u05D1\u05EA"
+];
+var ENGLISH_WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday"
+];
+function formatWeekday(isoDate, lang = "he") {
+  if (!isoCalendarDateSchema.safeParse(isoDate).success) {
+    throw new RangeError("formatWeekday: expected a calendar date YYYY-MM-DD");
+  }
+  const index = (/* @__PURE__ */ new Date(`${isoDate}T00:00:00Z`)).getUTCDay();
+  const name = (lang === "en" ? ENGLISH_WEEKDAYS : HEBREW_WEEKDAYS)[index];
+  if (name === void 0) throw new RangeError("formatWeekday: weekday out of range");
+  return name;
+}
 var pickupTimeSchema = external_exports.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "expected a time HH:MM, 00:00-23:59");
 function formatPickupTime(hhmm, lang) {
   if (!pickupTimeSchema.safeParse(hhmm).success) {
@@ -21392,14 +21423,19 @@ function confirmRequestLines(vars, personalText, lang) {
   }
   const lines = [
     greetingLine(vars, lang),
-    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" in
-    // Hebrew, "Nov 5" in English.
-    t(lang, "whatsapp.confirmRequest.date", { date: formatDayMonth(vars.date, lang) })
+    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" and
+    // "יום רביעי" in Hebrew, "Nov 5" and "Wednesday" in English.
+    t(lang, "whatsapp.confirmRequest.date", {
+      date: formatDayMonth(vars.date, lang),
+      weekday: formatWeekday(vars.date, lang)
+    })
   ];
   if (vars.pickupBy !== void 0 && vars.pickupFrom !== void 0) {
+    const from = formatPickupTime(vars.pickupFrom, lang);
     lines.push(
-      t(lang, "whatsapp.confirmRequest.pickupWindow", {
-        from: formatPickupTime(vars.pickupFrom, lang),
+      t(lang, "whatsapp.confirmRequest.putOutBy", { from }),
+      t(lang, "whatsapp.confirmRequest.arrivalWindow", {
+        from,
         by: formatPickupTime(vars.pickupBy, lang)
       })
     );

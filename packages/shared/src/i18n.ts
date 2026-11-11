@@ -110,17 +110,19 @@ const HE = {
   'customerOrder.orderNotFound': 'לא מצאנו את ההזמנה. ייתכן שהקישור לא הועתק עד הסוף.',
 
   // WhatsApp messages (messages.ts renderMessage, spec §6.1), one key per line of the message.
-  // {name} is the customer's trimmed name, {date} the round's day and {from}/{by} the pickup times,
-  // already formatted for the language. With both times, {from} is when the bottles must be out
+  // {name} is the customer's trimmed name, {date} the round's day, {weekday} its weekday name
+  // ("יום רביעי", "שבת", "Wednesday") and {from}/{by} the pickup times, already formatted for the
+  // language. With both times, {from} is when the bottles must be out
   // AND when Yoel starts coming, {by} when he is done (ADR-0012); with {by} alone it is the time to
   // put them out by. The message announces the pickup, it asks for no confirmation (ADR-0012):
   // the link is for "not this time", a change or a cancel. messages.test.ts compares whole
   // messages char for char.
   'whatsapp.greeting': 'שלום {name},',
-  'whatsapp.confirmRequest.date': 'ב-{date} נעבור לאסוף את הבקבוקים שלכם.',
-  'whatsapp.confirmRequest.pickupWindow':
-    'נא להוציא את הבקבוקים עד השעה {from}. נגיע בין השעות {from} ל-{by}.',
-  'whatsapp.confirmRequest.pickupBy': 'נא להוציא את הבקבוקים עד השעה {by}.',
+  'whatsapp.confirmRequest.date': 'ב-{date} {weekday} נעבור לאסוף את הבקבוקים שלכם.',
+  // With both times: two lines. {from} is when the bottles must be out, and the start of the window.
+  'whatsapp.confirmRequest.putOutBy': 'נא להוציא את הבקבוקים החוצה עד השעה {from}.',
+  'whatsapp.confirmRequest.arrivalWindow': 'נגיע לאסוף בין השעות {from} עד {by}.',
+  'whatsapp.confirmRequest.pickupBy': 'נא להוציא את הבקבוקים החוצה עד השעה {by}.',
   'whatsapp.confirmRequest.changeAtLink': 'אם לא מתאים, או כדי לבטל:',
   // Ends with the app's name (index.ts APP_NAME); messages.test.ts checks it in every language.
   'whatsapp.confirmRequest.signOff': 'תודה, לתת עוד',
@@ -289,10 +291,10 @@ const EN = {
   // WhatsApp messages. The brand name "לתת עוד" stays in Hebrew: it is the name the customer
   // knows the project by, in either language.
   'whatsapp.greeting': 'Hello {name},',
-  'whatsapp.confirmRequest.date': 'On {date} we will come to collect your bottles.',
-  'whatsapp.confirmRequest.pickupWindow':
-    'Please put the bottles out by {from}. We will come between {from} and {by}.',
-  'whatsapp.confirmRequest.pickupBy': 'Please put the bottles out by {by}.',
+  'whatsapp.confirmRequest.date': 'On {weekday}, {date} we will come to collect your bottles.',
+  'whatsapp.confirmRequest.putOutBy': 'Please put the bottles outside by {from}.',
+  'whatsapp.confirmRequest.arrivalWindow': 'We will come to collect between {from} and {by}.',
+  'whatsapp.confirmRequest.pickupBy': 'Please put the bottles outside by {by}.',
   'whatsapp.confirmRequest.changeAtLink': 'If this does not suit you, or to cancel:',
   'whatsapp.confirmRequest.signOff': 'Thank you, לתת עוד',
   'whatsapp.thankYou.thanks':

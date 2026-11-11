@@ -179,9 +179,12 @@ describe('MESSAGES', () => {
       'We could not find the order. The link may not have been copied in full.',
     );
     expect(t('en', 'whatsapp.greeting', { name: 'Moshe' })).toBe('Hello Moshe,');
+    expect(t('en', 'whatsapp.confirmRequest.putOutBy', { from: '7:00 AM' })).toBe(
+      'Please put the bottles outside by 7:00 AM.',
+    );
     expect(
-      t('en', 'whatsapp.confirmRequest.pickupWindow', { from: '7:00 AM', by: '8:30 AM' }),
-    ).toBe('Please put the bottles out by 7:00 AM. We will come between 7:00 AM and 8:30 AM.');
+      t('en', 'whatsapp.confirmRequest.arrivalWindow', { from: '7:00 AM', by: '8:30 AM' }),
+    ).toBe('We will come to collect between 7:00 AM and 8:30 AM.');
   });
 
   // The brand is a name, not a word to translate: English WhatsApp texts that mention it keep it
