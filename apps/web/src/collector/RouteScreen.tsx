@@ -191,7 +191,8 @@ export function RouteScreen({
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [bottlesErrors, setBottlesErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
-  // What was just saved for a card (Yoel's own "אספתי", or an arrow), until the card acted on it.
+  // What was just saved for a card (Yoel's own "אספתי" or "כן, לא נמצא", or an arrow), until the
+  // card acted on it.
   // Kept here, not in the card: the save moves the card into another list, where React mounts a
   // new one, and that new card is the one that buzzes and takes the focus (StopCard justSaved).
   const [justSaved, setJustSaved] = useState<ReadonlyMap<string, JustSaved>>(() => new Map());
@@ -391,7 +392,13 @@ export function RouteScreen({
             () => markJustSaved(orderId, 'collected'),
           )
         }
-        onNotFound={() => void runOnce(orderId, () => markStopNotFound(roundId, orderId))}
+        onNotFound={() =>
+          void runOnce(
+            orderId,
+            () => markStopNotFound(roundId, orderId),
+            () => markJustSaved(orderId, 'notFound'),
+          )
+        }
         onTypingChange={(typing) => typingChanged(orderId, typing)}
         markOpened={markOpened}
         justSaved={justSaved.get(orderId)}
