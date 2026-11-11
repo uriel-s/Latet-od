@@ -95,7 +95,8 @@ export interface StopCardProps {
   markOpened?: SendListProps['markOpened'];
   /**
    * What the route screen just saved for this card: 'collected' (Yoel's own "אספתי") buzzes once
-   * and moves the focus to "שלח תודה"; 'moved' (an arrow) puts a lost focus back on "⋯". It comes
+   * and moves the focus to "שלח תודה"; 'notFound' (his own "כן, לא נמצא") moves it to the handled
+   * card's name; 'moved' (an arrow) puts a lost focus back on "⋯". It comes
    * from the screen, not from a flag inside the card, because the save moves the card into another
    * list (current → handled, current ↔ upcoming), and React mounts a new card there.
    */
@@ -105,7 +106,7 @@ export interface StopCardProps {
 }
 
 /** A save of the route screen that the card reacts to; see {@link StopCardProps.justSaved}. */
-export type JustSaved = 'collected' | 'moved';
+export type JustSaved = 'collected' | 'notFound' | 'moved';
 
 /** What is open in a card still to collect: nothing, the quantity stepper, or the "⋯" sheet. */
 type OpenPart = 'none' | 'quantity' | 'more';
@@ -178,6 +179,16 @@ export function StopCard(props: StopCardProps) {
     thanksTitleRef.current?.focus();
     onJustSavedSeenRef.current?.();
   }, [collectedHere, showThanks]);
+  // Yoel's own "כן, לא נמצא" was saved: the sheet he answered in is gone with the card it was in,
+  // and the focus would fall to the page. The handled card's name takes it, so a screen reader
+  // says which stop moved and he goes on from there. A stop seen not found on a reload does not.
+  const nameRef = useRef<HTMLHeadingElement>(null);
+  const notFoundHere = justSaved === 'notFound' && stop.state === 'notFound';
+  useEffect(() => {
+    if (!notFoundHere) return;
+    nameRef.current?.focus();
+    onJustSavedSeenRef.current?.();
+  }, [notFoundHere]);
   // An arrow's move was saved. Focus that was on this card's "⋯" is lost when the move took the
   // card into the other list; put it back on the new "⋯", but never take it from somewhere else.
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -190,7 +201,7 @@ export function StopCard(props: StopCardProps) {
   }, [movedHere]);
 
   if (handled) {
-    return <HandledStopCard {...props} thanksTitleRef={thanksTitleRef} />;
+    return <HandledStopCard {...props} nameRef={nameRef} thanksTitleRef={thanksTitleRef} />;
   }
   return (
     <ToCollectStopCard
@@ -502,8 +513,11 @@ function ToCollectStopCard({
   );
 }
 
-/** Props of {@link HandledStopCard}: the card's, plus the thank-you title to focus. */
+/** Props of {@link HandledStopCard}: the card's, plus the headings StopCard focuses. */
 interface HandledStopCardProps extends StopCardProps {
+  /** The name, focused after Yoel's own "כן, לא נמצא" saved. */
+  nameRef: RefObject<HTMLHeadingElement | null>;
+  /** "שלח תודה", focused after Yoel's own "אספתי" saved. */
   thanksTitleRef: RefObject<HTMLHeadingElement | null>;
 }
 
@@ -512,14 +526,23 @@ interface HandledStopCardProps extends StopCardProps {
  * signal), the name and the street, and no action or arrow. A collected stop with a thank-you to
  * send shows its "שלח תודה" row; SendList keeps what Yoel tapped while the row stays mounted.
  */
-function HandledStopCard({ stop, error, markOpened, thanksTitleRef }: HandledStopCardProps) {
+function HandledStopCard({
+  stop,
+  error,
+  markOpened,
+  nameRef,
+  thanksTitleRef,
+}: HandledStopCardProps) {
   const { order } = stop;
   // isStopHandled already excluded 'toCollect'; the check narrows the type for the label lookup.
   const label = stop.state === 'toCollect' ? undefined : STOP_STATE_LABELS[stop.state];
 
   return (
     <li className="stop-card stop-card-handled">
-      <h3 className="stop-card-name">{order.contact.name}</h3>
+      {/* tabIndex -1: focused from code after "כן, לא נמצא" saved, never a Tab stop. */}
+      <h3 ref={nameRef} tabIndex={-1} className="stop-card-name">
+        {order.contact.name}
+      </h3>
       <p className="stop-card-state">{label}</p>
       <p className="stop-card-street">{stopAddressLines(order.address).street}</p>
       {stop.state === 'collected' && stop.thankYou !== undefined && (

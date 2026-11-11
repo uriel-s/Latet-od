@@ -630,6 +630,28 @@ describe('StopCard justSaved', () => {
     expect(seen).toHaveBeenCalledTimes(1);
   });
 
+  it('focuses its name, not a Tab stop, when mounted not found right after Yoel\x27s "כן, לא נמצא"', () => {
+    const seen = vi.fn();
+
+    renderCard({
+      stop: makeStop({ state: 'notFound' }),
+      justSaved: 'notFound',
+      onJustSavedSeen: seen,
+    });
+
+    const name = screen.getByRole('heading', { level: 3, name: 'דנה כהן' });
+    expect(document.activeElement).toBe(name);
+    expect(name.getAttribute('tabindex')).toBe('-1');
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes no focus when shown not found with nothing just saved (a reload)', () => {
+    const seen = vi.fn();
+    renderCard({ stop: makeStop({ state: 'notFound' }), onJustSavedSeen: seen });
+    expect(document.activeElement).toBe(document.body);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
   it('puts a lost focus back on "⋯" when mounted after a saved move', () => {
     const seen = vi.fn();
     renderCard({ current: false, justSaved: 'moved', onJustSavedSeen: seen });

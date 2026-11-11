@@ -641,6 +641,63 @@ describe('RouteScreen "לא נמצא"', () => {
     expect(api.calls).toEqual([{ action: 'notFound', roundId: 'r1', orderId: 'o1' }]);
     expect(within(cardOf('דנה כהן')).getByText('לא נמצא')).toBeTruthy();
   });
+
+  // Like "אספתי": the saved card moves to the handled list, where React mounts a new card, and the
+  // sheet that held the focus is gone with the old one (justSaved tells the new card).
+  it("moves the focus to the handled card's name after Yoel's own 'כן, לא נמצא'", async () => {
+    renderRoute();
+
+    sheetAction('דנה כהן', 'לא נמצא');
+    fireEvent.click(button('כן, לא נמצא'));
+
+    await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן']));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const name = within(cardOf('דנה כהן')).getByRole('heading', { level: 3 });
+    await waitFor(() => expect(document.activeElement).toBe(name));
+  });
+
+  it('keeps the sheet open with its error, and the focus where it was, when the save fails', async () => {
+    const { api } = renderRoute();
+    api.next.push({ kind: 'failed' });
+
+    sheetAction('משה לוי', 'לא נמצא');
+    const yes = button('כן, לא נמצא');
+    yes.focus();
+    fireEvent.click(yes);
+
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toBe(
+        STOP_ACTION_FAILED_MESSAGE,
+      ),
+    );
+    expect(document.activeElement).toBe(yes);
+  });
+
+  it('takes no focus for a stop that shows not found when the route loads', () => {
+    renderRoute(makeView([stopOf(DANA), stopOf(MOSHE, { state: 'notFound' }), stopOf(YOSSI)]));
+    expect(within(cardOf('משה לוי')).getByText('לא נמצא')).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  // A save of another card hands a view where this stop turned up not found (marked elsewhere):
+  // only the card Yoel acted on reacts.
+  it('takes no focus for a stop that turns up not found in the answer to another action', async () => {
+    const { api } = renderRoute();
+    api.next.push({
+      kind: 'saved',
+      view: makeView([
+        collected(stopOf(DANA)),
+        stopOf(MOSHE, { state: 'notFound' }),
+        stopOf(YOSSI),
+      ]),
+    });
+
+    collect('דנה כהן');
+
+    const title = await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    expect(within(cardOf('משה לוי')).getByText('לא נמצא')).toBeTruthy();
+  });
 });
 
 describe('RouteScreen moves', () => {
