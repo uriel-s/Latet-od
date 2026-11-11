@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { COLLECTOR_ORDER_MESSAGES } from '@bottlerun/shared';
 import type {
   AddOrderRequest,
@@ -231,14 +231,6 @@ describe('createOrder', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [404, 413, 502, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await createOrder(REQUEST, fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
   it('retries once after a network error and answers what the retry got', async () => {
     const { fetchFn, calls } = makeFakeFetch('networkError', { status: 201, body: CREATED });
 
@@ -251,16 +243,6 @@ describe('createOrder', () => {
     const { fetchFn, calls } = makeFakeFetch('throws', { status: 201, body: CREATED });
 
     expect(await createOrder(REQUEST, fetchFn)).toEqual({ kind: 'created', response: CREATED });
-    expect(calls).toHaveLength(2);
-  });
-
-  it('answers failed after two network errors, with exactly two calls', async () => {
-    const { fetchFn, calls } = makeFakeFetch('networkError', 'networkError', {
-      status: 201,
-      body: CREATED,
-    });
-
-    expect(await createOrder(REQUEST, fetchFn)).toEqual({ kind: 'failed' });
     expect(calls).toHaveLength(2);
   });
 
@@ -388,28 +370,6 @@ describe('login', () => {
       });
     }
   });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [400, 403, 404, 500, 502, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await login(PASSWORD, fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error and does not retry it', async () => {
-    const { fetchFn, calls } = makeFakeFetch('networkError', { status: 200, body: ME });
-
-    expect(await login(PASSWORD, fetchFn)).toEqual({ kind: 'failed' });
-    expect(calls).toHaveLength(1);
-  });
-
-  it('treats a fetch that throws instead of rejecting as a network error', async () => {
-    const { fetchFn, calls } = makeFakeFetch('throws', { status: 200, body: ME });
-
-    expect(await login(PASSWORD, fetchFn)).toEqual({ kind: 'failed' });
-    expect(calls).toHaveLength(1);
-  });
 });
 
 describe('fetchSession', () => {
@@ -436,32 +396,6 @@ describe('fetchSession', () => {
       expect(await fetchSession(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
     }
   });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await fetchSession(fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed, not loggedOut, on any other status', async () => {
-    for (const status of [403, 404, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await fetchSession(fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ME });
-      expect(await fetchSession(fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
 });
 
 describe('logout', () => {
@@ -473,21 +407,6 @@ describe('logout', () => {
     expect(calls[0]?.input).toBe('/api/auth/logout');
     expect(calls[0]?.init?.method).toBe('POST');
     expect(calls[0]?.init?.body).toBeUndefined();
-  });
-
-  it('answers false on an error status', async () => {
-    for (const status of [403, 500, 503]) {
-      const { fetchFn } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await logout(fetchFn), String(status)).toBe(false);
-    }
-  });
-
-  it('answers false after a network error or a fetch that throws, without a retry', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 204, noBody: true });
-      expect(await logout(fetchFn), answer).toBe(false);
-      expect(calls, answer).toHaveLength(1);
-    }
   });
 });
 
@@ -595,32 +514,6 @@ describe('fetchWaitingOrders', () => {
       });
     }
   });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await fetchWaitingOrders(fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [403, 404, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await fetchWaitingOrders(fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: { groups: GROUPS } });
-      expect(await fetchWaitingOrders(fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
 });
 
 describe('fetchCollectorOrder', () => {
@@ -658,30 +551,6 @@ describe('fetchCollectorOrder', () => {
     const { fetchFn } = makeFakeFetch({ status: 404, body: { error: 'order_not_found' } });
 
     expect(await fetchCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'notFound' });
-  });
-
-  it('answers loggedOut on 401', async () => {
-    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
-
-    expect(await fetchCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'loggedOut' });
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [400, 403, 409, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await fetchCollectorOrder(ORDER.id, fetchFn), String(status)).toEqual({
-        kind: 'failed',
-      });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: { order: ORDER } });
-      expect(await fetchCollectorOrder(ORDER.id, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
   });
 });
 
@@ -775,22 +644,6 @@ describe('deleteCollectorOrder', () => {
 
   it('answers failed on a 409 it does not know, so it never guesses a reason', async () => {
     const { fetchFn } = makeFakeFetch({ status: 409, body: { error: 'other' } });
-
-    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'failed' });
-  });
-
-  it('answers loggedOut on 401', async () => {
-    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
-
-    expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'loggedOut' });
-  });
-
-  it.each([
-    { label: 'a 500', answer: { status: 500, body: {} } as const },
-    { label: 'a 403', answer: { status: 403, body: { error: 'forbidden_origin' } } as const },
-    { label: 'a network error', answer: 'networkError' as const },
-  ])('answers failed on $label', async ({ answer }) => {
-    const { fetchFn } = makeFakeFetch(answer);
 
     expect(await deleteCollectorOrder(ORDER.id, fetchFn)).toEqual({ kind: 'failed' });
   });
@@ -917,35 +770,6 @@ describe.each(WRITES)('$name answers', ({ successStatus, write }) => {
       expect(await write(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
     }
   });
-
-  it('loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await write(fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('failed on any other status, without a retry', async () => {
-    for (const status of [403, 413, 429, 500, 502, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await write(fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, {
-        status: successStatus,
-        body: { order: ORDER },
-      });
-      expect(await write(fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
 });
 
 describe.each(WRITES.filter(({ name }) => name !== 'addCollectorOrder'))(
@@ -1003,16 +827,6 @@ describe('markMessageOpened', () => {
     }
   });
 
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await markMessageOpened(ORDER.id, 0, fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
   it('answers notFound on a 404, for a missing order and a missing message alike', async () => {
     for (const answer of [
       { status: 404, body: { error: 'order_not_found' } },
@@ -1023,30 +837,6 @@ describe('markMessageOpened', () => {
       expect(await markMessageOpened(ORDER.id, 7, fetchFn), JSON.stringify(answer)).toEqual({
         kind: 'notFound',
       });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [201, 400, 403, 409, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'x' } },
-        { status: 200, body: { openedAt: OPENED_AT } },
-      );
-      expect(await markMessageOpened(ORDER.id, 0, fetchFn), String(status)).toEqual({
-        kind: 'failed',
-      });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, {
-        status: 200,
-        body: { openedAt: OPENED_AT },
-      });
-      expect(await markMessageOpened(ORDER.id, 0, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
     }
   });
 });
@@ -1166,44 +956,18 @@ describe('fetchRounds', () => {
       expect(await fetchRounds(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
     }
   });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await fetchRounds(fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [201, 403, 404, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: ROUNDS });
-      expect(await fetchRounds(fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ROUNDS });
-      expect(await fetchRounds(fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
 });
 
-describe('planRound', () => {
-  /** What the planning screen sends: a pickup time, and its personal text as typed. */
-  const PLAN: PlanRoundRequest = {
-    date: '2026-11-12',
-    region: 'ramat',
-    orderIds: [ORDER.id, '6710f3a2c4b5d6e7f8a9b0c9'],
-    pickupBy: '08:00',
-    personalText: 'תודה רבה!',
-  };
+/** What the planning screen sends: a pickup time, and its personal text as typed. */
+const PLAN: PlanRoundRequest = {
+  date: '2026-11-12',
+  region: 'ramat',
+  orderIds: [ORDER.id, '6710f3a2c4b5d6e7f8a9b0c9'],
+  pickupBy: '08:00',
+  personalText: 'תודה רבה!',
+};
 
+describe('planRound', () => {
   it('posts the request as JSON to /api/collector/rounds', async () => {
     const { fetchFn, calls } = makeFakeFetch({ status: 201, body: ROUND_VIEW });
 
@@ -1300,32 +1064,6 @@ describe('planRound', () => {
     ]) {
       const { fetchFn } = makeFakeFetch(answer);
       expect(await planRound(PLAN, fetchFn), JSON.stringify(answer)).toEqual({ kind: 'failed' });
-    }
-  });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await planRound(PLAN, fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [403, 404, 413, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch({ status, body: { error: 'x' } });
-      expect(await planRound(PLAN, fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 201, body: ROUND_VIEW });
-      expect(await planRound(PLAN, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
     }
   });
 });
@@ -1442,37 +1180,6 @@ describe('buildRoute', () => {
       expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), JSON.stringify(answer)).toEqual({
         kind: 'notFound',
       });
-    }
-  });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [201, 400, 403, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'x' } },
-        { status: 200, body: ROUTED_VIEW },
-      );
-      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), String(status)).toEqual({
-        kind: 'failed',
-      });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ROUTED_VIEW });
-      expect(await buildRoute(ROUND_VIEW.round.id, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
     }
   });
 });
@@ -1596,35 +1303,6 @@ describe.each(STOP_ACTIONS)('$name', ({ act, action, body }) => {
       expect(await act(roundId, ORDER.id, fetchFn), JSON.stringify(answer)).toEqual({
         kind: 'notFound',
       });
-    }
-  });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await act(roundId, ORDER.id, fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [201, 403, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'x' } },
-        { status: 200, body: ROUTED_VIEW },
-      );
-      expect(await act(roundId, ORDER.id, fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: ROUTED_VIEW });
-      expect(await act(roundId, ORDER.id, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
     }
   });
 });
@@ -1795,37 +1473,6 @@ describe('closeRound', () => {
       });
     }
   });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await closeRound(ROUND_VIEW.round.id, fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, a 409 too, without a retry', async () => {
-    for (const status of [201, 400, 403, 409, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'confirmations_closed' } },
-        { status: 200, body: CLOSED_VIEW },
-      );
-      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), String(status)).toEqual({
-        kind: 'failed',
-      });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: CLOSED_VIEW });
-      expect(await closeRound(ROUND_VIEW.round.id, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1914,35 +1561,6 @@ describe('fetchHistory', () => {
       expect(await fetchHistory('2026-10', fetchFn), JSON.stringify(answer)).toEqual({
         kind: 'failed',
       });
-    }
-  });
-
-  it('answers loggedOut on 401, whatever the body says', async () => {
-    for (const answer of [
-      { status: 401, body: { error: 'unauthenticated' } },
-      { status: 401, text: 'Unauthorized' },
-    ]) {
-      const { fetchFn } = makeFakeFetch(answer);
-      expect(await fetchHistory('2026-10', fetchFn)).toEqual({ kind: 'loggedOut' });
-    }
-  });
-
-  it('answers failed on any other status, a 400 too, without a retry', async () => {
-    for (const status of [201, 400, 403, 404, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'invalid_month' } },
-        { status: 200, body: HISTORY },
-      );
-      expect(await fetchHistory('2026-10', fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, { status: 200, body: HISTORY });
-      expect(await fetchHistory('2026-10', fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
     }
   });
 });
@@ -2052,30 +1670,6 @@ describe('fetchCustomerOrder', () => {
     ]) {
       const { fetchFn } = makeFakeFetch(answer);
       expect(await fetchCustomerOrder(TOKEN, fetchFn)).toEqual({ kind: 'notFound' });
-    }
-  });
-
-  it('answers failed on any other status, without a retry', async () => {
-    for (const status of [201, 400, 401, 403, 409, 429, 500, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        { status, body: { error: 'x' } },
-        { status: 200, body: { order: CUSTOMER_ORDER } },
-      );
-      expect(await fetchCustomerOrder(TOKEN, fetchFn), String(status)).toEqual({
-        kind: 'failed',
-      });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('answers failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, {
-        status: 200,
-        body: { order: CUSTOMER_ORDER },
-      });
-      expect(await fetchCustomerOrder(TOKEN, fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
     }
   });
 });
@@ -2207,28 +1801,6 @@ describe.each(CUSTOMER_WRITES)('$name answers', ({ write }) => {
       expect(await write(fetchFn), JSON.stringify(answer)).toEqual({ kind: 'notFound' });
     }
   });
-
-  it('failed on any other status, without a retry', async () => {
-    for (const status of [201, 204, 401, 403, 413, 429, 500, 502, 503]) {
-      const { fetchFn, calls } = makeFakeFetch(
-        status === 204 ? { status, noBody: true } : { status, body: { order: CUSTOMER_ORDER } },
-        { status: 200, body: { order: CUSTOMER_ORDER } },
-      );
-      expect(await write(fetchFn), String(status)).toEqual({ kind: 'failed' });
-      expect(calls, String(status)).toHaveLength(1);
-    }
-  });
-
-  it('failed after a network error or a fetch that throws, with exactly one call', async () => {
-    for (const answer of ['networkError', 'throws'] as const) {
-      const { fetchFn, calls } = makeFakeFetch(answer, {
-        status: 200,
-        body: { order: CUSTOMER_ORDER },
-      });
-      expect(await write(fetchFn), answer).toEqual({ kind: 'failed' });
-      expect(calls, answer).toHaveLength(1);
-    }
-  });
 });
 
 describe('fetchPushConfig', () => {
@@ -2260,22 +1832,12 @@ describe('fetchPushConfig', () => {
     });
   });
 
-  it('answers loggedOut on 401', async () => {
-    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
-    expect(await fetchPushConfig(fetchFn)).toEqual({ kind: 'loggedOut' });
-  });
-
   it('answers failed on invalid 200 or 500', async () => {
     const { fetchFn: invalid200 } = makeFakeFetch({ status: 200, body: { enabled: true } });
     expect(await fetchPushConfig(invalid200)).toEqual({ kind: 'failed' });
 
     const { fetchFn: serverError } = makeFakeFetch({ status: 500, body: { error: 'internal' } });
     expect(await fetchPushConfig(serverError)).toEqual({ kind: 'failed' });
-  });
-
-  it('answers failed on network error', async () => {
-    const { fetchFn } = makeFakeFetch('networkError');
-    expect(await fetchPushConfig(fetchFn)).toEqual({ kind: 'failed' });
   });
 });
 
@@ -2295,25 +1857,6 @@ describe('savePushSubscription', () => {
     expect(calls[0]?.init?.body).toBe(JSON.stringify(subscription));
     expect(outcome).toEqual({ kind: 'saved' });
   });
-
-  it('answers loggedOut on 401', async () => {
-    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
-    expect(await savePushSubscription(subscription, fetchFn)).toEqual({ kind: 'loggedOut' });
-  });
-
-  it('answers failed on 400, 500 or network error', async () => {
-    const { fetchFn: badReq } = makeFakeFetch({
-      status: 400,
-      body: { error: 'invalid_push_subscription' },
-    });
-    expect(await savePushSubscription(subscription, badReq)).toEqual({ kind: 'failed' });
-
-    const { fetchFn: serverErr } = makeFakeFetch({ status: 500, body: { error: 'internal' } });
-    expect(await savePushSubscription(subscription, serverErr)).toEqual({ kind: 'failed' });
-
-    const { fetchFn: netErr } = makeFakeFetch('networkError');
-    expect(await savePushSubscription(subscription, netErr)).toEqual({ kind: 'failed' });
-  });
 });
 
 describe('deletePushSubscription', () => {
@@ -2327,31 +1870,270 @@ describe('deletePushSubscription', () => {
     expect(calls[0]?.init?.body).toBe(JSON.stringify({ endpoint: 'https://push.example/sub1' }));
     expect(outcome).toEqual({ kind: 'deleted' });
   });
+});
 
-  it('answers loggedOut on 401', async () => {
-    const { fetchFn } = makeFakeFetch({ status: 401, body: { error: 'unauthenticated' } });
-    expect(await deletePushSubscription('https://push.example/sub1', fetchFn)).toEqual({
-      kind: 'loggedOut',
-    });
+// ---------------------------------------------------------------------------------------------
+// What every endpoint answers alike, because request() decides it once for all of them
+// ---------------------------------------------------------------------------------------------
+
+/** One endpoint, called the way its screen calls it. */
+interface EndpointCase {
+  name: string;
+  /** Calls the endpoint. logout's boolean becomes `cleared` / `failed`, so every row reads alike. */
+  call: (fetchFn: FetchFn) => Promise<{ kind: string }>;
+  /** An answer it succeeds with: queued after a failing one, it would show a retry. */
+  success: FakeAnswer;
+  /**
+   * What a 401 answers: `loggedOut` behind the login, `failed` on a public route, or null when the
+   * endpoint gives it a meaning of its own (login: the wrong password, tested with login).
+   */
+  on401: 'loggedOut' | 'failed' | null;
+  /** Statuses `failed` for this endpoint, on top of {@link ALWAYS_FAILED}. */
+  alsoFailed: number[];
+  /** The body of those failing answers, when it matters that it would look like a success's. */
+  failedBody?: unknown;
+  /** How many fetches a network error costs: 2 for the booking form, which retries once. */
+  networkTries?: number;
+}
+
+/** Statuses no endpoint knows: each answers `failed`, without a retry. */
+const ALWAYS_FAILED = [403, 500, 502, 503];
+
+const PUSH_ENDPOINT = 'https://push.example/sub1';
+
+const ENDPOINTS: EndpointCase[] = [
+  {
+    name: 'createOrder',
+    call: (fetchFn) => createOrder(REQUEST, fetchFn),
+    success: { status: 201, body: CREATED },
+    on401: 'failed',
+    alsoFailed: [404, 413],
+    networkTries: 2,
+  },
+  {
+    name: 'login',
+    call: (fetchFn) => login(PASSWORD, fetchFn),
+    success: { status: 200, body: ME },
+    on401: null,
+    alsoFailed: [400, 404],
+  },
+  {
+    name: 'fetchSession',
+    call: (fetchFn) => fetchSession(fetchFn),
+    success: { status: 200, body: ME },
+    on401: 'loggedOut',
+    alsoFailed: [404, 429],
+  },
+  {
+    name: 'logout',
+    call: async (fetchFn) => ((await logout(fetchFn)) ? { kind: 'cleared' } : { kind: 'failed' }),
+    success: { status: 204, noBody: true },
+    on401: 'failed',
+    alsoFailed: [],
+  },
+  {
+    name: 'fetchWaitingOrders',
+    call: (fetchFn) => fetchWaitingOrders(fetchFn),
+    success: { status: 200, body: { groups: GROUPS } },
+    on401: 'loggedOut',
+    alsoFailed: [404, 429],
+  },
+  {
+    name: 'fetchCollectorOrder',
+    call: (fetchFn) => fetchCollectorOrder(ORDER.id, fetchFn),
+    success: { status: 200, body: { order: ORDER } },
+    on401: 'loggedOut',
+    alsoFailed: [400, 409],
+  },
+  ...WRITES.map(({ name, successStatus, write }): EndpointCase => ({
+    name,
+    call: write,
+    success: { status: successStatus, body: { order: ORDER } },
+    on401: 'loggedOut',
+    alsoFailed: [413, 429],
+  })),
+  {
+    name: 'deleteCollectorOrder',
+    call: (fetchFn) => deleteCollectorOrder(ORDER.id, fetchFn),
+    success: { status: 204, noBody: true },
+    on401: 'loggedOut',
+    alsoFailed: [400, 429],
+    failedBody: { error: 'forbidden_origin' },
+  },
+  {
+    name: 'markMessageOpened',
+    call: (fetchFn) => markMessageOpened(ORDER.id, 0, fetchFn),
+    success: { status: 200, body: { openedAt: OPENED_AT } },
+    on401: 'loggedOut',
+    alsoFailed: [201, 400, 409, 429],
+  },
+  {
+    name: 'fetchRounds',
+    call: (fetchFn) => fetchRounds(fetchFn),
+    success: { status: 200, body: { rounds: [ROUND_VIEW] } },
+    on401: 'loggedOut',
+    alsoFailed: [201, 404, 429],
+    failedBody: { rounds: [ROUND_VIEW] },
+  },
+  {
+    name: 'planRound',
+    call: (fetchFn) => planRound(PLAN, fetchFn),
+    success: { status: 201, body: ROUND_VIEW },
+    on401: 'loggedOut',
+    alsoFailed: [404, 413, 429],
+  },
+  {
+    name: 'buildRoute',
+    call: (fetchFn) => buildRoute(ROUND_VIEW.round.id, fetchFn),
+    success: { status: 200, body: ROUTED_VIEW },
+    on401: 'loggedOut',
+    alsoFailed: [201, 400, 429],
+  },
+  ...STOP_ACTIONS.map(({ name, act }): EndpointCase => ({
+    name,
+    call: (fetchFn) => act(ROUND_VIEW.round.id, ORDER.id, fetchFn),
+    success: { status: 200, body: ROUTED_VIEW },
+    on401: 'loggedOut',
+    alsoFailed: [201, 429],
+  })),
+  {
+    name: 'closeRound',
+    call: (fetchFn) => closeRound(ROUND_VIEW.round.id, fetchFn),
+    success: { status: 200, body: CLOSED_VIEW },
+    on401: 'loggedOut',
+    // The route has no 409: even a known code there is from something in between.
+    alsoFailed: [201, 400, 409, 429],
+    failedBody: { error: 'confirmations_closed' },
+  },
+  {
+    name: 'fetchHistory',
+    call: (fetchFn) => fetchHistory('2026-10', fetchFn),
+    success: { status: 200, body: HISTORY },
+    on401: 'loggedOut',
+    // A 400 too: the picker only builds valid months, so `invalid_month` is a client bug.
+    alsoFailed: [201, 400, 404, 429],
+    failedBody: { error: 'invalid_month' },
+  },
+  {
+    name: 'fetchCustomerOrder',
+    call: (fetchFn) => fetchCustomerOrder(TOKEN, fetchFn),
+    success: { status: 200, body: { order: CUSTOMER_ORDER } },
+    on401: 'failed',
+    alsoFailed: [201, 400, 409, 429],
+  },
+  ...CUSTOMER_WRITES.map(({ name, write }): EndpointCase => ({
+    name,
+    call: write,
+    success: { status: 200, body: { order: CUSTOMER_ORDER } },
+    on401: 'failed',
+    // A success status other than the route's own (200) means nothing the page can show.
+    alsoFailed: [201, 204, 413, 429],
+    failedBody: { order: CUSTOMER_ORDER },
+  })),
+  {
+    name: 'fetchPushConfig',
+    call: (fetchFn) => fetchPushConfig(fetchFn),
+    success: { status: 200, body: { enabled: true, publicKey: 'test-key' } },
+    on401: 'loggedOut',
+    alsoFailed: [404, 429],
+  },
+  {
+    name: 'savePushSubscription',
+    call: (fetchFn) =>
+      savePushSubscription(
+        { endpoint: PUSH_ENDPOINT, keys: { p256dh: 'p256dhKey', auth: 'authKey' } },
+        fetchFn,
+      ),
+    success: { status: 204, noBody: true },
+    on401: 'loggedOut',
+    alsoFailed: [400, 429],
+  },
+  {
+    name: 'deletePushSubscription',
+    call: (fetchFn) => deletePushSubscription(PUSH_ENDPOINT, fetchFn),
+    success: { status: 204, noBody: true },
+    on401: 'loggedOut',
+    alsoFailed: [400, 429],
+  },
+];
+
+/** An answer with `status` and `body`; a 204 has none, since a Response cannot carry one. */
+function answerWith(status: number, body: unknown): FakeAnswer {
+  return status === 204 ? { status, noBody: true } : { status, body };
+}
+
+/**
+ * A fetch whose answer breaks as it is read: a stand-in for any bug past the network, which the
+ * endpoint must log and answer as `failed` instead of rejecting.
+ */
+const brokenAnswerFetch: FetchFn = () =>
+  Promise.resolve({
+    get status(): number {
+      throw new Error('broken answer');
+    },
+  } as unknown as Response);
+
+describe('every endpoint', () => {
+  let consoleError: MockInstance<typeof console.error>;
+
+  beforeEach(() => {
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
-  it('answers failed on 400, 500 or network error', async () => {
-    const { fetchFn: badReq } = makeFakeFetch({
-      status: 400,
-      body: { error: 'invalid_push_subscription' },
-    });
-    expect(await deletePushSubscription('https://push.example/sub1', badReq)).toEqual({
-      kind: 'failed',
-    });
-
-    const { fetchFn: serverErr } = makeFakeFetch({ status: 500, body: { error: 'internal' } });
-    expect(await deletePushSubscription('https://push.example/sub1', serverErr)).toEqual({
-      kind: 'failed',
-    });
-
-    const { fetchFn: netErr } = makeFakeFetch('networkError');
-    expect(await deletePushSubscription('https://push.example/sub1', netErr)).toEqual({
-      kind: 'failed',
-    });
+  afterEach(() => {
+    consoleError.mockRestore();
   });
+
+  it.each(ENDPOINTS.filter(({ on401 }) => on401 !== null))(
+    '$name answers $on401 on 401, whatever the body says',
+    async ({ call, on401 }) => {
+      for (const answer of [
+        { status: 401, body: { error: 'unauthenticated' } },
+        { status: 401, text: 'Unauthorized' },
+      ]) {
+        const { fetchFn, calls } = makeFakeFetch(answer);
+        expect(await call(fetchFn), JSON.stringify(answer)).toEqual({ kind: on401 });
+        expect(calls).toHaveLength(1);
+      }
+    },
+  );
+
+  it.each(ENDPOINTS)(
+    '$name answers failed on any other status, without a retry',
+    async ({ call, success, alsoFailed, failedBody = { error: 'x' } }) => {
+      for (const status of [...ALWAYS_FAILED, ...alsoFailed]) {
+        const { fetchFn, calls } = makeFakeFetch(answerWith(status, failedBody), success);
+        expect(await call(fetchFn), String(status)).toEqual({ kind: 'failed' });
+        expect(calls, String(status)).toHaveLength(1);
+      }
+      expect(consoleError).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(ENDPOINTS)(
+    '$name answers failed after a network error or a fetch that throws, without logging',
+    async ({ call, success, networkTries = 1 }) => {
+      for (const answer of ['networkError', 'throws'] as const) {
+        const answers: FakeAnswer[] = Array.from({ length: networkTries }, () => answer);
+        const { fetchFn, calls } = makeFakeFetch(...answers, success);
+        expect(await call(fetchFn), answer).toEqual({ kind: 'failed' });
+        expect(calls, answer).toHaveLength(networkTries);
+      }
+      expect(consoleError).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(ENDPOINTS)(
+    '$name logs an unexpected error, without the request, and answers failed',
+    async ({ call }) => {
+      expect(await call(brokenAnswerFetch)).toEqual({ kind: 'failed' });
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      // Never the body (a phone, an address, a password) or the path (it can hold a token).
+      const logged = consoleError.mock.calls.flat().map(String).join(' ');
+      for (const secret of ['/api/', '+97250', 'דרך רבין', PASSWORD.trim(), TOKEN]) {
+        expect(logged).not.toContain(secret);
+      }
+    },
+  );
 });
