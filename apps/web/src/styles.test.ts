@@ -10,6 +10,8 @@
 // 4. Cards and badges: a .card keeps the dawn radius and shadow, every coloured badge sets both
 //    its text and its background (so does every round tile), badge text is never shrunk below
 //    1rem, and the round .call-button is a full tap target.
+// 5. Push toggle: the active (green) notifications toggle still greys out while busy, and its
+//    frame adds no size.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -113,7 +115,7 @@ const TEXT_PAIRS: [foreground: string, background: string][] = [
   ['brand', 'brand-soft'],
   ['white', 'brand'],
   ['white', 'brand-2'],
-  ['green', 'green-soft'],
+  ['green', 'green-soft'], // also the active push toggle (.push-control .push-active)
   ['amber', 'amber-soft'],
   ['error', 'card'], // .button-danger-outline, the opening "ביטול ההזמנה"
   ['error', 'bg'], // .button-danger-quiet: no fill of its own, so the page shows through
@@ -353,5 +355,22 @@ describe('styles.css cards and badges', () => {
     // A font-size on .badge, if any, must be exactly 1rem: the mockup's .9rem is too small.
     const fontSize = /font-size:\s*([^;]+);/.exec(ruleBody(stylesCss, '.badge'))?.[1];
     expect(fontSize ?? '1rem').toBe('1rem');
+  });
+});
+
+// The collector's notifications toggle (collector/PushNotificationsControl.tsx): green when on.
+describe('styles.css push toggle', () => {
+  it('gives the active toggle its green only while it is enabled, so a busy one greys out', () => {
+    // Without :not(:disabled) the rule outweighs .button:disabled and a saving toggle stays green.
+    const active = ruleBody(stylesCss, '.push-control .push-active:not(:disabled)');
+    expect(active).toContain('background: var(--green-soft);');
+    expect(active).toContain('color: var(--green);');
+    expect(stylesCss).not.toMatch(/\.push-active\s*\{/);
+  });
+
+  it('frames the active toggle with an inset shadow, so on and off are the same size', () => {
+    const active = ruleBody(stylesCss, '.push-control .push-active:not(:disabled)');
+    expect(active).toContain('box-shadow: inset 0 0 0 2px var(--green);');
+    expect(active).not.toMatch(/(^|[\s;])(border|padding|min-height|height):/);
   });
 });
