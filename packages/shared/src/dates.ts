@@ -1,5 +1,6 @@
 // Calendar dates and pickup times as the app shows them, in Israel's time zone (spec §7,
-// CLAUDE.md): "DD/MM" and a 24-hour "08:00" in Hebrew, "Nov 4" and "8:00 AM" in English. Shared so
+// CLAUDE.md): "DD/MM" and a 24-hour "08:00" in Hebrew, "Nov 4" and "8:00 AM" in English, plus the
+// weekday name of a day ("יום רביעי" / "Wednesday") for the WhatsApp message. Shared so
 // the collector app's tags ("לא הגענו אליו · 12/11"), the customer's page and anything the api writes
 // read a day the same way, whatever zone the code runs in (UTC on Vercel, the phone's own zone in
 // the browser). Also the calendar months of the monthly statistics (spec §3.7): which month an
@@ -94,6 +95,49 @@ export function formatDayMonth(value: string | Date, lang: Lang = 'he'): string 
     throw new RangeError('formatDayMonth: Intl gave no day or month');
   }
   return dayMonthIn(lang, day, month);
+}
+
+// Sunday first, matching `Date.getUTCDay()`. Fixed lists, like ENGLISH_MONTHS, so the same day
+// reads the same on the server and on every phone.
+const HEBREW_WEEKDAYS = [
+  'יום ראשון',
+  'יום שני',
+  'יום שלישי',
+  'יום רביעי',
+  'יום חמישי',
+  'יום שישי',
+  'שבת',
+] as const;
+const ENGLISH_WEEKDAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
+/**
+ * The weekday of a calendar day `YYYY-MM-DD` (a round's date), for the WhatsApp message so the
+ * customer sees "11/11 יום רביעי" and not only a number. Hebrew: "יום רביעי" ("שבת" for Saturday,
+ * which has no "יום"); English: "Wednesday".
+ *
+ * The date is already a day in Israel, so the weekday is read from its own calendar fields via UTC
+ * (no zone conversion that could shift it by a day).
+ *
+ * @throws RangeError for a string that is not a real `YYYY-MM-DD` date. The message never contains
+ *   the value.
+ */
+export function formatWeekday(isoDate: string, lang: Lang = 'he'): string {
+  if (!isoCalendarDateSchema.safeParse(isoDate).success) {
+    throw new RangeError('formatWeekday: expected a calendar date YYYY-MM-DD');
+  }
+  const index = new Date(`${isoDate}T00:00:00Z`).getUTCDay();
+  const name = (lang === 'en' ? ENGLISH_WEEKDAYS : HEBREW_WEEKDAYS)[index];
+  // Cannot happen: getUTCDay() is 0-6. Fails loudly rather than "undefined".
+  if (name === undefined) throw new RangeError('formatWeekday: weekday out of range');
+  return name;
 }
 
 /**

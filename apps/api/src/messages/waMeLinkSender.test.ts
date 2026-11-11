@@ -149,8 +149,8 @@ describe('WaMeLinkSender', () => {
     );
 
     expect(text).toBe(renderMessage(message.kind, message.vars, message.personalText, 'en'));
-    expect(text).toMatch(/^Hello משה כהן,\nOn Nov 5 /);
-    expect(text).toContain('Please put the bottles out by 8:00 AM.');
+    expect(text).toMatch(/^Hello משה כהן,\nOn Thursday, Nov 5 /);
+    expect(text).toContain('Please put the bottles outside by 8:00 AM.');
     // Yoel's personal text goes in as he wrote it.
     expect(text).toContain('נא לשים בשקית (לא בקרטון)!');
   });

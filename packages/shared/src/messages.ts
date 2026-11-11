@@ -5,7 +5,7 @@
 // (`whatsapp.*`), in Hebrew and English; the message goes out in the customer's language.
 import { z } from 'zod';
 import type { OrderNotFoundErrorBody } from './collectorOrdersApi.ts';
-import { formatDayMonth, formatPickupTime, pickupTimeSchema } from './dates.ts';
+import { formatDayMonth, formatPickupTime, formatWeekday, pickupTimeSchema } from './dates.ts';
 import { DEFAULT_LANG, t, type Lang } from './i18n.ts';
 import {
   messageKindSchema,
@@ -98,17 +98,22 @@ function confirmRequestLines(
   }
   const lines = [
     greetingLine(vars, lang),
-    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" in
-    // Hebrew, "Nov 5" in English.
-    t(lang, 'whatsapp.confirmRequest.date', { date: formatDayMonth(vars.date, lang) }),
+    // Throws a RangeError, without the value, for a date that is not YYYY-MM-DD. "05/11" and
+    // "יום רביעי" in Hebrew, "Nov 5" and "Wednesday" in English.
+    t(lang, 'whatsapp.confirmRequest.date', {
+      date: formatDayMonth(vars.date, lang),
+      weekday: formatWeekday(vars.date, lang),
+    }),
   ];
   // Both times were validated above. Hebrew keeps the 24-hour "08:00"; English reads "8:00 AM".
-  // With both, the start appears twice: "out by {from}. we come between {from} and {by}" — the
-  // window is when Yoel comes, so the bottles must already be out when it starts (ADR-0012).
+  // With both, two lines: "out by {from}" and "we come between {from} and {by}" — the window is
+  // when Yoel comes, so the bottles must already be out when it starts (ADR-0012).
   if (vars.pickupBy !== undefined && vars.pickupFrom !== undefined) {
+    const from = formatPickupTime(vars.pickupFrom, lang);
     lines.push(
-      t(lang, 'whatsapp.confirmRequest.pickupWindow', {
-        from: formatPickupTime(vars.pickupFrom, lang),
+      t(lang, 'whatsapp.confirmRequest.putOutBy', { from }),
+      t(lang, 'whatsapp.confirmRequest.arrivalWindow', {
+        from,
         by: formatPickupTime(vars.pickupBy, lang),
       }),
     );
