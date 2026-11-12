@@ -9,6 +9,7 @@ import {
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
+import { makeCustomerOrder } from '@bottlerun/shared/testing';
 import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
@@ -17,22 +18,18 @@ import { OrderPage } from './OrderPage.tsx';
 const TOKEN = 'Q'.repeat(43);
 const ROUND = { date: '2026-11-12', pickupFrom: '16:00', pickupBy: '18:00' };
 
-function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
-  return {
-    contact: { name: 'Dana Cohen', phone: '+972501234567' },
-    address: {
-      streetCode: 247,
-      streetName: 'דרך רבין יצחק',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'floor 3, apt 12',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    lang: 'en',
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCustomerOrder: Dana's order, booked in English. */
+const IN_ENGLISH: Partial<CustomerOrder> = {
+  contact: { name: 'Dana Cohen', phone: '+972501234567' },
+  address: {
+    streetCode: 247,
+    streetName: 'דרך רבין יצחק',
+    houseNumber: '12',
+    bottlesSpot: 'apartmentDoor',
+    floorApt: 'floor 3, apt 12',
+  },
+  lang: 'en',
+};
 
 interface Options {
   update?: CustomerOrderWriteOutcome;
@@ -79,7 +76,8 @@ describe('OrderPage in English', () => {
   it('sets the document to English left to right, and back to Hebrew when it leaves', async () => {
     window.history.replaceState(null, '', `/o/${TOKEN}`);
     const { unmount } = renderWithApi(<OrderPage token={TOKEN} />, {
-      fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: makeOrder() }),
+      fetchCustomerOrder: () =>
+        Promise.resolve({ kind: 'loaded', order: makeCustomerOrder(IN_ENGLISH) }),
     });
     await screen.findByRole('heading', { level: 1, name: 'Your order' });
     // The hook sets lang/dir in a passive effect, which can run after the heading is found.
@@ -98,14 +96,15 @@ describe('OrderPage in English', () => {
     const seen: string[] = [];
     window.history.replaceState(null, '', `/o/${TOKEN}`);
     renderWithApi(<OrderPage token={TOKEN} onLangChange={(lang) => seen.push(lang)} />, {
-      fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: makeOrder() }),
+      fetchCustomerOrder: () =>
+        Promise.resolve({ kind: 'loaded', order: makeCustomerOrder(IN_ENGLISH) }),
     });
     await screen.findByRole('heading', { level: 1, name: 'Your order' });
     expect(seen).toContain('en');
   });
 
   it('shows a waiting order with its details', async () => {
-    await renderEn(makeOrder());
+    await renderEn(makeCustomerOrder(IN_ENGLISH));
 
     expect(statusLine()).toBe('Order status: Waiting for a round');
     expect(screen.getByText('Waiting for a round').closest('.badge')).not.toBeNull();
@@ -121,7 +120,7 @@ describe('OrderPage in English', () => {
   });
 
   it('lays the details out as rows in English too, the phone left to right', async () => {
-    await renderEn(makeOrder());
+    await renderEn(makeCustomerOrder(IN_ENGLISH));
 
     const details = screen.getByRole('region', { name: 'Order details' });
     const names = Array.from(details.querySelectorAll('dl > div > dt')).map(
@@ -133,7 +132,7 @@ describe('OrderPage in English', () => {
   });
 
   it('shows an order in a round with the date, the window and "Not this time", nothing to confirm', async () => {
-    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }));
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'confirmed', round: ROUND }));
 
     expect(statusLine()).toBe('Order status: Scheduled');
     expect(wholeText('We will come to collect on Nov 12.')).toBeDefined();
@@ -149,14 +148,18 @@ describe('OrderPage in English', () => {
 
   it('shows only the latest time when there is no start time', async () => {
     await renderEn(
-      makeOrder({ status: 'confirmed', round: { date: '2026-11-12', pickupBy: '18:00' } }),
+      makeCustomerOrder({
+        ...IN_ENGLISH,
+        status: 'confirmed',
+        round: { date: '2026-11-12', pickupBy: '18:00' },
+      }),
     );
 
     expect(wholeText('Please put the bottles outside by 18:00.')).toBeDefined();
   });
 
   it('shows a legacy pending order like one in a round, with "Not this time"', async () => {
-    await renderEn(makeOrder({ status: 'pending', round: ROUND }));
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'pending', round: ROUND }));
 
     expect(statusLine()).toBe('Order status: Scheduled');
     expect(wholeText('We will come to collect on Nov 12.')).toBeDefined();
@@ -165,7 +168,7 @@ describe('OrderPage in English', () => {
   });
 
   it('shows a collected order with thanks and a new-order button', async () => {
-    await renderEn(makeOrder({ status: 'collected' }));
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'collected' }));
 
     expect(statusLine()).toBe('Order status: Collected');
     expect(screen.getByText(/The order was collected/)).toBeDefined();
@@ -174,14 +177,14 @@ describe('OrderPage in English', () => {
   });
 
   it('shows a cancelled order', async () => {
-    await renderEn(makeOrder({ status: 'cancelled' }));
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'cancelled' }));
 
     expect(statusLine()).toBe('Order status: Cancelled');
     expect(screen.getByText('Thank you! You can book a new pickup at any time.')).toBeDefined();
   });
 
   it('opens the English booking form with the same details from the new-order button', async () => {
-    await renderEn(makeOrder({ status: 'collected' }));
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'collected' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'New order with the same details' }));
 
@@ -192,8 +195,8 @@ describe('OrderPage in English', () => {
   });
 
   it('asks in English before cancelling and announces the cancel in English', async () => {
-    await renderEn(makeOrder(), {
-      cancel: { kind: 'saved', order: makeOrder({ status: 'cancelled' }) },
+    await renderEn(makeCustomerOrder(IN_ENGLISH), {
+      cancel: { kind: 'saved', order: makeCustomerOrder({ ...IN_ENGLISH, status: 'cancelled' }) },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel the order' }));
@@ -205,7 +208,7 @@ describe('OrderPage in English', () => {
   });
 
   it('asks in English before declining', async () => {
-    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }));
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'confirmed', round: ROUND }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Not this time' }));
 
@@ -216,8 +219,8 @@ describe('OrderPage in English', () => {
   });
 
   it('announces a decline in English', async () => {
-    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }), {
-      decline: { kind: 'saved', order: makeOrder() },
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'confirmed', round: ROUND }), {
+      decline: { kind: 'saved', order: makeCustomerOrder(IN_ENGLISH) },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Not this time' }));
@@ -229,7 +232,7 @@ describe('OrderPage in English', () => {
   });
 
   it('tells in English that the order closed meanwhile', async () => {
-    await renderEn(makeOrder({ status: 'confirmed', round: ROUND }), {
+    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'confirmed', round: ROUND }), {
       decline: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed },
     });
 
@@ -242,7 +245,7 @@ describe('OrderPage in English', () => {
   });
 
   describe('the change form', () => {
-    async function openChange(order = makeOrder(), options: Options = {}) {
+    async function openChange(order = makeCustomerOrder(IN_ENGLISH), options: Options = {}) {
       const updates = await renderEn(order, options);
       fireEvent.click(screen.getByRole('button', { name: 'Change' }));
       return updates;
@@ -277,7 +280,7 @@ describe('OrderPage in English', () => {
     });
 
     it('warns in English that a new address takes the order out of its round', async () => {
-      await openChange(makeOrder({ status: 'confirmed', round: ROUND }));
+      await openChange(makeCustomerOrder({ ...IN_ENGLISH, status: 'confirmed', round: ROUND }));
 
       fireEvent.change(screen.getByLabelText('House number'), { target: { value: '14' } });
 
@@ -299,7 +302,7 @@ describe('OrderPage in English', () => {
     });
 
     it('shows a failed save in English', async () => {
-      await openChange(makeOrder(), { update: { kind: 'failed' } });
+      await openChange(makeCustomerOrder(IN_ENGLISH), { update: { kind: 'failed' } });
 
       fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
