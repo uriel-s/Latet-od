@@ -103,8 +103,9 @@ export default tseslint.config(
   },
 
   // --- Test helpers ---------------------------------------------------------
-  // packages/shared/src/testing (`@bottlerun/shared/testing`: deferred, firstRealStreet) is for
-  // tests only, so production code (and the web bundle) never depends on it. This uses the
+  // packages/shared/src/testing (`@bottlerun/shared/testing`: deferred, firstRealStreet, the
+  // makeOrder fixtures) is for tests only, so production code (and the web bundle) never depends
+  // on it. This uses the
   // typescript-eslint copy of no-restricted-imports, a separate rule from the core one above:
   // flat config replaces a rule's options instead of merging them, so sharing the core rule would
   // make the test-file exception below also drop the workspace boundaries for test files.
