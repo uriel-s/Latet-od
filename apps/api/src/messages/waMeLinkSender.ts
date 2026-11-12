@@ -42,17 +42,10 @@ export function encodeWaMeText(text: string): string {
 }
 
 /**
- * The wa.me "click to chat" link that opens WhatsApp on a chat with `e164`, with `text` already
- * written: `https://wa.me/972501234567?text=<encodeWaMeText(text)>`.
- *
- * @returns null when `e164` is not a stored Israeli mobile (see {@link waMePhone}).
+ * The wa.me "click to chat" link that opens WhatsApp on a chat with `phone`, with `text` already
+ * written: `https://wa.me/972501234567?text=<encodeWaMeText(text)>`. `phone` is already in
+ * wa.me's digits-only form ({@link waMePhone}).
  */
-export function waMeUrl(e164: string, text: string): string | null {
-  const phone = waMePhone(e164);
-  return phone === null ? null : linkTo(phone, text);
-}
-
-/** The wa.me link for `phone`, already in wa.me's digits-only form ({@link waMePhone}). */
 function linkTo(phone: string, text: string): string {
   return `https://wa.me/${phone}?text=${encodeWaMeText(text)}`;
 }

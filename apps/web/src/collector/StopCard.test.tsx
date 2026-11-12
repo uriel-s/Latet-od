@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NOT_FOUND_QUESTION } from './MoreActionsSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
 import {
   COLLECT_STOP_ERRORS,
@@ -13,7 +14,6 @@ import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   BOTTLES_COLLECTED_LABEL,
   NEXT_STOP_EYEBROW,
-  NOT_FOUND_QUESTION,
   SEND_THANKS_TITLE,
   StopCard,
   parseBottlesCollected,

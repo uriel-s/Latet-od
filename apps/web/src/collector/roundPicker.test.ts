@@ -11,7 +11,6 @@ import {
   pickSelectedRound,
   regionsPresent,
   roundPhaseLabel,
-  roundPickerLabel,
   roundPickerParts,
 } from './roundPicker.ts';
 
@@ -123,7 +122,7 @@ describe('regionsPresent', () => {
   });
 });
 
-describe('roundPickerParts and roundPickerLabel', () => {
+describe('roundPickerParts', () => {
   it('shows how many customers are in the round before the route, not "ביקשו מועד אחר"', () => {
     const view = makeRoundView({}, { inRound: 4, otherDate: 1 });
     expect(roundPickerParts(view)).toEqual({
@@ -131,12 +130,15 @@ describe('roundPickerParts and roundPickerLabel', () => {
       region: 'רמת בית שמש',
       summary: '4 בסבב',
     });
-    expect(roundPickerLabel(view)).toBe('28/10 · רמת בית שמש · 4 בסבב');
   });
 
   it('shows the number of stops once the round is routed', () => {
     const view = makeRoundView({ phase: 'routed', region: 'old', date: '2026-11-02' }, {}, 7);
-    expect(roundPickerLabel(view)).toBe('02/11 · בית שמש · 7 עצירות');
+    expect(roundPickerParts(view)).toEqual({
+      date: '02/11',
+      region: 'בית שמש',
+      summary: '7 עצירות',
+    });
   });
 
   it('shows zero in the round for a confirming round with no orders', () => {

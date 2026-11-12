@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
   customerOrderSchema,
+  t,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
@@ -11,16 +12,7 @@ import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/cus
 import { renderWithApi } from '../api/renderWithApi.tsx';
 import { SAVE_FAILED_MESSAGE, UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
-import {
-  CANCELLED_TEXT,
-  COLLECTED_TEXT,
-  LEFT_ROUND_MESSAGE,
-  ORDER_LOAD_FAILED_MESSAGE,
-  OrderPage,
-  PHONE_NOT_CHANGED_TEXT,
-  SAVED_MESSAGES,
-  WAITING_TEXT,
-} from './OrderPage.tsx';
+import { OrderPage } from './OrderPage.tsx';
 
 /** A token as the api hands it out: 43 base64url characters. */
 const TOKEN = 'Q'.repeat(43);
@@ -250,8 +242,8 @@ describe('OrderPage', () => {
       const second = deferred<CustomerOrderOutcome>();
       const calls = renderPage(makeOrder(), { load: [{ kind: 'failed' }, second.promise] });
 
-      expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
-      expect(ORDER_LOAD_FAILED_MESSAGE).toBe(
+      expect((await screen.findByRole('alert')).textContent).toBe(t('he', 'orderPage.loadFailed'));
+      expect(t('he', 'orderPage.loadFailed')).toBe(
         'לא הצלחנו לטעון את ההזמנה. נא לבדוק את החיבור לאינטרנט ולנסות שוב.',
       );
       expectOneH1();
@@ -274,7 +266,7 @@ describe('OrderPage', () => {
         fetchCustomerOrder: () => Promise.reject(new Error('boom')),
       });
 
-      expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
+      expect((await screen.findByRole('alert')).textContent).toBe(t('he', 'orderPage.loadFailed'));
     });
   });
 
@@ -297,8 +289,8 @@ describe('OrderPage', () => {
 
       expectOneH1();
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
-      expect(WAITING_TEXT).toBe('נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.');
+      expect(screen.getByText(t('he', 'orderPage.waiting'))).toBeDefined();
+      expect(t('he', 'orderPage.waiting')).toBe('נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.');
       // The status is a badge with the status in words (not colour alone), inside a card.
       expect(screen.getByText('ממתינה לסבב').closest('.badge')).not.toBeNull();
     });
@@ -308,7 +300,7 @@ describe('OrderPage', () => {
 
       const card = screen.getByText('מצב ההזמנה:', { exact: false }).closest('.card');
       expect(card).not.toBeNull();
-      expect(card?.contains(screen.getByText(WAITING_TEXT))).toBe(true);
+      expect(card?.contains(screen.getByText(t('he', 'orderPage.waiting')))).toBe(true);
     });
 
     it('draws each detail as one row: its name, then its value', async () => {
@@ -432,7 +424,7 @@ describe('OrderPage', () => {
       // The button just tapped is gone, so the focus goes to the notice that says what happened.
       expect(document.activeElement).toBe(notice);
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
+      expect(screen.getByText(t('he', 'orderPage.waiting'))).toBeDefined();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(calls.declines).toEqual([TOKEN]);
@@ -527,7 +519,7 @@ describe('OrderPage', () => {
 
       reload.resolve({ kind: 'loaded', order: makeOrder({ status: 'collected' }) });
 
-      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(await screen.findByText(t('he', 'orderPage.collected'))).toBeDefined();
       expect(screen.getByRole('alert').textContent).toBe('ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.');
       expectOneH1();
     });
@@ -568,8 +560,8 @@ describe('OrderPage', () => {
       await renderLoaded(makeOrder({ status: 'collected' }));
 
       expect(statusLabel()).toBe('מצב ההזמנה: נאספה');
-      expect(screen.getByText(COLLECTED_TEXT)).toBeDefined();
-      expect(COLLECTED_TEXT).toBe('ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!');
+      expect(screen.getByText(t('he', 'orderPage.collected'))).toBeDefined();
+      expect(t('he', 'orderPage.collected')).toBe('ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!');
       expect(screen.getByText('דנה כהן')).toBeDefined();
       expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
     });
@@ -580,7 +572,7 @@ describe('OrderPage', () => {
       await renderLoaded(makeOrder({ status: 'cancelled' }));
 
       expect(statusLabel()).toBe('מצב ההזמנה: בוטלה');
-      expect(screen.getByText(CANCELLED_TEXT)).toBeDefined();
+      expect(screen.getByText(t('he', 'orderPage.cancelled'))).toBeDefined();
       expect(screen.getByText('דנה כהן')).toBeDefined();
       expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
     });
@@ -652,8 +644,8 @@ describe('OrderPage', () => {
       answer.resolve({ kind: 'saved', order: makeOrder({ status: 'cancelled' }) });
 
       const notice = await screen.findByRole('status');
-      expect(notice.textContent).toBe(SAVED_MESSAGES.cancel);
-      expect(SAVED_MESSAGES.cancel).toBe('ההזמנה בוטלה.');
+      expect(notice.textContent).toBe(t('he', 'orderPage.saved.cancel'));
+      expect(t('he', 'orderPage.saved.cancel')).toBe('ההזמנה בוטלה.');
       expect(document.activeElement).toBe(notice);
       expect(statusLabel()).toBe('מצב ההזמנה: בוטלה');
       expect(button('הזמנה חדשה עם אותם פרטים')).toBeDefined();
@@ -685,7 +677,7 @@ describe('OrderPage', () => {
 
       click('כן, לבטל');
 
-      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(await screen.findByText(t('he', 'orderPage.collected'))).toBeDefined();
       expect(screen.getByRole('alert').textContent).toBe(CUSTOMER_ORDER_MESSAGES.orderClosed);
       expect(calls.loads).toEqual([TOKEN, TOKEN]);
     });
@@ -716,8 +708,8 @@ describe('OrderPage', () => {
 
       const heading = screen.getByRole('heading', { level: 2, name: 'שינוי פרטי ההזמנה' });
       expect(document.activeElement).toBe(heading);
-      expect(screen.getByText(PHONE_NOT_CHANGED_TEXT)).toBeDefined();
-      expect(PHONE_NOT_CHANGED_TEXT).toBe('את מספר הטלפון אי אפשר לשנות כאן.');
+      expect(screen.getByText(t('he', 'orderPage.phoneNotChanged'))).toBeDefined();
+      expect(t('he', 'orderPage.phoneNotChanged')).toBe('את מספר הטלפון אי אפשר לשנות כאן.');
       expect(input('רחוב').value).toBe('דרך רבין יצחק');
       expect(input('מספר בית').value).toBe('12');
       expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
@@ -753,7 +745,7 @@ describe('OrderPage', () => {
 
       const notice = await screen.findByRole('status');
       expect(notice.textContent).toBe('השינויים נשמרו.');
-      expect(SAVED_MESSAGES.change).toBe('השינויים נשמרו.');
+      expect(t('he', 'orderPage.saved.change')).toBe('השינויים נשמרו.');
       expect(document.activeElement).toBe(notice);
       expect(calls.updates).toEqual([
         {
@@ -831,10 +823,12 @@ describe('OrderPage', () => {
       click('שמירת השינויים');
 
       const notice = await screen.findByRole('status');
-      expect(notice.textContent).toBe(LEFT_ROUND_MESSAGE);
-      expect(LEFT_ROUND_MESSAGE).toBe('הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.');
+      expect(notice.textContent).toBe(t('he', 'orderPage.leftRound'));
+      expect(t('he', 'orderPage.leftRound')).toBe(
+        'הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.',
+      );
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
+      expect(screen.getByText(t('he', 'orderPage.waiting'))).toBeDefined();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(screen.getByText('דרך רבין יצחק 14')).toBeDefined();
       expect(calls.updates[0]?.request.address?.houseNumber).toBe('14');
@@ -965,7 +959,7 @@ describe('OrderPage', () => {
 
       click('שמירת השינויים');
 
-      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(await screen.findByText(t('he', 'orderPage.collected'))).toBeDefined();
       const alert = screen.getByRole('alert');
       expect(alert.textContent).toBe(CUSTOMER_ORDER_MESSAGES.orderClosed);
       expect(document.activeElement).toBe(alert);

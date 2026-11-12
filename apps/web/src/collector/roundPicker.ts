@@ -81,12 +81,6 @@ export function roundPickerParts(view: RoundView): RoundPickerParts {
   return { date: formatDayMonth(round.date), region: REGION_LABELS[round.region], summary };
 }
 
-/** One-line label of a round, e.g. "28/10 · רמת בית שמש · 7 עצירות" (plain text). */
-export function roundPickerLabel(view: RoundView): string {
-  const { date, region, summary } = roundPickerParts(view);
-  return `${date} · ${region} · ${summary}`;
-}
-
 /** Short tag of the round's step: "תכנון" or "מסלול". */
 export function roundPhaseLabel(view: RoundView): string {
   return ROUND_PHASE_LABELS[view.round.phase];

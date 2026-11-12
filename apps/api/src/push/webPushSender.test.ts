@@ -12,10 +12,10 @@ import type { PushNotificationPayload, PushSubscription } from '@bottlerun/share
 import { describe, expect, it, vi } from 'vitest';
 import { FAKE_VAPID_PUBLIC_KEY, FakePushSender } from './fakePushSender.ts';
 import { DisabledPushSender, type PushSender } from './pushSender.ts';
+import { makeVapidKeys } from './testVapidKeys.ts';
 import {
   buildVapidAuthHeader,
   encryptWebPushPayload,
-  generateVapidKeys,
   parseVapidKeys,
   WebPushSender,
 } from './webPushSender.ts';
@@ -72,9 +72,9 @@ function decryptWebPushRecord(
   return { rs, idlen, delimitedPlaintext };
 }
 
-describe('generateVapidKeys & parseVapidKeys', () => {
-  it('generates a valid P-256 key pair accepted by parseVapidKeys', () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+describe('parseVapidKeys', () => {
+  it('accepts a key pair made by the .env.example recipe', () => {
+    const { publicKey, privateKey } = makeVapidKeys();
     const parsed = parseVapidKeys(publicKey, privateKey);
 
     expect(parsed.publicKey).toBe(publicKey);
@@ -96,8 +96,8 @@ describe('generateVapidKeys & parseVapidKeys', () => {
   });
 
   it('rejects a mismatched public and private key pair without leaking either value', () => {
-    const first = generateVapidKeys();
-    const second = generateVapidKeys();
+    const first = makeVapidKeys();
+    const second = makeVapidKeys();
 
     let thrown: Error | undefined;
     try {
@@ -121,7 +121,7 @@ describe('generateVapidKeys & parseVapidKeys', () => {
     ['invalid base64url characters', 'not+valid/base64url==='],
     ['empty string', ''],
   ])('rejects an invalid public key (%s) without repeating the value', (_label, badPublic) => {
-    const { privateKey } = generateVapidKeys();
+    const { privateKey } = makeVapidKeys();
 
     let thrown: Error | undefined;
     try {
@@ -143,7 +143,7 @@ describe('generateVapidKeys & parseVapidKeys', () => {
     ['invalid base64url characters', 'bad+private/key==='],
     ['zero scalar (all 0x00 bytes)', Buffer.alloc(32, 0).toString('base64url')],
   ])('rejects an invalid private key (%s) without repeating the value', (_label, badPrivate) => {
-    const { publicKey } = generateVapidKeys();
+    const { publicKey } = makeVapidKeys();
 
     let thrown: Error | undefined;
     try {
@@ -161,7 +161,7 @@ describe('generateVapidKeys & parseVapidKeys', () => {
 
 describe('buildVapidAuthHeader', () => {
   it('builds a valid RFC 8292 Authorization header with a verifiable ES256 JWT signature', () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const vapidKeys = parseVapidKeys(publicKey, privateKey);
     const nowMs = Date.UTC(2026, 10, 9, 12, 0, 0);
 
@@ -217,7 +217,7 @@ describe('buildVapidAuthHeader', () => {
   });
 
   it('rejects a non-https push endpoint', () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const vapidKeys = parseVapidKeys(publicKey, privateKey);
 
     expect(() =>
@@ -270,7 +270,7 @@ describe('encryptWebPushPayload', () => {
 
 describe('WebPushSender.send', () => {
   it('sends an encrypted POST with VAPID headers and returns sent on 201', async () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const { subscription, uaEcdh, uaPublic, authSecret } = makeBrowserSubscription(
       'https://fcm.googleapis.com/fcm/send/device-42',
     );
@@ -307,7 +307,7 @@ describe('WebPushSender.send', () => {
   });
 
   it.each([404, 410])('returns gone when the push service responds with %i', async (status) => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const { subscription } = makeBrowserSubscription();
     const fetchFn = vi.fn<typeof fetch>(() => Promise.resolve(new Response(null, { status })));
     const sender = new WebPushSender({
@@ -328,7 +328,7 @@ describe('WebPushSender.send', () => {
   ])(
     'returns failed with reason %s when the push service responds with %i',
     async (status, reason) => {
-      const { publicKey, privateKey } = generateVapidKeys();
+      const { publicKey, privateKey } = makeVapidKeys();
       const { subscription } = makeBrowserSubscription();
       const fetchFn = vi.fn<typeof fetch>(() => Promise.resolve(new Response(null, { status })));
       const sender = new WebPushSender({
@@ -346,7 +346,7 @@ describe('WebPushSender.send', () => {
   );
 
   it('returns failed with network_error when fetch rejects', async () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const { subscription } = makeBrowserSubscription();
     const fetchFn = vi.fn<typeof fetch>(() => Promise.reject(new Error('socket hang up')));
     const sender = new WebPushSender({
@@ -363,7 +363,7 @@ describe('WebPushSender.send', () => {
   });
 
   it('returns failed with invalid_subscription without calling fetch when keys are invalid', async () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const fetchFn = vi.fn<typeof fetch>();
     const sender = new WebPushSender({
       publicKey,

@@ -10,7 +10,8 @@ import { depsFromEnv, envErrorMessage } from './envDeps.ts';
 import { createFakeDeps } from './fakeDeps.ts';
 import { WaMeLinkSender } from './messages/waMeLinkSender.ts';
 import { DisabledPushSender } from './push/pushSender.ts';
-import { generateVapidKeys, WebPushSender } from './push/webPushSender.ts';
+import { makeVapidKeys } from './push/testVapidKeys.ts';
+import { WebPushSender } from './push/webPushSender.ts';
 
 /** Test-only values. The URI's password is what must never reach an error message. */
 const URI_PASSWORD = 'db-password-never-logged';
@@ -88,7 +89,7 @@ describe('depsFromEnv', () => {
   });
 
   it('enables Web Push when VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT are set', () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const deps = depsFromEnv(
       envWith({
         VAPID_PUBLIC_KEY: publicKey,
