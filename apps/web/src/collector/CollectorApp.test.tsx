@@ -1,11 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  groupWaitingOrders,
-  type CollectorOrder,
-  type CollectorOrdersResponse,
-  type RoundsResponse,
-} from '@bottlerun/shared';
+import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
 import type { Api } from '../api/ApiContext.tsx';
 import type { SessionOutcome } from '../api/authApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -36,22 +31,14 @@ const ORDERS_BY_ID: readonly CollectorOrder[] = [
   makeOrder('o2', 'משה לוי'),
 ];
 
-/** A 200 with `body` as JSON. */
-function jsonResponse(body: CollectorOrdersResponse | RoundsResponse): Promise<Response> {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }),
-  );
-}
-
 /**
- * The client functions the orders and history screens call (useApi), faked: no waiting order,
- * {@link ORDERS_BY_ID} for the edit screen, nothing closed in any month, and push off on the
- * server. The session check and the logout are faked per test (see renderAt).
+ * The client functions the tabs call on opening (useApi), faked: no waiting order,
+ * {@link ORDERS_BY_ID} for the edit screen, no open round (for the rounds tab and the planning
+ * screen), nothing closed in any month, and push off on the server. The session check and the
+ * logout are faked per test (see renderAt).
  */
 const SCREENS_API: Partial<Api> = {
+  fetchRounds: () => Promise.resolve({ kind: 'loaded', rounds: [] }),
   fetchWaitingOrders: () => Promise.resolve({ kind: 'loaded', groups: groupWaitingOrders([]) }),
   fetchCollectorOrder: (id) => {
     const order = ORDERS_BY_ID.find((candidate) => candidate.id === id);
@@ -70,23 +57,24 @@ const SCREENS_API: Partial<Api> = {
 };
 
 /**
- * The rounds tab and the planning screen still import their endpoints instead of taking them from
- * useApi, so the global fetch is stubbed for them: GET /api/collector/orders answers an empty
- * list, GET /api/collector/rounds no rounds, anything else 404, and no test sends a request from
- * jsdom.
+ * What reached the global fetch during the test. Every screen takes its calls from useApi, so a
+ * request here is a client function no test faked: the real one sent it (answered 404 below, so
+ * it would only show `failed`), and afterEach fails the test for it rather than letting it pass
+ * for the wrong reason.
  */
-function fakeFetch(input: string): Promise<Response> {
-  if (input === '/api/collector/orders') return jsonResponse({ groups: groupWaitingOrders([]) });
-  if (input === '/api/collector/rounds') return jsonResponse({ rounds: [] });
-  return Promise.resolve(new Response(null, { status: 404 }));
-}
+let unfakedRequests: string[] = [];
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fakeFetch);
+  unfakedRequests = [];
+  vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+    unfakedRequests.push(input instanceof Request ? input.url : String(input));
+    return Promise.resolve(new Response(null, { status: 404 }));
+  });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  expect(unfakedRequests).toEqual([]);
 });
 
 /** A promise the test settles by hand, to look at the screen while its request is on its way. */
