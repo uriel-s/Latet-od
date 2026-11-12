@@ -10,7 +10,7 @@ import {
 } from '@bottlerun/shared';
 import { describe, expect, it } from 'vitest';
 import type { SendResult } from './messageSender.ts';
-import { WaMeLinkSender, encodeWaMeText, waMePhone, waMeUrl } from './waMeLinkSender.ts';
+import { WaMeLinkSender, encodeWaMeText, waMePhone } from './waMeLinkSender.ts';
 
 const PHONE = '+972501234567';
 const LINK = 'https://latet-od.example/o/Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
@@ -94,31 +94,6 @@ describe('encodeWaMeText', () => {
   });
 });
 
-describe('waMeUrl', () => {
-  it('opens a chat with the number in wa.me form', () => {
-    expect(waMeUrl(PHONE, 'שלום')).toMatch(/^https:\/\/wa\.me\/972501234567\?text=/);
-  });
-
-  it('puts the text in strictly encoded, so it decodes back exactly', () => {
-    const text = encodedTextOf(waMeUrl(PHONE, TRICKY_TEXT) ?? '');
-
-    expect(text).not.toMatch(/\p{Script=Hebrew}/u);
-    for (const raw of [' ', '\n', '+', '!', '(', ')']) {
-      expect(text).not.toContain(raw);
-    }
-    expect(text).toMatch(STRICTLY_ENCODED);
-    expect(decodeURIComponent(text)).toBe(TRICKY_TEXT);
-  });
-
-  it('encodes a space as %20, never +', () => {
-    expect(waMeUrl(PHONE, 'a b')).toBe('https://wa.me/972501234567?text=a%20b');
-  });
-
-  it('is null for a phone that is not E.164 mobile', () => {
-    expect(waMeUrl('0501234567', 'שלום')).toBeNull();
-  });
-});
-
 describe('WaMeLinkSender', () => {
   it('turns a confirmation request into a wa.me link with the rendered text', async () => {
     const message = makeMessage();
@@ -126,6 +101,8 @@ describe('WaMeLinkSender', () => {
     const url = manualUrl(await new WaMeLinkSender().send(message));
 
     expect(url).toMatch(/^https:\/\/wa\.me\/972501234567\?text=/);
+    // Strictly encoded (Hebrew, spaces, line breaks, parentheses): nothing raw, never a `+`.
+    expect(encodedTextOf(url)).toMatch(STRICTLY_ENCODED);
     const text = decodeURIComponent(encodedTextOf(url));
     expect(text).toBe(renderMessage(message.kind, message.vars, message.personalText));
     expect(text).toContain(LINK);
