@@ -15,10 +15,8 @@ import {
 } from './collectorOrdersApi.ts';
 import { ORDER_FORM_ERRORS, type Order } from './order.ts';
 import { STREETS, type Street } from './streets.ts';
-import { firstRealStreet } from './testing/index.ts';
+import { MADE_ORDER_TOKEN, firstRealStreet, makeOrder } from './testing/index.ts';
 
-/** 43 base64url characters, the shape of a real token. */
-const TOKEN = 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const CREATED_AT = new Date('2026-10-19T08:30:00.000Z');
 
 const hasPoint = (street: Street): boolean => street.lat !== undefined && street.lng !== undefined;
@@ -31,39 +29,30 @@ const OLD_STREET = firstRealStreet((street) => street.region === 'old' && hasPoi
 const POINTLESS_STREET = firstRealStreet((street) => !hasPoint(street));
 const UNKNOWN_STREET_CODE = Math.max(...STREETS.map((street) => street.code)) + 1;
 
-/** A stored waiting order on a listed street, with every internal field set. */
-function makeOrder(overrides: Partial<Order> = {}): Order {
-  return {
-    id: '6710f3a2c4b5d6e7f8a9b0c1',
-    contact: { name: 'משה כהן', phone: '+972501234567', method: 'whatsapp' },
-    address: {
-      streetCode: RAMAT_STREET.code,
-      streetName: RAMAT_STREET.name,
-      houseNumber: '12א',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-      note: 'קוד לבניין 1234',
+/**
+ * What these tests start from, on top of makeOrder: a waiting order back from a round (lastMiss,
+ * with that round's message), on a listed street of רמת בית שמש with every internal field set.
+ */
+const BACK_FROM_ROUND: Partial<Order> = {
+  address: {
+    streetCode: RAMAT_STREET.code,
+    streetName: RAMAT_STREET.name,
+    houseNumber: '12א',
+    bottlesSpot: 'apartmentDoor',
+    floorApt: 'קומה 3, דירה 12',
+    note: 'קוד לבניין 1234',
+  },
+  region: 'ramat',
+  lastMiss: { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-0' },
+  messages: [
+    {
+      kind: 'confirmRequest',
+      at: CREATED_AT,
+      mode: 'manual',
+      url: 'https://wa.me/972501234567?text=x',
     },
-    bottlesEstimated: 45,
-    status: 'waiting',
-    region: 'ramat',
-    token: TOKEN,
-    lastMiss: { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-0' },
-    messages: [
-      {
-        kind: 'confirmRequest',
-        at: CREATED_AT,
-        mode: 'manual',
-        url: 'https://wa.me/972501234567?text=x',
-      },
-    ],
-    source: 'form',
-    lang: 'he',
-    createdAt: CREATED_AT,
-    updatedAt: CREATED_AT,
-    ...overrides,
-  };
-}
+  ],
+};
 
 /** A free-text street ("הרחוב שלי לא ברשימה"): no street code, so no region and no point. */
 const FREE_TEXT_ADDRESS: Order['address'] = {
@@ -73,12 +62,12 @@ const FREE_TEXT_ADDRESS: Order['address'] = {
 };
 
 /** A collector order with a distinct id, bottles and region, for the grouping tests. */
-function makeCollectorOrder(
+function orderToGroup(
   id: string,
   bottlesEstimated: number,
   region: Order['region'],
 ): CollectorOrder {
-  const order = makeOrder({ id, bottlesEstimated });
+  const order = makeOrder({ ...BACK_FROM_ROUND, id, bottlesEstimated });
   if (region === undefined) {
     delete order.region;
   } else {
@@ -108,7 +97,7 @@ describe('labels', () => {
 
 describe('toCollectorOrder', () => {
   it('keeps the fields Yoel needs and strips token, message log and contact method', () => {
-    expect(toCollectorOrder(makeOrder())).toStrictEqual({
+    expect(toCollectorOrder(makeOrder(BACK_FROM_ROUND))).toStrictEqual({
       id: '6710f3a2c4b5d6e7f8a9b0c1',
       contact: { name: 'משה כהן', phone: '+972501234567' },
       address: {
@@ -131,49 +120,63 @@ describe('toCollectorOrder', () => {
   });
 
   it('marks an order as deletable by canDeleteOrder, without exposing the roundId', () => {
-    expect(toCollectorOrder(makeOrder()).deletable).toBe(true);
-    expect(toCollectorOrder(makeOrder({ roundId: 'round-1' })).deletable).toBe(false);
-    expect(toCollectorOrder(makeOrder({ status: 'pending', roundId: 'round-1' })).deletable).toBe(
+    expect(toCollectorOrder(makeOrder(BACK_FROM_ROUND)).deletable).toBe(true);
+    expect(toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, roundId: 'round-1' })).deletable).toBe(
       false,
     );
-    expect(toCollectorOrder(makeOrder({ status: 'collected' })).deletable).toBe(false);
+    expect(
+      toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'pending', roundId: 'round-1' }))
+        .deletable,
+    ).toBe(false);
+    expect(toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'collected' })).deletable).toBe(
+      false,
+    );
   });
 
   it('never carries the token, the message log or the other internal fields', () => {
     const collectorOrder = toCollectorOrder(
-      makeOrder({ roundId: 'round-1', bottlesCollected: 50, collectedAt: CREATED_AT }),
+      makeOrder({
+        ...BACK_FROM_ROUND,
+        roundId: 'round-1',
+        bottlesCollected: 50,
+        collectedAt: CREATED_AT,
+      }),
     );
     for (const key of ['token', 'messages', 'roundId', 'updatedAt']) {
       expect(collectorOrder, key).not.toHaveProperty(key);
     }
     expect(collectorOrder.contact).not.toHaveProperty('method');
-    expect(JSON.stringify(collectorOrder)).not.toContain(TOKEN);
+    expect(JSON.stringify(collectorOrder)).not.toContain(MADE_ORDER_TOKEN);
   });
 
   it('keeps the recorded count of a collected order, for the donation line', () => {
-    expect(toCollectorOrder(makeOrder({ bottlesCollected: 50 })).bottlesCollected).toBe(50);
-    expect(toCollectorOrder(makeOrder())).not.toHaveProperty('bottlesCollected');
+    expect(
+      toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, bottlesCollected: 50 })).bottlesCollected,
+    ).toBe(50);
+    expect(toCollectorOrder(makeOrder(BACK_FROM_ROUND))).not.toHaveProperty('bottlesCollected');
   });
 
   it('keeps the near street, which Yoel sees and changes', () => {
     const order = makeOrder({
+      ...BACK_FROM_ROUND,
       address: { ...FREE_TEXT_ADDRESS, nearStreetCode: OLD_STREET.code },
     });
     expect(toCollectorOrder(order).address.nearStreetCode).toBe(OLD_STREET.code);
   });
 
   it('has a location for a listed street with a point', () => {
-    expect(toCollectorOrder(makeOrder()).hasLocation).toBe(true);
+    expect(toCollectorOrder(makeOrder(BACK_FROM_ROUND)).hasLocation).toBe(true);
   });
 
   it('has no location for a free-text street', () => {
-    const order = makeOrder({ address: FREE_TEXT_ADDRESS });
+    const order = makeOrder({ ...BACK_FROM_ROUND, address: FREE_TEXT_ADDRESS });
     delete order.region;
     expect(toCollectorOrder(order).hasLocation).toBe(false);
   });
 
   it('has no location for a listed street without a point', () => {
     const order = makeOrder({
+      ...BACK_FROM_ROUND,
       address: {
         ...FREE_TEXT_ADDRESS,
         streetCode: POINTLESS_STREET.code,
@@ -185,13 +188,14 @@ describe('toCollectorOrder', () => {
 
   it('has a location for a free-text street once its near street has a point', () => {
     const order = makeOrder({
+      ...BACK_FROM_ROUND,
       address: { ...FREE_TEXT_ADDRESS, nearStreetCode: OLD_STREET.code },
     });
     expect(toCollectorOrder(order).hasLocation).toBe(true);
   });
 
   it('leaves out region and lastMiss when the order has none', () => {
-    const order = makeOrder({ address: FREE_TEXT_ADDRESS });
+    const order = makeOrder({ ...BACK_FROM_ROUND, address: FREE_TEXT_ADDRESS });
     delete order.region;
     delete order.lastMiss;
     const collectorOrder = toCollectorOrder(order);
@@ -200,7 +204,7 @@ describe('toCollectorOrder', () => {
   });
 
   it('gives an order the collector schema accepts, also after a JSON round trip', () => {
-    const collectorOrder = toCollectorOrder(makeOrder());
+    const collectorOrder = toCollectorOrder(makeOrder(BACK_FROM_ROUND));
     expect(collectorOrderSchema.parse(collectorOrder)).toStrictEqual(collectorOrder);
     // The api sends createdAt as an ISO string; the web reads it back as the same Date.
     const fromJson = collectorOrderSchema.parse(JSON.parse(JSON.stringify(collectorOrder)));
@@ -211,7 +215,7 @@ describe('toCollectorOrder', () => {
 
 describe('collectorOrderResponseSchema', () => {
   it('reads an order back from JSON with its Date', () => {
-    const response = { order: toCollectorOrder(makeOrder()) };
+    const response = { order: toCollectorOrder(makeOrder(BACK_FROM_ROUND)) };
     const parsed = collectorOrderResponseSchema.parse(JSON.parse(JSON.stringify(response)));
     expect(parsed).toStrictEqual(response);
   });
@@ -227,9 +231,9 @@ describe('groupWaitingOrders', () => {
   });
 
   it('puts each order in the group of its region, and one without a region under none', () => {
-    const ramatOrder = makeCollectorOrder('a', 40, 'ramat');
-    const oldOrder = makeCollectorOrder('b', 50, 'old');
-    const noRegionOrder = makeCollectorOrder('c', 60, undefined);
+    const ramatOrder = orderToGroup('a', 40, 'ramat');
+    const oldOrder = orderToGroup('b', 50, 'old');
+    const noRegionOrder = orderToGroup('c', 60, undefined);
     const groups = groupWaitingOrders([noRegionOrder, oldOrder, ramatOrder]);
     expect(groups.map((group) => group.key)).toEqual(['ramat', 'old', 'none']);
     expect(groups.map((group) => group.orders)).toStrictEqual([
@@ -241,10 +245,10 @@ describe('groupWaitingOrders', () => {
 
   it('counts the orders and sums the estimated bottles of each group', () => {
     const groups = groupWaitingOrders([
-      makeCollectorOrder('a', 40, 'ramat'),
-      makeCollectorOrder('b', 30, 'old'),
-      makeCollectorOrder('c', 45, 'ramat'),
-      makeCollectorOrder('d', 100, 'ramat'),
+      orderToGroup('a', 40, 'ramat'),
+      orderToGroup('b', 30, 'old'),
+      orderToGroup('c', 45, 'ramat'),
+      orderToGroup('d', 100, 'ramat'),
     ]);
     expect(
       groups.map(({ key, orderCount, bottlesTotal }) => [key, orderCount, bottlesTotal]),
@@ -256,7 +260,7 @@ describe('groupWaitingOrders', () => {
   });
 
   it('keeps the input order inside a group', () => {
-    const orders = ['first', 'second', 'third'].map((id) => makeCollectorOrder(id, 40, 'old'));
+    const orders = ['first', 'second', 'third'].map((id) => orderToGroup(id, 40, 'old'));
     const oldGroup = groupWaitingOrders(orders)[1];
     expect(oldGroup?.orders.map((order) => order.id)).toEqual(['first', 'second', 'third']);
   });
@@ -264,8 +268,8 @@ describe('groupWaitingOrders', () => {
   it('gives a response the response schema accepts, also after a JSON round trip', () => {
     const response = {
       groups: groupWaitingOrders([
-        makeCollectorOrder('a', 40, 'ramat'),
-        makeCollectorOrder('b', 50, undefined),
+        orderToGroup('a', 40, 'ramat'),
+        orderToGroup('b', 50, undefined),
       ]),
     };
     expect(collectorOrdersResponseSchema.parse(JSON.parse(JSON.stringify(response)))).toStrictEqual(
@@ -317,7 +321,7 @@ describe('updateOrderRequestSchema', () => {
   it('refuses a status, or any other unknown key', () => {
     const bodies: [Record<string, unknown>, string][] = [
       [{ status: 'cancelled' }, 'status'],
-      [{ region: 'old', token: TOKEN }, 'token'],
+      [{ region: 'old', token: MADE_ORDER_TOKEN }, 'token'],
     ];
     for (const [body, unknownKey] of bodies) {
       const result = updateOrderRequestSchema.safeParse(body);

@@ -20,10 +20,9 @@ import {
   type RoundGroupKey,
   type RoundView,
 } from './roundsApi.ts';
+import { makeOrder } from './testing/index.ts';
 
 const ERR = ROUND_PLAN_ERRORS;
-/** 43 base64url characters, the shape of a real token. */
-const TOKEN = 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const CREATED_AT = new Date('2026-11-04T17:00:00.000Z');
 const OPENED_AT = new Date('2026-11-04T17:05:00.000Z');
 const ROUND_ID = 'round-2';
@@ -74,23 +73,21 @@ function thankYouLink(orderId: string, openedAt?: Date): MessageLogEntry {
   };
 }
 
-/** A stored order on a free-text street, in round {@link ROUND_ID} (confirmed) with its message. */
-function makeOrder(id: string, overrides: Partial<Order> = {}): Order {
+/**
+ * The fields, on top of makeOrder, of order `id` in round {@link ROUND_ID}: confirmed, with its
+ * round message, on a free-text street, its customer named after the id.
+ */
+function orderInRound(id: string): Partial<Order> {
   return {
     id,
     contact: { name: `לקוח ${id}`, phone: '+972501234567', method: 'whatsapp' },
     address: { streetName: 'רחוב חדש', houseNumber: '5', bottlesSpot: 'privateHouse' },
-    bottlesEstimated: 45,
     status: 'confirmed',
     region: 'ramat',
-    token: TOKEN,
     roundId: ROUND_ID,
     messages: [confirmLink(id)],
-    source: 'form',
-    lang: 'he',
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
-    ...overrides,
   };
 }
 
@@ -271,22 +268,24 @@ describe('buildRoundView', () => {
     const round = makeRound(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
     // Given in another order than the plan's: the view follows `round.orderIds`.
     const orders = [
-      makeOrder('h', { status: 'confirmed' }),
-      makeOrder('g', {
+      makeOrder({ ...orderInRound('h'), status: 'confirmed' }),
+      makeOrder({
+        ...orderInRound('g'),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
       }),
-      makeOrder('f', { status: 'pending' }),
-      makeOrder('e', { status: 'collected' }),
-      makeOrder('d', {
+      makeOrder({ ...orderInRound('f'), status: 'pending' }),
+      makeOrder({ ...orderInRound('e'), status: 'collected' }),
+      makeOrder({
+        ...orderInRound('d'),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason: 'askedOtherDate', roundId: ROUND_ID },
       }),
-      makeOrder('c', { status: 'confirmed' }),
-      makeOrder('b', { status: 'pending' }),
-      makeOrder('a', { status: 'confirmed' }),
+      makeOrder({ ...orderInRound('c'), status: 'confirmed' }),
+      makeOrder({ ...orderInRound('b'), status: 'pending' }),
+      makeOrder({ ...orderInRound('a'), status: 'confirmed' }),
     ];
     const view = buildRoundView(round, orders);
     expect(view.groups.map((group) => group.key)).toEqual([...ROUND_GROUP_KEYS]);
@@ -302,7 +301,8 @@ describe('buildRoundView', () => {
   it('puts an order that left the round for another reason in no group', () => {
     const round = makeRound(['a', 'b', 'c']);
     const leftFor = (id: string, reason: 'addressChanged' | 'notFound' | 'notReached'): Order =>
-      makeOrder(id, {
+      makeOrder({
+        ...orderInRound(id),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason, roundId: ROUND_ID },
@@ -317,7 +317,8 @@ describe('buildRoundView', () => {
 
   it('finds an order that left the round by lastMiss, even once it is in another round', () => {
     const round = makeRound(['a']);
-    const plannedAgain = makeOrder('a', {
+    const plannedAgain = makeOrder({
+      ...orderInRound('a'),
       roundId: 'round-3',
       lastMiss: { date: '2026-11-05', reason: 'askedOtherDate', roundId: ROUND_ID },
     });
@@ -327,8 +328,9 @@ describe('buildRoundView', () => {
   it('leaves out an order cancelled in the round, and one that missed another round', () => {
     const round = makeRound(['a', 'b']);
     const view = buildRoundView(round, [
-      makeOrder('a', { status: 'cancelled' }),
-      makeOrder('b', {
+      makeOrder({ ...orderInRound('a'), status: 'cancelled' }),
+      makeOrder({
+        ...orderInRound('b'),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-10-29', reason: 'notConfirmed', roundId: 'round-1' },
@@ -338,7 +340,10 @@ describe('buildRoundView', () => {
   });
 
   it('ignores an order given that is not in orderIds, and an id with no order given', () => {
-    const view = buildRoundView(makeRound(['a', 'missing']), [makeOrder('a'), makeOrder('z')]);
+    const view = buildRoundView(makeRound(['a', 'missing']), [
+      makeOrder(orderInRound('a')),
+      makeOrder(orderInRound('z')),
+    ]);
     expect(idsIn(view, 'inRound')).toEqual(['a']);
     expect(view.sendList.map((link) => link.orderId)).toEqual(['a']);
   });
@@ -346,10 +351,14 @@ describe('buildRoundView', () => {
   it('builds the send list from every order still in the round and not collected, in plan order', () => {
     const round = makeRound(['a', 'b', 'c', 'd']);
     const view = buildRoundView(round, [
-      makeOrder('a'),
-      makeOrder('b', { status: 'collected' }),
-      makeOrder('c', { status: 'pending', messages: [confirmLink('c', OPENED_AT)] }),
-      makeOrder('d', { status: 'waiting', roundId: undefined }),
+      makeOrder(orderInRound('a')),
+      makeOrder({ ...orderInRound('b'), status: 'collected' }),
+      makeOrder({
+        ...orderInRound('c'),
+        status: 'pending',
+        messages: [confirmLink('c', OPENED_AT)],
+      }),
+      makeOrder({ ...orderInRound('d'), status: 'waiting', roundId: undefined }),
     ]);
     expect(view.sendList).toEqual([
       {
@@ -374,13 +383,14 @@ describe('buildRoundView', () => {
   it('gives no send row to an order whose newest message is not a manual link', () => {
     const round = makeRound(['a', 'b']);
     const view = buildRoundView(round, [
-      makeOrder('a', {
+      makeOrder({
+        ...orderInRound('a'),
         messages: [
           confirmLink('a'),
           { kind: 'confirmRequest', at: CREATED_AT, mode: 'failed', reason: 'timeout' },
         ],
       }),
-      makeOrder('b', { messages: [] }),
+      makeOrder({ ...orderInRound('b'), messages: [] }),
     ]);
     expect(idsIn(view, 'inRound')).toEqual(['a', 'b']);
     expect(view.sendList).toEqual([]);
@@ -392,7 +402,7 @@ describe('buildRoundView', () => {
       ...makeRound(['a'], { personalText: 'תודה!', stops: [{ orderId: 'a', hasLocation: true }] }),
       _id: 'mongo',
     };
-    expect(buildRoundView(stored, [makeOrder('a')]).round).toEqual({
+    expect(buildRoundView(stored, [makeOrder(orderInRound('a'))]).round).toEqual({
       id: ROUND_ID,
       date: '2026-11-05',
       region: 'ramat',
@@ -411,14 +421,15 @@ describe('buildRoundView', () => {
   });
 
   it('gives each order as the collector screens get it, without token or messages', () => {
-    const [order] = buildRoundView(makeRound(['a']), [makeOrder('a')]).groups[0]?.orders ?? [];
+    const [order] =
+      buildRoundView(makeRound(['a']), [makeOrder(orderInRound('a'))]).groups[0]?.orders ?? [];
     expect(order).toMatchObject({ id: 'a', status: 'confirmed', hasLocation: false });
     expect(order).not.toHaveProperty('token');
     expect(order).not.toHaveProperty('messages');
   });
 
   it('returns no stops for a round still confirming', () => {
-    expect(buildRoundView(makeRound(['a']), [makeOrder('a')]).stops).toEqual([]);
+    expect(buildRoundView(makeRound(['a']), [makeOrder(orderInRound('a'))]).stops).toEqual([]);
   });
 
   it('returns a routed round’s stops in stored order, with stored hasLocation and state', () => {
@@ -433,14 +444,16 @@ describe('buildRoundView', () => {
       ],
     });
     const view = buildRoundView(round, [
-      makeOrder('a', { status: 'collected' }),
-      makeOrder('b', {
+      makeOrder({ ...orderInRound('a'), status: 'collected' }),
+      makeOrder({
+        ...orderInRound('b'),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
       }),
-      makeOrder('c', { status: 'confirmed' }),
-      makeOrder('d', {
+      makeOrder({ ...orderInRound('c'), status: 'confirmed' }),
+      makeOrder({
+        ...orderInRound('d'),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason: 'notFound', roundId: ROUND_ID },
@@ -472,12 +485,14 @@ describe('buildRoundView', () => {
 
     it('gives a collected stop its newest thankYou wa.me link', () => {
       const view = buildRoundView(routedRound(['a', 'b']), [
-        makeOrder('a', {
+        makeOrder({
+          ...orderInRound('a'),
           status: 'collected',
           messages: [confirmLink('a', OPENED_AT), thankYouLink('a')],
         }),
         // An older thank-you behind the newest one: the newest counts.
-        makeOrder('b', {
+        makeOrder({
+          ...orderInRound('b'),
           status: 'collected',
           messages: [confirmLink('b'), thankYouLink('old'), thankYouLink('b', OPENED_AT)],
         }),
@@ -503,14 +518,15 @@ describe('buildRoundView', () => {
 
     it('leaves the key out for a collected stop whose newest thankYou failed or is missing', () => {
       const view = buildRoundView(routedRound(['a', 'b']), [
-        makeOrder('a', {
+        makeOrder({
+          ...orderInRound('a'),
           status: 'collected',
           messages: [
             thankYouLink('a'),
             { kind: 'thankYou', at: OPENED_AT, mode: 'failed', reason: 'timeout' },
           ],
         }),
-        makeOrder('b', { status: 'collected' }),
+        makeOrder({ ...orderInRound('b'), status: 'collected' }),
       ]);
       expect(view.stops.map((stop) => stop.state)).toEqual(['collected', 'collected']);
       for (const stop of view.stops) expect(stop).not.toHaveProperty('thankYou');
@@ -520,14 +536,15 @@ describe('buildRoundView', () => {
     it('never gives one to a stop that is not collected, even with an older thankYou', () => {
       const messages = [thankYouLink('earlier'), confirmLink('x')];
       const view = buildRoundView(routedRound(['a', 'b', 'c']), [
-        makeOrder('a', { status: 'confirmed', messages }),
-        makeOrder('b', {
+        makeOrder({ ...orderInRound('a'), status: 'confirmed', messages }),
+        makeOrder({
+          ...orderInRound('b'),
           status: 'waiting',
           roundId: undefined,
           lastMiss: { date: '2026-11-05', reason: 'notFound', roundId: ROUND_ID },
           messages,
         }),
-        makeOrder('c', { status: 'cancelled', messages }),
+        makeOrder({ ...orderInRound('c'), status: 'cancelled', messages }),
       ]);
       expect(view.stops.map((stop) => stop.state)).toEqual(['toCollect', 'notFound', 'cancelled']);
       for (const stop of view.stops) expect(stop).not.toHaveProperty('thankYou');
@@ -535,7 +552,11 @@ describe('buildRoundView', () => {
 
     it('survives the JSON round trip, with openedAt as a Date', () => {
       const view = buildRoundView(routedRound(['a']), [
-        makeOrder('a', { status: 'collected', messages: [thankYouLink('a', OPENED_AT)] }),
+        makeOrder({
+          ...orderInRound('a'),
+          status: 'collected',
+          messages: [thankYouLink('a', OPENED_AT)],
+        }),
       ]);
       const parsed = roundViewSchema.parse(JSON.parse(JSON.stringify(view)));
       expect(parsed).toEqual(view);
@@ -548,7 +569,8 @@ describe('roundStopStateOf', () => {
   const round = makeRound(['a'], { phase: 'routed', stops: [{ orderId: 'a', hasLocation: true }] });
   /** The order out of the round, back to waiting, with this round's lastMiss for `reason`. */
   const leftFor = (reason: 'notFound' | 'addressChanged' | 'askedOtherDate'): Order =>
-    makeOrder('a', {
+    makeOrder({
+      ...orderInRound('a'),
       status: 'waiting',
       roundId: undefined,
       lastMiss: { date: '2026-11-05', reason, roundId: ROUND_ID },
@@ -559,13 +581,19 @@ describe('roundStopStateOf', () => {
   });
 
   it('is toCollect for a confirmed or pending order still in the round', () => {
-    expect(roundStopStateOf(round, makeOrder('a', { status: 'confirmed' }))).toBe('toCollect');
-    expect(roundStopStateOf(round, makeOrder('a'))).toBe('toCollect');
+    expect(roundStopStateOf(round, makeOrder({ ...orderInRound('a'), status: 'confirmed' }))).toBe(
+      'toCollect',
+    );
+    expect(roundStopStateOf(round, makeOrder(orderInRound('a')))).toBe('toCollect');
   });
 
   it('is collected or cancelled as the status of an order in the round says', () => {
-    expect(roundStopStateOf(round, makeOrder('a', { status: 'collected' }))).toBe('collected');
-    expect(roundStopStateOf(round, makeOrder('a', { status: 'cancelled' }))).toBe('cancelled');
+    expect(roundStopStateOf(round, makeOrder({ ...orderInRound('a'), status: 'collected' }))).toBe(
+      'collected',
+    );
+    expect(roundStopStateOf(round, makeOrder({ ...orderInRound('a'), status: 'cancelled' }))).toBe(
+      'cancelled',
+    );
   });
 
   it('is notFound for an order that left this round as not found', () => {
@@ -591,21 +619,26 @@ describe('roundStopStateOf', () => {
     expect(
       roundStopStateOf(
         round,
-        makeOrder('a', {
+        makeOrder({
+          ...orderInRound('a'),
           status: 'waiting',
           roundId: undefined,
           lastMiss: { date: '2026-10-29', reason: 'notFound', roundId: 'round-1' },
         }),
       ),
     ).toBe('left');
-    expect(roundStopStateOf(round, makeOrder('a', { status: 'waiting', roundId: undefined }))).toBe(
-      'left',
-    );
+    expect(
+      roundStopStateOf(
+        round,
+        makeOrder({ ...orderInRound('a'), status: 'waiting', roundId: undefined }),
+      ),
+    ).toBe('left');
   });
 
   // "לא נמצא" stores lastMiss { this round, notFound } and unsets roundId.
   it('is notFound for an order marked not found in this round', () => {
-    const notFoundHere = makeOrder('a', {
+    const notFoundHere = makeOrder({
+      ...orderInRound('a'),
       status: 'waiting',
       roundId: undefined,
       lastMiss: { date: '2026-11-05', reason: 'notFound', roundId: ROUND_ID },
@@ -616,7 +649,8 @@ describe('roundStopStateOf', () => {
   // The documented limit: one lastMiss only (spec §4). Still a handled state, never toCollect.
   it('turns left once another round overwrites the lastMiss', () => {
     for (const reason of ['notConfirmed', 'askedOtherDate', 'notFound'] as const) {
-      const missedLater = makeOrder('a', {
+      const missedLater = makeOrder({
+        ...orderInRound('a'),
         status: 'waiting',
         roundId: undefined,
         lastMiss: { date: '2026-11-12', reason, roundId: 'round-3' },
@@ -650,8 +684,8 @@ describe('roundViewSchema and roundsResponseSchema', () => {
   /** A view with a collected order, a confirmed one with an opened link, and a closed round. */
   function makeView(): RoundView {
     return buildRoundView(makeRound(['a', 'b'], { closedAt: OPENED_AT }), [
-      makeOrder('a', { status: 'collected' }),
-      makeOrder('b', { messages: [confirmLink('b', OPENED_AT)] }),
+      makeOrder({ ...orderInRound('a'), status: 'collected' }),
+      makeOrder({ ...orderInRound('b'), messages: [confirmLink('b', OPENED_AT)] }),
     ]);
   }
 
@@ -664,7 +698,10 @@ describe('roundViewSchema and roundsResponseSchema', () => {
           { orderId: 'a', hasLocation: true },
         ],
       }),
-      [makeOrder('a', { status: 'confirmed' }), makeOrder('b', { status: 'collected' })],
+      [
+        makeOrder({ ...orderInRound('a'), status: 'confirmed' }),
+        makeOrder({ ...orderInRound('b'), status: 'collected' }),
+      ],
     );
     expect(view.stops).toHaveLength(2);
     const parsed = roundViewSchema.parse(JSON.parse(JSON.stringify(view)));
@@ -675,7 +712,7 @@ describe('roundViewSchema and roundsResponseSchema', () => {
   it('refuses a stop with an unknown state', () => {
     const view = buildRoundView(
       makeRound(['a'], { phase: 'routed', stops: [{ orderId: 'a', hasLocation: true }] }),
-      [makeOrder('a', { status: 'confirmed' })],
+      [makeOrder({ ...orderInRound('a'), status: 'confirmed' })],
     );
     const json = JSON.parse(JSON.stringify(view)) as { stops: { state: string }[] };
     const broken = { ...json, stops: json.stops.map((stop) => ({ ...stop, state: 'archived' })) };
