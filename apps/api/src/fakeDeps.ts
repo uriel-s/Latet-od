@@ -72,8 +72,10 @@ export function createFakeRoute(overrides: Partial<RouteDeps> = {}): RouteDeps {
  * Web Push settings for tests (ADR-0013): a fresh {@link FakePushSender} and
  * {@link FAKE_VAPID_PUBLIC_KEY}.
  *
- * @param overrides E.g. `{ publicKey: null, sender: new DisabledPushSender() }` to test with Web
- *   Push disabled, or a custom {@link FakePushSender} to inspect or steer sent notifications.
+ * For Web Push disabled, pass `push: null` to {@link createFakeDeps} instead (that is what
+ * pushDepsFromEnv returns without VAPID).
+ *
+ * @param overrides E.g. a custom {@link FakePushSender} to inspect or steer sent notifications.
  */
 export function createFakePush(overrides: Partial<PushDeps> = {}): PushDeps {
   return { sender: new FakePushSender(), publicKey: FAKE_VAPID_PUBLIC_KEY, ...overrides };

@@ -1,5 +1,5 @@
 // Unit tests for VAPID key parsing/signing (RFC 8292), Web Push aes128gcm encryption (RFC 8291 +
-// RFC 8188), WebPushSender, DisabledPushSender, and FakePushSender.
+// RFC 8188), WebPushSender, and FakePushSender.
 import {
   createDecipheriv,
   createECDH,
@@ -11,7 +11,6 @@ import {
 import type { PushNotificationPayload, PushSubscription } from '@bottlerun/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { FAKE_VAPID_PUBLIC_KEY, FakePushSender } from './fakePushSender.ts';
-import { DisabledPushSender, type PushSender } from './pushSender.ts';
 import { makeVapidKeys } from './testVapidKeys.ts';
 import {
   buildVapidAuthHeader,
@@ -388,17 +387,7 @@ describe('WebPushSender.send', () => {
   });
 });
 
-describe('DisabledPushSender & FakePushSender', () => {
-  it('DisabledPushSender always resolves failed with reason disabled', async () => {
-    const sender: PushSender = new DisabledPushSender();
-    const { subscription } = makeBrowserSubscription();
-
-    await expect(sender.send(subscription, SAMPLE_PAYLOAD)).resolves.toEqual({
-      status: 'failed',
-      reason: 'disabled',
-    });
-  });
-
+describe('FakePushSender', () => {
   it('FakePushSender clones calls and returns the configured result', async () => {
     const { subscription } = makeBrowserSubscription();
     const sender = new FakePushSender();

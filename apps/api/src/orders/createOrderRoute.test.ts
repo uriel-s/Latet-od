@@ -625,6 +625,18 @@ describe('POST /api/orders: Web Push notifications', () => {
     expect(crashingSender.sent).toHaveLength(1);
     expect(await orders.list()).toHaveLength(2);
   });
+
+  it('creates the order (201) when Web Push is disabled (push is null, no VAPID_* vars)', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB);
+    const target = createApp(createFakeDeps({ orders, attempts, pushSubscriptions, push: null }));
+
+    const res = await postOrder(validBody(), IP, target);
+
+    expect(res.status).toBe(201);
+    expect(await orders.list()).toHaveLength(1);
+    expect(await pushSubscriptions.list()).toEqual([SUB]);
+  });
 });
 
 describe('POST /api/orders: failures', () => {

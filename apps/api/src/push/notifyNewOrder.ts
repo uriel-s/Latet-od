@@ -12,7 +12,7 @@ import { logError } from '../errors.ts';
  * Sends a Web Push notification to all registered collector devices for `order`.
  *
  * Best-effort (ADR-0013):
- * - If Web Push is disabled (`publicKey === null`), returns immediately without doing anything.
+ * - If Web Push is disabled (`deps.push === null`), logs that and returns without sending.
  * - Subscriptions returning `{ status: 'gone' }` are automatically pruned from the repository.
  * - Failed sends (`{ status: 'failed' }`) or network errors for one subscription are logged (reason
  *   code only) and do not prevent sending to remaining subscriptions.
@@ -23,7 +23,8 @@ export async function notifyNewOrder(
   order: Order,
 ): Promise<void> {
   try {
-    if (deps.push.publicKey === null) {
+    const push = deps.push;
+    if (push === null) {
       logPushSummary({ enabled: false });
       return;
     }
@@ -35,7 +36,7 @@ export async function notifyNewOrder(
     await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
-          const result = await deps.push.sender.send(sub, payload);
+          const result = await push.sender.send(sub, payload);
           counts[result.status] += 1;
           if (result.status === 'gone') {
             await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);

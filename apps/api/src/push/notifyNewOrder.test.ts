@@ -202,7 +202,7 @@ describe('notifyNewOrder', () => {
       await notifyNewOrder(
         {
           pushSubscriptions: new InMemoryPushSubscriptionsRepo(),
-          push: createFakePush({ sender: new FakePushSender(), publicKey: null }),
+          push: null,
         },
         SAMPLE_ORDER,
       );
@@ -217,18 +217,23 @@ describe('notifyNewOrder', () => {
     }
   });
 
-  it('does nothing when Web Push is disabled (publicKey is null)', async () => {
+  it('does nothing when Web Push is disabled (push is null)', async () => {
     const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
     await pushSubscriptions.save(SUB_1);
+    const listSpy = vi.spyOn(pushSubscriptions, 'list');
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 
-    // The sender is injected so the test fails if the `publicKey === null` guard is removed.
-    const sender = new FakePushSender();
-    const push = createFakePush({ sender, publicKey: null });
+    try {
+      await expect(
+        notifyNewOrder({ pushSubscriptions, push: null }, SAMPLE_ORDER),
+      ).resolves.toBeUndefined();
 
-    await notifyNewOrder({ pushSubscriptions, push }, SAMPLE_ORDER);
-
-    expect(sender.sent).toHaveLength(0);
-    expect(await pushSubscriptions.list()).toHaveLength(1);
+      // Disabled stops before reading the subscriptions, and keeps the stored one.
+      expect(listSpy).not.toHaveBeenCalled();
+      expect(await pushSubscriptions.list()).toHaveLength(1);
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it('continues sending to remaining subscriptions when sender throws an unexpected error', async () => {

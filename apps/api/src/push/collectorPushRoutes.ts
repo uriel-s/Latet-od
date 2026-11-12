@@ -36,14 +36,12 @@ export function createCollectorPushRouter(
 
   router.get('/config', (_req, res) => {
     const body: PushConfigResponse =
-      deps.push.publicKey !== null
-        ? { enabled: true, publicKey: deps.push.publicKey }
-        : { enabled: false };
+      deps.push === null ? { enabled: false } : { enabled: true, publicKey: deps.push.publicKey };
     res.json(body);
   });
 
   const handleSubscribe: RequestHandler = async (req, res) => {
-    if (deps.push.publicKey === null) {
+    if (deps.push === null) {
       const error: PushNotConfiguredErrorBody = { error: 'push_not_configured' };
       res.status(503).json(error);
       return;
