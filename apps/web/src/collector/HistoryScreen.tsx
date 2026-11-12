@@ -17,7 +17,7 @@ import {
   type HistoryOrder,
   type HistoryResponse,
 } from '@bottlerun/shared';
-import { fetchHistory, type HistoryOutcome } from '../api.ts';
+import { fetchHistory, type HistoryOutcome } from '../api/historyApi.ts';
 import { navigate } from '../router.tsx';
 import { bottlesText } from './OrdersScreen.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';

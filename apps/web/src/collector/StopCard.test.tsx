@@ -8,7 +8,7 @@ import {
   type CollectorOrder,
   type RouteStopView,
 } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome } from '../api.ts';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import {
   BOTTLES_COLLECTED_LABEL,
   NEXT_STOP_EYEBROW,

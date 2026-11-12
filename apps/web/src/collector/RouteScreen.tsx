@@ -21,7 +21,7 @@ import {
   markStopNotFound as apiMarkStopNotFound,
   moveStop as apiMoveStop,
   type StopActionOutcome,
-} from '../api.ts';
+} from '../api/roundsApi.ts';
 import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 import {

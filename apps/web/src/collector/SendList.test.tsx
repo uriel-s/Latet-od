@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { MessageLink } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome } from '../api.ts';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import {
   EMPTY_SEND_LIST_TEXT,
   MARK_OPENED_FAILED_MESSAGE,

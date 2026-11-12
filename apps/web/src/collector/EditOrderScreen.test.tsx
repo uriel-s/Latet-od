@@ -16,7 +16,7 @@ import type {
   CollectorOrderOutcome,
   CollectorOrderWriteOutcome,
   DeleteCollectorOrderOutcome,
-} from '../api.ts';
+} from '../api/collectorOrdersApi.ts';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
 import {

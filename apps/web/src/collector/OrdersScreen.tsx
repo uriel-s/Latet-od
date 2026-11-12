@@ -18,7 +18,7 @@ import {
   type CollectorOrder,
   type OrderGroup,
 } from '@bottlerun/shared';
-import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api.ts';
+import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import { Link, navigate } from '../router.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
@@ -41,7 +41,7 @@ const PLAN_ROUND_PATH = '/app/orders/plan';
 
 /**
  * The edit screen of one order. The id is encoded, so a `/` or `?` in it stays part of the id
- * instead of adding a path segment or a query (the same rule as api.ts's request paths).
+ * instead of adding a path segment or a query (the same rule as collectorOrdersApi.ts's request paths).
  */
 function editOrderPath(id: string): string {
   return `/app/orders/${encodeURIComponent(id)}`;

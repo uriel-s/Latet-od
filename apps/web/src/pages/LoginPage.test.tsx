@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { LOGIN_MESSAGES } from '@bottlerun/shared';
-import { NETWORK_ERROR_MESSAGE, type LoginOutcome } from '../api.ts';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import type { LoginOutcome } from '../api/authApi.ts';
 import { INSTALL_HINT_TEXT, type InstallHintNavigator } from './installHint.ts';
 import { LoginPage } from './LoginPage.tsx';
 

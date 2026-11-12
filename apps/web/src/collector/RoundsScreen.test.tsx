@@ -9,13 +9,13 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import type {
   BuildRouteOutcome,
   CloseRoundOutcome,
-  MarkMessageOpenedOutcome,
   RoundsOutcome,
   StopActionOutcome,
-} from '../api.ts';
+} from '../api/roundsApi.ts';
 import { BUILD_ROUTE_FAILED_MESSAGE, BUILD_ROUTE_LABEL } from './BuildRouteConfirm.tsx';
 import { CLOSE_ROUND_TEXTS, UNSENT_THANK_YOUS_TITLE } from './CloseRoundConfirm.tsx';
 import {

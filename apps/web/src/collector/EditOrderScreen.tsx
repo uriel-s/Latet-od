@@ -22,7 +22,7 @@ import {
   type CollectorOrderOutcome,
   type CollectorOrderWriteOutcome,
   type DeleteCollectorOrderOutcome,
-} from '../api.ts';
+} from '../api/collectorOrdersApi.ts';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { NO_ERRORS, validateOrderDetails } from '../orderForm/formValues.ts';
 import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';

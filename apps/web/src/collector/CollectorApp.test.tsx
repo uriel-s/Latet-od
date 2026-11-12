@@ -9,7 +9,7 @@ import {
   type HistoryResponse,
   type RoundsResponse,
 } from '@bottlerun/shared';
-import type { SessionOutcome } from '../api.ts';
+import type { SessionOutcome } from '../api/authApi.ts';
 import { matchRoute, navigate, useLocation } from '../router.tsx';
 import { CollectorApp, SESSION_CHECK_FAILED_MESSAGE } from './CollectorApp.tsx';
 

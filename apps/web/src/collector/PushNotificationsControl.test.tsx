@@ -5,7 +5,7 @@ import type {
   DeletePushSubscriptionOutcome,
   PushConfigOutcome,
   SavePushSubscriptionOutcome,
-} from '../api.ts';
+} from '../api/pushApi.ts';
 import { PushNotificationsControl, urlBase64ToUint8Array } from './PushNotificationsControl.tsx';
 
 const FAKE_PUBLIC_KEY = 'BA_fake_public_key_12345';

@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { HistoryOrder, HistoryResponse } from '@bottlerun/shared';
-import type { HistoryOutcome } from '../api.ts';
+import type { HistoryOutcome } from '../api/historyApi.ts';
 import {
   EMPTY_MONTH_TEXT,
   HISTORY_LOAD_FAILED_MESSAGE,

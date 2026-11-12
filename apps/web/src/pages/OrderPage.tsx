@@ -1,5 +1,5 @@
 // The customer's own page `/o/<token>` (spec §3.3), reached from the thank-you screen and from the
-// links in Yoel's WhatsApp messages, by the order's random token only. It loads the order (api.ts,
+// links in Yoel's WhatsApp messages, by the order's random token only. It loads the order (customerOrderApi.ts,
 // GET /api/o/:token) and draws what fits its status: while the order is in a round, the round's
 // date and times with "לא מתאים הפעם" (there is nothing to confirm: being in the round is the
 // default, ADR-0012), thanks and "הזמנה חדשה עם אותם פרטים" once collected or cancelled, and,
@@ -32,15 +32,15 @@ import {
   type Lang,
   type MessageKey,
 } from '@bottlerun/shared';
+import { networkErrorMessage } from '../api/request.ts';
 import {
   cancelCustomerOrder,
   declineCustomerOrder,
   fetchCustomerOrder,
-  networkErrorMessage,
   updateCustomerOrder,
   type CustomerOrderOutcome,
   type CustomerOrderWriteOutcome,
-} from '../api.ts';
+} from '../api/customerOrderApi.ts';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import {
@@ -310,7 +310,7 @@ export function OrderPage({
     try {
       outcome = await send();
     } catch {
-      // The api.ts functions never reject, but a rejection must not leave the button busy.
+      // The customerOrderApi.ts functions never reject, but a rejection must not leave the button busy.
       outcome = { kind: 'failed' };
     }
     busyRef.current = false;
