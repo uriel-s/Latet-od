@@ -1,9 +1,10 @@
 // One stop of the route screen (spec §3.6 step 2, "מסלול"): who, where, how many bottles, and
 // what Yoel does there: "נווט" (Waze), "חייג", "אספתי" with the real quantity (a − / + stepper),
 // and "⋯", which opens the bottom sheet with "לא נמצא" and the arrows that move the stop. A handled stop shows its state in words and, once
-// collected, its "שלח תודה" row (SendList.tsx). Presentational: the route screen sends every
-// request and tells this card whether one is on its way and why it failed; the card owns only
-// what is open in it (the quantity stepper, the "⋯" sheet) and where focus goes.
+// collected, its "שלח תודה" row (SendList.tsx, which stores the opening itself through useApi).
+// Presentational: the route screen sends every stop request and tells this card whether one is on
+// its way and why it failed; the card owns only what is open in it (the quantity stepper, the "⋯"
+// sheet) and where focus goes.
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import {
@@ -25,7 +26,7 @@ import {
   telUrl,
   wazeUrl,
 } from './routeStops.ts';
-import { SendList, type SendListProps } from './SendList.tsx';
+import { SendList } from './SendList.tsx';
 
 /** The label of the quantity field "אספתי" opens. */
 export const BOTTLES_COLLECTED_LABEL = 'כמה בקבוקים נאספו';
@@ -91,8 +92,6 @@ export interface StopCardProps {
   onNotFound: () => void;
   /** The quantity field opened or closed: the screen stops reload-on-return while Yoel types. */
   onTypingChange?: (typing: boolean) => void;
-  /** Passed to the thank-you's "שלח" row; undefined keeps SendList's own default (the api). */
-  markOpened?: SendListProps['markOpened'];
   /**
    * What the route screen just saved for this card: 'collected' (Yoel's own "אספתי") buzzes once
    * and moves the focus to "שלח תודה"; 'notFound' (his own "כן, לא נמצא") moves it to the handled
@@ -526,13 +525,7 @@ interface HandledStopCardProps extends StopCardProps {
  * signal), the name and the street, and no action or arrow. A collected stop with a thank-you to
  * send shows its "שלח תודה" row; SendList keeps what Yoel tapped while the row stays mounted.
  */
-function HandledStopCard({
-  stop,
-  error,
-  markOpened,
-  nameRef,
-  thanksTitleRef,
-}: HandledStopCardProps) {
+function HandledStopCard({ stop, error, nameRef, thanksTitleRef }: HandledStopCardProps) {
   const { order } = stop;
   // isStopHandled already excluded 'toCollect'; the check narrows the type for the label lookup.
   const label = stop.state === 'toCollect' ? undefined : STOP_STATE_LABELS[stop.state];
@@ -551,7 +544,7 @@ function HandledStopCard({
           <h4 ref={thanksTitleRef} tabIndex={-1} className="stop-card-thanks-title">
             {SEND_THANKS_TITLE}
           </h4>
-          <SendList rows={[stop.thankYou]} markOpened={markOpened} />
+          <SendList rows={[stop.thankYou]} />
         </div>
       )}
       {error !== undefined && (

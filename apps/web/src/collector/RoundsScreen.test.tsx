@@ -1,5 +1,4 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ROUND_MESSAGES,
@@ -9,7 +8,9 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
+import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import type {
   BuildRouteOutcome,
   CloseRoundOutcome,
@@ -26,7 +27,6 @@ import {
   SEND_LIST_HEADING,
   SEND_LIST_HINT,
   roundGroupsSummary,
-  type RoundsScreenProps,
 } from './RoundsScreen.tsx';
 import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
@@ -190,7 +190,7 @@ function answerOf<T>(answers: readonly Answer<T>[], call: number, fallback: T): 
   return Promise.resolve(answer ?? fallback);
 }
 
-/** A fake `loadRounds` (answers {@link LOADED} when given nothing). */
+/** A fake `fetchRounds` (answers {@link LOADED} when given nothing). */
 function fakeLoad(...answers: Answer<RoundsOutcome>[]): {
   load: () => Promise<RoundsOutcome>;
   calls: () => number;
@@ -200,13 +200,13 @@ function fakeLoad(...answers: Answer<RoundsOutcome>[]): {
   return { load, calls: () => calls };
 }
 
-/** A fake `markOpened` that records its calls and answers `marked` on 20/10. */
+/** A fake `markMessageOpened` that records its calls and answers `marked` on 20/10. */
 function fakeMarkOpened(): {
-  markOpened: NonNullable<RoundsScreenProps['markOpened']>;
+  markMessageOpened: Api['markMessageOpened'];
   calls: { orderId: string; messageIndex: number }[];
 } {
   const calls: { orderId: string; messageIndex: number }[] = [];
-  const markOpened = (orderId: string, messageIndex: number) => {
+  const markMessageOpened = (orderId: string, messageIndex: number) => {
     calls.push({ orderId, messageIndex });
     const outcome: MarkMessageOpenedOutcome = {
       kind: 'marked',
@@ -214,7 +214,7 @@ function fakeMarkOpened(): {
     };
     return Promise.resolve(outcome);
   };
-  return { markOpened, calls };
+  return { markMessageOpened, calls };
 }
 
 /** `order` as a stop of round r1's route, still to collect. */
@@ -254,7 +254,7 @@ const ROUTED = routedView([stopOf(DANA), stopOf(MOSHE)]);
 
 /** A fake `buildRoute` that records its calls (answers built {@link ROUTED}). */
 function fakeBuildRoute(...answers: Answer<BuildRouteOutcome>[]): {
-  buildRoute: NonNullable<RoundsScreenProps['buildRoute']>;
+  buildRoute: Api['buildRoute'];
   calls: string[];
 } {
   const calls: string[] = [];
@@ -275,7 +275,7 @@ function closedView(view: RoundView): RoundView {
 
 /** A fake `closeRound` that records its calls (answers round r1 closed, from {@link VIEW}). */
 function fakeCloseRound(...answers: Answer<CloseRoundOutcome>[]): {
-  closeRound: NonNullable<RoundsScreenProps['closeRound']>;
+  closeRound: Api['closeRound'];
   calls: string[];
 } {
   const calls: string[] = [];
@@ -299,7 +299,7 @@ interface StopCall {
  * (the last repeats), or a failure when given none.
  */
 function fakeStopActions(...answers: Answer<StopActionOutcome>[]): {
-  props: Pick<RoundsScreenProps, 'moveStop' | 'collectStop' | 'markStopNotFound'>;
+  fakes: Pick<Api, 'moveStop' | 'collectStop' | 'markStopNotFound'>;
   calls: StopCall[];
 } {
   const calls: StopCall[] = [];
@@ -309,7 +309,7 @@ function fakeStopActions(...answers: Answer<StopActionOutcome>[]): {
   };
   return {
     calls,
-    props: {
+    fakes: {
       moveStop: (roundId, orderId, direction) =>
         answer({ action: 'move', roundId, orderId, arg: direction }),
       collectStop: (roundId, orderId, bottlesCollected) =>
@@ -325,27 +325,49 @@ function settle(): Promise<void> {
 }
 
 /**
- * Opens the rounds tab at /app/rounds. The fakes not given are ones that would fail the test if
- * the screen used them by mistake through the real api (jsdom has no server).
+ * Every client function the rounds tab calls: its own load, build and close, the route's stop
+ * actions (RouteScreen) and the "שלח" rows' opening (SendList), each taken from useApi.
+ */
+type ScreenFakes = Pick<
+  Api,
+  | 'fetchRounds'
+  | 'buildRoute'
+  | 'closeRound'
+  | 'moveStop'
+  | 'collectStop'
+  | 'markStopNotFound'
+  | 'markMessageOpened'
+>;
+
+/**
+ * Every function of {@link ScreenFakes} faked: rounds loaded as {@link LOADED}, a build and a close
+ * that succeed, stop actions that fail, and openings that are marked. A test replaces the ones it
+ * looks at; none falls through to the real client, which in jsdom would only answer `failed`.
+ */
+function defaultFakes(): ScreenFakes {
+  return {
+    fetchRounds: fakeLoad().load,
+    buildRoute: fakeBuildRoute().buildRoute,
+    closeRound: fakeCloseRound().closeRound,
+    ...fakeStopActions().fakes,
+    markMessageOpened: fakeMarkOpened().markMessageOpened,
+  };
+}
+
+/**
+ * Opens the rounds tab at /app/rounds under an ApiProvider: `fakes` over {@link defaultFakes}.
+ * `strict` puts StrictMode around the whole tree, as in development.
  */
 function renderScreen(
-  props: RoundsScreenProps,
+  fakes: Partial<ScreenFakes>,
   { strict = false, url = '/app/rounds' }: { strict?: boolean; url?: string } = {},
 ): { unmount: () => void } {
   window.history.replaceState(null, '', url);
-  const stopActions = fakeStopActions().props;
-  const screenElement = (
-    <RoundsScreen
-      loadRounds={props.loadRounds ?? fakeLoad().load}
-      buildRoute={props.buildRoute ?? fakeBuildRoute().buildRoute}
-      closeRound={props.closeRound ?? fakeCloseRound().closeRound}
-      moveStop={props.moveStop ?? stopActions.moveStop}
-      collectStop={props.collectStop ?? stopActions.collectStop}
-      markStopNotFound={props.markStopNotFound ?? stopActions.markStopNotFound}
-      markOpened={props.markOpened ?? fakeMarkOpened().markOpened}
-    />
+  return renderWithApi(
+    <RoundsScreen />,
+    { ...defaultFakes(), ...fakes },
+    { reactStrictMode: strict },
   );
-  return render(strict ? <StrictMode>{screenElement}</StrictMode> : screenElement);
 }
 
 /** The region of round r1 on 19/11. */
@@ -353,9 +375,9 @@ function roundRegion(): HTMLElement {
   return screen.getByRole('region', { name: 'רמת בית שמש · 19/11' });
 }
 
-/** Renders `props` with {@link LOADED} by default, and waits for round r1. */
-async function renderLoaded(props: RoundsScreenProps = {}): Promise<HTMLElement> {
-  renderScreen({ loadRounds: fakeLoad(LOADED).load, ...props });
+/** Renders the tab with `fakes` ({@link LOADED} by default), and waits for round r1. */
+async function renderLoaded(fakes: Partial<ScreenFakes> = {}): Promise<HTMLElement> {
+  renderScreen({ fetchRounds: fakeLoad(LOADED).load, ...fakes });
   return screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
 }
 
@@ -436,9 +458,8 @@ describe('RoundsScreen', () => {
 
   it('tells the notice the planning screen sent along, once', async () => {
     window.history.replaceState({ notice: 'הסבב נוצר.' }, '', '/app/rounds');
-    render(
-      <RoundsScreen loadRounds={fakeLoad(LOADED).load} markOpened={fakeMarkOpened().markOpened} />,
-    );
+    // Not renderScreen: it would replace the history state that carries the notice.
+    renderWithApi(<RoundsScreen />, defaultFakes());
 
     const notice = await screen.findByText('הסבב נוצר.');
     expect(notice.getAttribute('role')).toBe('status');
@@ -449,7 +470,7 @@ describe('RoundsScreen', () => {
 
   describe('while the rounds load', () => {
     it('shows the heading and a loading status, nothing else', () => {
-      renderScreen({ loadRounds: () => deferred<RoundsOutcome>().promise });
+      renderScreen({ fetchRounds: () => deferred<RoundsOutcome>().promise });
 
       expectOneH1();
       expect(screen.getByRole('status').textContent).toBe('טוען...');
@@ -460,7 +481,7 @@ describe('RoundsScreen', () => {
 
   describe('with no open round', () => {
     it('says so and links to the planning screen', async () => {
-      renderScreen({ loadRounds: fakeLoad(NO_ROUNDS).load });
+      renderScreen({ fetchRounds: fakeLoad(NO_ROUNDS).load });
 
       expect(await screen.findByText('אין סבב פתוח.')).toBeDefined();
       expectOneH1();
@@ -500,7 +521,7 @@ describe('RoundsScreen', () => {
     it('shows the start as the time to put the bottles out by, then the window Yoel comes in', async () => {
       const view = makeView({ round: { pickupFrom: '07:00' }, inRound: [MOSHE] });
       const round = await renderLoaded({
-        loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
+        fetchRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
       });
 
       const pickup = within(round).getByText(/^להוציא את הבקבוקים עד/);
@@ -517,7 +538,7 @@ describe('RoundsScreen', () => {
         inRound: [MOSHE],
       });
       const round = await renderLoaded({
-        loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
+        fetchRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
       });
 
       expect(within(round).queryByText(/להוציא/)).toBeNull();
@@ -553,7 +574,7 @@ describe('RoundsScreen', () => {
 
     it("shows each group's count as a badge next to its title, 0 for an empty group", async () => {
       const view = makeView({ inRound: [DANA, MOSHE, YOSSI] });
-      await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
+      await renderLoaded({ fetchRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
 
       const badgeOf = (name: string) => groupRegion(name).querySelector('.group-head .badge');
       expect(badgeOf('בסבב')?.textContent).toBe('3');
@@ -583,7 +604,7 @@ describe('RoundsScreen', () => {
 
     it('says "אין" in an empty group, with no list', async () => {
       const view = makeView({ inRound: [DANA, MOSHE] });
-      await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
+      await renderLoaded({ fetchRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
 
       const otherDate = groupRegion('ביקשו מועד אחר');
       expect(within(otherDate).getByText('אין')).toBeDefined();
@@ -630,7 +651,7 @@ describe('RoundsScreen', () => {
 
   describe('with several open rounds', () => {
     it('shows only the nearest one, the first the api gave, and a picker for the rest', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load });
 
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       const roundHeadings = screen
@@ -644,7 +665,7 @@ describe('RoundsScreen', () => {
     });
 
     it('shows the picked round alone and writes ?round= by replacing the history entry', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       const historyLength = window.history.length;
 
@@ -661,7 +682,7 @@ describe('RoundsScreen', () => {
     });
 
     it('keeps the path Yoel is on when it writes the query', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/somewhere' });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/somewhere' });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
 
       pickRound('19/11', '26/11');
@@ -672,14 +693,14 @@ describe('RoundsScreen', () => {
     });
 
     it('opens on the round the URL names', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/rounds?round=r2' });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/rounds?round=r2' });
 
       expect(await screen.findByRole('region', { name: 'בית שמש · 26/11' })).toBeDefined();
       expect(screen.queryByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeNull();
     });
 
     it('falls back to the first round for an unknown ?round=, leaving the URL alone', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/rounds?round=zzz' });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load }, { url: '/app/rounds?round=zzz' });
 
       expect(await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeDefined();
       expect(screen.queryByRole('region', { name: 'בית שמש · 26/11' })).toBeNull();
@@ -689,7 +710,7 @@ describe('RoundsScreen', () => {
     // The api answers one round; only that round is swapped, the other open round stays as loaded.
     it('swaps in only the round whose route was built, leaving the other open round as it was', async () => {
       const { buildRoute, calls } = fakeBuildRoute();
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load, buildRoute });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load, buildRoute });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
 
       fireEvent.click(screen.getByRole('button', { name: BUILD_ROUTE_LABEL }));
@@ -705,7 +726,7 @@ describe('RoundsScreen', () => {
     });
 
     it('follows a query that changes from outside, as the back button does', async () => {
-      renderScreen({ loadRounds: fakeLoad(LOADED_TWO).load });
+      renderScreen({ fetchRounds: fakeLoad(LOADED_TWO).load });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
 
       // The browser changed the URL (back or forward) and fires popstate; no navigate() call.
@@ -737,9 +758,9 @@ describe('RoundsScreen', () => {
       expect(screen.getByRole('link', { name: 'שלח ליוסי מזרחי' })).toBeDefined();
     });
 
-    it('stores the opening of a tapped row through markOpened', async () => {
-      const { markOpened, calls } = fakeMarkOpened();
-      await renderLoaded({ markOpened });
+    it('stores the opening of a tapped row through markMessageOpened', async () => {
+      const { markMessageOpened, calls } = fakeMarkOpened();
+      await renderLoaded({ markMessageOpened });
 
       fireEvent.click(screen.getByRole('link', { name: 'שלח למשה לוי' }));
 
@@ -750,7 +771,7 @@ describe('RoundsScreen', () => {
     it('says there is nothing to send, with no hint, when no customer is left in the round', async () => {
       const view = makeView({ otherDate: [RACHEL] });
       const round = await renderLoaded({
-        loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
+        fetchRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load,
       });
 
       expect(within(round).getByText('אין הודעות לשליחה.')).toBeDefined();
@@ -837,7 +858,7 @@ describe('RoundsScreen', () => {
     it('says the route was built already and loads the rounds again', async () => {
       const rounds = fakeLoad(LOADED, { kind: 'loaded', rounds: [ROUTED] });
       await renderLoaded({
-        loadRounds: rounds.load,
+        fetchRounds: rounds.load,
         buildRoute: fakeBuildRoute({ kind: 'closed', message: ROUND_MESSAGES.confirmationsClosed })
           .buildRoute,
       });
@@ -856,7 +877,7 @@ describe('RoundsScreen', () => {
     it('says the round is gone and loads the rounds again', async () => {
       const rounds = fakeLoad(LOADED, NO_ROUNDS);
       await renderLoaded({
-        loadRounds: rounds.load,
+        fetchRounds: rounds.load,
         buildRoute: fakeBuildRoute({ kind: 'notFound' }).buildRoute,
       });
       openQuestion();
@@ -874,7 +895,7 @@ describe('RoundsScreen', () => {
         view: ROUTED,
       });
       const rounds = fakeLoad(LOADED);
-      await renderLoaded({ loadRounds: rounds.load, buildRoute });
+      await renderLoaded({ fetchRounds: rounds.load, buildRoute });
       const question = openQuestion();
 
       fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));
@@ -932,7 +953,7 @@ describe('RoundsScreen', () => {
     const LOADED_ROUTED: RoundsOutcome = { kind: 'loaded', rounds: [ROUTED] };
 
     it('shows its route in driving order, with no groups and no "שלח" list', async () => {
-      const round = await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
+      const round = await renderLoaded({ fetchRounds: fakeLoad(LOADED_ROUTED).load });
 
       expect(stopNames()).toEqual(['דנה כהן', 'משה לוי']);
       const card = screen.getByRole('heading', { level: 3, name: 'דנה כהן' }).closest('li');
@@ -960,8 +981,8 @@ describe('RoundsScreen', () => {
 
     it('swaps in the round a stop action answers: "אספתי" shows its "שלח תודה" row', async () => {
       const saved = routedView([collected(stopOf(DANA)), stopOf(MOSHE)]);
-      const { props, calls } = fakeStopActions({ kind: 'saved', view: saved });
-      await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load, ...props });
+      const { fakes, calls } = fakeStopActions({ kind: 'saved', view: saved });
+      await renderLoaded({ fetchRounds: fakeLoad(LOADED_ROUTED).load, ...fakes });
 
       fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
       fireEvent.click(screen.getByRole('button', { name: 'שמור' }));
@@ -980,8 +1001,8 @@ describe('RoundsScreen', () => {
     it('says why and loads the rounds again when a stop action finds the screen out of date', async () => {
       const handledElsewhere = routedView([stopOf(DANA, { state: 'notFound' }), stopOf(MOSHE)]);
       const rounds = fakeLoad(LOADED_ROUTED, { kind: 'loaded', rounds: [handledElsewhere] });
-      const { props } = fakeStopActions({ kind: 'stale', message: ROUND_MESSAGES.stopHandled });
-      await renderLoaded({ loadRounds: rounds.load, ...props });
+      const { fakes } = fakeStopActions({ kind: 'stale', message: ROUND_MESSAGES.stopHandled });
+      await renderLoaded({ fetchRounds: rounds.load, ...fakes });
 
       fireEvent.click(screen.getByRole('button', { name: 'עוד פעולות, דנה כהן' }));
       fireEvent.click(screen.getByRole('button', { name: 'לא נמצא' }));
@@ -996,7 +1017,7 @@ describe('RoundsScreen', () => {
 
     it('does not reload on coming back while a quantity field is open, and does once it closes', async () => {
       const rounds = fakeLoad(LOADED_ROUTED);
-      await renderLoaded({ loadRounds: rounds.load });
+      await renderLoaded({ fetchRounds: rounds.load });
       fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
       fireEvent.change(screen.getByLabelText(BOTTLES_COLLECTED_LABEL), {
         target: { value: '35' },
@@ -1023,7 +1044,7 @@ describe('RoundsScreen', () => {
         round: { ...ROUND, id: 'r2', date: '2026-11-26', region: 'old', phase: 'routed' },
       };
       const rounds = fakeLoad({ kind: 'loaded', rounds: [ROUTED, routedSecond] });
-      renderScreen({ loadRounds: rounds.load });
+      renderScreen({ fetchRounds: rounds.load });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
       returnToApp();
@@ -1073,7 +1094,7 @@ describe('RoundsScreen', () => {
     });
 
     it('ends a routed round, after its route', async () => {
-      const round = await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
+      const round = await renderLoaded({ fetchRounds: fakeLoad(LOADED_ROUTED).load });
 
       const close = within(round).getByRole('button', { name: 'סיימתי את הסבב' });
       expect(follows(within(round).getByRole('list', { name: 'העצירה הנוכחית' }), close)).toBe(
@@ -1106,7 +1127,7 @@ describe('RoundsScreen', () => {
     it('takes the closed round off the tab, says so with the focus there, and does not reload', async () => {
       const rounds = fakeLoad(LOADED_TWO);
       const { closeRound } = fakeCloseRound();
-      renderScreen({ loadRounds: rounds.load, closeRound });
+      renderScreen({ fetchRounds: rounds.load, closeRound });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       openCloseQuestion();
 
@@ -1130,7 +1151,7 @@ describe('RoundsScreen', () => {
       // r2 is the selected round; r1 is the one left when it closes, by the same fallback.
       const { closeRound, calls } = fakeCloseRound({ kind: 'closed', view: closedView(SECOND) });
       renderScreen(
-        { loadRounds: fakeLoad(LOADED_TWO).load, closeRound },
+        { fetchRounds: fakeLoad(LOADED_TWO).load, closeRound },
         { url: '/app/rounds?round=r2' },
       );
       await screen.findByRole('region', { name: 'בית שמש · 26/11' });
@@ -1146,7 +1167,7 @@ describe('RoundsScreen', () => {
     });
 
     it('says no round is open, with the planning link, when the last one closed', async () => {
-      await renderLoaded({ loadRounds: fakeLoad(LOADED_ROUTED).load });
+      await renderLoaded({ fetchRounds: fakeLoad(LOADED_ROUTED).load });
       openCloseQuestion(ROUTED_TEXTS);
 
       fireEvent.click(screen.getByRole('button', { name: ROUTED_TEXTS.yesLabel }));
@@ -1160,7 +1181,7 @@ describe('RoundsScreen', () => {
     it('does not bring the round back when a reload that set out before the close answers', async () => {
       const reload = deferred<RoundsOutcome>();
       const rounds = fakeLoad(LOADED_TWO, reload.promise);
-      renderScreen({ loadRounds: rounds.load, closeRound: fakeCloseRound().closeRound });
+      renderScreen({ fetchRounds: rounds.load, closeRound: fakeCloseRound().closeRound });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
       returnToApp();
       expect(rounds.calls()).toBe(2);
@@ -1187,7 +1208,7 @@ describe('RoundsScreen', () => {
         view: closedView(VIEW),
       });
       const rounds = fakeLoad(LOADED);
-      await renderLoaded({ loadRounds: rounds.load, closeRound });
+      await renderLoaded({ fetchRounds: rounds.load, closeRound });
       const question = openCloseQuestion();
 
       fireEvent.click(within(question).getByRole('button', { name: CONFIRMING_TEXTS.yesLabel }));
@@ -1222,7 +1243,7 @@ describe('RoundsScreen', () => {
     it('says the round is gone and loads the rounds again', async () => {
       const rounds = fakeLoad(LOADED, NO_ROUNDS);
       await renderLoaded({
-        loadRounds: rounds.load,
+        fetchRounds: rounds.load,
         closeRound: fakeCloseRound({ kind: 'notFound' }).closeRound,
       });
       openCloseQuestion();
@@ -1250,7 +1271,7 @@ describe('RoundsScreen', () => {
     it('stays where Yoel went when the answer comes after he left the tab', async () => {
       const answer = deferred<CloseRoundOutcome>();
       const { unmount } = renderScreen({
-        loadRounds: fakeLoad(LOADED).load,
+        fetchRounds: fakeLoad(LOADED).load,
         closeRound: fakeCloseRound(answer.promise).closeRound,
       });
       await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
@@ -1267,7 +1288,7 @@ describe('RoundsScreen', () => {
 
     it('lists the unsent thank-yous of a routed round above its question', async () => {
       const view = routedView([collected(stopOf(DANA)), stopOf(MOSHE)]);
-      await renderLoaded({ loadRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
+      await renderLoaded({ fetchRounds: fakeLoad({ kind: 'loaded', rounds: [view] }).load });
 
       const question = openCloseQuestion(ROUTED_TEXTS);
 
@@ -1285,7 +1306,7 @@ describe('RoundsScreen', () => {
 
     it('keeps an open question, and its focus, when a reload shows the round routed', async () => {
       const reload = deferred<RoundsOutcome>();
-      await renderLoaded({ loadRounds: fakeLoad(LOADED, reload.promise).load });
+      await renderLoaded({ fetchRounds: fakeLoad(LOADED, reload.promise).load });
       openCloseQuestion();
       returnToApp();
 
@@ -1305,7 +1326,7 @@ describe('RoundsScreen', () => {
   describe('logged out', () => {
     it('goes to the login in place of the rounds tab', async () => {
       const historyLength = window.history.length;
-      renderScreen({ loadRounds: fakeLoad(LOGGED_OUT).load });
+      renderScreen({ fetchRounds: fakeLoad(LOGGED_OUT).load });
 
       await waitFor(() => expect(window.location.pathname).toBe('/login'));
       // Replaced, not pushed: "back" from the login does not bounce off the tab again.
@@ -1314,7 +1335,7 @@ describe('RoundsScreen', () => {
 
     it('stays where Yoel went when the answer comes after he left the tab', async () => {
       const answer = deferred<RoundsOutcome>();
-      const { unmount } = renderScreen({ loadRounds: () => answer.promise });
+      const { unmount } = renderScreen({ fetchRounds: () => answer.promise });
       unmount();
       window.history.replaceState(null, '', '/app/orders');
 
@@ -1327,7 +1348,7 @@ describe('RoundsScreen', () => {
 
   describe('when the load fails', () => {
     it('says so in plain words with a retry, and stays on the tab', async () => {
-      renderScreen({ loadRounds: fakeLoad(FAILED).load });
+      renderScreen({ fetchRounds: fakeLoad(FAILED).load });
 
       expect((await screen.findByRole('alert')).textContent).toBe(ROUNDS_LOAD_FAILED_MESSAGE);
       expect(ROUNDS_LOAD_FAILED_MESSAGE).toBe(
@@ -1340,7 +1361,7 @@ describe('RoundsScreen', () => {
     });
 
     it('treats a rejected load like a failed one', async () => {
-      renderScreen({ loadRounds: fakeLoad('rejects').load });
+      renderScreen({ fetchRounds: fakeLoad('rejects').load });
 
       expect((await screen.findByRole('alert')).textContent).toBe(ROUNDS_LOAD_FAILED_MESSAGE);
       expect(window.location.pathname).toBe('/app/rounds');
@@ -1349,7 +1370,7 @@ describe('RoundsScreen', () => {
     it('loads again on "לנסות שוב", and shows the rounds when that load succeeds', async () => {
       const second = deferred<RoundsOutcome>();
       const rounds = fakeLoad(FAILED, second.promise);
-      renderScreen({ loadRounds: rounds.load });
+      renderScreen({ fetchRounds: rounds.load });
       await screen.findByRole('alert');
 
       fireEvent.click(screen.getByRole('button', { name: 'לנסות שוב' }));
@@ -1370,7 +1391,7 @@ describe('RoundsScreen', () => {
     it('loads the rounds again, keeping them on screen until the answer replaces them', async () => {
       const reload = deferred<RoundsOutcome>();
       const rounds = fakeLoad(LOADED, reload.promise);
-      await renderLoaded({ loadRounds: rounds.load });
+      await renderLoaded({ fetchRounds: rounds.load });
 
       returnToApp();
 
@@ -1391,7 +1412,7 @@ describe('RoundsScreen', () => {
 
     it('keeps the "שלח" rows Yoel opened marked when he is back from WhatsApp', async () => {
       const rounds = fakeLoad(LOADED);
-      await renderLoaded({ loadRounds: rounds.load });
+      await renderLoaded({ fetchRounds: rounds.load });
       fireEvent.click(screen.getByRole('link', { name: 'שלח למשה לוי' }));
       await screen.findByRole('link', { name: 'שלח שוב למשה לוי' });
 
@@ -1406,7 +1427,7 @@ describe('RoundsScreen', () => {
     it('keeps the notice of a refused "התחל מסלול"', async () => {
       const rounds = fakeLoad(LOADED);
       await renderLoaded({
-        loadRounds: rounds.load,
+        fetchRounds: rounds.load,
         buildRoute: fakeBuildRoute({ kind: 'notFound' }).buildRoute,
       });
       fireEvent.click(screen.getByRole('button', { name: BUILD_ROUTE_LABEL }));
@@ -1426,7 +1447,7 @@ describe('RoundsScreen', () => {
     it('ignores the answer of the first, discarded run of the load', async () => {
       // StrictMode mounts, unmounts and mounts again: two loads, and only the second counts.
       const rounds = fakeLoad(LOGGED_OUT, LOADED);
-      renderScreen({ loadRounds: rounds.load }, { strict: true });
+      renderScreen({ fetchRounds: rounds.load }, { strict: true });
 
       expect(await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' })).toBeDefined();
       expect(rounds.calls()).toBe(2);
@@ -1435,7 +1456,7 @@ describe('RoundsScreen', () => {
 
     it('still shows the answer of "התחל מסלול"', async () => {
       const { buildRoute, calls } = fakeBuildRoute();
-      renderScreen({ loadRounds: fakeLoad(LOADED).load, buildRoute }, { strict: true });
+      renderScreen({ fetchRounds: fakeLoad(LOADED).load, buildRoute }, { strict: true });
 
       fireEvent.click(await screen.findByRole('button', { name: BUILD_ROUTE_LABEL }));
       fireEvent.click(screen.getByRole('button', { name: 'כן, להתחיל' }));

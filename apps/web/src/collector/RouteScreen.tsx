@@ -16,12 +16,8 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
-import {
-  collectStop as apiCollectStop,
-  markStopNotFound as apiMarkStopNotFound,
-  moveStop as apiMoveStop,
-  type StopActionOutcome,
-} from '../api/roundsApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { StopActionOutcome } from '../api/roundsApi.ts';
 import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 import {
@@ -34,7 +30,6 @@ import {
   screenOrderOfStops,
   storedMovesFor,
 } from './routeStops.ts';
-import type { SendListProps } from './SendList.tsx';
 import { StopCard, type JustSaved } from './StopCard.tsx';
 
 /** In place of the list when the route has no stop at all. */
@@ -132,22 +127,6 @@ export interface RouteScreenProps {
   onStale: (message: string) => void;
   /** True while some quantity field is open: the parent must not reload-on-return then. */
   onTypingChange?: (typing: boolean) => void;
-  /** Moves a stop one place in the stored route. Defaults to the api's; tests pass a fake. */
-  moveStop?: (
-    roundId: string,
-    orderId: string,
-    direction: 'up' | 'down',
-  ) => Promise<StopActionOutcome>;
-  /** "אספתי"; undefined `bottlesCollected` means the estimate. Defaults to the api's. */
-  collectStop?: (
-    roundId: string,
-    orderId: string,
-    bottlesCollected?: number,
-  ) => Promise<StopActionOutcome>;
-  /** "לא נמצא". Defaults to the api's. */
-  markStopNotFound?: (roundId: string, orderId: string) => Promise<StopActionOutcome>;
-  /** Passed to each "שלח תודה" row; undefined keeps SendList's own default (the api). */
-  markOpened?: SendListProps['markOpened'];
 }
 
 /**
@@ -160,17 +139,13 @@ export interface RouteScreenProps {
  * that says the screen is out of date goes to `onStale`, since the card Yoel tapped may move or
  * vanish once the parent reloads; a refused count shows next to the quantity field; anything else
  * shows in the card, and the button can be tapped again. A 401 leaves for the login.
+ *
+ * The requests are `moveStop`, `collectStop` and `markStopNotFound` of {@link useApi}: this part
+ * sends them, so neither the rounds screen above nor the cards below handle them. A card's
+ * "שלח תודה" row stores its opening itself (SendList.tsx).
  */
-export function RouteScreen({
-  view,
-  onView,
-  onStale,
-  onTypingChange,
-  moveStop = apiMoveStop,
-  collectStop = apiCollectStop,
-  markStopNotFound = apiMarkStopNotFound,
-  markOpened,
-}: RouteScreenProps) {
+export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScreenProps) {
+  const { moveStop, collectStop, markStopNotFound } = useApi();
   const roundId = view.round.id;
 
   // The stops shown last, so a newer view never hides a "שלח תודה" row already on screen (see
@@ -400,7 +375,6 @@ export function RouteScreen({
           )
         }
         onTypingChange={(typing) => typingChanged(orderId, typing)}
-        markOpened={markOpened}
         justSaved={justSaved.get(orderId)}
         onJustSavedSeen={() =>
           setJustSaved((previous) => withMessage(previous, orderId, undefined))

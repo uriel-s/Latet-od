@@ -1,5 +1,4 @@
-import { StrictMode } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_ROUND_ORDERS,
@@ -12,6 +11,7 @@ import {
 } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
@@ -157,12 +157,13 @@ function answersInTurn<T extends object>(
 }
 
 interface RenderOptions {
-  /** The answers of loadOrders, in turn. Default: the four orders above. */
+  /** The answers of the client's fetchWaitingOrders, in turn. Default: the four orders above. */
   orders?: readonly Answer<WaitingOrdersOutcome>[];
-  /** The answers of loadRounds, in turn. Default: no open round, last pickup time 08:30. */
+  /** The answers of fetchRounds, in turn. Default: no open round, last pickup time 08:30. */
   rounds?: readonly Answer<RoundsOutcome>[];
-  /** The answers of submitPlan, in turn. Default: planned. */
+  /** The answers of planRound, in turn. Default: planned. */
   plan?: readonly Answer<PlanRoundOutcome>[];
+  /** StrictMode around the whole tree, as in development. */
   strict?: boolean;
 }
 
@@ -174,24 +175,28 @@ interface Recorded {
   unmount: () => void;
 }
 
-/** Opens the planning screen at /app/orders/plan, with fakes that record every call. */
+/**
+ * Opens the planning screen at /app/orders/plan under an ApiProvider whose three functions the
+ * screen calls (fetchWaitingOrders, fetchRounds, planRound) are fakes that record every call.
+ */
 function renderScreen({ orders, rounds, plan, strict = false }: RenderOptions = {}): Recorded {
   window.history.replaceState(null, '', '/app/orders/plan');
   const loadOrders = answersInTurn(orders ?? [ORDERS_LOADED]);
   const loadRounds = answersInTurn(rounds ?? [ROUNDS_LOADED]);
   const submit = answersInTurn(plan ?? [PLANNED]);
   const plans: PlanRoundRequest[] = [];
-  const element = (
-    <PlanRoundScreen
-      loadOrders={loadOrders.next}
-      loadRounds={loadRounds.next}
-      submitPlan={(request) => {
+  const { unmount } = renderWithApi(
+    <PlanRoundScreen />,
+    {
+      fetchWaitingOrders: loadOrders.next,
+      fetchRounds: loadRounds.next,
+      planRound: (request) => {
         plans.push(request);
         return submit.next();
-      }}
-    />
+      },
+    },
+    { reactStrictMode: strict },
   );
-  const { unmount } = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ordersCalls: loadOrders.calls, roundsCalls: loadRounds.calls, plans, unmount };
 }
 
