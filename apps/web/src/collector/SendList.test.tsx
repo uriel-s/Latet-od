@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { MessageLink } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -35,15 +36,6 @@ const ROWS: MessageLink[] = [
     url: 'https://wa.me/972527654321?text=x',
   }),
 ];
-
-/** A promise the test settles by hand, to look at the list while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /**
  * One answer of the fake `markMessageOpened`: an outcome, a promise the test settles, or

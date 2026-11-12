@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { LOGIN_MESSAGES } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { LoginOutcome } from '../api/authApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -16,15 +17,6 @@ const IPHONE_SAFARI =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
 const WINDOWS_CHROME =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /**
  * Opens `/login` with a fake `login` (through the ApiProvider) that records every password it is

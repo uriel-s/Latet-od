@@ -6,6 +6,7 @@ import {
   type CreateOrderRequest,
   type CreateOrderResponse,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { CreateOrderOutcome } from '../api/bookingApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -53,15 +54,6 @@ function makePrefill(contact: Partial<OrderPrefill['contact']> = {}): OrderPrefi
       floorApt: 'קומה 3, דירה 12',
     },
   };
-}
-
-/** A promise the test settles by hand, to look at the form while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
 }
 
 /** Presses "הבנתי, להזמנה": the rules notice gives way to the form. */

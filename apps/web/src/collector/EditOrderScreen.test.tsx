@@ -11,6 +11,7 @@ import {
   type Street,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type {
   CollectorOrderOutcome,
   CollectorOrderWriteOutcome,
@@ -91,15 +92,6 @@ function makeFreeTextOrder(nearStreetCode?: number): CollectorOrder {
     region: nearStreetCode === undefined ? undefined : 'old',
     hasLocation: nearStreetCode !== undefined,
   });
-}
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
 }
 
 type Answer<T> = T | Promise<T>;

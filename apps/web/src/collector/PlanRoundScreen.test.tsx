@@ -9,6 +9,7 @@ import {
   type PlanRoundRequest,
   type RoundView,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -115,15 +116,6 @@ const ROUND_VIEW: RoundView = {
   stops: [],
 };
 const PLANNED: PlanRoundOutcome = { kind: 'planned', view: ROUND_VIEW };
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /**
  * One answer of a fake: an outcome, a promise of one (a `deferred` the test settles), or a

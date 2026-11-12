@@ -11,17 +11,11 @@ import {
   type OrderFormInput,
   type Street,
 } from '@bottlerun/shared';
+import { firstRealStreet } from '@bottlerun/shared/testing';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
 import { newOrderFromForm, newOrderToken } from './newOrderFromForm.ts';
 
 const NOW = new Date('2026-10-19T08:30:00.000Z');
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const RAMAT_STREET = firstRealStreet((street) => street.region === 'ramat');
 const OLD_STREET = firstRealStreet((street) => street.region === 'old');

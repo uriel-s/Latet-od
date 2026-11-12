@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { SessionOutcome } from '../api/authApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -76,15 +77,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   expect(unfakedRequests).toEqual([]);
 });
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /** A fake `fetchSession`: answers each call with the next answer given (the last one repeats). */
 function fakeSession(...answers: (SessionOutcome | Promise<SessionOutcome>)[]): {
