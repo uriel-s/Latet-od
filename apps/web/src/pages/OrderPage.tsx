@@ -1,9 +1,10 @@
 // The customer's own page `/o/<token>` (spec §3.3), reached from the thank-you screen and from the
-// links in Yoel's WhatsApp messages, by the order's random token only. It loads the order (customerOrderApi.ts,
-// GET /api/o/:token) and draws what fits its status: while the order is in a round, the round's
-// date and times with "לא מתאים הפעם" (there is nothing to confirm: being in the round is the
-// default, ADR-0012), thanks and "הזמנה חדשה עם אותם פרטים" once collected or cancelled, and,
-// while the order is open, "שינוי" (the booking form's fields without the contact: address, note and bottles, never the phone) and "ביטול
+// links in Yoel's WhatsApp messages, by the order's random token only. It loads the order
+// (customerOrderApi.ts, GET /api/o/:token, reached through useApi()) and draws what fits its
+// status: while the order is in a round, the round's date and times with "לא מתאים הפעם" (there
+// is nothing to confirm: being in the round is the default, ADR-0012), thanks and "הזמנה חדשה עם
+// אותם פרטים" once collected or cancelled, and, while the order is open, "שינוי" (the booking
+// form's fields without the contact: address, note and bottles, never the phone) and "ביטול
 // ההזמנה" (with a question first). Every button is a POST or a PATCH, never a link to open:
 // WhatsApp's preview opens links. The page always draws the order the api answered with, not what
 // it expected the button to do.
@@ -34,13 +35,10 @@ import {
 } from '@bottlerun/shared';
 import { networkErrorMessage } from '../api/request.ts';
 import {
-  cancelCustomerOrder,
-  declineCustomerOrder,
-  fetchCustomerOrder,
-  updateCustomerOrder,
   type CustomerOrderOutcome,
   type CustomerOrderWriteOutcome,
 } from '../api/customerOrderApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import {
@@ -148,23 +146,6 @@ export interface OrderPageProps {
   /** The order's token, from the URL `/o/<token>`. */
   token: string;
   /**
-   * Loads the order. Defaults to {@link fetchCustomerOrder}; tests pass a fake. Must keep its
-   * identity across renders (a module function, not an inline arrow): a new one loads again.
-   */
-  loadOrder?: (token: string) => Promise<CustomerOrderOutcome>;
-  /** "לא מתאים הפעם". Defaults to {@link declineCustomerOrder}; tests pass a fake. */
-  declineOrder?: SendAction;
-  /** "כן, לבטל". Defaults to {@link cancelCustomerOrder}; tests pass a fake. */
-  cancelOrder?: SendAction;
-  /**
-   * "שמירת השינויים" of the change form. Defaults to {@link updateCustomerOrder}; tests pass a
-   * fake.
-   */
-  updateOrder?: (
-    token: string,
-    request: CustomerUpdateOrderRequest,
-  ) => Promise<CustomerOrderWriteOutcome>;
-  /**
    * Told the language of the order once it is known (Hebrew until then), so the app's frame
    * (the slogan in the header) speaks it too. The page sets the document's own language.
    */
@@ -201,14 +182,16 @@ interface Notice {
  * One request at a time: a double tap on a button sends one request. Every write is idempotent
  * on the api's side too, so a request whose answer was lost is put right by tapping again.
  */
-export function OrderPage({
-  token,
-  loadOrder = fetchCustomerOrder,
-  declineOrder = declineCustomerOrder,
-  cancelOrder = cancelCustomerOrder,
-  updateOrder = updateCustomerOrder,
-  onLangChange,
-}: OrderPageProps) {
+export function OrderPage({ token, onLangChange }: OrderPageProps) {
+  // The customer's endpoints (customerOrderApi.ts); tests give fakes through the ApiProvider
+  // (renderWithApi.tsx). `loadOrder` is an effect dependency: the client keeps its identity, so
+  // it loads once per mount.
+  const {
+    fetchCustomerOrder: loadOrder,
+    declineCustomerOrder: declineOrder,
+    cancelCustomerOrder: cancelOrder,
+    updateCustomerOrder: updateOrder,
+  } = useApi();
   const [state, setState] = useState<PageState>({ kind: 'loading' });
   // The order's language, kept while the order reloads (a reload must not flash Hebrew). Hebrew
   // until the first order arrives, and for a missing order.

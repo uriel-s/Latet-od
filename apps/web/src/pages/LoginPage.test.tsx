@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { LOGIN_MESSAGES } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { LoginOutcome } from '../api/authApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { INSTALL_HINT_TEXT, type InstallHintNavigator } from './installHint.ts';
 import { LoginPage } from './LoginPage.tsx';
 
@@ -26,19 +27,19 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 /**
- * Opens `/login` with a fake `submitLogin` that records every password it is given and answers
- * `outcome`. Returns the passwords, in order.
+ * Opens `/login` with a fake `login` (through the ApiProvider) that records every password it is
+ * given and answers `outcome`. Returns the passwords, in order.
  */
 function renderLogin(outcome: LoginOutcome | Promise<LoginOutcome> = LOGGED_IN): {
   passwords: string[];
 } {
   window.history.replaceState(null, '', '/login');
   const passwords: string[] = [];
-  const submitLogin = (password: string): Promise<LoginOutcome> => {
+  const login = (password: string): Promise<LoginOutcome> => {
     passwords.push(password);
     return Promise.resolve(outcome);
   };
-  render(<LoginPage submitLogin={submitLogin} />);
+  renderWithApi(<LoginPage />, { login });
   return { passwords };
 }
 
@@ -166,9 +167,9 @@ describe('LoginPage', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(NETWORK_ERROR_MESSAGE);
   });
 
-  it('shows the network message when submitLogin rejects', async () => {
+  it('shows the network message when login rejects', async () => {
     window.history.replaceState(null, '', '/login');
-    render(<LoginPage submitLogin={() => Promise.reject(new Error('boom'))} />);
+    renderWithApi(<LoginPage />, { login: () => Promise.reject(new Error('boom')) });
     typePassword(TYPED_PASSWORD);
 
     submit();
@@ -210,7 +211,7 @@ describe('LoginPage install hint', () => {
   /** Opens `/login` as `browser` would see it. */
   function renderLoginIn(browser: InstallHintNavigator): void {
     window.history.replaceState(null, '', '/login');
-    render(<LoginPage submitLogin={() => Promise.resolve(LOGGED_IN)} browser={browser} />);
+    renderWithApi(<LoginPage browser={browser} />, { login: () => Promise.resolve(LOGGED_IN) });
   }
 
   it('shows "להתקנה: שיתוף ← הוסף למסך הבית" in iPhone Safari', () => {
@@ -241,7 +242,7 @@ describe('LoginPage install hint', () => {
 
   it('reads the real navigator by default, which in the test browser is not an iPhone', () => {
     window.history.replaceState(null, '', '/login');
-    render(<LoginPage submitLogin={() => Promise.resolve(LOGGED_IN)} />);
+    renderWithApi(<LoginPage />, { login: () => Promise.resolve(LOGGED_IN) });
 
     expect(screen.queryByText(INSTALL_HINT_TEXT)).toBeNull();
   });

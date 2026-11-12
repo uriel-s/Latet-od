@@ -1,20 +1,14 @@
 // The public booking form at `/` (spec §3.1) and, once the order is in, the thank-you screen in
 // its place (spec §3.2). The rules live in the shared schema (formValues.ts), the fields in
 // OrderFields.tsx and their state in useOrderForm.ts (both shared with Yoel's add and edit
-// screens), the request in api/bookingApi.ts and the returning customer's prefill in savedDetails.ts: this
-// file is the screen itself, the parts only the public form has (the honeypot, the privacy line),
-// and what happens after each answer.
+// screens), the request in api/bookingApi.ts (reached through useApi(), api/ApiContext.tsx) and
+// the returning customer's prefill in savedDetails.ts: this file is the screen itself, the parts
+// only the public form has (the honeypot, the privacy line), and what happens after each answer.
 import { useEffect, useId, useRef, useState } from 'react';
-import {
-  DEFAULT_LANG,
-  MIN_BOTTLES,
-  ORDER_HONEYPOT_FIELD,
-  t,
-  type CreateOrderRequest,
-  type Lang,
-} from '@bottlerun/shared';
+import { DEFAULT_LANG, MIN_BOTTLES, ORDER_HONEYPOT_FIELD, t, type Lang } from '@bottlerun/shared';
 import { networkErrorMessage } from '../api/request.ts';
-import { createOrder, type CreateOrderOutcome } from '../api/bookingApi.ts';
+import { type CreateOrderOutcome } from '../api/bookingApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
 import { Link, navigate, useLocation } from '../router.tsx';
 import {
   NO_ERRORS,
@@ -53,11 +47,6 @@ export interface OrderFormPageProps {
    * language of the error messages, and the `lang` sent with the order.
    */
   lang?: Lang;
-  /**
-   * Sends the validated form. Defaults to {@link createOrder} (POST /api/orders, which owns the
-   * one retry on a network error); tests pass a fake that records each request.
-   */
-  submitOrder?: (request: CreateOrderRequest) => Promise<CreateOrderOutcome>;
 }
 
 /**
@@ -74,10 +63,10 @@ export interface OrderFormPageProps {
  * is wrong, or while an earlier request is still on its way: the api counts every request toward
  * its limit of 10 an hour per IP.
  */
-export function OrderFormPage({
-  lang = DEFAULT_LANG,
-  submitOrder = createOrder,
-}: OrderFormPageProps) {
+export function OrderFormPage({ lang = DEFAULT_LANG }: OrderFormPageProps) {
+  // POST /api/orders (bookingApi.ts `createOrder`, which owns the one retry on a network error);
+  // tests give a fake through the ApiProvider (renderWithApi.tsx).
+  const { createOrder: submitOrder } = useApi();
   // Where the language button leads: the other language's address (no detection by browser).
   const homePath = lang === 'en' ? '/en' : '/';
   const otherLangPath = lang === 'en' ? '/' : '/en';

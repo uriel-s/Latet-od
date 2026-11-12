@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   CREATE_ORDER_MESSAGES,
@@ -8,6 +8,7 @@ import {
 } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { CreateOrderOutcome } from '../api/bookingApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors } from './formValues.ts';
 import { OrderFormPage } from './OrderFormPage.tsx';
 import {
@@ -69,9 +70,9 @@ function acceptNotice(): void {
 }
 
 /**
- * Renders the page with a fake `submitOrder` that records every request and answers `outcome`,
- * and goes past the rules notice to the form (`passNotice: false` stays on the notice).
- * Returns the requests, in order.
+ * Renders the page with a fake `createOrder` (through the ApiProvider) that records every request
+ * and answers `outcome`, and goes past the rules notice to the form (`passNotice: false` stays on
+ * the notice). Returns the requests, in order.
  */
 function renderForm(
   outcome: CreateOrderOutcome | Promise<CreateOrderOutcome> = CREATED,
@@ -82,11 +83,11 @@ function renderForm(
   unmount: () => void;
 } {
   const requests: CreateOrderRequest[] = [];
-  const submitOrder = (request: CreateOrderRequest): Promise<CreateOrderOutcome> => {
+  const createOrder = (request: CreateOrderRequest): Promise<CreateOrderOutcome> => {
     requests.push(request);
     return Promise.resolve(outcome);
   };
-  const { container, unmount } = render(<OrderFormPage submitOrder={submitOrder} />);
+  const { container, unmount } = renderWithApi(<OrderFormPage />, { createOrder });
   if (passNotice) acceptNotice();
   return { requests, container, unmount };
 }

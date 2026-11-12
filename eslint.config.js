@@ -48,10 +48,16 @@ export default tseslint.config(
             {
               ...appPattern('api'),
               // apps/web/src/api/ is the web app's own network code (one module per resource),
-              // imported as ./api/x.ts or ../api/x.ts: not apps/api, which `**/../api/**` would
-              // otherwise take it for. Only its files, no deeper path, so `../../api/src/…` and
-              // `../api/src/…` still fail.
-              group: [...appPattern('api').group, '!./api/*.ts', '!../api/*.ts'],
+              // imported as ./api/x.ts or ../api/x.ts (x.tsx for ApiContext.tsx and the test helper
+              // renderWithApi.tsx): not apps/api, which `**/../api/**` would otherwise take it for.
+              // Only its files, no deeper path, so `../../api/src/…` and `../api/src/…` still fail.
+              group: [
+                ...appPattern('api').group,
+                '!./api/*.ts',
+                '!../api/*.ts',
+                '!./api/*.tsx',
+                '!../api/*.tsx',
+              ],
             },
           ],
         },

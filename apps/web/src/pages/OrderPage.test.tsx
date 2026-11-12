@@ -1,5 +1,4 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
@@ -9,6 +8,7 @@ import {
 } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { SAVE_FAILED_MESSAGE, UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
 import {
@@ -88,13 +88,13 @@ function answersInTurn<T>(answers: Answer<T>[]): () => Promise<T> {
 }
 
 interface RenderOptions {
-  /** The answers of loadOrder, in turn. Default: the order loads. */
+  /** The answers of fetchCustomerOrder, in turn. Default: the order loads. */
   load?: Answer<CustomerOrderOutcome>[];
-  /** The answer of declineOrder. Default: saved, back to waiting with no round. */
+  /** The answer of declineCustomerOrder. Default: saved, back to waiting with no round. */
   decline?: Answer<CustomerOrderWriteOutcome>;
-  /** The answer of cancelOrder. Default: saved, cancelled with no round. */
+  /** The answer of cancelCustomerOrder. Default: saved, cancelled with no round. */
   cancel?: Answer<CustomerOrderWriteOutcome>;
-  /** The answer of updateOrder. Default: saved, the order with the change applied. */
+  /** The answer of updateCustomerOrder. Default: saved, the order with the change applied. */
   update?: Answer<CustomerOrderWriteOutcome>;
   strict?: boolean;
 }
@@ -108,7 +108,7 @@ interface Calls {
   unmount: () => void;
 }
 
-/** Opens the page of `order` at /o/<token>, with fakes that record every call. */
+/** Opens the page of `order` at /o/<token>, with fakes (through the ApiProvider) that record every call. */
 function renderPage(
   order: CustomerOrder = makeOrder(),
   { load, decline, cancel, update, strict = false }: RenderOptions = {},
@@ -124,32 +124,34 @@ function renderPage(
   // The order without its round, as the api answers once it left the round or was cancelled.
   const outOfRound = { ...order };
   delete outOfRound.round;
-  const element = (
-    <OrderPage
-      token={TOKEN}
-      loadOrder={(token) => {
+  // StrictMode goes around the whole tree, provider included (`reactStrictMode`): nested under the
+  // provider, it did not run the load's effect twice.
+  const { unmount } = renderWithApi(
+    <OrderPage token={TOKEN} />,
+    {
+      fetchCustomerOrder: (token) => {
         calls.loads.push(token);
         return nextLoad();
-      }}
-      declineOrder={(token) => {
+      },
+      declineCustomerOrder: (token) => {
         calls.declines.push(token);
         return Promise.resolve(
           decline ?? { kind: 'saved', order: { ...outOfRound, status: 'waiting' } },
         );
-      }}
-      cancelOrder={(token) => {
+      },
+      cancelCustomerOrder: (token) => {
         calls.cancels.push(token);
         return Promise.resolve(
           cancel ?? { kind: 'saved', order: { ...outOfRound, status: 'cancelled' } },
         );
-      }}
-      updateOrder={(token, request) => {
+      },
+      updateCustomerOrder: (token, request) => {
         calls.updates.push({ token, request });
         return Promise.resolve(update ?? { kind: 'saved', order: withChange(order, request) });
-      }}
-    />
+      },
+    },
+    { reactStrictMode: strict },
   );
-  const { unmount } = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...calls, unmount };
 }
 
@@ -268,7 +270,9 @@ describe('OrderPage', () => {
     });
 
     it('treats a rejected load like a failed one', async () => {
-      render(<OrderPage token={TOKEN} loadOrder={() => Promise.reject(new Error('boom'))} />);
+      renderWithApi(<OrderPage token={TOKEN} />, {
+        fetchCustomerOrder: () => Promise.reject(new Error('boom')),
+      });
 
       expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
     });
@@ -494,13 +498,10 @@ describe('OrderPage', () => {
     );
 
     it('treats a rejected "לא מתאים הפעם" like a failed one', async () => {
-      render(
-        <OrderPage
-          token={TOKEN}
-          loadOrder={() => Promise.resolve({ kind: 'loaded', order: confirmedOrder() })}
-          declineOrder={() => Promise.reject(new Error('boom'))}
-        />,
-      );
+      renderWithApi(<OrderPage token={TOKEN} />, {
+        fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: confirmedOrder() }),
+        declineCustomerOrder: () => Promise.reject(new Error('boom')),
+      });
       fireEvent.click(await screen.findByRole('button', { name: 'לא מתאים הפעם' }));
 
       click('כן, לא מתאים');
@@ -924,13 +925,10 @@ describe('OrderPage', () => {
     });
 
     it('treats a rejected save like a failed one', async () => {
-      render(
-        <OrderPage
-          token={TOKEN}
-          loadOrder={() => Promise.resolve({ kind: 'loaded', order: makeOrder() })}
-          updateOrder={() => Promise.reject(new Error('boom'))}
-        />,
-      );
+      renderWithApi(<OrderPage token={TOKEN} />, {
+        fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: makeOrder() }),
+        updateCustomerOrder: () => Promise.reject(new Error('boom')),
+      });
       fireEvent.click(await screen.findByRole('button', { name: 'שינוי' }));
 
       click('שמירת השינויים');
