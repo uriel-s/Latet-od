@@ -55,46 +55,11 @@ import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
 import { useDocumentLanguage } from '../useDocumentLanguage.ts';
 
-// The Hebrew texts of the page are exported for tests; they are the dictionary's (i18n.ts,
-// 'orderPage.*'), where the English ones live next to them.
+// Every text of the page comes from the dictionary (i18n.ts, 'orderPage.*'), in the order's
+// language; tests read the Hebrew ones through t('he', …) too.
 
-/** The page's `<h1>`, the same in every state. */
-export const ORDER_PAGE_HEADING = t('he', 'orderPage.heading');
-
-/** Shown when the order got no usable answer (network error, 5xx, unreadable body). */
-export const ORDER_LOAD_FAILED_MESSAGE = t('he', 'orderPage.loadFailed');
-
-/** Under the status of a waiting order: what happens next, in the thank-you screen's words. */
-export const WAITING_TEXT = t('he', 'orderPage.waiting');
-
-/** Under the status of a collected order. */
-export const COLLECTED_TEXT = t('he', 'orderPage.collected');
-
-/**
- * Under the status of a cancelled order: thanks (spec §3.3), and what the button under it does.
- * Not "ההזמנה בוטלה.": the status line already says it, and so does the message announced right
- * after the customer's own cancel.
- */
-export const CANCELLED_TEXT = t('he', 'orderPage.cancelled');
-
-/** What each request of the page announces once the api stored it (Hebrew; see {@link savedMessage}). */
-export const SAVED_MESSAGES = {
-  decline: t('he', 'orderPage.saved.decline'),
-  cancel: t('he', 'orderPage.saved.cancel'),
-  change: t('he', 'orderPage.saved.change'),
-} as const;
-
-/**
- * Announced instead of {@link SAVED_MESSAGES}.change when a new street or house number took the
- * order out of its round (spec §3.3: "שינוי כתובת אחרי שההזמנה נכנסה לסבב מוציא אותה מהסבב").
- */
-export const LEFT_ROUND_MESSAGE = t('he', 'orderPage.leftRound');
-
-/** Above the change form's fields: why the phone is not among them (spec §3.3). */
-export const PHONE_NOT_CHANGED_TEXT = t('he', 'orderPage.phoneNotChanged');
-
-/** The text of what `action` announces once saved, in `lang`. */
-function savedMessage(lang: Lang, action: keyof typeof SAVED_MESSAGES): string {
+/** The text of what `action` announces once the api stored it, in `lang`. */
+function savedMessage(lang: Lang, action: Action): string {
   return t(lang, `orderPage.saved.${action}`);
 }
 
@@ -132,8 +97,8 @@ function tWithDay(lang: Lang, key: MessageKey, day: string): ReactNode {
   return withDay(t(lang, key, { date: DAY_PLACEHOLDER }), day);
 }
 
-/** A request of the page, by what it asks the api to do. */
-type Action = keyof typeof SAVED_MESSAGES;
+/** A request of the page, by what it asks the api to do; each has its 'orderPage.saved.*' text. */
+type Action = 'decline' | 'cancel' | 'change';
 
 /** A button that sends its request at once: every action but the change form's save. */
 type ButtonAction = Exclude<Action, 'change'>;
@@ -356,7 +321,8 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
 
     switch (outcome.kind) {
       case 'saved': {
-        // The api decides whether the order left its round; the answer's status says it did.
+        // The api decides whether the order left its round; the answer's status says it did
+        // (spec §3.3: "שינוי כתובת אחרי שההזמנה נכנסה לסבב מוציא אותה מהסבב").
         const leftRound = leavesRound && outcome.order.status === 'waiting';
         setChanging(false);
         showOrder(outcome.order);
@@ -723,6 +689,8 @@ function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
     case 'collected':
       return <p>{t(lang, 'orderPage.collected')}</p>;
     case 'cancelled':
+      // Thanks (spec §3.3), not "ההזמנה בוטלה.": the status line already says it, and so does
+      // the notice announced right after the customer's own cancel.
       return <p>{t(lang, 'orderPage.cancelled')}</p>;
   }
 }

@@ -16,7 +16,7 @@ import {
 import { Icon } from '../components/Icon.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { TextField } from '../components/TextField.tsx';
-import { MoreActionsSheet, NOT_FOUND_QUESTION } from './MoreActionsSheet.tsx';
+import { MoreActionsSheet } from './MoreActionsSheet.tsx';
 import { bottlesText } from './OrdersScreen.tsx';
 import { NO_LOCATION_TAG } from './orderTags.ts';
 import {
@@ -30,9 +30,6 @@ import { SendList } from './SendList.tsx';
 
 /** The label of the quantity field "אספתי" opens. */
 export const BOTTLES_COLLECTED_LABEL = 'כמה בקבוקים נאספו';
-
-// The "לא נמצא" question moved into the sheet; re-exported so existing imports keep working.
-export { NOT_FOUND_QUESTION };
 
 /** The eyebrow of the current stop's card (the first stop still to collect). */
 export const NEXT_STOP_EYEBROW = 'העצירה הבאה';
