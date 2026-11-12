@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type {
   CollectorOrder,
@@ -7,7 +7,9 @@ import type {
   RoundView,
   RouteStopView,
 } from '@bottlerun/shared';
+import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   CLOSE_ROUND_NO_LABEL,
   CLOSE_ROUND_TEXTS,
@@ -120,9 +122,12 @@ function collected(
 
 const OPENED_AT = new Date('2026-11-19T09:00:00Z');
 
-/** A fake `markOpened` that records its calls and answers `marked` at {@link OPENED_AT}. */
+/**
+ * A fake `markMessageOpened` (the client's, which the rows' SendList takes from useApi) that
+ * records its calls and answers `marked` at {@link OPENED_AT}.
+ */
 function fakeMarkOpened(): {
-  markOpened: NonNullable<CloseRoundConfirmProps['markOpened']>;
+  markOpened: Api['markMessageOpened'];
   calls: { orderId: string; messageIndex: number }[];
 } {
   const calls: { orderId: string; messageIndex: number }[] = [];
@@ -133,10 +138,15 @@ function fakeMarkOpened(): {
   return { markOpened, calls };
 }
 
-/** Renders the component with fakes; returns the calls of each callback and `rerender`. */
-function renderConfirm(overrides: Partial<CloseRoundConfirmProps> = {}) {
+/**
+ * Renders the component with fakes; returns the calls of each callback and `rerender`. The rows'
+ * `markMessageOpened` is `markOpened`, else a fresh {@link fakeMarkOpened}; `rerender` keeps it.
+ */
+function renderConfirm(
+  overrides: Partial<CloseRoundConfirmProps> = {},
+  markOpened: Api['markMessageOpened'] = fakeMarkOpened().markOpened,
+) {
   const calls = { close: 0, openChange: 0 };
-  const { markOpened } = fakeMarkOpened();
   const props = (next: Partial<CloseRoundConfirmProps>): CloseRoundConfirmProps => ({
     view: routedView([toCollect(DANA)]),
     closing: false,
@@ -147,11 +157,12 @@ function renderConfirm(overrides: Partial<CloseRoundConfirmProps> = {}) {
     onOpenChange: () => {
       calls.openChange += 1;
     },
-    markOpened,
     ...overrides,
     ...next,
   });
-  const result = render(<CloseRoundConfirm {...props({})} />);
+  const result = renderWithApi(<CloseRoundConfirm {...props({})} />, {
+    markMessageOpened: markOpened,
+  });
   return {
     calls,
     rerender: (next: Partial<CloseRoundConfirmProps>) =>
@@ -431,9 +442,9 @@ describe('CloseRoundConfirm', () => {
       );
     });
 
-    it('marks a row opened through markOpened', async () => {
+    it('marks a row opened through the client', async () => {
       const { markOpened, calls } = fakeMarkOpened();
-      renderConfirm({ view: VIEW, markOpened });
+      renderConfirm({ view: VIEW }, markOpened);
       openQuestion();
 
       fireEvent.click(screen.getByRole('link', { name: 'שלח לדנה כהן' }));

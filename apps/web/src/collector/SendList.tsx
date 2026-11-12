@@ -1,12 +1,13 @@
 // The "שלח" list of the collector app (ADR-0003): one row per customer with a link that opens
 // WhatsApp with the message already written (a wa.me url), for Yoel to tap "send" there. Tapping
-// marks the row opened at once and tells the api (markMessageOpened), so a row he already sent
-// stands out. Reusable: the hosting screen (a planned round, section 8) owns the heading and
+// marks the row opened at once and tells the api (`markMessageOpened` of useApi), so a row he
+// already sent stands out. Reusable: the hosting screen (a planned round, section 8) owns the heading and
 // passes the rows (`MessageLink`, built by the api with `toMessageLink`). Two looks: framed rows by
 // default (the route's thank-you row, the close question), or one card of thin rows (`grouped`).
 import { useEffect, useRef, useState } from 'react';
 import { formatDayMonth, type MessageLink } from '@bottlerun/shared';
-import { markMessageOpened, type MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { navigate } from '../router.tsx';
 
 /** Shown in place of the list when there is no message to send. */
@@ -22,8 +23,6 @@ export const MARK_OPENED_FAILED_MESSAGE = 'לא הצלחנו לשמור שההו
 export interface SendListProps {
   /** The rows to show, in the order given; a row whose `openedAt` is set starts as opened. */
   rows: readonly MessageLink[];
-  /** Stores that a row's link was opened. Defaults to {@link markMessageOpened}; tests pass a fake. */
-  markOpened?: (orderId: string, messageIndex: number) => Promise<MarkMessageOpenedOutcome>;
   /**
    * One card of thin rows split by a line (the inset grouped list of styles.css), as on the rounds
    * screen's step 1. Off by default: the route's thank-you row and the close question keep the
@@ -57,14 +56,17 @@ function rowKey(row: Pick<MessageLink, 'orderId' | 'messageIndex'>): string {
  * after an await: a tap on a link is what mobile browsers reliably hand to WhatsApp, and it is
  * never blocked as a popup.
  *
- * The tap marks the row opened at once, then calls `markOpened`. `marked` shows the api's
+ * The tap marks the row opened at once, then stores the opening with `markMessageOpened` of
+ * {@link useApi}: the list sends it itself, so the screens that host it pass no api function down
+ * (the round's step 1, a stop's "שלח תודה" row, the close question). `marked` shows the api's
  * `openedAt` as DD/MM; `loggedOut` goes to /login; `notFound` and `failed` keep the row opened
  * and add {@link MARK_OPENED_FAILED_MESSAGE}. An opened row keeps its link, as "שלח שוב", for a
  * message that did not go. The local state is kept by row key, so new `rows` from the hosting
  * screen keep what was tapped. No `<h1>`: the hosting screen has the page's heading. `grouped`
  * shows the list (and its empty sentence) as one card of thin rows.
  */
-export function SendList({ rows, markOpened = markMessageOpened, grouped = false }: SendListProps) {
+export function SendList({ rows, grouped = false }: SendListProps) {
+  const { markMessageOpened } = useApi();
   const [openedLocally, setOpenedLocally] = useState<Readonly<Record<string, OpenedLocally>>>({});
   // False once the list is gone: an answer that comes after Yoel left the screen must not pull
   // him to the login from the screen he went to.
@@ -109,7 +111,7 @@ export function SendList({ rows, markOpened = markMessageOpened, grouped = false
     }
 
     // markMessageOpened never rejects; a rejection is a failed save like any other.
-    markOpened(row.orderId, row.messageIndex).then(settle, () => settle({ kind: 'failed' }));
+    markMessageOpened(row.orderId, row.messageIndex).then(settle, () => settle({ kind: 'failed' }));
   }
 
   if (rows.length === 0) {

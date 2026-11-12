@@ -4,10 +4,11 @@
 // Yoel can still send a thank-you he forgot before the round leaves his screen. The rounds screen
 // sends the close itself and tells this component whether it is on its way and whether it failed;
 // this component owns only the question being open, the rows it shows, and where the focus goes.
+// The rows' "שלח" stores its opening itself (SendList.tsx, through useApi).
 import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import type { MessageLink, RoundPhase, RoundView } from '@bottlerun/shared';
-import { SendList, type SendListProps } from './SendList.tsx';
+import { SendList } from './SendList.tsx';
 
 /** The texts of the close button and its question for one {@link RoundPhase}. */
 export interface CloseRoundTexts {
@@ -125,8 +126,6 @@ export interface CloseRoundConfirmProps {
   onClose: () => void;
   /** The question opened or closed; the screen clears an old error here. */
   onOpenChange: () => void;
-  /** Passed to the thank-you rows; undefined keeps SendList's own default (the api). */
-  markOpened?: SendListProps['markOpened'];
 }
 
 /**
@@ -155,7 +154,6 @@ export function CloseRoundConfirm({
   failed,
   onClose,
   onOpenChange,
-  markOpened,
 }: CloseRoundConfirmProps) {
   // The order ids of the rows unsent when the question opened; undefined while it is closed.
   const [keptOrderIds, setKeptOrderIds] = useState<ReadonlySet<string> | undefined>(undefined);
@@ -196,7 +194,7 @@ export function CloseRoundConfirm({
                 {UNSENT_THANK_YOUS_TITLE}
               </h3>
               <p className="round-hint">{UNSENT_THANK_YOUS_HINT}</p>
-              <SendList rows={rows} markOpened={markOpened} />
+              <SendList rows={rows} />
             </>
           )}
           {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}

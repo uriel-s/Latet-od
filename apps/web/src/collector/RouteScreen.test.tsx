@@ -1,5 +1,5 @@
-import { StrictMode, useState } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   COLLECT_STOP_ERRORS,
@@ -9,7 +9,9 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
+import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import type { StopActionOutcome } from '../api/roundsApi.ts';
 import {
   ALL_STOPS_HANDLED_TEXT,
@@ -23,7 +25,6 @@ import {
   STOP_ACTION_FAILED_MESSAGE,
   STOP_LEFT_ROUTE_MESSAGE,
   routeSummary,
-  type RouteScreenProps,
 } from './RouteScreen.tsx';
 import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
@@ -149,10 +150,11 @@ interface Call {
  * A fake of the three stop actions over a stored route, like the api: a move swaps the stop with
  * its stored neighbour (`atEdge` at an end), "אספתי" collects it with its thank-you, "לא נמצא"
  * marks it, and each answers the round as it is now. Answers pushed to `next` are used first, in
- * order, in place of doing the action.
+ * order, in place of doing the action. `fakes` are the client's functions of the same names, which
+ * RouteScreen takes from useApi.
  */
 function fakeApi(initial: RoundView = VIEW): {
-  props: Required<Pick<RouteScreenProps, 'moveStop' | 'collectStop' | 'markStopNotFound'>>;
+  fakes: Pick<Api, 'moveStop' | 'collectStop' | 'markStopNotFound'>;
   calls: Call[];
   next: Answer[];
 } {
@@ -174,7 +176,7 @@ function fakeApi(initial: RoundView = VIEW): {
   return {
     calls,
     next,
-    props: {
+    fakes: {
       moveStop: (roundId, orderId, direction) => {
         calls.push({ action: 'move', roundId, orderId, arg: direction });
         return answer(() => {
@@ -208,7 +210,8 @@ function fakeApi(initial: RoundView = VIEW): {
   };
 }
 
-const markOpened = (): Promise<MarkMessageOpenedOutcome> =>
+/** The client's `markMessageOpened`, which a card's "שלח תודה" row (SendList) takes from useApi. */
+const markMessageOpened = (): Promise<MarkMessageOpenedOutcome> =>
   Promise.resolve({ kind: 'marked', openedAt: new Date('2026-10-20T08:00:00Z') });
 
 /** What the route told its parent. */
@@ -219,15 +222,7 @@ interface Parent {
 }
 
 /** The parent's part: holds the view, so a view the route hands back re-renders it. */
-function Harness({
-  initial,
-  api,
-  parent,
-}: {
-  initial: RoundView;
-  api: ReturnType<typeof fakeApi>;
-  parent: Parent;
-}) {
+function Harness({ initial, parent }: { initial: RoundView; parent: Parent }) {
   const [view, setView] = useState(initial);
   return (
     <RouteScreen
@@ -238,20 +233,26 @@ function Harness({
       }}
       onStale={(message) => parent.stale.push(message)}
       onTypingChange={(typing) => parent.typing.push(typing)}
-      markOpened={markOpened}
-      {...api.props}
     />
   );
 }
 
+/**
+ * Renders the route under an ApiProvider whose stop actions are a {@link fakeApi} over `initial`
+ * and whose `markMessageOpened` is the fake above. `strict` puts StrictMode around the whole tree,
+ * as in development.
+ */
 function renderRoute(
   initial: RoundView = VIEW,
   { strict = false }: { strict?: boolean } = {},
 ): { api: ReturnType<typeof fakeApi>; parent: Parent; unmount: () => void } {
   const api = fakeApi(initial);
   const parent: Parent = { views: [], stale: [], typing: [] };
-  const harness = <Harness initial={initial} api={api} parent={parent} />;
-  const { unmount } = render(strict ? <StrictMode>{harness}</StrictMode> : harness);
+  const { unmount } = renderWithApi(
+    <Harness initial={initial} parent={parent} />,
+    { ...api.fakes, markMessageOpened },
+    { reactStrictMode: strict },
+  );
   return { api, parent, unmount };
 }
 

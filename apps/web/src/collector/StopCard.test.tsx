@@ -9,6 +9,7 @@ import {
   type RouteStopView,
 } from '@bottlerun/shared';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   BOTTLES_COLLECTED_LABEL,
   NEXT_STOP_EYEBROW,
@@ -70,10 +71,17 @@ interface Calls {
   typing: boolean[];
 }
 
-const markOpened = (): Promise<MarkMessageOpenedOutcome> =>
+/**
+ * The client's `markMessageOpened`, which the "שלח תודה" row (SendList) takes from useApi. No test
+ * here taps it; faked anyway, so no request can leave the test.
+ */
+const markMessageOpened = (): Promise<MarkMessageOpenedOutcome> =>
   Promise.resolve({ kind: 'marked', openedAt: new Date('2026-10-20T08:00:00Z') });
 
-/** Renders one card inside a list, as the route screen does, recording every callback. */
+/**
+ * Renders one card inside a list, as the route screen does, recording every callback. Under an
+ * ApiProvider whose `markMessageOpened` is the fake above; `rerender` keeps it.
+ */
 function renderCard(overrides: Partial<StopCardProps> = {}): {
   calls: Calls;
   rerender: (next: Partial<StopCardProps>) => void;
@@ -94,14 +102,14 @@ function renderCard(overrides: Partial<StopCardProps> = {}): {
       calls.notFounds += 1;
     },
     onTypingChange: (typing) => calls.typing.push(typing),
-    markOpened,
     ...overrides,
     ...next,
   });
-  const result = render(
+  const result = renderWithApi(
     <ol>
       <StopCard {...props({})} />
     </ol>,
+    { markMessageOpened },
   );
   return {
     calls,
