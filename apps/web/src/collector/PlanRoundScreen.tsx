@@ -16,17 +16,12 @@ import {
   regionSchema,
   type CollectorOrder,
   type OrderGroup,
-  type PlanRoundRequest,
   type Region,
 } from '@bottlerun/shared';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
-import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
-import {
-  fetchRounds,
-  planRound,
-  type PlanRoundOutcome,
-  type RoundsOutcome,
-} from '../api/roundsApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
+import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { TextField } from '../components/TextField.tsx';
 import { FormCard } from '../orderForm/OrderFields.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
@@ -147,19 +142,6 @@ function describedBy(...ids: (string | undefined)[]): string | undefined {
   return present.length === 0 ? undefined : present.join(' ');
 }
 
-/** Props of {@link PlanRoundScreen}. Each loader must keep its identity across renders. */
-export interface PlanRoundScreenProps {
-  /** Loads the waiting orders. Defaults to {@link fetchWaitingOrders}; tests pass a fake. */
-  loadOrders?: () => Promise<WaitingOrdersOutcome>;
-  /**
-   * Loads the open rounds, for `previousPickupBy` (ADR-0003). Defaults to {@link fetchRounds};
-   * tests pass a fake.
-   */
-  loadRounds?: () => Promise<RoundsOutcome>;
-  /** Plans the round. Defaults to {@link planRound}; tests pass a fake. */
-  submitPlan?: (request: PlanRoundRequest) => Promise<PlanRoundOutcome>;
-}
-
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
 type ScreenState =
   | { kind: 'loading' }
@@ -176,12 +158,15 @@ type ScreenState =
  * the orders in every state. The waiting orders and the rounds load together, once per mount and
  * again on "לנסות שוב"; the form appears only once both are there, so the pickup time starts
  * from the last round's.
+ *
+ * Both loads are of {@link useApi}: `fetchWaitingOrders` (GET /api/collector/orders) and
+ * `fetchRounds` (GET /api/collector/rounds, for the last round's pickup times, ADR-0003). The form
+ * takes its own requests from the client too.
  */
-export function PlanRoundScreen({
-  loadOrders = fetchWaitingOrders,
-  loadRounds = fetchRounds,
-  submitPlan = planRound,
-}: PlanRoundScreenProps) {
+export function PlanRoundScreen() {
+  // The client keeps its functions' identity, so listing them as effect dependencies does not run
+  // the load again.
+  const { fetchWaitingOrders: loadOrders, fetchRounds: loadRounds } = useApi();
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   // Counts the "לנסות שוב" taps: a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
@@ -249,8 +234,6 @@ export function PlanRoundScreen({
           initialGroups={state.groups}
           previousPickupBy={state.previousPickupBy}
           previousPickupFrom={state.previousPickupFrom}
-          loadOrders={loadOrders}
-          submitPlan={submitPlan}
         />
       )}
     </>
@@ -265,9 +248,6 @@ interface PlanRoundFormProps {
   previousPickupBy: string | undefined;
   /** The last round's window start, `HH:MM`, which the "from" field starts with. */
   previousPickupFrom: string | undefined;
-  /** Loads the orders again after a conflict (`ordersNotWaiting`). */
-  loadOrders: () => Promise<WaitingOrdersOutcome>;
-  submitPlan: (request: PlanRoundRequest) => Promise<PlanRoundOutcome>;
 }
 
 /**
@@ -276,14 +256,16 @@ interface PlanRoundFormProps {
  * "מתי" (the date and the pickup window) and "הודעה" (the personal text); then
  * "שלח הודעות". Every mistake shows next to its field, checked with the
  * shared `planRoundRequestSchema` (the api's own check) before anything is sent.
+ *
+ * The send is `planRound` of {@link useApi}, and after a conflict (`ordersNotWaiting`) the list
+ * loads again with its `fetchWaitingOrders`.
  */
 function PlanRoundForm({
   initialGroups,
   previousPickupBy,
   previousPickupFrom,
-  loadOrders,
-  submitPlan,
 }: PlanRoundFormProps) {
+  const { fetchWaitingOrders: loadOrders, planRound: submitPlan } = useApi();
   // Replaced only after a conflict, by the list loaded again.
   const [groups, setGroups] = useState(initialGroups);
   const [date, setDate] = useState('');
