@@ -1,6 +1,9 @@
-// The web app's only network code: every call to the api goes through here. Each function takes
-// the fetch to use, so tests pass a fake and never touch the network (CLAUDE.md: every external
-// call sits behind an interface). The api is same-origin (ADR-0002), so paths are relative.
+// The web app's only network code: every call to the api goes through here, and through one
+// helper, `request()`, which handles what every endpoint shares (a network error, a 401 behind the
+// login, a status the endpoint does not know, an unreadable body, an unexpected error). Each
+// function takes the fetch to use, so tests pass a fake and never touch the network (CLAUDE.md:
+// every external call sits behind an interface). The api is same-origin (ADR-0002), so paths are
+// relative.
 import {
   COLLECTOR_ORDER_MESSAGES,
   CREATE_ORDER_MESSAGES,
@@ -49,6 +52,134 @@ export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 // `fetch` itself around as a parameter or property can turn into.
 const globalFetch: FetchFn = (input, init) => fetch(input, init);
 
+// ---------------------------------------------------------------------------------------------
+// One request helper: `request()`
+//
+// Every endpoint below sends through it, and it decides, once for all of them:
+// - a network error (fetch rejects, or throws instead of rejecting) is `failed`, never retried
+//   unless the endpoint asks for one retry (only the booking form does);
+// - on a route behind the login (ADR-0004) a 401 is `loggedOut`, whatever the body says;
+// - a status the endpoint does not list is `failed`;
+// - the body reaches the endpoint's handler as JSON, or undefined when it is not JSON, so a
+//   success that must parse with its shared zod schema (`parsed`) is `failed` when it does not;
+// - anything else that throws is a bug: it is logged with console.error (the method and the
+//   error only: never the request body, a phone, an address or the path, which can hold the
+//   customer's token) and answered `failed`, so no screen ever gets a rejected promise.
+// What a status means for one endpoint (its success, a 404, a 409 told apart by its code) stays
+// in that endpoint's `on` map. Self-contained, so it can move to a module of its own.
+// ---------------------------------------------------------------------------------------------
+
+/** No usable answer: what an endpoint answers when nothing better can be said. */
+type Failed = { kind: 'failed' };
+
+/** A 401 on a route behind the login: the session is gone, and the screen goes to /login. */
+type LoggedOut = { kind: 'loggedOut' };
+
+const FAILED: Failed = { kind: 'failed' };
+const LOGGED_OUT: LoggedOut = { kind: 'loggedOut' };
+
+/** Turns the body of one status (JSON, or undefined when it is not JSON) into an outcome. */
+type StatusHandler<O> = (body: unknown) => O;
+
+/** The outcome of each status an endpoint knows, its success included; any other is `failed`. */
+type StatusHandlers<O> = Readonly<Record<number, StatusHandler<O | Failed>>>;
+
+/**
+ * The one method of a shared zod schema that `parsed` needs. Structural, so the web app does not
+ * depend on zod itself.
+ */
+interface ResponseSchema<T> {
+  safeParse(value: unknown): { success: true; data: T } | { success: false };
+}
+
+/** One call to the api, as {@link request} takes it. */
+interface RequestSpec<O> {
+  path: string;
+  init: RequestInit;
+  /** True for the routes behind the login: a 401 is then `loggedOut`. */
+  behindLogin: boolean;
+  /** See {@link StatusHandlers}. */
+  on: StatusHandlers<O>;
+  /** Send once more when the first fetch got no answer. Only for a write that is safe to repeat. */
+  retryOnNetworkError?: boolean;
+}
+
+/**
+ * Sends one request and turns its answer into the endpoint's outcome (see the section comment).
+ * Never rejects. `O` is the endpoint's outcome union; behind the login it must hold `loggedOut`.
+ */
+function request<O>(
+  fetchFn: FetchFn,
+  spec: RequestSpec<O> & { behindLogin: true },
+): Promise<O | Failed | LoggedOut>;
+function request<O>(
+  fetchFn: FetchFn,
+  spec: RequestSpec<O> & { behindLogin: false },
+): Promise<O | Failed>;
+async function request<O>(fetchFn: FetchFn, spec: RequestSpec<O>): Promise<O | Failed | LoggedOut> {
+  const response = await send(fetchFn, spec);
+  if (response === null) return FAILED;
+  try {
+    if (spec.behindLogin && response.status === 401) return LOGGED_OUT;
+    const handle = spec.on[response.status];
+    if (handle === undefined) return FAILED;
+    return handle(await readJson(response));
+  } catch (error) {
+    console.error(
+      `api: unexpected error handling the answer to a ${spec.init.method ?? 'GET'}`,
+      error,
+    );
+    return FAILED;
+  }
+}
+
+/**
+ * The answer of the request, or null when none arrived: every try's fetch rejected (a network
+ * error) or threw instead of rejecting.
+ */
+async function send(fetchFn: FetchFn, spec: RequestSpec<unknown>): Promise<Response | null> {
+  const tries = spec.retryOnNetworkError === true ? 2 : 1;
+  for (let attempt = 1; attempt <= tries; attempt += 1) {
+    try {
+      return await fetchFn(spec.path, spec.init);
+    } catch {
+      // No answer arrived; the next try, if any, sends the same request again.
+    }
+  }
+  return null;
+}
+
+/**
+ * The handler of a success status: the body must parse with `schema` (the shared zod schema of
+ * the answer), or the outcome is `failed`; a body that is not JSON never parses.
+ */
+function parsed<T, O>(
+  schema: ResponseSchema<T>,
+  outcome: (data: T) => O,
+): StatusHandler<O | Failed> {
+  return (body) => {
+    const result = schema.safeParse(body);
+    return result.success ? outcome(result.data) : FAILED;
+  };
+}
+
+/** The body as JSON, or undefined when it is not JSON (or could not be read to the end). */
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The init of a request that sends `body` as JSON. */
+function jsonInit(method: string, body: unknown): RequestInit {
+  return { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+/** The init of a GET that skips the browser cache, so a list is never one kept from before a change. */
+const FRESH_GET: RequestInit = { method: 'GET', cache: 'no-store' };
+
 /**
  * Shown on a form when what it sent got no usable answer (the booking form's order, the planning
  * screen's round, a button of the customer's page), or its answer was not understood.
@@ -63,18 +194,16 @@ export function networkErrorMessage(lang: Lang): string {
 /**
  * Wakes the api when the form loads (ADR-0002, warm-up): `GET /api/health` starts the serverless
  * function and opens its database connection, so both are warm by the time the customer presses
- * "send". Fire-and-forget: the answer does not matter, and every failure (a rejected or a throwing
- * fetch) is swallowed without logging, so it can never surface as an unhandled rejection.
+ * "send". Fire-and-forget: the answer does not matter (no status is listed, so none is even
+ * read), and `request()` never rejects and logs no network error, so a failed warm-up is silent.
  */
 export function warmUp(fetchFn: FetchFn = globalFetch): void {
-  try {
-    void fetchFn('/api/health', { method: 'GET', cache: 'no-store' }).then(
-      () => undefined,
-      () => undefined,
-    );
-  } catch {
-    // A fetch that throws instead of rejecting: as harmless as any other failed warm-up.
-  }
+  void request<never>(fetchFn, {
+    path: '/api/health',
+    init: FRESH_GET,
+    behindLogin: false,
+    on: {},
+  });
 }
 
 /** How POST /api/orders ended, as the form shows it. */
@@ -101,60 +230,26 @@ export type CreateOrderOutcome =
  * the order exists and the retry gets a 409. The customer then sees "כבר יש הזמנה פתוחה למספר
  * הזה.", which is still true: the order exists, and its link reaches them in the WhatsApp
  * message sent when a round is planned.
+ *
+ * 400, 409 and 429 are decided by the status: their messages are the shared constants, not the
+ * body's text, so a 429 from the hosting platform (an HTML body) still tells the customer to wait.
  */
 export async function createOrder(
-  request: CreateOrderRequest,
+  order: CreateOrderRequest,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CreateOrderOutcome> {
-  const send = () =>
-    fetchFn('/api/orders', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(request),
-    });
-
-  let response: Response;
-  try {
-    response = await send();
-  } catch {
-    try {
-      response = await send();
-    } catch {
-      return { kind: 'failed' };
-    }
-  }
-  return outcomeOf(response);
-}
-
-/**
- * The outcome of an HTTP answer. 400, 409 and 429 are decided by the status: their messages are
- * the shared constants, not the body's text, so a 429 from the hosting platform (an HTML body)
- * still tells the customer to wait. A 201 must carry a body that parses as the shared response.
- */
-async function outcomeOf(response: Response): Promise<CreateOrderOutcome> {
-  switch (response.status) {
-    case 201: {
-      const parsed = createOrderResponseSchema.safeParse(await readJson(response));
-      return parsed.success ? { kind: 'created', response: parsed.data } : { kind: 'failed' };
-    }
-    case 400:
-      return { kind: 'invalid', errors: invalidOrderErrors(await readJson(response)) };
-    case 409:
-      return { kind: 'duplicate', message: CREATE_ORDER_MESSAGES.duplicateOpenOrder };
-    case 429:
-      return { kind: 'rateLimited', message: CREATE_ORDER_MESSAGES.rateLimited };
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/** The body as JSON, or undefined when it is not JSON (or could not be read to the end). */
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return (await response.json()) as unknown;
-  } catch {
-    return undefined;
-  }
+  return request<CreateOrderOutcome>(fetchFn, {
+    path: '/api/orders',
+    init: jsonInit('POST', order),
+    behindLogin: false,
+    retryOnNetworkError: true,
+    on: {
+      201: parsed(createOrderResponseSchema, (response) => ({ kind: 'created', response })),
+      400: (body) => ({ kind: 'invalid', errors: invalidOrderErrors(body) }),
+      409: () => ({ kind: 'duplicate', message: CREATE_ORDER_MESSAGES.duplicateOpenOrder }),
+      429: () => ({ kind: 'rateLimited', message: CREATE_ORDER_MESSAGES.rateLimited }),
+    },
+  });
 }
 
 /**
@@ -169,6 +264,21 @@ function invalidOrderErrors(body: unknown): FormErrors {
     : { byField: {}, other: UNKNOWN_FIELD_ERROR };
 }
 
+/**
+ * The `fieldErrors` of a 400 body as the screen places them (planning, "אספתי"): only when it is
+ * an object of strings, as the route sends it; empty for any other 400, which still tells the
+ * user to check the form.
+ */
+function fieldErrorsOf(body: unknown): Record<string, string> {
+  const fieldErrors = isObject(body) ? body.fieldErrors : undefined;
+  return isStringRecord(fieldErrors) ? fieldErrors : {};
+}
+
+/** The `error` code of a 4xx body, or undefined when the body has none. */
+function errorCodeOf(body: unknown): unknown {
+  return isObject(body) ? body.error : undefined;
+}
+
 /** A plain JSON object (not null, not an array). */
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -177,6 +287,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
 /** A plain JSON object whose every value is a string, like the 400 body's `fieldErrors`. */
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isObject(value) && Object.values(value).every((item) => typeof item === 'string');
+}
+
+/** A JSON array whose every item is a string, like the 409 body's `orderIds`. */
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -207,33 +322,26 @@ export type LoginOutcome =
  * answer may have counted as a failed attempt, and every failure counts toward the limit (5 per
  * IP in 15 minutes). Yoel taps "כניסה" again instead.
  *
- * The 401 and 429 messages are the shared constants, not the body's text, so a 429 from the
- * hosting platform (an HTML body) still says to wait. A 200 that does not parse is `failed`, even
- * though its cookie may be set: the next tap logs in again, and nothing is lost.
+ * Not `behindLogin`: its 401 is the wrong password, not a lost session. The 401 and 429 messages
+ * are the shared constants, not the body's text, so a 429 from the hosting platform (an HTML body)
+ * still says to wait. A 200 that does not parse is `failed`, even though its cookie may be set:
+ * the next tap logs in again, and nothing is lost.
  */
 export async function login(
   password: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<LoginOutcome> {
-  const request: LoginRequest = { password };
-  const response = await fetchOrNull(fetchFn, '/api/auth/login', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
+  const body: LoginRequest = { password };
+  return request<LoginOutcome>(fetchFn, {
+    path: '/api/auth/login',
+    init: jsonInit('POST', body),
+    behindLogin: false,
+    on: {
+      200: parsed(meResponseSchema, ({ user }) => ({ kind: 'loggedIn', user })),
+      401: () => ({ kind: 'wrongPassword', message: LOGIN_MESSAGES.wrongPassword }),
+      429: () => ({ kind: 'rateLimited', message: LOGIN_MESSAGES.rateLimited }),
+    },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const user = await sessionUserOf(response);
-      return user === null ? { kind: 'failed' } : { kind: 'loggedIn', user };
-    }
-    case 401:
-      return { kind: 'wrongPassword', message: LOGIN_MESSAGES.wrongPassword };
-    case 429:
-      return { kind: 'rateLimited', message: LOGIN_MESSAGES.rateLimited };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** Who `GET /api/auth/me` says is logged in on this browser. */
@@ -252,50 +360,28 @@ export type SessionOutcome =
  * like a logout and send Yoel to the password screen.
  */
 export async function fetchSession(fetchFn: FetchFn = globalFetch): Promise<SessionOutcome> {
-  const response = await fetchOrNull(fetchFn, '/api/auth/me', { method: 'GET', cache: 'no-store' });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const user = await sessionUserOf(response);
-      return user === null ? { kind: 'failed' } : { kind: 'loggedIn', user };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
+  return request<SessionOutcome>(fetchFn, {
+    path: '/api/auth/me',
+    init: FRESH_GET,
+    behindLogin: true,
+    on: { 200: parsed(meResponseSchema, ({ user }) => ({ kind: 'loggedIn', user })) },
+  });
 }
 
 /**
  * Logs out with `POST /api/auth/logout`, which clears the session cookie (the cookie is httpOnly,
- * so the page cannot clear it itself). True when the api answered with success (204); false on
+ * so the page cannot clear it itself). True when the api answered its success (204); false on
  * any other answer or a network error, when the cookie may still be there.
  */
 export async function logout(fetchFn: FetchFn = globalFetch): Promise<boolean> {
-  const response = await fetchOrNull(fetchFn, '/api/auth/logout', { method: 'POST' });
-  return response?.ok ?? false;
-}
-
-/**
- * The answer of one fetch, or null when none arrived: fetch rejected (a network error) or threw
- * instead of rejecting. Never retries.
- */
-async function fetchOrNull(
-  fetchFn: FetchFn,
-  input: string,
-  init: RequestInit,
-): Promise<Response | null> {
-  try {
-    return await fetchFn(input, init);
-  } catch {
-    return null;
-  }
-}
-
-/** The user of a 200 from login or /me, or null when the body is not a `MeResponse`. */
-async function sessionUserOf(response: Response): Promise<SessionUser | null> {
-  const parsed = meResponseSchema.safeParse(await readJson(response));
-  return parsed.success ? parsed.data.user : null;
+  const outcome = await request<{ kind: 'cleared' }>(fetchFn, {
+    path: '/api/auth/logout',
+    init: { method: 'POST' },
+    // Not `behindLogin`: the route answers 204 with or without a session, so a 401 is `failed`.
+    behindLogin: false,
+    on: { 204: () => ({ kind: 'cleared' }) },
+  });
+  return outcome.kind === 'cleared';
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -335,21 +421,14 @@ export type WaitingOrdersOutcome =
 export async function fetchWaitingOrders(
   fetchFn: FetchFn = globalFetch,
 ): Promise<WaitingOrdersOutcome> {
-  const response = await fetchOrNull(fetchFn, COLLECTOR_ORDERS_PATH, {
-    method: 'GET',
-    cache: 'no-store',
+  return request<WaitingOrdersOutcome>(fetchFn, {
+    path: COLLECTOR_ORDERS_PATH,
+    init: FRESH_GET,
+    behindLogin: true,
+    on: {
+      200: parsed(collectorOrdersResponseSchema, ({ groups }) => ({ kind: 'loaded', groups })),
+    },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const parsed = collectorOrdersResponseSchema.safeParse(await readJson(response));
-      return parsed.success ? { kind: 'loaded', groups: parsed.data.groups } : { kind: 'failed' };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** How GET /api/collector/orders/:id ended, as the edit screen shows it. */
@@ -368,23 +447,15 @@ export async function fetchCollectorOrder(
   id: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CollectorOrderOutcome> {
-  const response = await fetchOrNull(fetchFn, collectorOrderPath(id), {
-    method: 'GET',
-    cache: 'no-store',
+  return request<CollectorOrderOutcome>(fetchFn, {
+    path: collectorOrderPath(id),
+    init: FRESH_GET,
+    behindLogin: true,
+    on: {
+      200: parsed(collectorOrderResponseSchema, ({ order }) => ({ kind: 'loaded', order })),
+      404: () => ({ kind: 'notFound' }),
+    },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const order = await collectorOrderOf(response);
-      return order === null ? { kind: 'failed' } : { kind: 'loaded', order };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return { kind: 'notFound' };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** How a change to an order ended (add, edit, cancel). */
@@ -409,34 +480,34 @@ export type CollectorOrderWriteOutcome =
  * `POST /api/collector/orders`: the booking form's request, without the honeypot.
  */
 export async function addCollectorOrder(
-  request: AddOrderRequest,
+  body: AddOrderRequest,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CollectorOrderWriteOutcome> {
-  const response = await fetchOrNull(fetchFn, COLLECTOR_ORDERS_PATH, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
+  return request<CollectorOrderWriteOutcome>(fetchFn, {
+    path: COLLECTOR_ORDERS_PATH,
+    init: jsonInit('POST', body),
+    behindLogin: true,
+    // No order id in the path, so a 404 is not "the order is gone": the route itself is missing.
+    on: collectorWriteHandlers(201, false),
   });
-  // No order id in the path, so a 404 is not "the order is gone": the route itself is missing.
-  return writeOutcomeOf(response, { successStatus: 201, notFoundMeansOrder: false });
 }
 
 /**
  * Changes an open order (Yoel's "עריכה", "שינוי אזור", "רחוב קרוב") with
- * `PATCH /api/collector/orders/:id`. Only the keys in `request` change; see
+ * `PATCH /api/collector/orders/:id`. Only the keys in `body` change; see
  * `updateOrderRequestSchema` for what each does to the region.
  */
 export async function updateCollectorOrder(
   id: string,
-  request: UpdateOrderRequest,
+  body: UpdateOrderRequest,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CollectorOrderWriteOutcome> {
-  const response = await fetchOrNull(fetchFn, collectorOrderPath(id), {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
+  return request<CollectorOrderWriteOutcome>(fetchFn, {
+    path: collectorOrderPath(id),
+    init: jsonInit('PATCH', body),
+    behindLogin: true,
+    on: collectorWriteHandlers(200, true),
   });
-  return writeOutcomeOf(response, { successStatus: 200, notFoundMeansOrder: true });
 }
 
 /**
@@ -447,10 +518,53 @@ export async function cancelCollectorOrder(
   id: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CollectorOrderWriteOutcome> {
-  const response = await fetchOrNull(fetchFn, `${collectorOrderPath(id)}/cancel`, {
-    method: 'POST',
+  return request<CollectorOrderWriteOutcome>(fetchFn, {
+    path: `${collectorOrderPath(id)}/cancel`,
+    init: { method: 'POST' },
+    behindLogin: true,
+    on: collectorWriteHandlers(200, true),
   });
-  return writeOutcomeOf(response, { successStatus: 200, notFoundMeansOrder: true });
+}
+
+/**
+ * The statuses of an order write. `successStatus` is the route's success (201 for an add, 200
+ * otherwise); any other 2xx is `failed`, since the app cannot tell what it means.
+ * `notFoundMeansOrder` is false for the add, whose path has no order id to be missing.
+ */
+function collectorWriteHandlers(
+  successStatus: 200 | 201,
+  notFoundMeansOrder: boolean,
+): StatusHandlers<CollectorOrderWriteOutcome> {
+  const handlers: Record<number, StatusHandler<CollectorOrderWriteOutcome>> = {
+    [successStatus]: parsed(collectorOrderResponseSchema, ({ order }) => ({
+      kind: 'saved',
+      order,
+    })),
+    // The same mapping as the booking form's: a path no field shows (`nearStreetCode`,
+    // `region`, an unknown key) becomes the message above the form.
+    400: (body) => ({ kind: 'invalid', errors: invalidOrderErrors(body) }),
+    409: conflictOutcome,
+  };
+  if (notFoundMeansOrder) {
+    handlers[404] = () => ({ kind: 'notFound', message: COLLECTOR_ORDER_MESSAGES.orderNotFound });
+  }
+  return handlers;
+}
+
+/**
+ * A 409 told apart by the body's `error` code: the two conflicts need different words and a
+ * different next step (check the phone, or go back to the list). A body without a known code is
+ * `failed`: guessing could tell Yoel the wrong thing.
+ */
+function conflictOutcome(body: unknown): CollectorOrderWriteOutcome {
+  switch (errorCodeOf(body)) {
+    case 'duplicate_open_order':
+      return { kind: 'duplicate', message: CREATE_ORDER_MESSAGES.duplicateOpenOrder };
+    case 'invalid_transition':
+      return { kind: 'closed', message: COLLECTOR_ORDER_MESSAGES.orderClosed };
+    default:
+      return FAILED;
+  }
 }
 
 /** How a delete ended (Yoel's "מחיקת ההזמנה", ADR-0008). */
@@ -472,78 +586,19 @@ export async function deleteCollectorOrder(
   id: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<DeleteCollectorOrderOutcome> {
-  const response = await fetchOrNull(fetchFn, collectorOrderPath(id), { method: 'DELETE' });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 204:
-    case 404:
-      return { kind: 'deleted' };
-    case 401:
-      return { kind: 'loggedOut' };
-    case 409: {
-      const body = await readJson(response);
-      return isObject(body) && body.error === 'cannot_delete'
-        ? { kind: 'refused', message: COLLECTOR_ORDER_MESSAGES.cannotDelete }
-        : { kind: 'failed' };
-    }
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/**
- * The outcome of a write's answer (null: none arrived). `successStatus` is the route's success
- * (201 for an add, 200 otherwise); any other 2xx is `failed`, since the app cannot tell what it
- * means. `notFoundMeansOrder` is false for the add, whose path has no order id to be missing.
- */
-async function writeOutcomeOf(
-  response: Response | null,
-  expected: { successStatus: 200 | 201; notFoundMeansOrder: boolean },
-): Promise<CollectorOrderWriteOutcome> {
-  if (response === null) return { kind: 'failed' };
-  if (response.status === expected.successStatus) {
-    const order = await collectorOrderOf(response);
-    return order === null ? { kind: 'failed' } : { kind: 'saved', order };
-  }
-  switch (response.status) {
-    case 400:
-      // The same mapping as the booking form's: a path no field shows (`nearStreetCode`,
-      // `region`, an unknown key) becomes the message above the form.
-      return { kind: 'invalid', errors: invalidOrderErrors(await readJson(response)) };
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return expected.notFoundMeansOrder
-        ? { kind: 'notFound', message: COLLECTOR_ORDER_MESSAGES.orderNotFound }
-        : { kind: 'failed' };
-    case 409:
-      return conflictOutcome(await readJson(response));
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/**
- * A 409 told apart by the body's `error` code: the two conflicts need different words and a
- * different next step (check the phone, or go back to the list). A body without a known code is
- * `failed`: guessing could tell Yoel the wrong thing.
- */
-function conflictOutcome(body: unknown): CollectorOrderWriteOutcome {
-  const code = isObject(body) ? body.error : undefined;
-  switch (code) {
-    case 'duplicate_open_order':
-      return { kind: 'duplicate', message: CREATE_ORDER_MESSAGES.duplicateOpenOrder };
-    case 'invalid_transition':
-      return { kind: 'closed', message: COLLECTOR_ORDER_MESSAGES.orderClosed };
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/** The order of a success body, or null when the body is not a `CollectorOrderResponse`. */
-async function collectorOrderOf(response: Response): Promise<CollectorOrder | null> {
-  const parsed = collectorOrderResponseSchema.safeParse(await readJson(response));
-  return parsed.success ? parsed.data.order : null;
+  return request<DeleteCollectorOrderOutcome>(fetchFn, {
+    path: collectorOrderPath(id),
+    init: { method: 'DELETE' },
+    behindLogin: true,
+    on: {
+      204: () => ({ kind: 'deleted' }),
+      404: () => ({ kind: 'deleted' }),
+      409: (body) =>
+        errorCodeOf(body) === 'cannot_delete'
+          ? { kind: 'refused', message: COLLECTOR_ORDER_MESSAGES.cannotDelete }
+          : FAILED,
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -582,26 +637,15 @@ export async function markMessageOpened(
   messageIndex: number,
   fetchFn: FetchFn = globalFetch,
 ): Promise<MarkMessageOpenedOutcome> {
-  const response = await fetchOrNull(
-    fetchFn,
-    `${collectorOrderPath(orderId)}/messages/${messageIndex}/opened`,
-    { method: 'POST' },
-  );
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const parsed = messageOpenedResponseSchema.safeParse(await readJson(response));
-      return parsed.success
-        ? { kind: 'marked', openedAt: parsed.data.openedAt }
-        : { kind: 'failed' };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return { kind: 'notFound' };
-    default:
-      return { kind: 'failed' };
-  }
+  return request<MarkMessageOpenedOutcome>(fetchFn, {
+    path: `${collectorOrderPath(orderId)}/messages/${messageIndex}/opened`,
+    init: { method: 'POST' },
+    behindLogin: true,
+    on: {
+      200: parsed(messageOpenedResponseSchema, ({ openedAt }) => ({ kind: 'marked', openedAt })),
+      404: () => ({ kind: 'notFound' }),
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -630,28 +674,19 @@ export type RoundsOutcome =
 
 /** Loads the open rounds from `GET /api/collector/rounds`, past the browser cache. */
 export async function fetchRounds(fetchFn: FetchFn = globalFetch): Promise<RoundsOutcome> {
-  const response = await fetchOrNull(fetchFn, COLLECTOR_ROUNDS_PATH, {
-    method: 'GET',
-    cache: 'no-store',
+  return request<RoundsOutcome>(fetchFn, {
+    path: COLLECTOR_ROUNDS_PATH,
+    init: FRESH_GET,
+    behindLogin: true,
+    on: {
+      200: parsed(roundsResponseSchema, (data) => ({
+        kind: 'loaded',
+        rounds: data.rounds,
+        previousPickupBy: data.previousPickupBy,
+        previousPickupFrom: data.previousPickupFrom,
+      })),
+    },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const parsed = roundsResponseSchema.safeParse(await readJson(response));
-      return parsed.success
-        ? {
-            kind: 'loaded',
-            rounds: parsed.data.rounds,
-            previousPickupBy: parsed.data.previousPickupBy,
-            previousPickupFrom: parsed.data.previousPickupFrom,
-          }
-        : { kind: 'failed' };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** How POST /api/collector/rounds ("שלח הודעות") ended, as the planning screen shows it. */
@@ -680,43 +715,29 @@ export type PlanRoundOutcome =
  * moves the orders into it (`confirmed`: nobody confirms, ADR-0012) and writes each one's message.
  */
 export async function planRound(
-  request: PlanRoundRequest,
+  body: PlanRoundRequest,
   fetchFn: FetchFn = globalFetch,
 ): Promise<PlanRoundOutcome> {
-  const response = await fetchOrNull(fetchFn, COLLECTOR_ROUNDS_PATH, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
-  });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 201: {
-      const view = await roundViewOf(response);
-      return view === null ? { kind: 'failed' } : { kind: 'planned', view };
-    }
-    case 400: {
-      // `fieldErrors` only when it is an object of strings, as the route sends it
-      // (`invalid_round`); any other 400 still tells Yoel to check the form.
-      const body = await readJson(response);
-      const fieldErrors = isObject(body) ? body.fieldErrors : undefined;
-      return { kind: 'invalid', fieldErrors: isStringRecord(fieldErrors) ? fieldErrors : {} };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 409: {
+  return request<PlanRoundOutcome>(fetchFn, {
+    path: COLLECTOR_ROUNDS_PATH,
+    init: jsonInit('POST', body),
+    behindLogin: true,
+    on: {
+      201: parsed(roundViewSchema, (view) => ({ kind: 'planned', view })),
+      // `fieldErrors` of an `invalid_round`; any other 400 still tells Yoel to check the form.
+      400: (answer) => ({ kind: 'invalid', fieldErrors: fieldErrorsOf(answer) }),
       // Told apart by the body's code, like the orders' 409s: a conflict this screen does not
       // know is `failed` rather than a guess.
-      const body = await readJson(response);
-      if (!isObject(body) || body.error !== 'orders_not_waiting') return { kind: 'failed' };
-      return {
-        kind: 'ordersNotWaiting',
-        message: ROUND_MESSAGES.ordersNotWaiting,
-        orderIds: isStringArray(body.orderIds) ? body.orderIds : [],
-      };
-    }
-    default:
-      return { kind: 'failed' };
-  }
+      409: (answer) =>
+        isObject(answer) && answer.error === 'orders_not_waiting'
+          ? {
+              kind: 'ordersNotWaiting',
+              message: ROUND_MESSAGES.ordersNotWaiting,
+              orderIds: isStringArray(answer.orderIds) ? answer.orderIds : [],
+            }
+          : FAILED,
+    },
+  });
 }
 
 /** The path of round `roundId`, both ids encoded so each stays one path segment. */
@@ -755,27 +776,20 @@ export async function buildRoute(
   roundId: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<BuildRouteOutcome> {
-  const response = await fetchOrNull(fetchFn, `${roundPath(roundId)}/route`, { method: 'POST' });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const view = await roundViewOf(response);
-      return view === null ? { kind: 'failed' } : { kind: 'built', view };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return { kind: 'notFound' };
-    case 409: {
+  return request<BuildRouteOutcome>(fetchFn, {
+    path: `${roundPath(roundId)}/route`,
+    init: { method: 'POST' },
+    behindLogin: true,
+    on: {
+      200: parsed(roundViewSchema, (view) => ({ kind: 'built', view })),
+      404: () => ({ kind: 'notFound' }),
       // Told apart by the body's code: a conflict this screen does not know is `failed`.
-      const body = await readJson(response);
-      return isObject(body) && body.error === 'confirmations_closed'
-        ? { kind: 'closed', message: ROUND_MESSAGES.confirmationsClosed }
-        : { kind: 'failed' };
-    }
-    default:
-      return { kind: 'failed' };
-  }
+      409: (body) =>
+        errorCodeOf(body) === 'confirmations_closed'
+          ? { kind: 'closed', message: ROUND_MESSAGES.confirmationsClosed }
+          : FAILED,
+    },
+  });
 }
 
 /** How a stop's move, "אספתי" or "לא נמצא" ended, as the route screen shows it. */
@@ -821,8 +835,8 @@ export async function moveStop(
   direction: MoveStopRequest['direction'],
   fetchFn: FetchFn = globalFetch,
 ): Promise<StopActionOutcome> {
-  const request: MoveStopRequest = { direction };
-  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/move`, request, false);
+  const body: MoveStopRequest = { direction };
+  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/move`, body, false);
 }
 
 /**
@@ -838,8 +852,8 @@ export async function collectStop(
   fetchFn: FetchFn = globalFetch,
 ): Promise<StopActionOutcome> {
   // The key is left out rather than sent as undefined: "no count" means the estimate.
-  const request: CollectStopRequest = bottlesCollected === undefined ? {} : { bottlesCollected };
-  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/collected`, request, true);
+  const body: CollectStopRequest = bottlesCollected === undefined ? {} : { bottlesCollected };
+  return stopAction(fetchFn, `${roundStopPath(roundId, orderId)}/collected`, body, true);
 }
 
 /**
@@ -856,46 +870,30 @@ export async function markStopNotFound(
 }
 
 /**
- * Sends one stop action (a JSON `request`, or no body when undefined) and turns the answer into a
+ * Sends one stop action (a JSON `body`, or none when undefined) and turns the answer into a
  * {@link StopActionOutcome}. `hasFields`: whether a 400 is `invalid` (the "אספתי" count) rather
  * than `failed`. Never retried: every stop action is idempotent, so Yoel just taps again.
  */
 async function stopAction(
   fetchFn: FetchFn,
   path: string,
-  request: MoveStopRequest | CollectStopRequest | undefined,
+  body: MoveStopRequest | CollectStopRequest | undefined,
   hasFields: boolean,
 ): Promise<StopActionOutcome> {
-  const init: RequestInit =
-    request === undefined
-      ? { method: 'POST' }
-      : {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(request),
-        };
-  const response = await fetchOrNull(fetchFn, path, init);
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const view = await roundViewOf(response);
-      return view === null ? { kind: 'failed' } : { kind: 'saved', view };
-    }
-    case 400: {
-      if (!hasFields) return { kind: 'failed' };
-      const body = await readJson(response);
-      const fieldErrors = isObject(body) ? body.fieldErrors : undefined;
-      return { kind: 'invalid', fieldErrors: isStringRecord(fieldErrors) ? fieldErrors : {} };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return { kind: 'notFound' };
-    case 409:
-      return stopConflictOutcome(await readJson(response));
-    default:
-      return { kind: 'failed' };
+  const handlers: Record<number, StatusHandler<StopActionOutcome>> = {
+    200: parsed(roundViewSchema, (view) => ({ kind: 'saved', view })),
+    404: () => ({ kind: 'notFound' }),
+    409: stopConflictOutcome,
+  };
+  if (hasFields) {
+    handlers[400] = (answer) => ({ kind: 'invalid', fieldErrors: fieldErrorsOf(answer) });
   }
+  return request<StopActionOutcome>(fetchFn, {
+    path,
+    init: body === undefined ? { method: 'POST' } : jsonInit('POST', body),
+    behindLogin: true,
+    on: handlers,
+  });
 }
 
 /**
@@ -903,8 +901,7 @@ async function stopAction(
  * A body without a known code is `failed`: guessing could tell Yoel the wrong thing.
  */
 function stopConflictOutcome(body: unknown): StopActionOutcome {
-  const code = isObject(body) ? body.error : undefined;
-  switch (code) {
+  switch (errorCodeOf(body)) {
     case 'route_not_open':
       return { kind: 'stale', message: ROUND_MESSAGES.routeNotOpen };
     case 'stop_handled':
@@ -913,7 +910,7 @@ function stopConflictOutcome(body: unknown): StopActionOutcome {
     case 'stop_at_edge':
       return { kind: 'atEdge', message: ROUND_MESSAGES.stopAtEdge };
     default:
-      return { kind: 'failed' };
+      return FAILED;
   }
 }
 
@@ -941,32 +938,16 @@ export async function closeRound(
   roundId: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CloseRoundOutcome> {
-  const response = await fetchOrNull(fetchFn, `${roundPath(roundId)}/close`, { method: 'POST' });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const view = await roundViewOf(response);
-      return view === null ? { kind: 'failed' } : { kind: 'closed', view };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    case 404:
-      return { kind: 'notFound' };
-    default:
-      // The route has no 409: a conflict here is from something in between, and so `failed`.
-      return { kind: 'failed' };
-  }
-}
-
-/** The round of a success body, or null when the body is not a `RoundView`. */
-async function roundViewOf(response: Response): Promise<RoundView | null> {
-  const parsed = roundViewSchema.safeParse(await readJson(response));
-  return parsed.success ? parsed.data : null;
-}
-
-/** A JSON array whose every item is a string, like the 409 body's `orderIds`. */
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  return request<CloseRoundOutcome>(fetchFn, {
+    path: `${roundPath(roundId)}/close`,
+    init: { method: 'POST' },
+    behindLogin: true,
+    // The route has no 409: a conflict here is from something in between, and so `failed`.
+    on: {
+      200: parsed(roundViewSchema, (view) => ({ kind: 'closed', view })),
+      404: () => ({ kind: 'notFound' }),
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -998,33 +979,23 @@ export async function fetchHistory(
   month: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<HistoryOutcome> {
-  const response = await fetchOrNull(
-    fetchFn,
-    `/api/collector/history?month=${encodeURIComponent(month)}`,
-    { method: 'GET', cache: 'no-store' },
-  );
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const parsed = historyResponseSchema.safeParse(await readJson(response));
-      return parsed.success ? { kind: 'loaded', history: parsed.data } : { kind: 'failed' };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
+  return request<HistoryOutcome>(fetchFn, {
+    path: `/api/collector/history?month=${encodeURIComponent(month)}`,
+    init: FRESH_GET,
+    behindLogin: true,
+    on: { 200: parsed(historyResponseSchema, (history) => ({ kind: 'loaded', history })) },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
 // The customer's own page: /api/o/:token (spec §3.3, the page `/o/<token>`)
 //
-// Public: no login, so no `loggedOut` here; the order is reached by its random token alone, which
-// goes into the path encoded. The same rules as the collector's routes otherwise: every message is
-// a shared constant, never the body's text, and every success body is parsed with the shared
-// schema. Nothing is retried, not even after a network error: every write is idempotent (a second
-// decline or cancel answers `saved` with the order as it is), so the customer just taps
-// again, and an answer lost on the way is put right by that tap.
+// Public: no login, so no `loggedOut` here (a 401 is `failed`); the order is reached by its random
+// token alone, which goes into the path encoded. The same rules as the collector's routes
+// otherwise: every message is a shared constant, never the body's text, and every success body is
+// parsed with the shared schema. Nothing is retried, not even after a network error: every write
+// is idempotent (a second decline or cancel answers `saved` with the order as it is), so the
+// customer just taps again, and an answer lost on the way is put right by that tap.
 // ---------------------------------------------------------------------------------------------
 
 /**
@@ -1052,21 +1023,15 @@ export async function fetchCustomerOrder(
   token: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CustomerOrderOutcome> {
-  const response = await fetchOrNull(fetchFn, customerOrderPath(token), {
-    method: 'GET',
-    cache: 'no-store',
+  return request<CustomerOrderOutcome>(fetchFn, {
+    path: customerOrderPath(token),
+    init: FRESH_GET,
+    behindLogin: false,
+    on: {
+      200: parsed(customerOrderResponseSchema, ({ order }) => ({ kind: 'loaded', order })),
+      404: () => ({ kind: 'notFound' }),
+    },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const order = await customerOrderOf(response);
-      return order === null ? { kind: 'failed' } : { kind: 'loaded', order };
-    }
-    case 404:
-      return { kind: 'notFound' };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** How a button of the customer's page (or its "שינוי") ended. */
@@ -1091,9 +1056,7 @@ export async function declineCustomerOrder(
   token: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CustomerOrderWriteOutcome> {
-  return customerWriteOutcomeOf(
-    await fetchOrNull(fetchFn, `${customerOrderPath(token)}/decline`, { method: 'POST' }),
-  );
+  return customerWrite(fetchFn, `${customerOrderPath(token)}/decline`, { method: 'POST' });
 }
 
 /**
@@ -1104,9 +1067,7 @@ export async function cancelCustomerOrder(
   token: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CustomerOrderWriteOutcome> {
-  return customerWriteOutcomeOf(
-    await fetchOrNull(fetchFn, `${customerOrderPath(token)}/cancel`, { method: 'POST' }),
-  );
+  return customerWrite(fetchFn, `${customerOrderPath(token)}/cancel`, { method: 'POST' });
 }
 
 /**
@@ -1116,63 +1077,42 @@ export async function cancelCustomerOrder(
  */
 export async function updateCustomerOrder(
   token: string,
-  request: CustomerUpdateOrderRequest,
+  body: CustomerUpdateOrderRequest,
   fetchFn: FetchFn = globalFetch,
 ): Promise<CustomerOrderWriteOutcome> {
-  return customerWriteOutcomeOf(
-    await fetchOrNull(fetchFn, customerOrderPath(token), {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(request),
-    }),
-  );
+  return customerWrite(fetchFn, customerOrderPath(token), jsonInit('PATCH', body));
 }
 
-/** The outcome of a customer write's answer (null: none arrived). Every route's success is 200. */
-async function customerWriteOutcomeOf(
-  response: Response | null,
+/** Sends one write of the customer's page. Every route's success is 200. */
+async function customerWrite(
+  fetchFn: FetchFn,
+  path: string,
+  init: RequestInit,
 ): Promise<CustomerOrderWriteOutcome> {
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const order = await customerOrderOf(response);
-      return order === null ? { kind: 'failed' } : { kind: 'saved', order };
-    }
-    case 400:
+  return request<CustomerOrderWriteOutcome>(fetchFn, {
+    path,
+    init,
+    behindLogin: false,
+    on: {
+      200: parsed(customerOrderResponseSchema, ({ order }) => ({ kind: 'saved', order })),
       // The booking form's mapping: `fieldErrors: {}` (a body refused as a whole) becomes the
       // message above the form instead of nothing.
-      return { kind: 'invalid', errors: invalidOrderErrors(await readJson(response)) };
-    case 404:
-      return { kind: 'notFound' };
-    case 409:
-      return customerConflictOutcome(await readJson(response));
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/**
- * A 409 of the customer's page, told apart by the body's `error` code. A body without a known code
- * is `failed`: guessing could tell the customer the wrong thing.
- */
-function customerConflictOutcome(body: unknown): CustomerOrderWriteOutcome {
-  const code = isObject(body) ? body.error : undefined;
-  switch (code) {
-    case 'invalid_transition':
-      return { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed };
-    default:
-      return { kind: 'failed' };
-  }
-}
-
-/** The order of a 200 body, or null when the body is not a `CustomerOrderResponse`. */
-async function customerOrderOf(response: Response): Promise<CustomerOrder | null> {
-  const parsed = customerOrderResponseSchema.safeParse(await readJson(response));
-  return parsed.success ? parsed.data.order : null;
+      400: (body) => ({ kind: 'invalid', errors: invalidOrderErrors(body) }),
+      404: () => ({ kind: 'notFound' }),
+      // Told apart by the body's code: a conflict without a known one is `failed`, since
+      // guessing could tell the customer the wrong thing.
+      409: (body) =>
+        errorCodeOf(body) === 'invalid_transition'
+          ? { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed }
+          : FAILED,
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
 // Collector Web Push: /api/collector/push/* (ADR-0013)
+//
+// Behind the login like the routes above: a 401 is `loggedOut`, and nothing is retried.
 // ---------------------------------------------------------------------------------------------
 
 const COLLECTOR_PUSH_PATH = '/api/collector/push';
@@ -1183,21 +1123,12 @@ export type PushConfigOutcome =
 
 /** Fetches whether Web Push is enabled and its public VAPID key from GET /api/collector/push/config. */
 export async function fetchPushConfig(fetchFn: FetchFn = globalFetch): Promise<PushConfigOutcome> {
-  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/config`, {
-    method: 'GET',
-    cache: 'no-store',
+  return request<PushConfigOutcome>(fetchFn, {
+    path: `${COLLECTOR_PUSH_PATH}/config`,
+    init: FRESH_GET,
+    behindLogin: true,
+    on: { 200: parsed(pushConfigResponseSchema, (config) => ({ kind: 'loaded', config })) },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 200: {
-      const parsed = pushConfigResponseSchema.safeParse(await readJson(response));
-      return parsed.success ? { kind: 'loaded', config: parsed.data } : { kind: 'failed' };
-    }
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** How saving a push subscription ended. */
@@ -1209,20 +1140,12 @@ export async function savePushSubscription(
   subscription: PushSubscription,
   fetchFn: FetchFn = globalFetch,
 ): Promise<SavePushSubscriptionOutcome> {
-  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/subscribe`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(subscription),
+  return request<SavePushSubscriptionOutcome>(fetchFn, {
+    path: `${COLLECTOR_PUSH_PATH}/subscribe`,
+    init: jsonInit('POST', subscription),
+    behindLogin: true,
+    on: { 204: () => ({ kind: 'saved' }) },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 204:
-      return { kind: 'saved' };
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
 }
 
 /** How deleting a push subscription ended. */
@@ -1234,19 +1157,11 @@ export async function deletePushSubscription(
   endpoint: string,
   fetchFn: FetchFn = globalFetch,
 ): Promise<DeletePushSubscriptionOutcome> {
-  const request: UnsubscribePushRequest = { endpoint };
-  const response = await fetchOrNull(fetchFn, `${COLLECTOR_PUSH_PATH}/unsubscribe`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
+  const body: UnsubscribePushRequest = { endpoint };
+  return request<DeletePushSubscriptionOutcome>(fetchFn, {
+    path: `${COLLECTOR_PUSH_PATH}/unsubscribe`,
+    init: jsonInit('POST', body),
+    behindLogin: true,
+    on: { 204: () => ({ kind: 'deleted' }) },
   });
-  if (response === null) return { kind: 'failed' };
-  switch (response.status) {
-    case 204:
-      return { kind: 'deleted' };
-    case 401:
-      return { kind: 'loggedOut' };
-    default:
-      return { kind: 'failed' };
-  }
 }
