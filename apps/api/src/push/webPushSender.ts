@@ -84,25 +84,6 @@ function decodeSubscriptionKey(value: string): Buffer | null {
 }
 
 /**
- * Generates a fresh P-256 VAPID key pair in base64url format (65-byte uncompressed `publicKey`,
- * 32-byte `privateKey`).
- */
-export function generateVapidKeys(): { publicKey: string; privateKey: string } {
-  const ecdh = createECDH('prime256v1');
-  ecdh.generateKeys();
-  const rawPrivate = ecdh.getPrivateKey();
-  // OpenSSL strips leading 0x00 bytes from BIGNUMs (~1 in 256 keys); left-pad to 32 bytes.
-  const privateBytes =
-    rawPrivate.length < P256_PRIVATE_KEY_BYTES
-      ? Buffer.concat([Buffer.alloc(P256_PRIVATE_KEY_BYTES - rawPrivate.length), rawPrivate])
-      : rawPrivate;
-  return {
-    publicKey: ecdh.getPublicKey().toString('base64url'),
-    privateKey: privateBytes.toString('base64url'),
-  };
-}
-
-/**
  * Validates a base64url VAPID public/private key pair on P-256 (`prime256v1`) and builds the
  * signing `KeyObject`.
  *
