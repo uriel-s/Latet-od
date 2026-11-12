@@ -2,6 +2,7 @@
 // at the end of the screen's title row (CSS floats it beside the <h1>), the screen of the current URL, and the bottom navigation (spec §3 "אפליקציית
 // האוסף"). Switching tabs only changes `path`; this component and its guard stay mounted.
 import { useRef, useState, type ReactNode } from 'react';
+import { useApi } from '../api/ApiContext.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 import { AddOrderScreen } from './AddOrderScreen.tsx';
@@ -21,15 +22,15 @@ const LOGGING_OUT_LABEL = 'יוצא...';
 export interface CollectorShellProps {
   /** The rest of the URL after `/app/`, without slashes at either end (router.tsx). */
   path: string;
-  /** Ends the session (POST /api/auth/logout); true when the api confirmed it. */
-  logOut: () => Promise<boolean>;
 }
 
 /**
  * The logged-in collector app. The screen comes from `path`, and each screen renders the page's
  * only `<h1>` (Layout's heading rule); a path no screen has shows "העמוד לא נמצא" inside the app.
+ * "יציאה" ends the session with `logout` of {@link useApi} (POST /api/auth/logout).
  */
-export function CollectorShell({ path, logOut }: CollectorShellProps) {
+export function CollectorShell({ path }: CollectorShellProps) {
+  const { logout: logOut } = useApi();
   const [loggingOut, setLoggingOut] = useState(false);
   // The state above reaches the handler only after a re-render; this ref stops a second tap
   // that comes before it, so the logout request is sent once.

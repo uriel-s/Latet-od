@@ -1,11 +1,12 @@
 // The collector app at /app/* behind its login guard (spec §3 "אפליקציית האוסף", ADR-0004).
-// On opening, it asks the api whether this browser is logged in (GET /api/auth/me, authApi.ts
-// `fetchSession`): logged in shows the app (CollectorShell), logged out goes to /login, and no
+// On opening, it asks the api whether this browser is logged in (GET /api/auth/me, `fetchSession`
+// of useApi): logged in shows the app (CollectorShell), logged out goes to /login, and no
 // answer offers a retry. The api guards every /api/collector/* route itself; this guard only
 // decides what to show, so Yoel never sees an app whose every request would answer 401.
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
-import { fetchSession, logout, type SessionOutcome } from '../api/authApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { SessionOutcome } from '../api/authApi.ts';
 import { navigate } from '../router.tsx';
 import { CollectorShell } from './CollectorShell.tsx';
 
@@ -20,14 +21,6 @@ export const SESSION_CHECK_FAILED_MESSAGE =
 export interface CollectorAppProps {
   /** The rest of the URL after `/app/`, without slashes at either end (router.tsx). */
   path: string;
-  /**
-   * Asks whether this browser is logged in. Defaults to {@link fetchSession}; tests pass a fake.
-   * Must keep its identity across renders (a module function, not an inline arrow): a new one
-   * runs the check again.
-   */
-  loadSession?: () => Promise<SessionOutcome>;
-  /** Ends the session. Defaults to {@link logout} (POST /api/auth/logout); tests pass a fake. */
-  logOut?: () => Promise<boolean>;
 }
 
 /** What the guard knows. A logged-out answer leaves for /login and needs no state of its own. */
@@ -42,11 +35,9 @@ type GuardState = 'checking' | 'failed' | 'loggedIn';
  * A failed check never sends him to the login: a dropped connection mid-round is not a logout,
  * and the session cookie is most likely still good. The screen says so and offers a retry.
  */
-export function CollectorApp({
-  path,
-  loadSession = fetchSession,
-  logOut = logout,
-}: CollectorAppProps) {
+export function CollectorApp({ path }: CollectorAppProps) {
+  // The client keeps its functions' identity, so this effect dependency does not check again.
+  const { fetchSession: loadSession } = useApi();
   const [guard, setGuard] = useState<GuardState>('checking');
   // Counts the "לנסות שוב" taps: a new value runs the check below again.
   const [attempt, setAttempt] = useState(0);
@@ -87,7 +78,7 @@ export function CollectorApp({
     setAttempt((previous) => previous + 1);
   }
 
-  if (guard === 'loggedIn') return <CollectorShell path={path} logOut={logOut} />;
+  if (guard === 'loggedIn') return <CollectorShell path={path} />;
 
   // Waiting, or failed: the page's one <h1> is the app's name until a screen replaces it.
   return (
