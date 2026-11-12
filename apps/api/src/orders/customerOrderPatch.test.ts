@@ -13,6 +13,7 @@ import {
   type Round,
   type Street,
 } from '@bottlerun/shared';
+import { firstRealStreet } from '@bottlerun/shared/testing';
 import { makeNewRound } from '../rounds/makeRound.ts';
 import { buildCustomerOrderPatch } from './customerOrderPatch.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
@@ -24,13 +25,6 @@ const ROUND_ID = '6650a1b2c3d4e5f6a7b8c9d0';
 const EARLIER_ROUND_ID = '6650a1b2c3d4e5f6a7b8c9d1';
 
 const ROUND: Round = { ...makeNewRound({ date: '2026-11-12' }), id: ROUND_ID };
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const RAMAT_STREET = firstRealStreet((street) => street.region === 'ramat');
 const OLD_STREET = firstRealStreet((street) => street.region === 'old');

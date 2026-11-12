@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import type { PushConfigOutcome } from '../api/pushApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -63,15 +64,6 @@ const ORDERS: CollectorOrder[] = [
 const LOADED: WaitingOrdersOutcome = { kind: 'loaded', groups: groupWaitingOrders(ORDERS) };
 const LOGGED_OUT: WaitingOrdersOutcome = { kind: 'loggedOut' };
 const FAILED: WaitingOrdersOutcome = { kind: 'failed' };
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /** A fake `fetchWaitingOrders`: answers each call with the next answer given (the last one repeats). */
 function fakeLoad(...answers: (WaitingOrdersOutcome | Promise<WaitingOrdersOutcome>)[]): {

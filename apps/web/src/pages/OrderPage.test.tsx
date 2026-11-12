@@ -7,6 +7,7 @@ import {
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -55,15 +56,6 @@ function confirmedOrder(): CustomerOrder {
  */
 function withChange(order: CustomerOrder, request: CustomerUpdateOrderRequest): CustomerOrder {
   return customerOrderSchema.parse({ ...order, ...request });
-}
-
-/** A promise the test settles by hand, to look at the page while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
 }
 
 type Answer<T> = T | Promise<T>;

@@ -9,6 +9,7 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -125,15 +126,6 @@ function makeView(stops: RouteStopView[]): RoundView {
 
 /** Three stops to collect: דנה, משה, יוסי. */
 const VIEW = makeView([stopOf(DANA), stopOf(MOSHE), stopOf(YOSSI)]);
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /** One answer of the fake api in place of doing the action; `'rejects'` rejects at call time. */
 type Answer = StopActionOutcome | Promise<StopActionOutcome> | 'rejects';

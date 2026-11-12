@@ -15,17 +15,11 @@ import {
 } from './collectorOrdersApi.ts';
 import { ORDER_FORM_ERRORS, type Order } from './order.ts';
 import { STREETS, type Street } from './streets.ts';
+import { firstRealStreet } from './testing/index.ts';
 
 /** 43 base64url characters, the shape of a real token. */
 const TOKEN = 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const CREATED_AT = new Date('2026-10-19T08:30:00.000Z');
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const hasPoint = (street: Street): boolean => street.lat !== undefined && street.lng !== undefined;
 

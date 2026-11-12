@@ -9,6 +9,7 @@ import {
   type CollectorOrder,
   type Street,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type { CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
@@ -53,15 +54,6 @@ const SAVED_ORDER: CollectorOrder = {
 };
 
 const SAVED: CollectorOrderWriteOutcome = { kind: 'saved', order: SAVED_ORDER };
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /**
  * Opens the add screen at /app/orders/new with a fake `addCollectorOrder` that records every request and

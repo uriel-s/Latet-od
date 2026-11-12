@@ -10,7 +10,7 @@ import {
 import { ORDER_FORM_ERRORS, orderSchema, type Address, type Order } from './order.ts';
 import { formFieldErrors } from './orderApi.ts';
 import type { Round } from './round.ts';
-import { STREETS, type Street } from './streets.ts';
+import { firstRealStreet } from './testing/index.ts';
 
 const ERR = ORDER_FORM_ERRORS;
 /** 43 base64url characters, the shape of a real token. */
@@ -18,13 +18,6 @@ const TOKEN = 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const ORDER_ID = '6710f3a2c4b5d6e7f8a9b0c1';
 const ROUND_ID = '6720a1b2c3d4e5f6a7b8c9d0';
 const CREATED_AT = new Date('2026-11-04T17:00:00.000Z');
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const RAMAT_STREET = firstRealStreet((street) => street.region === 'ramat');
 const OLD_STREET = firstRealStreet((street) => street.region === 'old');

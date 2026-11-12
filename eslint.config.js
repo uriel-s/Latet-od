@@ -101,4 +101,42 @@ export default tseslint.config(
       'no-restricted-imports': ['error', { patterns: [appPattern('api'), appPattern('web')] }],
     },
   },
+
+  // --- Test helpers ---------------------------------------------------------
+  // packages/shared/src/testing (`@bottlerun/shared/testing`: deferred, firstRealStreet) is for
+  // tests only, so production code (and the web bundle) never depends on it. This uses the
+  // typescript-eslint copy of no-restricted-imports, a separate rule from the core one above:
+  // flat config replaces a rule's options instead of merging them, so sharing the core rule would
+  // make the test-file exception below also drop the workspace boundaries for test files.
+  {
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@bottlerun/shared/testing',
+                '@bottlerun/shared/testing/*',
+                // Relative forms: from inside packages/shared/src, and from anywhere by path.
+                './testing',
+                './testing/*',
+                '../testing',
+                '../testing/*',
+                '**/shared/src/testing',
+                '**/shared/src/testing/**',
+              ],
+              message:
+                'shared/testing is for tests only: import it from *.test.ts(x) or *.contract.ts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Tests, and the repo contracts (*.contract.ts) that tests run against each implementation.
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/*.contract.ts'],
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
+  },
 );

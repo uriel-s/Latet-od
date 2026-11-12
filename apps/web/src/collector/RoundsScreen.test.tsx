@@ -8,6 +8,7 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
+import { deferred } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -167,15 +168,6 @@ const LOADED_TWO: RoundsOutcome = { kind: 'loaded', rounds: [VIEW, SECOND] };
 const NO_ROUNDS: RoundsOutcome = { kind: 'loaded', rounds: [] };
 const LOGGED_OUT = { kind: 'loggedOut' } as const;
 const FAILED = { kind: 'failed' } as const;
-
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
 
 /**
  * One answer of a fake: an outcome, a promise of one (a `deferred` the test settles), or
