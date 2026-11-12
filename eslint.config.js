@@ -41,7 +41,21 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'no-restricted-imports': ['error', { patterns: [appPattern('api')] }],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              ...appPattern('api'),
+              // apps/web/src/api/ is the web app's own network code (one module per resource),
+              // imported as ./api/x.ts or ../api/x.ts: not apps/api, which `**/../api/**` would
+              // otherwise take it for. Only its files, no deeper path, so `../../api/src/…` and
+              // `../api/src/…` still fail.
+              group: [...appPattern('api').group, '!./api/*.ts', '!../api/*.ts'],
+            },
+          ],
+        },
+      ],
     },
   },
   {

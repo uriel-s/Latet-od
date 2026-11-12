@@ -7,7 +7,7 @@ import type {
   RoundView,
   RouteStopView,
 } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome } from '../api.ts';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import {
   CLOSE_ROUND_NO_LABEL,
   CLOSE_ROUND_TEXTS,

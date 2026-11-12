@@ -4,7 +4,10 @@
 // refused); the question itself is the shared CancelConfirm.
 import { useEffect, useRef, useState } from 'react';
 import { COLLECTOR_ORDER_MESSAGES, type CollectorOrder } from '@bottlerun/shared';
-import { deleteCollectorOrder, type DeleteCollectorOrderOutcome } from '../api.ts';
+import {
+  deleteCollectorOrder,
+  type DeleteCollectorOrderOutcome,
+} from '../api/collectorOrdersApi.ts';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { navigate } from '../router.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';

@@ -7,11 +7,8 @@ import {
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
-import {
-  NETWORK_ERROR_MESSAGE,
-  type CustomerOrderOutcome,
-  type CustomerOrderWriteOutcome,
-} from '../api.ts';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
 import { SAVE_FAILED_MESSAGE, UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
 import {

@@ -9,7 +9,7 @@ import {
   type Region,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
-import type { CollectorOrderWriteOutcome } from '../api.ts';
+import type { CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
 import {
   SAVE_FAILED_MESSAGE,
   type FormErrors,

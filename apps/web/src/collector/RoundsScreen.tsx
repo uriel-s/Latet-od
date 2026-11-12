@@ -34,7 +34,7 @@ import {
   type BuildRouteOutcome,
   type CloseRoundOutcome,
   type RoundsOutcome,
-} from '../api.ts';
+} from '../api/roundsApi.ts';
 import { Link, navigate, searchParam, useLocation } from '../router.tsx';
 import {
   BuildRouteConfirm,

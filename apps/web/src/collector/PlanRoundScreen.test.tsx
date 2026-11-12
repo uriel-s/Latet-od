@@ -10,12 +10,9 @@ import {
   type PlanRoundRequest,
   type RoundView,
 } from '@bottlerun/shared';
-import {
-  NETWORK_ERROR_MESSAGE,
-  type PlanRoundOutcome,
-  type RoundsOutcome,
-  type WaitingOrdersOutcome,
-} from '../api.ts';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
+import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import {

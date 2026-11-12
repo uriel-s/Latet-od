@@ -6,7 +6,7 @@
 // default (the route's thank-you row, the close question), or one card of thin rows (`grouped`).
 import { useEffect, useRef, useState } from 'react';
 import { formatDayMonth, type MessageLink } from '@bottlerun/shared';
-import { markMessageOpened, type MarkMessageOpenedOutcome } from '../api.ts';
+import { markMessageOpened, type MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { navigate } from '../router.tsx';
 
 /** Shown in place of the list when there is no message to send. */

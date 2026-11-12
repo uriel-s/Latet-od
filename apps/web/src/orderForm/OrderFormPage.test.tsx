@@ -6,7 +6,8 @@ import {
   type CreateOrderRequest,
   type CreateOrderResponse,
 } from '@bottlerun/shared';
-import { NETWORK_ERROR_MESSAGE, type CreateOrderOutcome } from '../api.ts';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import type { CreateOrderOutcome } from '../api/bookingApi.ts';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors } from './formValues.ts';
 import { OrderFormPage } from './OrderFormPage.tsx';
 import {

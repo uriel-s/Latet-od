@@ -2,7 +2,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
-import { warmUp } from './api.ts';
+import { warmUp } from './api/request.ts';
 import './styles.css';
 
 // Wake the api the moment the page loads (ADR-0002): by the time the customer has filled the form,

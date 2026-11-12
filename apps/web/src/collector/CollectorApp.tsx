@@ -1,11 +1,11 @@
 // The collector app at /app/* behind its login guard (spec §3 "אפליקציית האוסף", ADR-0004).
-// On opening, it asks the api whether this browser is logged in (GET /api/auth/me, api.ts
+// On opening, it asks the api whether this browser is logged in (GET /api/auth/me, authApi.ts
 // `fetchSession`): logged in shows the app (CollectorShell), logged out goes to /login, and no
 // answer offers a retry. The api guards every /api/collector/* route itself; this guard only
 // decides what to show, so Yoel never sees an app whose every request would answer 401.
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
-import { fetchSession, logout, type SessionOutcome } from '../api.ts';
+import { fetchSession, logout, type SessionOutcome } from '../api/authApi.ts';
 import { navigate } from '../router.tsx';
 import { CollectorShell } from './CollectorShell.tsx';
 

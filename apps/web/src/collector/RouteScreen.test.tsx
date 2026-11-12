@@ -9,7 +9,8 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome, StopActionOutcome } from '../api.ts';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import type { StopActionOutcome } from '../api/roundsApi.ts';
 import {
   ALL_STOPS_HANDLED_TEXT,
   HANDLED_TITLE,

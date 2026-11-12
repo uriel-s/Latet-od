@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MIN_BOTTLES, type CreateOrderRequest } from '@bottlerun/shared';
 import { App } from '../App.tsx';
-import type { CreateOrderOutcome } from '../api.ts';
+import type { CreateOrderOutcome } from '../api/bookingApi.ts';
 import { OrderFormPage } from './OrderFormPage.tsx';
 
 const TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO_-';

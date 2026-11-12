@@ -19,15 +19,14 @@ import {
   type PlanRoundRequest,
   type Region,
 } from '@bottlerun/shared';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import {
-  NETWORK_ERROR_MESSAGE,
   fetchRounds,
-  fetchWaitingOrders,
   planRound,
   type PlanRoundOutcome,
   type RoundsOutcome,
-  type WaitingOrdersOutcome,
-} from '../api.ts';
+} from '../api/roundsApi.ts';
 import { TextField } from '../components/TextField.tsx';
 import { FormCard } from '../orderForm/OrderFields.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';

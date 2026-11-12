@@ -9,7 +9,7 @@ import {
   type CollectorOrder,
   type Street,
 } from '@bottlerun/shared';
-import type { CollectorOrderWriteOutcome } from '../api.ts';
+import type { CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
 import { AddOrderScreen } from './AddOrderScreen.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';

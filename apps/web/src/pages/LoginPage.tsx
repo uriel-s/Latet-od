@@ -1,10 +1,11 @@
 // The collector's login at `/login` (spec §3.4, ADR-0004): one password field, no username (there
-// is one collector, Yoel). The check and the session cookie are the api's (api.ts `login`); this
+// is one collector, Yoel). The check and the session cookie are the api's (authApi.ts `login`); this
 // screen holds what he typed, shows each answer in plain words, and opens the app on success.
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { LOGIN_MESSAGES, LOGIN_PASSWORD_MAX_LENGTH } from '@bottlerun/shared';
-import { NETWORK_ERROR_MESSAGE, login, type LoginOutcome } from '../api.ts';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import { login, type LoginOutcome } from '../api/authApi.ts';
 import { TextField } from '../components/TextField.tsx';
 import { navigate } from '../router.tsx';
 import {

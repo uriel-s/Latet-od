@@ -9,7 +9,7 @@ import {
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
-import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api.ts';
+import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
 import { OrderPage } from './OrderPage.tsx';
 

@@ -10,7 +10,7 @@ import {
   fetchPushConfig,
   savePushSubscription,
   type PushConfigOutcome,
-} from '../api.ts';
+} from '../api/pushApi.ts';
 import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 

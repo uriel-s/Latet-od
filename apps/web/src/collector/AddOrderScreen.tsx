@@ -4,7 +4,7 @@
 // behind the login) and no privacy line. The api stores the order with `source: 'collector'`.
 import { useEffect, useRef, useState } from 'react';
 import type { AddOrderRequest, Lang } from '@bottlerun/shared';
-import { addCollectorOrder, type CollectorOrderWriteOutcome } from '../api.ts';
+import { addCollectorOrder, type CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
 import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderForm/formValues.ts';
 import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';

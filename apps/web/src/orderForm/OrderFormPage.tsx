@@ -1,7 +1,7 @@
 // The public booking form at `/` (spec §3.1) and, once the order is in, the thank-you screen in
 // its place (spec §3.2). The rules live in the shared schema (formValues.ts), the fields in
 // OrderFields.tsx and their state in useOrderForm.ts (both shared with Yoel's add and edit
-// screens), the request in api.ts and the returning customer's prefill in savedDetails.ts: this
+// screens), the request in api/bookingApi.ts and the returning customer's prefill in savedDetails.ts: this
 // file is the screen itself, the parts only the public form has (the honeypot, the privacy line),
 // and what happens after each answer.
 import { useEffect, useId, useRef, useState } from 'react';
@@ -13,7 +13,8 @@ import {
   type CreateOrderRequest,
   type Lang,
 } from '@bottlerun/shared';
-import { createOrder, networkErrorMessage, type CreateOrderOutcome } from '../api.ts';
+import { networkErrorMessage } from '../api/request.ts';
+import { createOrder, type CreateOrderOutcome } from '../api/bookingApi.ts';
 import { Link, navigate, useLocation } from '../router.tsx';
 import {
   NO_ERRORS,
