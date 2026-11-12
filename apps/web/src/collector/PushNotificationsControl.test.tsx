@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushSubscription } from '@bottlerun/shared';
 import type {
@@ -6,6 +6,8 @@ import type {
   PushConfigOutcome,
   SavePushSubscriptionOutcome,
 } from '../api/pushApi.ts';
+import type { Api } from '../api/ApiContext.tsx';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { PushNotificationsControl, urlBase64ToUint8Array } from './PushNotificationsControl.tsx';
 
 const FAKE_PUBLIC_KEY = 'BA_fake_public_key_12345';
@@ -33,6 +35,42 @@ function savedSubStub() {
     sub: PushSubscription,
   ) => Promise<SavePushSubscriptionOutcome>;
 }
+
+/** The client functions the control calls. */
+type PushApi = Pick<Api, 'fetchPushConfig' | 'savePushSubscription' | 'deletePushSubscription'>;
+
+/** Names of the push functions a test called without giving a fake for (see renderControl). */
+let unexpectedCalls: string[] = [];
+
+/** A stand-in for a push function the test did not fake: it records the call and fails. */
+function unexpected(name: keyof PushApi): () => Promise<{ kind: 'failed' }> {
+  return () => {
+    unexpectedCalls.push(name);
+    return Promise.resolve({ kind: 'failed' });
+  };
+}
+
+/**
+ * Renders the control with the push functions in `fakes`. One the test leaves out answers
+ * `failed` and is recorded, and afterEach fails the test for it: no test may lean on a call
+ * it did not fake (the real client would also answer `failed` in jsdom, silently).
+ */
+function renderControl(fakes: Partial<PushApi>) {
+  return renderWithApi(<PushNotificationsControl />, {
+    fetchPushConfig: unexpected('fetchPushConfig'),
+    savePushSubscription: unexpected('savePushSubscription'),
+    deletePushSubscription: unexpected('deletePushSubscription'),
+    ...fakes,
+  });
+}
+
+beforeEach(() => {
+  unexpectedCalls = [];
+});
+
+afterEach(() => {
+  expect(unexpectedCalls).toEqual([]);
+});
 
 describe('urlBase64ToUint8Array', () => {
   it('converts base64url string to Uint8Array correctly', () => {
@@ -108,7 +146,7 @@ describe('PushNotificationsControl', () => {
         }),
     );
 
-    const { container } = render(<PushNotificationsControl loadConfig={loadConfig} />);
+    const { container } = renderControl({ fetchPushConfig: loadConfig });
 
     // Initially in checking state
     expect(container.firstChild).toBeNull();
@@ -153,7 +191,7 @@ describe('PushNotificationsControl', () => {
       config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
     });
 
-    const { container } = render(<PushNotificationsControl loadConfig={loadConfig} />);
+    const { container } = renderControl({ fetchPushConfig: loadConfig });
     await act(async () => {
       await Promise.resolve();
     });
@@ -169,7 +207,7 @@ describe('PushNotificationsControl', () => {
       config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
     });
 
-    render(<PushNotificationsControl loadConfig={loadConfig} />);
+    renderControl({ fetchPushConfig: loadConfig });
 
     expect(await screen.findByText('התראות חסומות בהגדרות הדפדפן')).toBeTruthy();
   });
@@ -181,7 +219,7 @@ describe('PushNotificationsControl', () => {
     });
     getSubscriptionMock.mockResolvedValue(null);
 
-    render(<PushNotificationsControl loadConfig={loadConfig} />);
+    renderControl({ fetchPushConfig: loadConfig });
 
     const button = await screen.findByRole('button', { name: 'הפעל התראות' });
     expect(button.getAttribute('aria-pressed')).toBe('false');
@@ -198,14 +236,10 @@ describe('PushNotificationsControl', () => {
 
     getSubscriptionMock.mockResolvedValue(null);
 
-    render(
-      <PushNotificationsControl
-        loadConfig={loadConfig}
-        saveSub={
-          saveSub as unknown as (sub: PushSubscription) => Promise<SavePushSubscriptionOutcome>
-        }
-      />,
-    );
+    renderControl({
+      fetchPushConfig: loadConfig,
+      savePushSubscription: saveSub,
+    });
 
     const button = await screen.findByRole('button', { name: 'הפעל התראות' });
     fireEvent.click(button);
@@ -226,7 +260,7 @@ describe('PushNotificationsControl', () => {
       config: { enabled: true, publicKey: FAKE_PUBLIC_KEY },
     });
 
-    render(<PushNotificationsControl loadConfig={loadConfig} />);
+    renderControl({ fetchPushConfig: loadConfig });
 
     const button = await screen.findByRole('button', { name: 'הפעל התראות' });
     fireEvent.click(button);
@@ -246,15 +280,11 @@ describe('PushNotificationsControl', () => {
       .fn<() => Promise<DeletePushSubscriptionOutcome>>()
       .mockResolvedValue({ kind: 'deleted' });
 
-    render(
-      <PushNotificationsControl
-        loadConfig={loadConfig}
-        saveSub={savedSubStub()}
-        deleteSub={
-          deleteSub as unknown as (endpoint: string) => Promise<DeletePushSubscriptionOutcome>
-        }
-      />,
-    );
+    renderControl({
+      fetchPushConfig: loadConfig,
+      savePushSubscription: savedSubStub(),
+      deletePushSubscription: deleteSub,
+    });
 
     const button = await screen.findByRole('button', { name: 'התראות פעילות' });
     expect(button.getAttribute('aria-pressed')).toBe('true');
@@ -278,15 +308,11 @@ describe('PushNotificationsControl', () => {
       .fn<() => Promise<DeletePushSubscriptionOutcome>>()
       .mockResolvedValue({ kind: 'failed' });
 
-    render(
-      <PushNotificationsControl
-        loadConfig={loadConfig}
-        saveSub={savedSubStub()}
-        deleteSub={
-          deleteSub as unknown as (endpoint: string) => Promise<DeletePushSubscriptionOutcome>
-        }
-      />,
-    );
+    renderControl({
+      fetchPushConfig: loadConfig,
+      savePushSubscription: savedSubStub(),
+      deletePushSubscription: deleteSub,
+    });
 
     const button = await screen.findByRole('button', { name: 'התראות פעילות' });
     fireEvent.click(button);
@@ -307,14 +333,10 @@ describe('PushNotificationsControl', () => {
       .fn<() => Promise<SavePushSubscriptionOutcome>>()
       .mockResolvedValue({ kind: 'failed' });
 
-    render(
-      <PushNotificationsControl
-        loadConfig={loadConfig}
-        saveSub={
-          saveSub as unknown as (sub: PushSubscription) => Promise<SavePushSubscriptionOutcome>
-        }
-      />,
-    );
+    renderControl({
+      fetchPushConfig: loadConfig,
+      savePushSubscription: saveSub,
+    });
 
     const button = await screen.findByRole('button', { name: 'הפעל התראות' });
     fireEvent.click(button);
@@ -330,7 +352,7 @@ describe('PushNotificationsControl', () => {
     });
     const saveSub = savedSubStub();
 
-    render(<PushNotificationsControl loadConfig={loadConfig} saveSub={saveSub} />);
+    renderControl({ fetchPushConfig: loadConfig, savePushSubscription: saveSub });
 
     expect(await screen.findByRole('button', { name: 'התראות פעילות' })).toBeTruthy();
     expect(saveSub).toHaveBeenCalledWith({
@@ -353,7 +375,7 @@ describe('PushNotificationsControl', () => {
       sub: PushSubscription,
     ) => Promise<SavePushSubscriptionOutcome>;
 
-    render(<PushNotificationsControl loadConfig={loadConfig} saveSub={saveSub} />);
+    renderControl({ fetchPushConfig: loadConfig, savePushSubscription: saveSub });
 
     expect(await screen.findByRole('button', { name: 'הפעל התראות' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'התראות פעילות' })).toBeNull();

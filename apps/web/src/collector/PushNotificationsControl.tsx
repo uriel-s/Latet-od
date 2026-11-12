@@ -2,15 +2,11 @@
 //
 // Mounted on the collector orders screen (OrdersScreen.tsx): checks if push is supported and
 // configured on the server (GET /api/collector/push/config), registers /sw.js, manages device
-// PushSubscription, and syncs subscription state with the server.
+// PushSubscription, and syncs subscription state with the server. Its three requests come from
+// `useApi()` (pushApi.ts), so tests give fakes through renderWithApi.
 import { useEffect, useState } from 'react';
 import type { PushSubscription as PushSubscriptionBody } from '@bottlerun/shared';
-import {
-  deletePushSubscription,
-  fetchPushConfig,
-  savePushSubscription,
-  type PushConfigOutcome,
-} from '../api/pushApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
 
@@ -37,25 +33,18 @@ function toServerSubscription(sub: PushSubscription): PushSubscriptionBody | nul
 export type PushControlState =
   'unsupported' | 'checking' | 'disabled' | 'blocked' | 'inactive' | 'active';
 
-export interface PushNotificationsControlProps {
-  /** Injected push config fetcher for testing. */
-  loadConfig?: () => Promise<PushConfigOutcome>;
-  /** Injected subscription saver for testing. */
-  saveSub?: typeof savePushSubscription;
-  /** Injected subscription remover for testing. */
-  deleteSub?: typeof deletePushSubscription;
-}
-
 /**
  * Push notifications toggle button for the collector app.
  *
  * Renders nothing if Web Push is not supported in this browser or disabled on the server.
  */
-export function PushNotificationsControl({
-  loadConfig = fetchPushConfig,
-  saveSub = savePushSubscription,
-  deleteSub = deletePushSubscription,
-}: PushNotificationsControlProps) {
+export function PushNotificationsControl() {
+  // The client keeps its functions' identity, so the check below runs once per mount.
+  const {
+    fetchPushConfig: loadConfig,
+    savePushSubscription: saveSub,
+    deletePushSubscription: deleteSub,
+  } = useApi();
   const [state, setState] = useState<PushControlState>('checking');
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

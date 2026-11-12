@@ -1,8 +1,9 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
+import type { PushConfigOutcome } from '../api/pushApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   ORDERS_LOAD_FAILED_MESSAGE,
   OrdersScreen,
@@ -72,7 +73,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-/** A fake `loadOrders`: answers each call with the next answer given (the last one repeats). */
+/** A fake `fetchWaitingOrders`: answers each call with the next answer given (the last one repeats). */
 function fakeLoad(...answers: (WaitingOrdersOutcome | Promise<WaitingOrdersOutcome>)[]): {
   load: () => Promise<WaitingOrdersOutcome>;
   calls: () => number;
@@ -86,14 +87,28 @@ function fakeLoad(...answers: (WaitingOrdersOutcome | Promise<WaitingOrdersOutco
   return { load, calls: () => calls };
 }
 
-/** Opens the orders tab at /app/orders with `loadOrders`. */
+/**
+ * Push turned off on the server: the push control (PushNotificationsControl.tsx) shows nothing.
+ * jsdom has no service worker, so the control stops before asking; faked anyway, so no request
+ * can leave the test.
+ */
+const PUSH_DISABLED = (): Promise<PushConfigOutcome> =>
+  Promise.resolve({ kind: 'loaded', config: { enabled: false } });
+
+/**
+ * Opens the orders tab at /app/orders, its list from `loadOrders` (the client's
+ * `fetchWaitingOrders`). `strict` puts StrictMode around the whole tree, as in development.
+ */
 function renderScreen(
   loadOrders: () => Promise<WaitingOrdersOutcome>,
   { strict = false }: { strict?: boolean } = {},
 ): { unmount: () => void } {
   window.history.replaceState(null, '', '/app/orders');
-  const screenElement = <OrdersScreen loadOrders={loadOrders} />;
-  return render(strict ? <StrictMode>{screenElement}</StrictMode> : screenElement);
+  return renderWithApi(
+    <OrdersScreen />,
+    { fetchWaitingOrders: loadOrders, fetchPushConfig: PUSH_DISABLED },
+    { reactStrictMode: strict },
+  );
 }
 
 /** Renders the loaded list of {@link ORDERS} and waits for it. */
@@ -194,7 +209,10 @@ describe('OrdersScreen', () => {
   describe('the notice from the screen Yoel just left', () => {
     it('tells it under the heading, once', async () => {
       window.history.replaceState({ notice: 'ההזמנה נוספה.' }, '', '/app/orders');
-      render(<OrdersScreen loadOrders={fakeLoad(LOADED).load} />);
+      renderWithApi(<OrdersScreen />, {
+        fetchWaitingOrders: fakeLoad(LOADED).load,
+        fetchPushConfig: PUSH_DISABLED,
+      });
 
       const notice = await screen.findByText('ההזמנה נוספה.');
       expect(notice.getAttribute('role')).toBe('status');
