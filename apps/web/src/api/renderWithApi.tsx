@@ -18,6 +18,10 @@ export function apiWith(overrides: Partial<Api> = {}): Api {
  * Library's result plus that client. The provider is the render's `wrapper`, so `rerender` keeps
  * it, with the same client: its functions keep their identity, and a screen that loads in an
  * effect does not load again.
+ *
+ * For StrictMode pass `{ reactStrictMode: true }` in `options`, which puts it around the whole
+ * tree, provider included. A `<StrictMode>` inside `ui` (under the provider) did not run the
+ * effects twice in this setup, so a test of a discarded first run would pass for the wrong reason.
  */
 export function renderWithApi(
   ui: ReactElement,

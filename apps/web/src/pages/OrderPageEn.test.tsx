@@ -1,6 +1,6 @@
 // The customer page for an English order (`order.lang === 'en'`): every text, the date and times,
 // the change form and the new-order link in English. The Hebrew page is tested in OrderPage.test.tsx.
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
@@ -10,6 +10,7 @@ import {
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
 import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
 import { OrderPage } from './OrderPage.tsx';
 
@@ -47,18 +48,15 @@ async function renderEn(
 ): Promise<CustomerUpdateOrderRequest[]> {
   window.history.replaceState(null, '', `/o/${TOKEN}`);
   const updates: CustomerUpdateOrderRequest[] = [];
-  render(
-    <OrderPage
-      token={TOKEN}
-      loadOrder={() => Promise.resolve(load ?? { kind: 'loaded', order })}
-      declineOrder={() => Promise.resolve(decline ?? { kind: 'saved', order })}
-      cancelOrder={() => Promise.resolve(cancel ?? { kind: 'saved', order })}
-      updateOrder={(_token, request) => {
-        updates.push(request);
-        return Promise.resolve(update ?? { kind: 'saved', order });
-      }}
-    />,
-  );
+  renderWithApi(<OrderPage token={TOKEN} />, {
+    fetchCustomerOrder: () => Promise.resolve(load ?? { kind: 'loaded', order }),
+    declineCustomerOrder: () => Promise.resolve(decline ?? { kind: 'saved', order }),
+    cancelCustomerOrder: () => Promise.resolve(cancel ?? { kind: 'saved', order }),
+    updateCustomerOrder: (_token, request) => {
+      updates.push(request);
+      return Promise.resolve(update ?? { kind: 'saved', order });
+    },
+  });
   await screen.findByRole('heading', { level: 1, name: 'Your order' });
   return updates;
 }
@@ -80,12 +78,9 @@ afterEach(() => {
 describe('OrderPage in English', () => {
   it('sets the document to English left to right, and back to Hebrew when it leaves', async () => {
     window.history.replaceState(null, '', `/o/${TOKEN}`);
-    const { unmount } = render(
-      <OrderPage
-        token={TOKEN}
-        loadOrder={() => Promise.resolve({ kind: 'loaded', order: makeOrder() })}
-      />,
-    );
+    const { unmount } = renderWithApi(<OrderPage token={TOKEN} />, {
+      fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: makeOrder() }),
+    });
     await screen.findByRole('heading', { level: 1, name: 'Your order' });
     // The hook sets lang/dir in a passive effect, which can run after the heading is found.
     await waitFor(() => {
@@ -102,13 +97,9 @@ describe('OrderPage in English', () => {
   it('tells the app its language', async () => {
     const seen: string[] = [];
     window.history.replaceState(null, '', `/o/${TOKEN}`);
-    render(
-      <OrderPage
-        token={TOKEN}
-        loadOrder={() => Promise.resolve({ kind: 'loaded', order: makeOrder() })}
-        onLangChange={(lang) => seen.push(lang)}
-      />,
-    );
+    renderWithApi(<OrderPage token={TOKEN} onLangChange={(lang) => seen.push(lang)} />, {
+      fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: makeOrder() }),
+    });
     await screen.findByRole('heading', { level: 1, name: 'Your order' });
     expect(seen).toContain('en');
   });
