@@ -14,7 +14,7 @@ import {
 } from '@bottlerun/shared';
 import { FAKE_PUBLIC_BASE_URL } from '../fakeDeps.ts';
 import { InMemoryOrdersRepo } from '../orders/inMemoryOrdersRepo.ts';
-import { MADE_ORDER_CREATED_AT, makeNewOrder } from '../orders/makeOrder.ts';
+import { MADE_ORDER_CREATED_AT, makeNewOrder } from '@bottlerun/shared/testing';
 import { FakeSender } from './fakeSender.ts';
 import type { SendResult } from './messageSender.ts';
 import { orderMessage, orderPageUrl, sendAndLog, type SendAndLogDeps } from './sendAndLog.ts';

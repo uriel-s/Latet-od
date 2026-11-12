@@ -31,7 +31,7 @@ import { InMemoryPushSubscriptionsRepo } from '../push/inMemoryPushSubscriptions
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { ORDER_RATE_LIMIT } from './createOrderRoute.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 
 // The customer's data. Distinctive values (a Hebrew letter in the house number, no bare digits),
 // so "the log does not contain it" cannot pass or fail by accident on a line number.

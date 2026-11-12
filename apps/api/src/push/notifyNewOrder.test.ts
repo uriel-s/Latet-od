@@ -9,7 +9,7 @@ import {
   type PushSubscription,
 } from '@bottlerun/shared';
 import { createFakePush } from '../fakeDeps.ts';
-import { makeNewOrder } from '../orders/makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import { FakePushSender } from './fakePushSender.ts';
 import { InMemoryPushSubscriptionsRepo } from './inMemoryPushSubscriptionsRepo.ts';
 import { notifyNewOrder } from './notifyNewOrder.ts';

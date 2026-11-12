@@ -13,11 +13,10 @@ import {
   type Round,
   type Street,
 } from '@bottlerun/shared';
-import { firstRealStreet } from '@bottlerun/shared/testing';
 import { makeNewRound } from '../rounds/makeRound.ts';
 import { buildCustomerOrderPatch } from './customerOrderPatch.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 
 const NOW = new Date('2026-11-11T18:45:00.000Z');
 const ORDER_ID = '6710f3a2c4b5d6e7f8a9b0c1';

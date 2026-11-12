@@ -17,7 +17,7 @@ import { createApp } from '../app.ts';
 import { loggedInCookie } from '../auth/testSession.ts';
 import { createFakeAuth, createFakeDeps } from '../fakeDeps.ts';
 import { InMemoryOrdersRepo } from '../orders/inMemoryOrdersRepo.ts';
-import { makeNewOrder } from '../orders/makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import { SAME_ORIGIN_HEADERS } from '../testRequest.ts';
 
 const BASE = '/api/collector/history';

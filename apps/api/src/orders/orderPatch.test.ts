@@ -11,9 +11,8 @@ import {
   type UpdateOrder,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
-import { firstRealStreet } from '@bottlerun/shared/testing';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 import { buildOrderPatch } from './orderPatch.ts';
 
 const NOW = new Date('2026-10-20T10:15:00.000Z');

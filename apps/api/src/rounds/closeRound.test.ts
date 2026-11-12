@@ -22,7 +22,7 @@ import { loggedInCookie } from '../auth/testSession.ts';
 import { createFakeAuth, createFakeDeps, createFakeMessaging } from '../fakeDeps.ts';
 import { FakeSender } from '../messages/fakeSender.ts';
 import { InMemoryOrdersRepo } from '../orders/inMemoryOrdersRepo.ts';
-import { makeNewOrder } from '../orders/makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import type { OrderPatch, OrderUpdateOptions } from '../orders/ordersRepo.ts';
 import { SAME_ORIGIN_HEADERS } from '../testRequest.ts';
 import { InMemoryRoundsRepo } from './inMemoryRoundsRepo.ts';

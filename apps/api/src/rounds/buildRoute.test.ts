@@ -9,7 +9,7 @@ import type {
   Street,
   StreetLookup,
 } from '@bottlerun/shared';
-import { makeNewOrder } from '../orders/makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import { buildRouteStops, moveStop } from './buildRoute.ts';
 
 // Made-up points on one line (lng is the position): start at 0, the end at 10.

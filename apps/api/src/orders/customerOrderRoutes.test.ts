@@ -26,7 +26,6 @@ import {
   type RoundGroupKey,
   type RoundView,
 } from '@bottlerun/shared';
-import { firstRealStreet } from '@bottlerun/shared/testing';
 import { createApp } from '../app.ts';
 import { loggedInCookie } from '../auth/testSession.ts';
 import { createFakeAuth, createFakeDeps } from '../fakeDeps.ts';
@@ -34,7 +33,7 @@ import { InMemoryRoundsRepo } from '../rounds/inMemoryRoundsRepo.ts';
 import { makeNewRound } from '../rounds/makeRound.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 import type { OrderPatch, OrderUpdateOptions } from './ordersRepo.ts';
 
 const BASE = '/api/o';
