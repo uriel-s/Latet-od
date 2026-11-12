@@ -11,7 +11,7 @@ import {
   type Street,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
-import { deferred } from '@bottlerun/shared/testing';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
 import type {
   CollectorOrderOutcome,
   CollectorOrderWriteOutcome,
@@ -55,33 +55,25 @@ function pickableStreet(region: Region): Street {
 const RAMAT_STREET = pickableStreet('ramat');
 const OLD_STREET = pickableStreet('old');
 
-/** A waiting order on a listed street in רמת בית שמש; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: RAMAT_STREET.code,
-      streetName: RAMAT_STREET.name,
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    // A waiting order in no round, like the one above: the api says it may be deleted.
-    deletable: true,
-    ...overrides,
-  };
-}
+/**
+ * What these tests start from, on top of makeCollectorOrder: a waiting order on a pickable street
+ * of רמת בית שמש, with a floor and apartment. In no round, so the api says it may be deleted.
+ */
+const EDITABLE: Partial<CollectorOrder> = {
+  address: {
+    streetCode: RAMAT_STREET.code,
+    streetName: RAMAT_STREET.name,
+    houseNumber: '12',
+    bottlesSpot: 'apartmentDoor',
+    floorApt: 'קומה 3, דירה 12',
+  },
+  deletable: true,
+};
 
 /** An order whose street the customer wrote by hand: no region, no map point ("בלי מיקום"). */
 function makeFreeTextOrder(nearStreetCode?: number): CollectorOrder {
-  return makeOrder({
+  return makeCollectorOrder({
+    ...EDITABLE,
     contact: { name: 'רחל אברהם', phone: '+972541112233' },
     address: {
       streetName: 'סמטת הגפנים',
@@ -134,7 +126,7 @@ interface Calls {
  * it calls (load, save, cancel, delete) that record every call.
  */
 function renderScreen(
-  order: CollectorOrder = makeOrder(),
+  order: CollectorOrder = makeCollectorOrder(EDITABLE),
   { load, update, cancel, remove, strict = false }: RenderOptions = {},
 ): Calls {
   window.history.replaceState(null, '', `/app/orders/${order.id}`);
@@ -168,7 +160,7 @@ function renderScreen(
 
 /** Renders the edit screen of `order` and waits for its form. */
 async function renderLoaded(
-  order: CollectorOrder = makeOrder(),
+  order: CollectorOrder = makeCollectorOrder(EDITABLE),
   options: RenderOptions = {},
 ): Promise<Calls> {
   const calls = renderScreen(order, options);
@@ -223,7 +215,9 @@ function regionRadio(name: string): HTMLInputElement {
 describe('EditOrderScreen', () => {
   describe('while the order loads', () => {
     it('shows the heading, the way back and a loading status, without a form', () => {
-      renderScreen(makeOrder(), { load: [deferred<CollectorOrderOutcome>().promise] });
+      renderScreen(makeCollectorOrder(EDITABLE), {
+        load: [deferred<CollectorOrderOutcome>().promise],
+      });
 
       expectOneH1();
       expect(screen.getByRole('status').textContent).toBe('טוען...');
@@ -419,7 +413,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('shows the duplicate message next to the phone', async () => {
-      await renderLoaded(makeOrder(), {
+      await renderLoaded(makeCollectorOrder(EDITABLE), {
         update: { kind: 'duplicate', message: CREATE_ORDER_MESSAGES.duplicateOpenOrder },
       });
 
@@ -434,7 +428,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('shows an api error no field shows above the button', async () => {
-      await renderLoaded(makeOrder(), {
+      await renderLoaded(makeCollectorOrder(EDITABLE), {
         update: { kind: 'invalid', errors: { byField: {}, other: UNKNOWN_FIELD_ERROR } },
       });
 
@@ -447,7 +441,7 @@ describe('EditOrderScreen', () => {
       ['closed', COLLECTOR_ORDER_MESSAGES.orderClosed],
       ['notFound', COLLECTOR_ORDER_MESSAGES.orderNotFound],
     ] as const)('shows the message when the save answers %s', async (kind, message) => {
-      await renderLoaded(makeOrder(), { update: { kind, message } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { update: { kind, message } });
 
       save();
 
@@ -456,7 +450,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('asks to check the connection when the save fails, and keeps the changes', async () => {
-      await renderLoaded(makeOrder(), { update: { kind: 'failed' } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { update: { kind: 'failed' } });
 
       typeInto('שם', 'דנה לוי');
       save();
@@ -467,7 +461,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('goes to the login when the session ended', async () => {
-      await renderLoaded(makeOrder(), { update: { kind: 'loggedOut' } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { update: { kind: 'loggedOut' } });
 
       save();
 
@@ -476,7 +470,7 @@ describe('EditOrderScreen', () => {
 
     it('says "saving" while the request runs and sends one request for two taps', async () => {
       const answer = deferred<CollectorOrderWriteOutcome>();
-      const calls = await renderLoaded(makeOrder(), { update: answer.promise });
+      const calls = await renderLoaded(makeCollectorOrder(EDITABLE), { update: answer.promise });
 
       save();
 
@@ -485,7 +479,7 @@ describe('EditOrderScreen', () => {
       fireEvent.click(busy);
       expect(calls.updates).toHaveLength(1);
 
-      answer.resolve({ kind: 'saved', order: makeOrder() });
+      answer.resolve({ kind: 'saved', order: makeCollectorOrder(EDITABLE) });
 
       await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
       expect(calls.updates).toHaveLength(1);
@@ -508,7 +502,7 @@ describe('EditOrderScreen', () => {
 
     it('cancels once on "כן, לבטל" and returns to the orders', async () => {
       const answer = deferred<CollectorOrderWriteOutcome>();
-      const calls = await renderLoaded(makeOrder(), { cancel: answer.promise });
+      const calls = await renderLoaded(makeCollectorOrder(EDITABLE), { cancel: answer.promise });
       const historyLength = window.history.length;
       fireEvent.click(screen.getByRole('button', { name: 'ביטול ההזמנה' }));
 
@@ -518,7 +512,10 @@ describe('EditOrderScreen', () => {
       fireEvent.click(busy);
       expect(calls.cancels).toEqual(['o1']);
 
-      answer.resolve({ kind: 'saved', order: makeOrder({ status: 'cancelled' }) });
+      answer.resolve({
+        kind: 'saved',
+        order: makeCollectorOrder({ ...EDITABLE, status: 'cancelled' }),
+      });
 
       await waitFor(() => expect(window.location.pathname).toBe('/app/orders'));
       expect(window.history.length).toBe(historyLength);
@@ -543,7 +540,7 @@ describe('EditOrderScreen', () => {
       ['closed', COLLECTOR_ORDER_MESSAGES.orderClosed],
       ['notFound', COLLECTOR_ORDER_MESSAGES.orderNotFound],
     ] as const)('says why when the cancel answers %s', async (kind, message) => {
-      await renderLoaded(makeOrder(), { cancel: { kind, message } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { cancel: { kind, message } });
       fireEvent.click(screen.getByRole('button', { name: 'ביטול ההזמנה' }));
 
       fireEvent.click(screen.getByRole('button', { name: 'כן, לבטל' }));
@@ -554,7 +551,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('asks to check the connection when the cancel fails', async () => {
-      await renderLoaded(makeOrder(), { cancel: { kind: 'failed' } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { cancel: { kind: 'failed' } });
       fireEvent.click(screen.getByRole('button', { name: 'ביטול ההזמנה' }));
 
       fireEvent.click(screen.getByRole('button', { name: 'כן, לבטל' }));
@@ -563,7 +560,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('goes to the login when the session ended', async () => {
-      await renderLoaded(makeOrder(), { cancel: { kind: 'loggedOut' } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { cancel: { kind: 'loggedOut' } });
       fireEvent.click(screen.getByRole('button', { name: 'ביטול ההזמנה' }));
 
       fireEvent.click(screen.getByRole('button', { name: 'כן, לבטל' }));
@@ -587,7 +584,7 @@ describe('EditOrderScreen', () => {
 
     it('deletes once on "כן, למחוק" and returns to the orders with a notice', async () => {
       const answer = deferred<DeleteCollectorOrderOutcome>();
-      const calls = await renderLoaded(makeOrder(), { remove: answer.promise });
+      const calls = await renderLoaded(makeCollectorOrder(EDITABLE), { remove: answer.promise });
       const historyLength = window.history.length;
       fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
 
@@ -618,7 +615,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('says why when the api refuses, and stays', async () => {
-      await renderLoaded(makeOrder(), {
+      await renderLoaded(makeCollectorOrder(EDITABLE), {
         remove: { kind: 'refused', message: COLLECTOR_ORDER_MESSAGES.cannotDelete },
       });
       fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
@@ -632,7 +629,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('asks to check the connection when the delete fails', async () => {
-      await renderLoaded(makeOrder(), { remove: { kind: 'failed' } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { remove: { kind: 'failed' } });
       fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
 
       fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
@@ -641,7 +638,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('goes to the login when the session ended', async () => {
-      await renderLoaded(makeOrder(), { remove: { kind: 'loggedOut' } });
+      await renderLoaded(makeCollectorOrder(EDITABLE), { remove: { kind: 'loggedOut' } });
       fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
 
       fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
@@ -650,13 +647,13 @@ describe('EditOrderScreen', () => {
     });
 
     it('offers no delete for an order in a round', async () => {
-      await renderLoaded(makeOrder({ status: 'pending', deletable: false }));
+      await renderLoaded(makeCollectorOrder({ ...EDITABLE, status: 'pending', deletable: false }));
 
       expect(screen.queryByRole('button', { name: 'מחיקת ההזמנה' })).toBeNull();
     });
 
     it('offers the delete on a cancelled order too, next to the closed notice', async () => {
-      const calls = renderScreen(makeOrder({ status: 'cancelled' }));
+      const calls = renderScreen(makeCollectorOrder({ ...EDITABLE, status: 'cancelled' }));
       await screen.findByRole('alert');
 
       fireEvent.click(screen.getByRole('button', { name: 'מחיקת ההזמנה' }));
@@ -667,7 +664,7 @@ describe('EditOrderScreen', () => {
     });
 
     it('offers no delete on a collected order', async () => {
-      renderScreen(makeOrder({ status: 'collected', deletable: false }));
+      renderScreen(makeCollectorOrder({ ...EDITABLE, status: 'collected', deletable: false }));
       await screen.findByRole('alert');
 
       expect(screen.queryByRole('button', { name: 'מחיקת ההזמנה' })).toBeNull();
@@ -678,7 +675,7 @@ describe('EditOrderScreen', () => {
     it.each(['collected', 'cancelled'] as const)(
       'says a %s order is closed, with no form and no cancel',
       async (status) => {
-        renderScreen(makeOrder({ status }));
+        renderScreen(makeCollectorOrder({ ...EDITABLE, status }));
 
         expect((await screen.findByRole('alert')).textContent).toBe(
           COLLECTOR_ORDER_MESSAGES.orderClosed,
@@ -692,7 +689,7 @@ describe('EditOrderScreen', () => {
     );
 
     it.each(['pending', 'confirmed'] as const)('can still edit a %s order', async (status) => {
-      await renderLoaded(makeOrder({ status }));
+      await renderLoaded(makeCollectorOrder({ ...EDITABLE, status }));
 
       expect(input('שם').value).toBe('דנה כהן');
     });
@@ -700,7 +697,7 @@ describe('EditOrderScreen', () => {
 
   describe('when the order is not found', () => {
     it('says so, with the way back and no form', async () => {
-      renderScreen(makeOrder(), { load: [{ kind: 'notFound' }] });
+      renderScreen(makeCollectorOrder(EDITABLE), { load: [{ kind: 'notFound' }] });
 
       expect((await screen.findByRole('alert')).textContent).toBe(
         COLLECTOR_ORDER_MESSAGES.orderNotFound,
@@ -714,7 +711,7 @@ describe('EditOrderScreen', () => {
   describe('logged out', () => {
     it('goes to the login in place of the screen', async () => {
       const historyLength = window.history.length;
-      renderScreen(makeOrder(), { load: [{ kind: 'loggedOut' }] });
+      renderScreen(makeCollectorOrder(EDITABLE), { load: [{ kind: 'loggedOut' }] });
 
       await waitFor(() => expect(window.location.pathname).toBe('/login'));
       expect(window.history.length).toBe(historyLength);
@@ -722,7 +719,7 @@ describe('EditOrderScreen', () => {
 
     it('stays where Yoel went when the answer comes after he left the screen', async () => {
       const answer = deferred<CollectorOrderOutcome>();
-      const { unmount } = renderScreen(makeOrder(), { load: [answer.promise] });
+      const { unmount } = renderScreen(makeCollectorOrder(EDITABLE), { load: [answer.promise] });
       unmount();
       window.history.replaceState(null, '', '/app/rounds');
 
@@ -734,7 +731,9 @@ describe('EditOrderScreen', () => {
 
     it('ignores a save answer that comes after he left the screen', async () => {
       const answer = deferred<CollectorOrderWriteOutcome>();
-      const { unmount } = await renderLoaded(makeOrder(), { update: answer.promise });
+      const { unmount } = await renderLoaded(makeCollectorOrder(EDITABLE), {
+        update: answer.promise,
+      });
       save();
       unmount();
       window.history.replaceState(null, '', '/app/rounds');
@@ -749,7 +748,9 @@ describe('EditOrderScreen', () => {
   describe('when the load fails', () => {
     it('says so in plain words with a retry, and loads again on "לנסות שוב"', async () => {
       const second = deferred<CollectorOrderOutcome>();
-      const calls = renderScreen(makeOrder(), { load: [{ kind: 'failed' }, second.promise] });
+      const calls = renderScreen(makeCollectorOrder(EDITABLE), {
+        load: [{ kind: 'failed' }, second.promise],
+      });
 
       expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
       expect(ORDER_LOAD_FAILED_MESSAGE).toBe(
@@ -764,7 +765,7 @@ describe('EditOrderScreen', () => {
       expect(screen.getByRole('status').textContent).toBe('טוען...');
       expect(screen.queryByRole('alert')).toBeNull();
 
-      second.resolve({ kind: 'loaded', order: makeOrder() });
+      second.resolve({ kind: 'loaded', order: makeCollectorOrder(EDITABLE) });
 
       expect(await screen.findByRole('button', { name: 'שמירת השינויים' })).toBeDefined();
       expect(input('שם').value).toBe('דנה כהן');
@@ -803,8 +804,8 @@ describe('EditOrderScreen', () => {
   describe('in StrictMode (development)', () => {
     it('ignores the answer of the first, discarded run of the load', async () => {
       // StrictMode mounts, unmounts and mounts again: two loads, and only the second counts.
-      const calls = renderScreen(makeOrder(), {
-        load: [{ kind: 'loggedOut' }, { kind: 'loaded', order: makeOrder() }],
+      const calls = renderScreen(makeCollectorOrder(EDITABLE), {
+        load: [{ kind: 'loggedOut' }, { kind: 'loaded', order: makeCollectorOrder(EDITABLE) }],
         strict: true,
       });
 

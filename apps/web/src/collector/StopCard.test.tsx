@@ -9,6 +9,7 @@ import {
   type CollectorOrder,
   type RouteStopView,
 } from '@bottlerun/shared';
+import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
@@ -20,39 +21,30 @@ import {
   type StopCardProps,
 } from './StopCard.tsx';
 
-/** A confirmed order in רמת בית שמש, on an apartment door with floor and note; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-      note: 'ליד העגלה',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/**
+ * What these tests start from, on top of makeCollectorOrder: confirmed, on an apartment door with
+ * floor and note.
+ */
+const AT_THE_DOOR: Partial<CollectorOrder> = {
+  status: 'confirmed',
+  address: { ...makeCollectorOrder().address, floorApt: 'קומה 3, דירה 12', note: 'ליד העגלה' },
+};
 
 /** A stop still to collect, with a map point; overrides change it. */
 function makeStop(overrides: Partial<RouteStopView> = {}): RouteStopView {
-  return { order: makeOrder(), hasLocation: true, state: 'toCollect', ...overrides };
+  return {
+    order: makeCollectorOrder(AT_THE_DOOR),
+    hasLocation: true,
+    state: 'toCollect',
+    ...overrides,
+  };
 }
 
 const THANK_YOU_URL = 'https://wa.me/972501234567?text=%D7%AA%D7%95%D7%93%D7%94';
 
 /** A collected stop with its unsent thank-you. */
 const COLLECTED: RouteStopView = makeStop({
-  order: makeOrder({ status: 'collected' }),
+  order: makeCollectorOrder({ ...AT_THE_DOOR, status: 'collected' }),
   state: 'collected',
   thankYou: {
     orderId: 'o1',
@@ -179,7 +171,10 @@ describe('StopCard compact (upcoming stop)', () => {
   it('tags "בלי מיקום" by the stored flag of the stop, not the order', () => {
     renderCard({
       current: false,
-      stop: makeStop({ hasLocation: false, order: makeOrder({ hasLocation: true }) }),
+      stop: makeStop({
+        hasLocation: false,
+        order: makeCollectorOrder({ ...AT_THE_DOOR, hasLocation: true }),
+      }),
     });
     expect(screen.getByText('בלי מיקום')).toBeTruthy();
   });
@@ -187,7 +182,10 @@ describe('StopCard compact (upcoming stop)', () => {
   it('shows no "בלי מיקום" when the stop had a point, although the order has none now', () => {
     renderCard({
       current: false,
-      stop: makeStop({ hasLocation: true, order: makeOrder({ hasLocation: false }) }),
+      stop: makeStop({
+        hasLocation: true,
+        order: makeCollectorOrder({ ...AT_THE_DOOR, hasLocation: false }),
+      }),
     });
     expect(screen.queryByText('בלי מיקום')).toBeNull();
   });
@@ -207,7 +205,7 @@ describe('StopCard compact (upcoming stop)', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: 'אספתי' })).toBeTruthy();
     const waze = within(dialog).getByRole('link', { name: 'נווט' });
-    expect(waze.getAttribute('href')).toBe(wazeUrl(makeOrder().address));
+    expect(waze.getAttribute('href')).toBe(wazeUrl(makeCollectorOrder(AT_THE_DOOR).address));
     expect(waze.getAttribute('target')).toBe('_blank');
     expect(waze.getAttribute('rel')?.split(' ')).toEqual(
       expect.arrayContaining(['noopener', 'noreferrer']),
@@ -534,7 +532,9 @@ describe('StopCard bottles stepper', () => {
   });
 
   it('changes the value by one and never goes below 1', () => {
-    renderCard({ stop: makeStop({ order: makeOrder({ bottlesEstimated: 2 }) }) });
+    renderCard({
+      stop: makeStop({ order: makeCollectorOrder({ ...AT_THE_DOOR, bottlesEstimated: 2 }) }),
+    });
     fireEvent.click(button('אספתי, דנה כהן'));
 
     fireEvent.click(button('הוסף בקבוק'));
@@ -740,7 +740,7 @@ describe('StopCard current', () => {
     expect(screen.queryByText('בלי מיקום')).toBeNull();
     // Same Waze link as the plain card, and every name still carries the customer.
     expect(screen.getByRole('link', { name: 'נווט, דנה כהן' }).getAttribute('href')).toBe(
-      wazeUrl(makeOrder().address),
+      wazeUrl(makeCollectorOrder(AT_THE_DOOR).address),
     );
     expect(screen.getByRole('link', { name: /^חייג/ }).getAttribute('href')).toBe(
       'tel:+972501234567',

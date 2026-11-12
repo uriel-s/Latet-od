@@ -9,7 +9,7 @@ import {
   type PlanRoundRequest,
   type RoundView,
 } from '@bottlerun/shared';
-import { deferred } from '@bottlerun/shared/testing';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
 import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -28,30 +28,15 @@ import {
 } from './PlanRoundScreen.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
-/** A waiting order on a listed street in רמת בית שמש, with a map point; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'privateHouse',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: a waiting private house. */
+const PRIVATE_HOUSE: Partial<CollectorOrder> = {
+  address: { ...makeCollectorOrder().address, bottlesSpot: 'privateHouse' },
+};
 
-const DANA = makeOrder();
+const DANA = makeCollectorOrder(PRIVATE_HOUSE);
 /** Back from a round the customer did not confirm in time: its card has the miss tag. */
-const MOSHE = makeOrder({
+const MOSHE = makeCollectorOrder({
+  ...PRIVATE_HOUSE,
   id: 'o2',
   contact: { name: 'משה לוי', phone: '+972527654321' },
   address: {
@@ -64,7 +49,8 @@ const MOSHE = makeOrder({
   lastMiss: { date: '2026-11-12', reason: 'notConfirmed', roundId: 'r0' },
 });
 /** In בית שמש, with no map point: its card has "בלי מיקום". */
-const YOSSI = makeOrder({
+const YOSSI = makeCollectorOrder({
+  ...PRIVATE_HOUSE,
   id: 'o4',
   contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
   address: { streetCode: 101, streetName: 'הרצל', houseNumber: '3', bottlesSpot: 'privateHouse' },
@@ -73,7 +59,8 @@ const YOSSI = makeOrder({
   hasLocation: false,
 });
 /** A street written by hand: no region yet ("בלי אזור"), so never offered for a round. */
-const RACHEL = makeOrder({
+const RACHEL = makeCollectorOrder({
+  ...PRIVATE_HOUSE,
   id: 'o3',
   contact: { name: 'רחל אברהם', phone: '+972541112233' },
   address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'buildingEntrance' },
@@ -747,7 +734,8 @@ describe('PlanRoundScreen', () => {
 
     it(`refuses more than ${MAX_ROUND_ORDERS} marked orders, and sends once one is unmarked`, async () => {
       const many = Array.from({ length: MAX_ROUND_ORDERS + 1 }, (_, index) =>
-        makeOrder({
+        makeCollectorOrder({
+          ...PRIVATE_HOUSE,
           id: `m${index + 1}`,
           contact: { name: `לקוח ${index + 1}`, phone: '+972501234567' },
         }),
@@ -838,7 +826,11 @@ describe('PlanRoundScreen', () => {
         kind: 'loaded',
         groups: groupWaitingOrders([
           DANA,
-          makeOrder({ id: 'o5', contact: { name: 'שרה גולן', phone: '+972509998877' } }),
+          makeCollectorOrder({
+            ...PRIVATE_HOUSE,
+            id: 'o5',
+            contact: { name: 'שרה גולן', phone: '+972509998877' },
+          }),
           YOSSI,
         ]),
       };

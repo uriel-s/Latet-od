@@ -7,6 +7,7 @@ import {
   type CollectorOrder,
   type Street,
 } from '@bottlerun/shared';
+import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import {
   CANCEL_FAILED_MESSAGE,
@@ -28,31 +29,21 @@ function streetIn(region: 'ramat' | 'old'): Street {
 const RAMAT_STREET = streetIn('ramat');
 const OLD_STREET = streetIn('old');
 
-/** A waiting order on a listed street in רמת בית שמש; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: RAMAT_STREET.code,
-      streetName: RAMAT_STREET.name,
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: a listed street of רמת בית שמש, a floor. */
+const ON_RAMAT_STREET: Partial<CollectorOrder> = {
+  address: {
+    streetCode: RAMAT_STREET.code,
+    streetName: RAMAT_STREET.name,
+    houseNumber: '12',
+    bottlesSpot: 'apartmentDoor',
+    floorApt: 'קומה 3',
+  },
+};
 
 /** A free-text order: no street code, no region, no map point. */
 function makeFreeTextOrder(overrides: Partial<CollectorOrder['address']> = {}): CollectorOrder {
-  return makeOrder({
+  return makeCollectorOrder({
+    ...ON_RAMAT_STREET,
     address: {
       streetName: 'סמטת הגפנים',
       houseNumber: '7',
@@ -64,7 +55,7 @@ function makeFreeTextOrder(overrides: Partial<CollectorOrder['address']> = {}): 
   });
 }
 
-/** The validated form details of {@link makeOrder}, as validateOrderDetails outputs them. */
+/** The validated form details of {@link ON_RAMAT_STREET}, as validateOrderDetails outputs them. */
 const DETAILS: AddOrderRequest = {
   contact: { name: 'דנה כהן', phone: '+972501234567' },
   address: {
@@ -79,7 +70,7 @@ const DETAILS: AddOrderRequest = {
 
 describe('formValuesFromOrder', () => {
   it('fills the form from the order: local phone, listed street, bottles as text', () => {
-    expect(formValuesFromOrder(makeOrder())).toEqual({
+    expect(formValuesFromOrder(makeCollectorOrder(ON_RAMAT_STREET))).toEqual({
       name: 'דנה כהן',
       phone: '050-1234567',
       street: { kind: 'listed', code: RAMAT_STREET.code, name: RAMAT_STREET.name },
@@ -124,7 +115,7 @@ describe('editRequest', () => {
   const oldChoice = { kind: 'listed', code: OLD_STREET.code, name: OLD_STREET.name } as const;
 
   it('always sends contact, address and bottles, and nothing else when nothing else changed', () => {
-    expect(editRequest(makeOrder(), DETAILS, null, 'ramat')).toEqual({
+    expect(editRequest(makeCollectorOrder(ON_RAMAT_STREET), DETAILS, null, 'ramat')).toEqual({
       contact: DETAILS.contact,
       address: DETAILS.address,
       bottlesEstimated: 40,
@@ -176,7 +167,9 @@ describe('editRequest', () => {
   });
 
   it('sends the region Yoel picked when it differs from the stored one', () => {
-    expect(editRequest(makeOrder(), DETAILS, null, 'old').region).toBe('old');
+    expect(editRequest(makeCollectorOrder(ON_RAMAT_STREET), DETAILS, null, 'old').region).toBe(
+      'old',
+    );
   });
 
   it('sends the region picked for an order that had none', () => {

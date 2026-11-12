@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
-import { deferred } from '@bottlerun/shared/testing';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { SessionOutcome } from '../api/authApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -12,24 +12,21 @@ const LOGGED_IN: SessionOutcome = { kind: 'loggedIn', user: { sub: 'collector' }
 const LOGGED_OUT: SessionOutcome = { kind: 'loggedOut' };
 const FAILED: SessionOutcome = { kind: 'failed' };
 
-/** A waiting order with a street written by hand, named `name`, for the edit screen to load. */
-function makeOrder(id: string, name: string): CollectorOrder {
-  return {
-    id,
-    contact: { name, phone: '+972501234567' },
-    address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'privateHouse' },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: false,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: a street written by hand, no map point. */
+const HAND_WRITTEN: Partial<CollectorOrder> = {
+  address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'privateHouse' },
+  region: undefined,
+  hasLocation: false,
+};
 
 /** The orders the edit screen can load; any other id is not found. */
 const ORDERS_BY_ID: readonly CollectorOrder[] = [
-  makeOrder('o1', 'דנה כהן'),
-  makeOrder('o2', 'משה לוי'),
+  makeCollectorOrder({ ...HAND_WRITTEN, id: 'o1' }),
+  makeCollectorOrder({
+    ...HAND_WRITTEN,
+    id: 'o2',
+    contact: { name: 'משה לוי', phone: '+972501234567' },
+  }),
 ];
 
 /**

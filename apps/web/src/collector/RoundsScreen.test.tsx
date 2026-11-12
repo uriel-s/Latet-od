@@ -8,7 +8,7 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
-import { deferred } from '@bottlerun/shared/testing';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -34,32 +34,20 @@ import { wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
-/** An order in round r1, in רמת בית שמש: `confirmed`, as planning leaves it (ADR-0012). */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/**
+ * What these tests start from, on top of makeCollectorOrder: in round r1, `confirmed` as planning
+ * leaves it (ADR-0012), with a floor and apartment.
+ */
+const IN_ROUND: Partial<CollectorOrder> = {
+  status: 'confirmed',
+  address: { ...makeCollectorOrder().address, floorApt: 'קומה 3, דירה 12' },
+};
 
 /** In the round. */
-const DANA = makeOrder();
+const DANA = makeCollectorOrder(IN_ROUND);
 /** In the round. */
-const MOSHE = makeOrder({
+const MOSHE = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o2',
   contact: { name: 'משה לוי', phone: '+972527654321' },
   address: {
@@ -74,7 +62,8 @@ const MOSHE = makeOrder({
  * In the round as a legacy `pending` order (planned before ADR-0012), shown like a confirmed one;
  * no map point: its card has "בלי מיקום".
  */
-const YOSSI = makeOrder({
+const YOSSI = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o4',
   status: 'pending',
   contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
@@ -83,7 +72,8 @@ const YOSSI = makeOrder({
   hasLocation: false,
 });
 /** Asked for another date: out of the round, waiting again, with the miss of this round. */
-const RACHEL = makeOrder({
+const RACHEL = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o3',
   contact: { name: 'רחל אברהם', phone: '+972541112233' },
   address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'buildingEntrance' },
@@ -159,7 +149,13 @@ const VIEW_MOSHE_DECLINED = makeView({
 /** Round r2, a week after r1 in the other half of the city, no route yet, one customer. */
 const SECOND = makeView({
   round: { id: 'r2', date: '2026-11-26', region: 'old' },
-  inRound: [makeOrder({ id: 'o9', contact: { name: 'שרה גולן', phone: '+972509998877' } })],
+  inRound: [
+    makeCollectorOrder({
+      ...IN_ROUND,
+      id: 'o9',
+      contact: { name: 'שרה גולן', phone: '+972509998877' },
+    }),
+  ],
 });
 
 const LOADED: RoundsOutcome = { kind: 'loaded', rounds: [VIEW] };
