@@ -1,5 +1,4 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   COLLECTOR_ORDER_MESSAGES,
@@ -17,6 +16,7 @@ import type {
   CollectorOrderWriteOutcome,
   DeleteCollectorOrderOutcome,
 } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
 import {
@@ -116,14 +116,15 @@ function answersInTurn<T>(answers: Answer<T>[]): () => Promise<T> {
 }
 
 interface RenderOptions {
-  /** The answers of loadOrder, in turn. Default: the order loads. */
+  /** The answers of fetchCollectorOrder, in turn. Default: the order loads. */
   load?: Answer<CollectorOrderOutcome>[];
-  /** The answer of updateOrder. Default: saved. */
+  /** The answer of updateCollectorOrder. Default: saved. */
   update?: Answer<CollectorOrderWriteOutcome>;
-  /** The answer of cancelOrder. Default: saved. */
+  /** The answer of cancelCollectorOrder. Default: saved. */
   cancel?: Answer<CollectorOrderWriteOutcome>;
-  /** The answer of deleteOrder. Default: deleted. */
+  /** The answer of deleteCollectorOrder. Default: deleted. */
   remove?: Answer<DeleteCollectorOrderOutcome>;
+  /** StrictMode around the whole tree, as in development. */
   strict?: boolean;
 }
 
@@ -136,7 +137,10 @@ interface Calls {
   unmount: () => void;
 }
 
-/** Opens the edit screen of `order` at /app/orders/<id>, with fakes that record every call. */
+/**
+ * Opens the edit screen of `order` at /app/orders/<id>, with fakes of the four client functions
+ * it calls (load, save, cancel, delete) that record every call.
+ */
 function renderScreen(
   order: CollectorOrder = makeOrder(),
   { load, update, cancel, remove, strict = false }: RenderOptions = {},
@@ -145,28 +149,28 @@ function renderScreen(
   const calls: Omit<Calls, 'unmount'> = { loads: [], updates: [], cancels: [], deletes: [] };
   const nextLoad = answersInTurn(load ?? [{ kind: 'loaded', order }]);
   const saved: CollectorOrderWriteOutcome = { kind: 'saved', order };
-  const element = (
-    <EditOrderScreen
-      id={order.id}
-      loadOrder={(id) => {
+  const { unmount } = renderWithApi(
+    <EditOrderScreen id={order.id} />,
+    {
+      fetchCollectorOrder: (id) => {
         calls.loads.push(id);
         return nextLoad();
-      }}
-      updateOrder={(id, request) => {
+      },
+      updateCollectorOrder: (id, request) => {
         calls.updates.push([id, request]);
         return Promise.resolve(update ?? saved);
-      }}
-      cancelOrder={(id) => {
+      },
+      cancelCollectorOrder: (id) => {
         calls.cancels.push(id);
         return Promise.resolve(cancel ?? saved);
-      }}
-      deleteOrder={(id) => {
+      },
+      deleteCollectorOrder: (id) => {
         calls.deletes.push(id);
         return Promise.resolve(remove ?? { kind: 'deleted' });
-      }}
-    />
+      },
+    },
+    { reactStrictMode: strict },
   );
-  const { unmount } = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...calls, unmount };
 }
 
@@ -778,7 +782,9 @@ describe('EditOrderScreen', () => {
 
     it('treats a rejected load like a failed one', async () => {
       window.history.replaceState(null, '', '/app/orders/o1');
-      render(<EditOrderScreen id="o1" loadOrder={() => Promise.reject(new Error('boom'))} />);
+      renderWithApi(<EditOrderScreen id="o1" />, {
+        fetchCollectorOrder: () => Promise.reject(new Error('boom')),
+      });
 
       expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
       expect(window.location.pathname).toBe('/app/orders/o1');

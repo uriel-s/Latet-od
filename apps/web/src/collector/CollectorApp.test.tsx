@@ -1,15 +1,14 @@
-import { StrictMode } from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   groupWaitingOrders,
   type CollectorOrder,
-  type CollectorOrderResponse,
   type CollectorOrdersResponse,
-  type HistoryResponse,
   type RoundsResponse,
 } from '@bottlerun/shared';
+import type { Api } from '../api/ApiContext.tsx';
 import type { SessionOutcome } from '../api/authApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { matchRoute, navigate, useLocation } from '../router.tsx';
 import { CollectorApp, SESSION_CHECK_FAILED_MESSAGE } from './CollectorApp.tsx';
 
@@ -31,16 +30,14 @@ function makeOrder(id: string, name: string): CollectorOrder {
   };
 }
 
-/** The orders GET /api/collector/orders/<id> answers with; any other id answers 404. */
+/** The orders the edit screen can load; any other id is not found. */
 const ORDERS_BY_ID: readonly CollectorOrder[] = [
   makeOrder('o1', 'דנה כהן'),
   makeOrder('o2', 'משה לוי'),
 ];
 
 /** A 200 with `body` as JSON. */
-function jsonResponse(
-  body: CollectorOrdersResponse | CollectorOrderResponse | RoundsResponse | HistoryResponse,
-): Promise<Response> {
+function jsonResponse(body: CollectorOrdersResponse | RoundsResponse): Promise<Response> {
   return Promise.resolve(
     new Response(JSON.stringify(body), {
       status: 200,
@@ -50,31 +47,42 @@ function jsonResponse(
 }
 
 /**
- * The orders screens call the real api functions (CollectorShell passes no fake), so every test
- * here stubs the global fetch: GET /api/collector/orders answers an empty list, GET
- * /api/collector/orders/<id> one of {@link ORDERS_BY_ID}, GET /api/collector/rounds no rounds,
- * GET /api/collector/history?month=<month> nothing closed in that month, and no test sends a
- * request from jsdom.
- * The session itself is checked by the fake loadSession.
+ * The client functions the orders and history screens call (useApi), faked: no waiting order,
+ * {@link ORDERS_BY_ID} for the edit screen, nothing closed in any month, and push off on the
+ * server. The session check and the logout are faked per test (see renderAt).
  */
-function fakeApi(input: string): Promise<Response> {
+const SCREENS_API: Partial<Api> = {
+  fetchWaitingOrders: () => Promise.resolve({ kind: 'loaded', groups: groupWaitingOrders([]) }),
+  fetchCollectorOrder: (id) => {
+    const order = ORDERS_BY_ID.find((candidate) => candidate.id === id);
+    return Promise.resolve(order === undefined ? { kind: 'notFound' } : { kind: 'loaded', order });
+  },
+  fetchHistory: (month) =>
+    Promise.resolve({
+      kind: 'loaded',
+      history: {
+        month,
+        totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
+        orders: [],
+      },
+    }),
+  fetchPushConfig: () => Promise.resolve({ kind: 'loaded', config: { enabled: false } }),
+};
+
+/**
+ * The rounds tab and the planning screen still import their endpoints instead of taking them from
+ * useApi, so the global fetch is stubbed for them: GET /api/collector/orders answers an empty
+ * list, GET /api/collector/rounds no rounds, anything else 404, and no test sends a request from
+ * jsdom.
+ */
+function fakeFetch(input: string): Promise<Response> {
   if (input === '/api/collector/orders') return jsonResponse({ groups: groupWaitingOrders([]) });
   if (input === '/api/collector/rounds') return jsonResponse({ rounds: [] });
-  const historyMonth = /^\/api\/collector\/history\?month=(\d{4}-\d{2})$/.exec(input)?.[1];
-  if (historyMonth !== undefined) {
-    return jsonResponse({
-      month: historyMonth,
-      totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
-      orders: [],
-    });
-  }
-  const order = ORDERS_BY_ID.find(({ id }) => input === `/api/collector/orders/${id}`);
-  if (order !== undefined) return jsonResponse({ order });
   return Promise.resolve(new Response(null, { status: 404 }));
 }
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fakeApi);
+  vi.stubGlobal('fetch', fakeFetch);
 });
 
 afterEach(() => {
@@ -90,7 +98,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-/** A fake `loadSession`: answers each call with the next answer given (the last one repeats). */
+/** A fake `fetchSession`: answers each call with the next answer given (the last one repeats). */
 function fakeSession(...answers: (SessionOutcome | Promise<SessionOutcome>)[]): {
   load: () => Promise<SessionOutcome>;
   calls: () => number;
@@ -104,7 +112,7 @@ function fakeSession(...answers: (SessionOutcome | Promise<SessionOutcome>)[]): 
   return { load, calls: () => calls };
 }
 
-/** A fake `logOut` that records how often it was called and answers `succeeded`. */
+/** A fake `logout` that records how often it was called and answers `succeeded`. */
 function fakeLogout(succeeded = true): { logOut: () => Promise<boolean>; calls: () => number } {
   let calls = 0;
   return {
@@ -118,7 +126,9 @@ function fakeLogout(succeeded = true): { logOut: () => Promise<boolean>; calls: 
 
 /**
  * Opens `path` the way App.tsx does: the collector app while the URL is under /app (the same
- * mounted component for every tab), and a plain marker for any other page, such as /login.
+ * mounted component for every tab), and a plain marker for any other page, such as /login. The
+ * client answers the session check with `loadSession`, the logout with `logOut`, and the screens
+ * with {@link SCREENS_API}. `strict` puts StrictMode around the whole tree, as in development.
  */
 function renderAt(
   path: string,
@@ -129,20 +139,12 @@ function renderAt(
   window.history.replaceState(null, '', path);
   function Pages() {
     const route = matchRoute(useLocation().pathname);
-    return route.name === 'collector' ? (
-      <CollectorApp path={route.path} loadSession={loadSession} logOut={logOut} />
-    ) : (
-      <p>עמוד אחר</p>
-    );
+    return route.name === 'collector' ? <CollectorApp path={route.path} /> : <p>עמוד אחר</p>;
   }
-  return render(
-    strict ? (
-      <StrictMode>
-        <Pages />
-      </StrictMode>
-    ) : (
-      <Pages />
-    ),
+  return renderWithApi(
+    <Pages />,
+    { ...SCREENS_API, fetchSession: loadSession, logout: logOut },
+    { reactStrictMode: strict },
   );
 }
 

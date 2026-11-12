@@ -1,8 +1,8 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { HistoryOrder, HistoryResponse } from '@bottlerun/shared';
 import type { HistoryOutcome } from '../api/historyApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   EMPTY_MONTH_TEXT,
   HISTORY_LOAD_FAILED_MESSAGE,
@@ -94,7 +94,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 /**
- * A fake `loadHistory` that records the month of every call and answers each call with the next
+ * A fake `fetchHistory` that records the month of every call and answers each call with the next
  * answer given (the last one repeats). With no answers, every month is October's.
  */
 function fakeLoad(...answers: (HistoryOutcome | Promise<HistoryOutcome>)[]): {
@@ -110,14 +110,20 @@ function fakeLoad(...answers: (HistoryOutcome | Promise<HistoryOutcome>)[]): {
   return { load, months };
 }
 
-/** Opens the history tab at /app/history with `loadHistory`, "now" pinned to `now`. */
+/**
+ * Opens the history tab at /app/history, its months from `loadHistory` (the client's
+ * `fetchHistory`) and "now" pinned to `now`. `strict` puts StrictMode around the whole tree.
+ */
 function renderScreen(
   loadHistory: (month: string) => Promise<HistoryOutcome>,
   { strict = false, now = fixedNow }: { strict?: boolean; now?: () => Date } = {},
 ): { unmount: () => void } {
   window.history.replaceState(null, '', '/app/history');
-  const screenElement = <HistoryScreen loadHistory={loadHistory} now={now} />;
-  return render(strict ? <StrictMode>{screenElement}</StrictMode> : screenElement);
+  return renderWithApi(
+    <HistoryScreen now={now} />,
+    { fetchHistory: loadHistory },
+    { reactStrictMode: strict },
+  );
 }
 
 /** Renders October's history and waits for it; the next loads answer September, then October. */

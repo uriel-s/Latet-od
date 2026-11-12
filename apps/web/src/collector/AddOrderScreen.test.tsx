@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   CREATE_ORDER_MESSAGES,
@@ -10,6 +10,7 @@ import {
   type Street,
 } from '@bottlerun/shared';
 import type { CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { MAX_STREET_RESULTS } from '../streetPicker/StreetPicker.tsx';
 import { AddOrderScreen } from './AddOrderScreen.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
@@ -63,7 +64,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 /**
- * Opens the add screen at /app/orders/new with a fake `addOrder` that records every request and
+ * Opens the add screen at /app/orders/new with a fake `addCollectorOrder` that records every request and
  * answers `outcome`.
  */
 function renderScreen(
@@ -75,7 +76,7 @@ function renderScreen(
     requests.push(request);
     return Promise.resolve(outcome);
   };
-  const { unmount } = render(<AddOrderScreen addOrder={addOrder} />);
+  const { unmount } = renderWithApi(<AddOrderScreen />, { addCollectorOrder: addOrder });
   return { requests, unmount };
 }
 
@@ -263,7 +264,9 @@ describe('AddOrderScreen', () => {
 
   it('treats a rejected save like a failed one', async () => {
     window.history.replaceState(null, '', '/app/orders/new');
-    render(<AddOrderScreen addOrder={() => Promise.reject(new Error('boom'))} />);
+    renderWithApi(<AddOrderScreen />, {
+      addCollectorOrder: () => Promise.reject(new Error('boom')),
+    });
 
     fillValidForm();
     save();
