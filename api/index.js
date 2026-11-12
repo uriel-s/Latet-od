@@ -22309,13 +22309,6 @@ function messagingDepsFromEnv(env) {
   };
 }
 
-// apps/api/src/push/pushSender.ts
-var DisabledPushSender = class {
-  send() {
-    return Promise.resolve({ status: "failed", reason: "disabled" });
-  }
-};
-
 // apps/api/src/push/webPushSender.ts
 import {
   createCipheriv,
@@ -22543,10 +22536,7 @@ function pushDepsFromEnv(env) {
   const privateKey = env.VAPID_PRIVATE_KEY ?? "";
   const subject = env.VAPID_SUBJECT ?? "";
   if (publicKey === "" && privateKey === "" && subject === "") {
-    return {
-      publicKey: null,
-      sender: new DisabledPushSender()
-    };
+    return null;
   }
   const missing = [];
   if (publicKey === "") missing.push("VAPID_PUBLIC_KEY");
@@ -23207,7 +23197,8 @@ function sendDuplicateOpenOrder(res) {
 // apps/api/src/push/notifyNewOrder.ts
 async function notifyNewOrder(deps, order) {
   try {
-    if (deps.push.publicKey === null) {
+    const push = deps.push;
+    if (push === null) {
       logPushSummary({ enabled: false });
       return;
     }
@@ -23217,7 +23208,7 @@ async function notifyNewOrder(deps, order) {
     await Promise.allSettled(
       subscriptions.map(async (sub) => {
         try {
-          const result = await deps.push.sender.send(sub, payload);
+          const result = await push.sender.send(sub, payload);
           counts[result.status] += 1;
           if (result.status === "gone") {
             await deps.pushSubscriptions.removeByEndpoint(sub.endpoint);
@@ -23474,11 +23465,11 @@ import { Router as Router5 } from "express";
 function createCollectorPushRouter(deps) {
   const router = Router5();
   router.get("/config", (_req, res) => {
-    const body = deps.push.publicKey !== null ? { enabled: true, publicKey: deps.push.publicKey } : { enabled: false };
+    const body = deps.push === null ? { enabled: false } : { enabled: true, publicKey: deps.push.publicKey };
     res.json(body);
   });
   const handleSubscribe = async (req, res) => {
-    if (deps.push.publicKey === null) {
+    if (deps.push === null) {
       const error62 = { error: "push_not_configured" };
       res.status(503).json(error62);
       return;
