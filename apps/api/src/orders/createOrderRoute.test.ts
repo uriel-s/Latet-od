@@ -636,6 +636,9 @@ describe('POST /api/orders: Web Push notifications', () => {
     expect(res.status).toBe(201);
     expect(await orders.list()).toHaveLength(1);
     expect(await pushSubscriptions.list()).toEqual([SUB]);
+    // notifyNewOrder logs errors instead of rejecting, so a 201 alone would not show that the
+    // null push was skipped rather than dereferenced: nothing may reach console.error.
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });
 

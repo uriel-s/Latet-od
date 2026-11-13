@@ -838,8 +838,11 @@ describe('RoundsScreen', () => {
       expect(within(round).queryByRole('region')).toBeNull();
       expect(within(round).queryByRole('button', { name: BUILD_ROUTE_LABEL })).toBeNull();
       expect(within(round).getByText('נאספו 0 מתוך 2 · נשארו 2')).toBeDefined();
-      // The question Yoel answered is gone: the focus goes to the round's heading.
-      expect(document.activeElement).toBe(within(round).getByRole('heading', { level: 2 }));
+      // The question Yoel answered is gone: the focus goes to the round's heading (in an effect,
+      // after the render waitFor saw, so this waits too).
+      await waitFor(() =>
+        expect(document.activeElement).toBe(within(round).getByRole('heading', { level: 2 })),
+      );
       expect(calls).toEqual(['r1']);
     });
 

@@ -63,6 +63,7 @@ BottleRun/
 │   ├── web/                 # React + Vite SPA: public form, customer page, collector app
 │   │   ├── index.html       # lang="he" dir="rtl"; static Open Graph tags go here
 │   │   ├── src/             # *.tsx, tests next to the code (*.test.tsx)
+│   │   ├── src/api/         # api client: one module per resource (roundsApi.ts, …), request.ts, ApiContext.tsx
 │   │   └── vite.config.ts   # also the Vitest "web" project (jsdom); dev proxy /api → :3000
 │   └── api/                 # Express
 │       ├── src/app.ts       # exports `createApp(deps)`, no listen()
@@ -175,6 +176,8 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 - api routes: `supertest` against the exported `app` — no `listen()`, no port.
 - React: Testing Library, query by role / visible text (Hebrew), not by class or test id.
 - Fakes, not mocks, for the external interfaces above; `makeOrder(overrides)`-style helpers for test data.
+- Shared test helpers come from `@bottlerun/shared/testing`: `makeOrder`, `makeNewOrder`, `makeCollectorOrder`, `makeCustomerOrder`, `deferred`, `firstRealStreet`. Lint allows it, and the test-only helpers next to the code (`fakeFetch.ts`, `renderWithApi.tsx`, `testSession.ts`, …), only from `*.test.ts(x)` / `*.contract.ts`.
+- Web screens get the api client from `useApi()` (`apps/web/src/api/ApiContext.tsx`), never as API-function props; tests inject fakes with `renderWithApi(ui, overrides)`.
 - Happy path first, then edges: minimum 20 bottles, Israeli mobile format, duplicate open order, expired/forged token, status transitions that must be refused.
 
 ## Adding Dependencies
