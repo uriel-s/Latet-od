@@ -193,7 +193,7 @@ The scale is one collector, about 1.5 orders a day, a few hundred orders a year.
 ## Adding Dependencies
 
 1. `npm install <pkg> --workspace apps/api` (or `apps/web`); dev tools used repo-wide go in the root with `-D`.
-2. Prefer no dependency: Node 24 and the existing stack cover a lot (`node:crypto` scrypt instead of bcrypt, ADR-0004).
+2. Prefer no dependency when a built-in does the job (`node:crypto` scrypt instead of bcrypt, ADR-0004). But never hand-write a security protocol or a standard format (encryption schemes, Web Push/VAPID, auth tokens, time zones, parsers): use the well-known library. A built-in primitive is fine; reimplementing an RFC is not.
 3. `bash .claude/checks.sh sec` — no high/critical advisories in production deps.
 4. Commit `package.json` and `package-lock.json` together.
 5. **TypeScript stays on 6.0.x** until typescript-eslint supports 7 (its peer range is `<6.1.0`).
