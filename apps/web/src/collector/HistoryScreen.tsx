@@ -17,7 +17,8 @@ import {
   type HistoryOrder,
   type HistoryResponse,
 } from '@bottlerun/shared';
-import { fetchHistory, type HistoryOutcome } from '../api.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { HistoryOutcome } from '../api/historyApi.ts';
 import { navigate } from '../router.tsx';
 import { bottlesText } from './OrdersScreen.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
@@ -49,11 +50,6 @@ export function monthName(month: string): string {
 
 /** Props of {@link HistoryScreen}. */
 export interface HistoryScreenProps {
-  /**
-   * Loads one month's history. Defaults to {@link fetchHistory}; tests pass a fake. Must keep its
-   * identity across renders (a module function, not an inline arrow): a new one loads again.
-   */
-  loadHistory?: (month: string) => Promise<HistoryOutcome>;
   /** The clock that decides the current month (in Israel). Tests pin it; defaults to now. */
   now?: () => Date;
 }
@@ -76,8 +72,12 @@ const systemNow = (): Date => new Date();
  *
  * A 401 means the session ended: to the login, like the other tabs. A failed load stays here with
  * a retry: a dropped connection is not a logout.
+ *
+ * Each month comes from `fetchHistory` of {@link useApi} (GET /api/collector/history).
  */
-export function HistoryScreen({ loadHistory = fetchHistory, now = systemNow }: HistoryScreenProps) {
+export function HistoryScreen({ now = systemNow }: HistoryScreenProps) {
+  // The client keeps its functions' identity, so this effect dependency does not reload.
+  const { fetchHistory: loadHistory } = useApi();
   // The current month in Israel: the picker's start and its upper end.
   const [currentMonth, setCurrentMonth] = useState(() => monthInAppZone(now()));
   // The month shown; the load below follows it.

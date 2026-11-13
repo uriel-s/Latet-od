@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pointForAddress, regionForAddress, type StreetLookup } from './location.ts';
-import { STREETS, type Street } from './streets.ts';
+import type { Street } from './streets.ts';
+import { firstRealStreet } from './testing/index.ts';
 
 // Fixed streets, so the tests do not change when the real list is geocoded again.
 const OLD_STREET: Street = {
@@ -37,13 +38,6 @@ const FAKE_STREETS = new Map(
   ]),
 );
 const lookup: StreetLookup = (code) => FAKE_STREETS.get(code);
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 describe('regionForAddress', () => {
   it('takes the region of the street the customer picked', () => {

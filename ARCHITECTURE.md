@@ -126,6 +126,7 @@ flowchart TB
 | `packages/shared` | zod, קוד TS טהור | כל אפליקציה, `express`, `react` | ESLint `no-restricted-imports` |
 | `scripts` | `@bottlerun/shared`, Node | כל אפליקציה | ESLint `no-restricted-imports` |
 | `api` (ה-function של Vercel) | `apps/api`, Node | `apps/web` | ESLint `no-restricted-imports` |
+| קוד שאינו בדיקה (כל workspace) | — | `@bottlerun/shared/testing` (עזרי בדיקות: `deferred`, `firstRealStreet`, `makeOrder` ודומיו), מותר רק מ-`*.test.ts(x)` ומ-`*.contract.ts` | ESLint `@typescript-eslint/no-restricted-imports` |
 
 **מה שייך ל-shared:** כל דבר ששני הצדדים צריכים להסכים עליו: צורת ההזמנה (zod), קודי סטטוס, כללי validation
 (טלפון ישראלי, מינימום 20), טקסט ההודעות (`renderMessage`), רשימת הרחובות, ושווי בקבוק.

@@ -11,7 +11,6 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import {
   CUSTOMER_ORDER_MESSAGES,
   ORDER_FORM_ERRORS,
-  STREETS,
   collectorOrdersResponseSchema,
   customerOrderResponseSchema,
   roundViewSchema,
@@ -26,7 +25,6 @@ import {
   type Round,
   type RoundGroupKey,
   type RoundView,
-  type Street,
 } from '@bottlerun/shared';
 import { createApp } from '../app.ts';
 import { loggedInCookie } from '../auth/testSession.ts';
@@ -35,7 +33,7 @@ import { InMemoryRoundsRepo } from '../rounds/inMemoryRoundsRepo.ts';
 import { makeNewRound } from '../rounds/makeRound.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 import type { OrderPatch, OrderUpdateOptions } from './ordersRepo.ts';
 
 const BASE = '/api/o';
@@ -73,13 +71,6 @@ const MANUAL_REQUEST: MessageLogEntry = {
 
 /** Shaped like a Mongo ObjectId: an earlier round the order once left. */
 const EARLIER_ROUND_ID = 'bbbbbbbbbbbbbbbbbbbbbbbb';
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 /** A listed street in רמת בית שמש. */
 const RAMAT_STREET = firstRealStreet((street) => street.region === 'ramat');

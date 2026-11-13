@@ -13,42 +13,14 @@ import {
   orderSchema,
   timestampSchema,
   type MessageLogEntry,
-  type Order,
   type OrderFormInput,
 } from './order.ts';
 import { t } from './i18n.ts';
 import { PHONE_ERROR } from './phone.ts';
 import { STREETS, type Street } from './streets.ts';
+import { MADE_ORDER_TOKEN, makeOrder } from './testing/index.ts';
 
-/** 43 base64url characters, the shape of a real token. */
-const TOKEN = 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const CREATED_AT = new Date('2026-10-19T08:30:00.000Z');
-
-/** A valid stored order (as the repo returns it from Mongo: Dates, not strings). */
-function makeOrder(overrides: Partial<Order> = {}): Order {
-  return {
-    id: '6710f3a2c4b5d6e7f8a9b0c1',
-    contact: { name: 'משה כהן', phone: '+972501234567', method: 'whatsapp' },
-    address: {
-      streetCode: 101,
-      streetName: 'הרצל',
-      houseNumber: '12א',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-      note: 'קוד לבניין 1234',
-    },
-    bottlesEstimated: 45,
-    status: 'waiting',
-    region: 'old',
-    token: TOKEN,
-    messages: [],
-    source: 'form',
-    lang: 'he',
-    createdAt: CREATED_AT,
-    updatedAt: CREATED_AT,
-    ...overrides,
-  };
-}
 
 /** A valid booking form, as the web form sends it. */
 function makeFormInput(overrides: Partial<OrderFormInput> = {}): OrderFormInput {
@@ -160,7 +132,12 @@ describe('orderSchema', () => {
   });
 
   it('rejects a token of the wrong length or alphabet', () => {
-    for (const token of [TOKEN.slice(1), `${TOKEN}A`, `${TOKEN.slice(1)}=`, `${TOKEN.slice(1)}+`]) {
+    for (const token of [
+      MADE_ORDER_TOKEN.slice(1),
+      `${MADE_ORDER_TOKEN}A`,
+      `${MADE_ORDER_TOKEN.slice(1)}=`,
+      `${MADE_ORDER_TOKEN.slice(1)}+`,
+    ]) {
       expect(orderSchema.safeParse(makeOrder({ token })).success, token).toBe(false);
     }
   });
@@ -239,7 +216,7 @@ describe('labels', () => {
   });
 
   it('documents a token length that matches its random bytes', () => {
-    expect(Math.ceil((ORDER_TOKEN_BYTES * 4) / 3)).toBe(TOKEN.length);
+    expect(Math.ceil((ORDER_TOKEN_BYTES * 4) / 3)).toBe(MADE_ORDER_TOKEN.length);
   });
 });
 

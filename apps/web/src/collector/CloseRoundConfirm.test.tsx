@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type {
   CollectorOrder,
@@ -7,7 +7,10 @@ import type {
   RoundView,
   RouteStopView,
 } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome } from '../api.ts';
+import { makeCollectorOrder } from '@bottlerun/shared/testing';
+import type { Api } from '../api/ApiContext.tsx';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   CLOSE_ROUND_NO_LABEL,
   CLOSE_ROUND_TEXTS,
@@ -20,31 +23,25 @@ import {
   type CloseRoundConfirmProps,
 } from './CloseRoundConfirm.tsx';
 
-/** A confirmed order of the round; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: an order of the round, confirmed. */
+const IN_ROUND: Partial<CollectorOrder> = { status: 'confirmed' };
 
-const DANA = makeOrder();
-const MOSHE = makeOrder({ id: 'o2', contact: { name: 'משה לוי', phone: '+972527654321' } });
-const YOSSI = makeOrder({ id: 'o3', contact: { name: 'יוסי מזרחי', phone: '+972501239999' } });
-const RINA = makeOrder({ id: 'o4', contact: { name: 'רינה פרץ', phone: '+972541112222' } });
+const DANA = makeCollectorOrder(IN_ROUND);
+const MOSHE = makeCollectorOrder({
+  ...IN_ROUND,
+  id: 'o2',
+  contact: { name: 'משה לוי', phone: '+972527654321' },
+});
+const YOSSI = makeCollectorOrder({
+  ...IN_ROUND,
+  id: 'o3',
+  contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
+});
+const RINA = makeCollectorOrder({
+  ...IN_ROUND,
+  id: 'o4',
+  contact: { name: 'רינה פרץ', phone: '+972541112222' },
+});
 
 /** Round r1 in `phase`. */
 function roundIn(phase: CollectorRound['phase']): CollectorRound {
@@ -120,9 +117,12 @@ function collected(
 
 const OPENED_AT = new Date('2026-11-19T09:00:00Z');
 
-/** A fake `markOpened` that records its calls and answers `marked` at {@link OPENED_AT}. */
+/**
+ * A fake `markMessageOpened` (the client's, which the rows' SendList takes from useApi) that
+ * records its calls and answers `marked` at {@link OPENED_AT}.
+ */
 function fakeMarkOpened(): {
-  markOpened: NonNullable<CloseRoundConfirmProps['markOpened']>;
+  markOpened: Api['markMessageOpened'];
   calls: { orderId: string; messageIndex: number }[];
 } {
   const calls: { orderId: string; messageIndex: number }[] = [];
@@ -133,10 +133,15 @@ function fakeMarkOpened(): {
   return { markOpened, calls };
 }
 
-/** Renders the component with fakes; returns the calls of each callback and `rerender`. */
-function renderConfirm(overrides: Partial<CloseRoundConfirmProps> = {}) {
+/**
+ * Renders the component with fakes; returns the calls of each callback and `rerender`. The rows'
+ * `markMessageOpened` is `markOpened`, else a fresh {@link fakeMarkOpened}; `rerender` keeps it.
+ */
+function renderConfirm(
+  overrides: Partial<CloseRoundConfirmProps> = {},
+  markOpened: Api['markMessageOpened'] = fakeMarkOpened().markOpened,
+) {
   const calls = { close: 0, openChange: 0 };
-  const { markOpened } = fakeMarkOpened();
   const props = (next: Partial<CloseRoundConfirmProps>): CloseRoundConfirmProps => ({
     view: routedView([toCollect(DANA)]),
     closing: false,
@@ -147,11 +152,12 @@ function renderConfirm(overrides: Partial<CloseRoundConfirmProps> = {}) {
     onOpenChange: () => {
       calls.openChange += 1;
     },
-    markOpened,
     ...overrides,
     ...next,
   });
-  const result = render(<CloseRoundConfirm {...props({})} />);
+  const result = renderWithApi(<CloseRoundConfirm {...props({})} />, {
+    markMessageOpened: markOpened,
+  });
   return {
     calls,
     rerender: (next: Partial<CloseRoundConfirmProps>) =>
@@ -197,10 +203,10 @@ describe('ordersSentBackCount', () => {
     const view = confirmingView({
       inRound: [
         DANA,
-        makeOrder({ ...MOSHE, status: 'pending' }),
-        makeOrder({ ...YOSSI, status: 'confirmed' }),
+        makeCollectorOrder({ ...MOSHE, status: 'pending' }),
+        makeCollectorOrder({ ...YOSSI, status: 'confirmed' }),
       ],
-      otherDate: [makeOrder({ ...RINA, status: 'waiting' })],
+      otherDate: [makeCollectorOrder({ ...RINA, status: 'waiting' })],
     });
 
     expect(ordersSentBackCount(view)).toBe(3);
@@ -208,7 +214,7 @@ describe('ordersSentBackCount', () => {
 
   it('does not count a collected order in the "בסבב" group', () => {
     const view = confirmingView({
-      inRound: [DANA, makeOrder({ ...MOSHE, status: 'collected' })],
+      inRound: [DANA, makeCollectorOrder({ ...MOSHE, status: 'collected' })],
     });
 
     expect(ordersSentBackCount(view)).toBe(1);
@@ -281,7 +287,9 @@ describe('CloseRoundConfirm', () => {
 
   it('asks about every order still in a confirming round, as "בטל את הסבב"', () => {
     renderConfirm({
-      view: confirmingView({ inRound: [DANA, makeOrder({ ...MOSHE, status: 'confirmed' })] }),
+      view: confirmingView({
+        inRound: [DANA, makeCollectorOrder({ ...MOSHE, status: 'confirmed' })],
+      }),
     });
 
     openQuestion('בטל את הסבב');
@@ -431,9 +439,9 @@ describe('CloseRoundConfirm', () => {
       );
     });
 
-    it('marks a row opened through markOpened', async () => {
+    it('marks a row opened through the client', async () => {
       const { markOpened, calls } = fakeMarkOpened();
-      renderConfirm({ view: VIEW, markOpened });
+      renderConfirm({ view: VIEW }, markOpened);
       openQuestion();
 
       fireEvent.click(screen.getByRole('link', { name: 'שלח לדנה כהן' }));

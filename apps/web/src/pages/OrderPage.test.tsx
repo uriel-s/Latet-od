@@ -1,29 +1,19 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   CUSTOMER_ORDER_MESSAGES,
   customerOrderSchema,
+  t,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
 } from '@bottlerun/shared';
-import {
-  NETWORK_ERROR_MESSAGE,
-  type CustomerOrderOutcome,
-  type CustomerOrderWriteOutcome,
-} from '../api.ts';
+import { deferred, makeCustomerOrder } from '@bottlerun/shared/testing';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import type { CustomerOrderOutcome, CustomerOrderWriteOutcome } from '../api/customerOrderApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { SAVE_FAILED_MESSAGE, UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { prefillFromNavigationState } from '../orderForm/savedDetails.ts';
-import {
-  CANCELLED_TEXT,
-  COLLECTED_TEXT,
-  LEFT_ROUND_MESSAGE,
-  ORDER_LOAD_FAILED_MESSAGE,
-  OrderPage,
-  PHONE_NOT_CHANGED_TEXT,
-  SAVED_MESSAGES,
-  WAITING_TEXT,
-} from './OrderPage.tsx';
+import { OrderPage } from './OrderPage.tsx';
 
 /** A token as the api hands it out: 43 base64url characters. */
 const TOKEN = 'Q'.repeat(43);
@@ -31,33 +21,14 @@ const TOKEN = 'Q'.repeat(43);
 /** The round of an order in a round (confirmed, or a legacy pending): 12/11, out by 18:00. */
 const ROUND = { date: '2026-11-12', pickupBy: '18:00' };
 
-/** A waiting order, as GET /api/o/:token answers it; overrides change it. */
-function makeOrder(overrides: Partial<CustomerOrder> = {}): CustomerOrder {
-  return {
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 247,
-      streetName: 'דרך רבין יצחק',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-      note: 'ליד העגלה הכחולה',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    lang: 'he',
-    ...overrides,
-  };
-}
-
 /** A legacy pending order: planned before ADR-0012, when the customer was asked to confirm. */
 function pendingOrder(): CustomerOrder {
-  return makeOrder({ status: 'pending', round: ROUND });
+  return makeCustomerOrder({ status: 'pending', round: ROUND });
 }
 
 /** An order in a round: since ADR-0012 planning moves it straight to confirmed. */
 function confirmedOrder(): CustomerOrder {
-  return makeOrder({ status: 'confirmed', round: ROUND });
+  return makeCustomerOrder({ status: 'confirmed', round: ROUND });
 }
 
 /**
@@ -66,15 +37,6 @@ function confirmedOrder(): CustomerOrder {
  */
 function withChange(order: CustomerOrder, request: CustomerUpdateOrderRequest): CustomerOrder {
   return customerOrderSchema.parse({ ...order, ...request });
-}
-
-/** A promise the test settles by hand, to look at the page while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
 }
 
 type Answer<T> = T | Promise<T>;
@@ -91,13 +53,13 @@ function answersInTurn<T>(answers: Answer<T>[]): () => Promise<T> {
 }
 
 interface RenderOptions {
-  /** The answers of loadOrder, in turn. Default: the order loads. */
+  /** The answers of fetchCustomerOrder, in turn. Default: the order loads. */
   load?: Answer<CustomerOrderOutcome>[];
-  /** The answer of declineOrder. Default: saved, back to waiting with no round. */
+  /** The answer of declineCustomerOrder. Default: saved, back to waiting with no round. */
   decline?: Answer<CustomerOrderWriteOutcome>;
-  /** The answer of cancelOrder. Default: saved, cancelled with no round. */
+  /** The answer of cancelCustomerOrder. Default: saved, cancelled with no round. */
   cancel?: Answer<CustomerOrderWriteOutcome>;
-  /** The answer of updateOrder. Default: saved, the order with the change applied. */
+  /** The answer of updateCustomerOrder. Default: saved, the order with the change applied. */
   update?: Answer<CustomerOrderWriteOutcome>;
   strict?: boolean;
 }
@@ -111,9 +73,9 @@ interface Calls {
   unmount: () => void;
 }
 
-/** Opens the page of `order` at /o/<token>, with fakes that record every call. */
+/** Opens the page of `order` at /o/<token>, with fakes (through the ApiProvider) that record every call. */
 function renderPage(
-  order: CustomerOrder = makeOrder(),
+  order: CustomerOrder = makeCustomerOrder(),
   { load, decline, cancel, update, strict = false }: RenderOptions = {},
 ): Calls {
   window.history.replaceState(null, '', `/o/${TOKEN}`);
@@ -127,38 +89,40 @@ function renderPage(
   // The order without its round, as the api answers once it left the round or was cancelled.
   const outOfRound = { ...order };
   delete outOfRound.round;
-  const element = (
-    <OrderPage
-      token={TOKEN}
-      loadOrder={(token) => {
+  // StrictMode goes around the whole tree, provider included (`reactStrictMode`): nested under the
+  // provider, it did not run the load's effect twice.
+  const { unmount } = renderWithApi(
+    <OrderPage token={TOKEN} />,
+    {
+      fetchCustomerOrder: (token) => {
         calls.loads.push(token);
         return nextLoad();
-      }}
-      declineOrder={(token) => {
+      },
+      declineCustomerOrder: (token) => {
         calls.declines.push(token);
         return Promise.resolve(
           decline ?? { kind: 'saved', order: { ...outOfRound, status: 'waiting' } },
         );
-      }}
-      cancelOrder={(token) => {
+      },
+      cancelCustomerOrder: (token) => {
         calls.cancels.push(token);
         return Promise.resolve(
           cancel ?? { kind: 'saved', order: { ...outOfRound, status: 'cancelled' } },
         );
-      }}
-      updateOrder={(token, request) => {
+      },
+      updateCustomerOrder: (token, request) => {
         calls.updates.push({ token, request });
         return Promise.resolve(update ?? { kind: 'saved', order: withChange(order, request) });
-      }}
-    />
+      },
+    },
+    { reactStrictMode: strict },
   );
-  const { unmount } = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...calls, unmount };
 }
 
 /** Renders the page of `order` and waits for its details. */
 async function renderLoaded(
-  order: CustomerOrder = makeOrder(),
+  order: CustomerOrder = makeCustomerOrder(),
   options: RenderOptions = {},
 ): Promise<Calls> {
   const calls = renderPage(order, options);
@@ -221,7 +185,7 @@ function queryLeaveRoundWarning(): HTMLElement | null {
 
 /** Renders the page of `order`, waits for it, and opens "שינוי". */
 async function openChange(
-  order: CustomerOrder = makeOrder(),
+  order: CustomerOrder = makeCustomerOrder(),
   options: RenderOptions = {},
 ): Promise<Calls> {
   const calls = await renderLoaded(order, options);
@@ -232,7 +196,7 @@ async function openChange(
 describe('OrderPage', () => {
   describe('while the order loads', () => {
     it('shows the heading and a loading status, and no button', () => {
-      renderPage(makeOrder(), { load: [deferred<CustomerOrderOutcome>().promise] });
+      renderPage(makeCustomerOrder(), { load: [deferred<CustomerOrderOutcome>().promise] });
 
       expectOneH1();
       expect(screen.getByRole('status').textContent).toBe('טוען...');
@@ -249,10 +213,10 @@ describe('OrderPage', () => {
   describe('when the load fails', () => {
     it('says so in plain words with a retry, and loads again on "לנסות שוב"', async () => {
       const second = deferred<CustomerOrderOutcome>();
-      const calls = renderPage(makeOrder(), { load: [{ kind: 'failed' }, second.promise] });
+      const calls = renderPage(makeCustomerOrder(), { load: [{ kind: 'failed' }, second.promise] });
 
-      expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
-      expect(ORDER_LOAD_FAILED_MESSAGE).toBe(
+      expect((await screen.findByRole('alert')).textContent).toBe(t('he', 'orderPage.loadFailed'));
+      expect(t('he', 'orderPage.loadFailed')).toBe(
         'לא הצלחנו לטעון את ההזמנה. נא לבדוק את החיבור לאינטרנט ולנסות שוב.',
       );
       expectOneH1();
@@ -263,7 +227,7 @@ describe('OrderPage', () => {
       expect(screen.getByRole('status').textContent).toBe('טוען...');
       expect(screen.queryByRole('alert')).toBeNull();
 
-      second.resolve({ kind: 'loaded', order: makeOrder() });
+      second.resolve({ kind: 'loaded', order: makeCustomerOrder() });
 
       expect(await screen.findByText('דנה כהן')).toBeDefined();
       expect(screen.queryByRole('button', { name: 'לנסות שוב' })).toBeNull();
@@ -271,15 +235,17 @@ describe('OrderPage', () => {
     });
 
     it('treats a rejected load like a failed one', async () => {
-      render(<OrderPage token={TOKEN} loadOrder={() => Promise.reject(new Error('boom'))} />);
+      renderWithApi(<OrderPage token={TOKEN} />, {
+        fetchCustomerOrder: () => Promise.reject(new Error('boom')),
+      });
 
-      expect((await screen.findByRole('alert')).textContent).toBe(ORDER_LOAD_FAILED_MESSAGE);
+      expect((await screen.findByRole('alert')).textContent).toBe(t('he', 'orderPage.loadFailed'));
     });
   });
 
   describe('when no order has the token', () => {
     it('says the link may be cut short, with a way to the booking form', async () => {
-      renderPage(makeOrder(), { load: [{ kind: 'notFound' }] });
+      renderPage(makeCustomerOrder(), { load: [{ kind: 'notFound' }] });
 
       expect((await screen.findByRole('alert')).textContent).toBe(
         CUSTOMER_ORDER_MESSAGES.orderNotFound,
@@ -296,8 +262,8 @@ describe('OrderPage', () => {
 
       expectOneH1();
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
-      expect(WAITING_TEXT).toBe('נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.');
+      expect(screen.getByText(t('he', 'orderPage.waiting'))).toBeDefined();
+      expect(t('he', 'orderPage.waiting')).toBe('נשלח לך הודעת WhatsApp לפני הסבב באזור שלך.');
       // The status is a badge with the status in words (not colour alone), inside a card.
       expect(screen.getByText('ממתינה לסבב').closest('.badge')).not.toBeNull();
     });
@@ -307,7 +273,7 @@ describe('OrderPage', () => {
 
       const card = screen.getByText('מצב ההזמנה:', { exact: false }).closest('.card');
       expect(card).not.toBeNull();
-      expect(card?.contains(screen.getByText(WAITING_TEXT))).toBe(true);
+      expect(card?.contains(screen.getByText(t('he', 'orderPage.waiting')))).toBe(true);
     });
 
     it('draws each detail as one row: its name, then its value', async () => {
@@ -357,7 +323,7 @@ describe('OrderPage', () => {
     });
 
     it('leaves out the note when there is none', async () => {
-      const order = makeOrder();
+      const order = makeCustomerOrder();
       delete order.address.note;
       await renderLoaded(order);
 
@@ -386,7 +352,7 @@ describe('OrderPage', () => {
 
     it('says the start twice when the round has a window: out by it, and when Yoel comes', async () => {
       await renderLoaded(
-        makeOrder({
+        makeCustomerOrder({
           status: 'confirmed',
           round: { date: '2026-11-12', pickupFrom: '16:00', pickupBy: '18:00' },
         }),
@@ -404,7 +370,7 @@ describe('OrderPage', () => {
     });
 
     it('leaves out the time when the round has none', async () => {
-      await renderLoaded(makeOrder({ status: 'confirmed', round: { date: '2026-11-12' } }));
+      await renderLoaded(makeCustomerOrder({ status: 'confirmed', round: { date: '2026-11-12' } }));
 
       expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
       expect(screen.queryByText('נא להוציא את הבקבוקים', { exact: false })).toBeNull();
@@ -431,7 +397,7 @@ describe('OrderPage', () => {
       // The button just tapped is gone, so the focus goes to the notice that says what happened.
       expect(document.activeElement).toBe(notice);
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
+      expect(screen.getByText(t('he', 'orderPage.waiting'))).toBeDefined();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(button('ביטול ההזמנה')).toBeDefined();
       expect(calls.declines).toEqual([TOKEN]);
@@ -465,7 +431,7 @@ describe('OrderPage', () => {
       fireEvent.click(button('שולח...'));
       expect(calls.declines).toEqual([TOKEN]);
 
-      answer.resolve({ kind: 'saved', order: makeOrder() });
+      answer.resolve({ kind: 'saved', order: makeCustomerOrder() });
 
       expect(await screen.findByText('קיבלנו. נחזור אליך עם מועד חדש.')).toBeDefined();
       expect(calls.declines).toEqual([TOKEN]);
@@ -497,13 +463,10 @@ describe('OrderPage', () => {
     );
 
     it('treats a rejected "לא מתאים הפעם" like a failed one', async () => {
-      render(
-        <OrderPage
-          token={TOKEN}
-          loadOrder={() => Promise.resolve({ kind: 'loaded', order: confirmedOrder() })}
-          declineOrder={() => Promise.reject(new Error('boom'))}
-        />,
-      );
+      renderWithApi(<OrderPage token={TOKEN} />, {
+        fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: confirmedOrder() }),
+        declineCustomerOrder: () => Promise.reject(new Error('boom')),
+      });
       fireEvent.click(await screen.findByRole('button', { name: 'לא מתאים הפעם' }));
 
       click('כן, לא מתאים');
@@ -527,9 +490,9 @@ describe('OrderPage', () => {
       expect(document.activeElement).toBe(alert);
       expect(calls.loads).toEqual([TOKEN, TOKEN]);
 
-      reload.resolve({ kind: 'loaded', order: makeOrder({ status: 'collected' }) });
+      reload.resolve({ kind: 'loaded', order: makeCustomerOrder({ status: 'collected' }) });
 
-      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(await screen.findByText(t('he', 'orderPage.collected'))).toBeDefined();
       expect(screen.getByRole('alert').textContent).toBe('ההזמנה כבר נסגרה, ואי אפשר לשנות אותה.');
       expectOneH1();
     });
@@ -567,11 +530,11 @@ describe('OrderPage', () => {
 
   describe('a collected order', () => {
     it('thanks the customer, with the details and no cancel', async () => {
-      await renderLoaded(makeOrder({ status: 'collected' }));
+      await renderLoaded(makeCustomerOrder({ status: 'collected' }));
 
       expect(statusLabel()).toBe('מצב ההזמנה: נאספה');
-      expect(screen.getByText(COLLECTED_TEXT)).toBeDefined();
-      expect(COLLECTED_TEXT).toBe('ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!');
+      expect(screen.getByText(t('he', 'orderPage.collected'))).toBeDefined();
+      expect(t('he', 'orderPage.collected')).toBe('ההזמנה נאספה. תודה רבה שלקחתם חלק בלתת עוד!');
       expect(screen.getByText('דנה כהן')).toBeDefined();
       expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
     });
@@ -579,10 +542,10 @@ describe('OrderPage', () => {
 
   describe('a cancelled order', () => {
     it('says so with thanks, with the details and no cancel', async () => {
-      await renderLoaded(makeOrder({ status: 'cancelled' }));
+      await renderLoaded(makeCustomerOrder({ status: 'cancelled' }));
 
       expect(statusLabel()).toBe('מצב ההזמנה: בוטלה');
-      expect(screen.getByText(CANCELLED_TEXT)).toBeDefined();
+      expect(screen.getByText(t('he', 'orderPage.cancelled'))).toBeDefined();
       expect(screen.getByText('דנה כהן')).toBeDefined();
       expect(screen.queryByRole('button', { name: 'ביטול ההזמנה' })).toBeNull();
     });
@@ -592,7 +555,7 @@ describe('OrderPage', () => {
     '"הזמנה חדשה עם אותם פרטים" on a %s order',
     (status) => {
       it('opens the booking form with the same contact and address, not the bottles', async () => {
-        const order = makeOrder({ status });
+        const order = makeCustomerOrder({ status });
         await renderLoaded(order);
         const historyLength = window.history.length;
 
@@ -651,11 +614,11 @@ describe('OrderPage', () => {
       expect(calls.cancels).toEqual([TOKEN]);
       expect(calls.declines).toEqual([]);
 
-      answer.resolve({ kind: 'saved', order: makeOrder({ status: 'cancelled' }) });
+      answer.resolve({ kind: 'saved', order: makeCustomerOrder({ status: 'cancelled' }) });
 
       const notice = await screen.findByRole('status');
-      expect(notice.textContent).toBe(SAVED_MESSAGES.cancel);
-      expect(SAVED_MESSAGES.cancel).toBe('ההזמנה בוטלה.');
+      expect(notice.textContent).toBe(t('he', 'orderPage.saved.cancel'));
+      expect(t('he', 'orderPage.saved.cancel')).toBe('ההזמנה בוטלה.');
       expect(document.activeElement).toBe(notice);
       expect(statusLabel()).toBe('מצב ההזמנה: בוטלה');
       expect(button('הזמנה חדשה עם אותם פרטים')).toBeDefined();
@@ -664,7 +627,7 @@ describe('OrderPage', () => {
     });
 
     it('keeps the question open with the network message when the cancel fails', async () => {
-      await renderLoaded(makeOrder(), { cancel: { kind: 'failed' } });
+      await renderLoaded(makeCustomerOrder(), { cancel: { kind: 'failed' } });
       click('ביטול ההזמנה');
 
       click('כן, לבטל');
@@ -676,10 +639,10 @@ describe('OrderPage', () => {
     });
 
     it('says the order closed, and loads it again, when it was collected meanwhile', async () => {
-      const calls = await renderLoaded(makeOrder(), {
+      const calls = await renderLoaded(makeCustomerOrder(), {
         load: [
-          { kind: 'loaded', order: makeOrder() },
-          { kind: 'loaded', order: makeOrder({ status: 'collected' }) },
+          { kind: 'loaded', order: makeCustomerOrder() },
+          { kind: 'loaded', order: makeCustomerOrder({ status: 'collected' }) },
         ],
         cancel: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed },
       });
@@ -687,7 +650,7 @@ describe('OrderPage', () => {
 
       click('כן, לבטל');
 
-      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(await screen.findByText(t('he', 'orderPage.collected'))).toBeDefined();
       expect(screen.getByRole('alert').textContent).toBe(CUSTOMER_ORDER_MESSAGES.orderClosed);
       expect(calls.loads).toEqual([TOKEN, TOKEN]);
     });
@@ -695,7 +658,7 @@ describe('OrderPage', () => {
 
   describe('changing the order ("שינוי")', () => {
     it.each([
-      ['waiting', makeOrder()],
+      ['waiting', makeCustomerOrder()],
       ['pending', pendingOrder()],
       ['confirmed', confirmedOrder()],
     ] as const)('offers "שינוי" on a %s order', async (_status, order) => {
@@ -707,7 +670,7 @@ describe('OrderPage', () => {
     it.each(['collected', 'cancelled'] as const)(
       'offers no "שינוי" on a %s order',
       async (status) => {
-        await renderLoaded(makeOrder({ status }));
+        await renderLoaded(makeCustomerOrder({ status }));
 
         expect(screen.queryByRole('button', { name: 'שינוי' })).toBeNull();
       },
@@ -718,8 +681,8 @@ describe('OrderPage', () => {
 
       const heading = screen.getByRole('heading', { level: 2, name: 'שינוי פרטי ההזמנה' });
       expect(document.activeElement).toBe(heading);
-      expect(screen.getByText(PHONE_NOT_CHANGED_TEXT)).toBeDefined();
-      expect(PHONE_NOT_CHANGED_TEXT).toBe('את מספר הטלפון אי אפשר לשנות כאן.');
+      expect(screen.getByText(t('he', 'orderPage.phoneNotChanged'))).toBeDefined();
+      expect(t('he', 'orderPage.phoneNotChanged')).toBe('את מספר הטלפון אי אפשר לשנות כאן.');
       expect(input('רחוב').value).toBe('דרך רבין יצחק');
       expect(input('מספר בית').value).toBe('12');
       expect(input('בבניין - ליד דלת הדירה').checked).toBe(true);
@@ -755,7 +718,7 @@ describe('OrderPage', () => {
 
       const notice = await screen.findByRole('status');
       expect(notice.textContent).toBe('השינויים נשמרו.');
-      expect(SAVED_MESSAGES.change).toBe('השינויים נשמרו.');
+      expect(t('he', 'orderPage.saved.change')).toBe('השינויים נשמרו.');
       expect(document.activeElement).toBe(notice);
       expect(calls.updates).toEqual([
         {
@@ -783,7 +746,7 @@ describe('OrderPage', () => {
 
     it('says "שומר..." while saving, and sends one request for a double tap', async () => {
       const answer = deferred<CustomerOrderWriteOutcome>();
-      const calls = await openChange(makeOrder(), { update: answer.promise });
+      const calls = await openChange(makeCustomerOrder(), { update: answer.promise });
 
       click('שמירת השינויים');
 
@@ -796,7 +759,7 @@ describe('OrderPage', () => {
       expect(button('שומר...')).toBeDefined();
       expect(calls.updates).toHaveLength(1);
 
-      answer.resolve({ kind: 'saved', order: makeOrder({ bottlesEstimated: 40 }) });
+      answer.resolve({ kind: 'saved', order: makeCustomerOrder({ bottlesEstimated: 40 }) });
 
       expect(await screen.findByText('השינויים נשמרו.')).toBeDefined();
       expect(calls.updates).toHaveLength(1);
@@ -819,7 +782,9 @@ describe('OrderPage', () => {
       const calls = await openChange(confirmedOrder(), {
         update: {
           kind: 'saved',
-          order: makeOrder({ address: { ...makeOrder().address, houseNumber: '14' } }),
+          order: makeCustomerOrder({
+            address: { ...makeCustomerOrder().address, houseNumber: '14' },
+          }),
         },
       });
       expect(queryLeaveRoundWarning()).toBeNull();
@@ -833,10 +798,12 @@ describe('OrderPage', () => {
       click('שמירת השינויים');
 
       const notice = await screen.findByRole('status');
-      expect(notice.textContent).toBe(LEFT_ROUND_MESSAGE);
-      expect(LEFT_ROUND_MESSAGE).toBe('הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.');
+      expect(notice.textContent).toBe(t('he', 'orderPage.leftRound'));
+      expect(t('he', 'orderPage.leftRound')).toBe(
+        'הכתובת עודכנה. ההזמנה יצאה מהסבב, ונחזור אליך עם מועד חדש.',
+      );
       expect(statusLabel()).toBe('מצב ההזמנה: ממתינה לסבב');
-      expect(screen.getByText(WAITING_TEXT)).toBeDefined();
+      expect(screen.getByText(t('he', 'orderPage.waiting'))).toBeDefined();
       expect(screen.queryByRole('button', { name: 'לא מתאים הפעם' })).toBeNull();
       expect(screen.getByText('דרך רבין יצחק 14')).toBeDefined();
       expect(calls.updates[0]?.request.address?.houseNumber).toBe('14');
@@ -889,7 +856,7 @@ describe('OrderPage', () => {
 
     it('shows a field the api refused next to that field, keeping the form', async () => {
       const message = 'מספר הבית צריך להתחיל בספרה, למשל 12 או 12א';
-      await openChange(makeOrder(), {
+      await openChange(makeCustomerOrder(), {
         update: { kind: 'invalid', errors: { byField: { houseNumber: message } } },
       });
 
@@ -904,7 +871,7 @@ describe('OrderPage', () => {
     });
 
     it('shows a change refused as a whole above the save button', async () => {
-      await openChange(makeOrder(), {
+      await openChange(makeCustomerOrder(), {
         update: { kind: 'invalid', errors: { byField: {}, other: UNKNOWN_FIELD_ERROR } },
       });
 
@@ -915,7 +882,7 @@ describe('OrderPage', () => {
     });
 
     it('keeps the form as typed, with the save-failed message, when the save fails', async () => {
-      await openChange(makeOrder(), { update: { kind: 'failed' } });
+      await openChange(makeCustomerOrder(), { update: { kind: 'failed' } });
 
       fillIn('הערה (לא חובה)', 'קוד 1234');
       click('שמירת השינויים');
@@ -927,13 +894,10 @@ describe('OrderPage', () => {
     });
 
     it('treats a rejected save like a failed one', async () => {
-      render(
-        <OrderPage
-          token={TOKEN}
-          loadOrder={() => Promise.resolve({ kind: 'loaded', order: makeOrder() })}
-          updateOrder={() => Promise.reject(new Error('boom'))}
-        />,
-      );
+      renderWithApi(<OrderPage token={TOKEN} />, {
+        fetchCustomerOrder: () => Promise.resolve({ kind: 'loaded', order: makeCustomerOrder() }),
+        updateCustomerOrder: () => Promise.reject(new Error('boom')),
+      });
       fireEvent.click(await screen.findByRole('button', { name: 'שינוי' }));
 
       click('שמירת השינויים');
@@ -960,17 +924,17 @@ describe('OrderPage', () => {
     });
 
     it('says the order closed, and loads it again, when it was collected meanwhile', async () => {
-      const calls = await openChange(makeOrder(), {
+      const calls = await openChange(makeCustomerOrder(), {
         load: [
-          { kind: 'loaded', order: makeOrder() },
-          { kind: 'loaded', order: makeOrder({ status: 'collected' }) },
+          { kind: 'loaded', order: makeCustomerOrder() },
+          { kind: 'loaded', order: makeCustomerOrder({ status: 'collected' }) },
         ],
         update: { kind: 'closed', message: CUSTOMER_ORDER_MESSAGES.orderClosed },
       });
 
       click('שמירת השינויים');
 
-      expect(await screen.findByText(COLLECTED_TEXT)).toBeDefined();
+      expect(await screen.findByText(t('he', 'orderPage.collected'))).toBeDefined();
       const alert = screen.getByRole('alert');
       expect(alert.textContent).toBe(CUSTOMER_ORDER_MESSAGES.orderClosed);
       expect(document.activeElement).toBe(alert);
@@ -980,7 +944,7 @@ describe('OrderPage', () => {
     });
 
     it('says the order was not found when the save answers so', async () => {
-      await openChange(makeOrder(), { update: { kind: 'notFound' } });
+      await openChange(makeCustomerOrder(), { update: { kind: 'notFound' } });
 
       click('שמירת השינויים');
 
@@ -994,8 +958,8 @@ describe('OrderPage', () => {
   describe('in StrictMode (development)', () => {
     it('ignores the answer of the first, discarded run of the load', async () => {
       // StrictMode mounts, unmounts and mounts again: two loads, and only the second counts.
-      const calls = renderPage(makeOrder(), {
-        load: [{ kind: 'notFound' }, { kind: 'loaded', order: makeOrder() }],
+      const calls = renderPage(makeCustomerOrder(), {
+        load: [{ kind: 'notFound' }, { kind: 'loaded', order: makeCustomerOrder() }],
         strict: true,
       });
 

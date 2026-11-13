@@ -1,7 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { MessageLink } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome } from '../api.ts';
+import { deferred } from '@bottlerun/shared/testing';
+import type { Api } from '../api/ApiContext.tsx';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   EMPTY_SEND_LIST_TEXT,
   MARK_OPENED_FAILED_MESSAGE,
@@ -34,27 +37,18 @@ const ROWS: MessageLink[] = [
   }),
 ];
 
-/** A promise the test settles by hand, to look at the list while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-
 /**
- * One answer of the fake `markOpened`: an outcome, a promise the test settles, or `'rejects'`
- * (created at call time, so no rejected promise waits unhandled before the call).
+ * One answer of the fake `markMessageOpened`: an outcome, a promise the test settles, or
+ * `'rejects'` (created at call time, so no rejected promise waits unhandled before the call).
  */
 type FakeAnswer = MarkMessageOpenedOutcome | Promise<MarkMessageOpenedOutcome> | 'rejects';
 
 /**
- * A fake `markOpened` that records its calls and answers each with the next answer given (the
- * last one repeats; with none, `marked` at {@link OPENED_AT}).
+ * A fake `markMessageOpened` that records its calls and answers each with the next answer given
+ * (the last one repeats; with none, `marked` at {@link OPENED_AT}).
  */
 function fakeMarkOpened(...answers: FakeAnswer[]): {
-  markOpened: NonNullable<SendListProps['markOpened']>;
+  markOpened: Api['markMessageOpened'];
   calls: { orderId: string; messageIndex: number }[];
 } {
   const calls: { orderId: string; messageIndex: number }[] = [];
@@ -89,10 +83,16 @@ function openedMarkOf(row: HTMLElement): string | null {
   return within(row).queryByText(/^נפתח/)?.textContent ?? null;
 }
 
-/** Shows the list at /app/rounds, where a planned round will host it. */
-function renderList(props: SendListProps): ReturnType<typeof render> {
+/**
+ * Shows the list at /app/rounds, where a planned round hosts it, with `markOpened` as the client's
+ * `markMessageOpened` (the list takes it from useApi).
+ */
+function renderList({
+  markOpened,
+  ...props
+}: SendListProps & { markOpened: Api['markMessageOpened'] }): ReturnType<typeof renderWithApi> {
   window.history.replaceState(null, '', '/app/rounds');
-  return render(<SendList {...props} />);
+  return renderWithApi(<SendList {...props} />, { markMessageOpened: markOpened });
 }
 
 describe('SendList', () => {
@@ -258,7 +258,8 @@ describe('SendList', () => {
 
     // The same rows as new objects, in another order, with one more customer.
     const third = makeRow({ orderId: 'o3', messageIndex: 1, name: 'רחל אברהם' });
-    rerender(<SendList rows={[third, makeRow(), makeRow(ROWS[1])]} markOpened={markOpened} />);
+    // rerender keeps the provider and its client (renderWithApi's wrapper).
+    rerender(<SendList rows={[third, makeRow(), makeRow(ROWS[1])]} />);
 
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
     expect(openedMarkOf(rowOf('דנה כהן'))).toBe('נפתח ✓ · 20/10');

@@ -12,18 +12,11 @@ import {
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 import { buildOrderPatch } from './orderPatch.ts';
 
 const NOW = new Date('2026-10-20T10:15:00.000Z');
 const ORDER_ID = '6710f3a2c4b5d6e7f8a9b0c1';
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const RAMAT_STREET = firstRealStreet((street) => street.region === 'ramat');
 const OLD_STREET = firstRealStreet((street) => street.region === 'old');

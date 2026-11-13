@@ -5,7 +5,7 @@
 // only declares tests when an implementation calls it.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { orderSchema, type MessageLogEntry, type NewOrder, type Order } from '@bottlerun/shared';
-import { makeNewOrder, MADE_ORDER_CREATED_AT } from './makeOrder.ts';
+import { makeNewOrder, MADE_ORDER_CREATED_AT } from '@bottlerun/shared/testing';
 import { DuplicateOpenOrderError, type OrdersRepo } from './ordersRepo.ts';
 
 /** Well-formed (ObjectId-shaped) but never handed out by a fresh repo in practice. */

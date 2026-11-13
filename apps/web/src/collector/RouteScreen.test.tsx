@@ -1,5 +1,5 @@
-import { StrictMode, useState } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   COLLECT_STOP_ERRORS,
@@ -9,7 +9,11 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
-import type { MarkMessageOpenedOutcome, StopActionOutcome } from '../api.ts';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
+import type { Api } from '../api/ApiContext.tsx';
+import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
+import type { StopActionOutcome } from '../api/roundsApi.ts';
 import {
   ALL_STOPS_HANDLED_TEXT,
   HANDLED_TITLE,
@@ -22,34 +26,16 @@ import {
   STOP_ACTION_FAILED_MESSAGE,
   STOP_LEFT_ROUTE_MESSAGE,
   routeSummary,
-  type RouteScreenProps,
 } from './RouteScreen.tsx';
 import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
 
-/** A confirmed order in round r1, in רמת בית שמש; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: confirmed in round r1. */
+const IN_ROUND: Partial<CollectorOrder> = { status: 'confirmed' };
 
-const DANA = makeOrder();
-const MOSHE = makeOrder({
+const DANA = makeCollectorOrder(IN_ROUND);
+const MOSHE = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o2',
   contact: { name: 'משה לוי', phone: '+972527654321' },
   address: {
@@ -60,7 +46,8 @@ const MOSHE = makeOrder({
   },
   bottlesEstimated: 80,
 });
-const YOSSI = makeOrder({
+const YOSSI = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o3',
   contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
   address: { streetCode: 101, streetName: 'הרצל', houseNumber: '3', bottlesSpot: 'privateHouse' },
@@ -124,15 +111,6 @@ function makeView(stops: RouteStopView[]): RoundView {
 /** Three stops to collect: דנה, משה, יוסי. */
 const VIEW = makeView([stopOf(DANA), stopOf(MOSHE), stopOf(YOSSI)]);
 
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-
 /** One answer of the fake api in place of doing the action; `'rejects'` rejects at call time. */
 type Answer = StopActionOutcome | Promise<StopActionOutcome> | 'rejects';
 
@@ -148,10 +126,11 @@ interface Call {
  * A fake of the three stop actions over a stored route, like the api: a move swaps the stop with
  * its stored neighbour (`atEdge` at an end), "אספתי" collects it with its thank-you, "לא נמצא"
  * marks it, and each answers the round as it is now. Answers pushed to `next` are used first, in
- * order, in place of doing the action.
+ * order, in place of doing the action. `fakes` are the client's functions of the same names, which
+ * RouteScreen takes from useApi.
  */
 function fakeApi(initial: RoundView = VIEW): {
-  props: Required<Pick<RouteScreenProps, 'moveStop' | 'collectStop' | 'markStopNotFound'>>;
+  fakes: Pick<Api, 'moveStop' | 'collectStop' | 'markStopNotFound'>;
   calls: Call[];
   next: Answer[];
 } {
@@ -173,7 +152,7 @@ function fakeApi(initial: RoundView = VIEW): {
   return {
     calls,
     next,
-    props: {
+    fakes: {
       moveStop: (roundId, orderId, direction) => {
         calls.push({ action: 'move', roundId, orderId, arg: direction });
         return answer(() => {
@@ -207,7 +186,8 @@ function fakeApi(initial: RoundView = VIEW): {
   };
 }
 
-const markOpened = (): Promise<MarkMessageOpenedOutcome> =>
+/** The client's `markMessageOpened`, which a card's "שלח תודה" row (SendList) takes from useApi. */
+const markMessageOpened = (): Promise<MarkMessageOpenedOutcome> =>
   Promise.resolve({ kind: 'marked', openedAt: new Date('2026-10-20T08:00:00Z') });
 
 /** What the route told its parent. */
@@ -218,15 +198,7 @@ interface Parent {
 }
 
 /** The parent's part: holds the view, so a view the route hands back re-renders it. */
-function Harness({
-  initial,
-  api,
-  parent,
-}: {
-  initial: RoundView;
-  api: ReturnType<typeof fakeApi>;
-  parent: Parent;
-}) {
+function Harness({ initial, parent }: { initial: RoundView; parent: Parent }) {
   const [view, setView] = useState(initial);
   return (
     <RouteScreen
@@ -237,20 +209,26 @@ function Harness({
       }}
       onStale={(message) => parent.stale.push(message)}
       onTypingChange={(typing) => parent.typing.push(typing)}
-      markOpened={markOpened}
-      {...api.props}
     />
   );
 }
 
+/**
+ * Renders the route under an ApiProvider whose stop actions are a {@link fakeApi} over `initial`
+ * and whose `markMessageOpened` is the fake above. `strict` puts StrictMode around the whole tree,
+ * as in development.
+ */
 function renderRoute(
   initial: RoundView = VIEW,
   { strict = false }: { strict?: boolean } = {},
 ): { api: ReturnType<typeof fakeApi>; parent: Parent; unmount: () => void } {
   const api = fakeApi(initial);
   const parent: Parent = { views: [], stale: [], typing: [] };
-  const harness = <Harness initial={initial} api={api} parent={parent} />;
-  const { unmount } = render(strict ? <StrictMode>{harness}</StrictMode> : harness);
+  const { unmount } = renderWithApi(
+    <Harness initial={initial} parent={parent} />,
+    { ...api.fakes, markMessageOpened },
+    { reactStrictMode: strict },
+  );
   return { api, parent, unmount };
 }
 
@@ -393,9 +371,16 @@ describe('RouteScreen order', () => {
       stopOf(DANA, { state: 'notFound' }),
       stopOf(MOSHE),
       stopOf(YOSSI),
-      stopOf(makeOrder({ id: 'o4', contact: { name: 'רות בר', phone: '+972521111111' } }), {
-        state: 'collected',
-      }),
+      stopOf(
+        makeCollectorOrder({
+          ...IN_ROUND,
+          id: 'o4',
+          contact: { name: 'רות בר', phone: '+972521111111' },
+        }),
+        {
+          state: 'collected',
+        },
+      ),
     ];
     renderRoute(makeView(stops));
 
@@ -640,6 +625,63 @@ describe('RouteScreen "לא נמצא"', () => {
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן']));
     expect(api.calls).toEqual([{ action: 'notFound', roundId: 'r1', orderId: 'o1' }]);
     expect(within(cardOf('דנה כהן')).getByText('לא נמצא')).toBeTruthy();
+  });
+
+  // Like "אספתי": the saved card moves to the handled list, where React mounts a new card, and the
+  // sheet that held the focus is gone with the old one (justSaved tells the new card).
+  it("moves the focus to the handled card's name after Yoel's own 'כן, לא נמצא'", async () => {
+    renderRoute();
+
+    sheetAction('דנה כהן', 'לא נמצא');
+    fireEvent.click(button('כן, לא נמצא'));
+
+    await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן']));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const name = within(cardOf('דנה כהן')).getByRole('heading', { level: 3 });
+    await waitFor(() => expect(document.activeElement).toBe(name));
+  });
+
+  it('keeps the sheet open with its error, and the focus where it was, when the save fails', async () => {
+    const { api } = renderRoute();
+    api.next.push({ kind: 'failed' });
+
+    sheetAction('משה לוי', 'לא נמצא');
+    const yes = button('כן, לא נמצא');
+    yes.focus();
+    fireEvent.click(yes);
+
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toBe(
+        STOP_ACTION_FAILED_MESSAGE,
+      ),
+    );
+    expect(document.activeElement).toBe(yes);
+  });
+
+  it('takes no focus for a stop that shows not found when the route loads', () => {
+    renderRoute(makeView([stopOf(DANA), stopOf(MOSHE, { state: 'notFound' }), stopOf(YOSSI)]));
+    expect(within(cardOf('משה לוי')).getByText('לא נמצא')).toBeTruthy();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  // A save of another card hands a view where this stop turned up not found (marked elsewhere):
+  // only the card Yoel acted on reacts.
+  it('takes no focus for a stop that turns up not found in the answer to another action', async () => {
+    const { api } = renderRoute();
+    api.next.push({
+      kind: 'saved',
+      view: makeView([
+        collected(stopOf(DANA)),
+        stopOf(MOSHE, { state: 'notFound' }),
+        stopOf(YOSSI),
+      ]),
+    });
+
+    collect('דנה כהן');
+
+    const title = await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    expect(within(cardOf('משה לוי')).getByText('לא נמצא')).toBeTruthy();
   });
 });
 

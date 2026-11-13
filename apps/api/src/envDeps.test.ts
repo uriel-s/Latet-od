@@ -9,8 +9,8 @@ import type { DbDeps } from './deps.ts';
 import { depsFromEnv, envErrorMessage } from './envDeps.ts';
 import { createFakeDeps } from './fakeDeps.ts';
 import { WaMeLinkSender } from './messages/waMeLinkSender.ts';
-import { DisabledPushSender } from './push/pushSender.ts';
-import { generateVapidKeys, WebPushSender } from './push/webPushSender.ts';
+import { makeVapidKeys } from './push/testVapidKeys.ts';
+import { WebPushSender } from './push/webPushSender.ts';
 
 /** Test-only values. The URI's password is what must never reach an error message. */
 const URI_PASSWORD = 'db-password-never-logged';
@@ -83,12 +83,11 @@ describe('depsFromEnv', () => {
     expect(deps.messaging.publicBaseUrl).toBe(PUBLIC_BASE_URL);
     expect(deps.route.start).toEqual({ lat: 31.7, lng: 35 });
     expect(deps.route.distance).toBe(straightLineDistance);
-    expect(deps.push.publicKey).toBeNull();
-    expect(deps.push.sender).toBeInstanceOf(DisabledPushSender);
+    expect(deps.push).toBeNull();
   });
 
   it('enables Web Push when VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT are set', () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const deps = depsFromEnv(
       envWith({
         VAPID_PUBLIC_KEY: publicKey,
@@ -98,8 +97,8 @@ describe('depsFromEnv', () => {
       fakeCreateDbDeps(),
     );
 
-    expect(deps.push.publicKey).toBe(publicKey);
-    expect(deps.push.sender).toBeInstanceOf(WebPushSender);
+    expect(deps.push?.publicKey).toBe(publicKey);
+    expect(deps.push?.sender).toBeInstanceOf(WebPushSender);
   });
 
   describe('refuses to start', () => {

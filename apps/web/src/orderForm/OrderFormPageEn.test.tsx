@@ -5,7 +5,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MIN_BOTTLES, type CreateOrderRequest } from '@bottlerun/shared';
 import { App } from '../App.tsx';
-import type { CreateOrderOutcome } from '../api.ts';
+import type { CreateOrderOutcome } from '../api/bookingApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { OrderFormPage } from './OrderFormPage.tsx';
 
 const TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO_-';
@@ -18,15 +19,12 @@ afterEach(() => {
 
 function renderEnglishForm(outcome: CreateOrderOutcome): { requests: CreateOrderRequest[] } {
   const requests: CreateOrderRequest[] = [];
-  render(
-    <OrderFormPage
-      lang="en"
-      submitOrder={(request) => {
-        requests.push(request);
-        return Promise.resolve(outcome);
-      }}
-    />,
-  );
+  renderWithApi(<OrderFormPage lang="en" />, {
+    createOrder: (request) => {
+      requests.push(request);
+      return Promise.resolve(outcome);
+    },
+  });
   acceptNotice();
   return { requests };
 }

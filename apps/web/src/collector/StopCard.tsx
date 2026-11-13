@@ -1,9 +1,10 @@
 // One stop of the route screen (spec §3.6 step 2, "מסלול"): who, where, how many bottles, and
 // what Yoel does there: "נווט" (Waze), "חייג", "אספתי" with the real quantity (a − / + stepper),
 // and "⋯", which opens the bottom sheet with "לא נמצא" and the arrows that move the stop. A handled stop shows its state in words and, once
-// collected, its "שלח תודה" row (SendList.tsx). Presentational: the route screen sends every
-// request and tells this card whether one is on its way and why it failed; the card owns only
-// what is open in it (the quantity stepper, the "⋯" sheet) and where focus goes.
+// collected, its "שלח תודה" row (SendList.tsx, which stores the opening itself through useApi).
+// Presentational: the route screen sends every stop request and tells this card whether one is on
+// its way and why it failed; the card owns only what is open in it (the quantity stepper, the "⋯"
+// sheet) and where focus goes.
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import {
@@ -15,7 +16,7 @@ import {
 import { Icon } from '../components/Icon.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { TextField } from '../components/TextField.tsx';
-import { MoreActionsSheet, NOT_FOUND_QUESTION } from './MoreActionsSheet.tsx';
+import { MoreActionsSheet } from './MoreActionsSheet.tsx';
 import { bottlesText } from './OrdersScreen.tsx';
 import { NO_LOCATION_TAG } from './orderTags.ts';
 import {
@@ -25,13 +26,10 @@ import {
   telUrl,
   wazeUrl,
 } from './routeStops.ts';
-import { SendList, type SendListProps } from './SendList.tsx';
+import { SendList } from './SendList.tsx';
 
 /** The label of the quantity field "אספתי" opens. */
 export const BOTTLES_COLLECTED_LABEL = 'כמה בקבוקים נאספו';
-
-// The "לא נמצא" question moved into the sheet; re-exported so existing imports keep working.
-export { NOT_FOUND_QUESTION };
 
 /** The eyebrow of the current stop's card (the first stop still to collect). */
 export const NEXT_STOP_EYEBROW = 'העצירה הבאה';
@@ -91,11 +89,10 @@ export interface StopCardProps {
   onNotFound: () => void;
   /** The quantity field opened or closed: the screen stops reload-on-return while Yoel types. */
   onTypingChange?: (typing: boolean) => void;
-  /** Passed to the thank-you's "שלח" row; undefined keeps SendList's own default (the api). */
-  markOpened?: SendListProps['markOpened'];
   /**
    * What the route screen just saved for this card: 'collected' (Yoel's own "אספתי") buzzes once
-   * and moves the focus to "שלח תודה"; 'moved' (an arrow) puts a lost focus back on "⋯". It comes
+   * and moves the focus to "שלח תודה"; 'notFound' (his own "כן, לא נמצא") moves it to the handled
+   * card's name; 'moved' (an arrow) puts a lost focus back on "⋯". It comes
    * from the screen, not from a flag inside the card, because the save moves the card into another
    * list (current → handled, current ↔ upcoming), and React mounts a new card there.
    */
@@ -105,7 +102,7 @@ export interface StopCardProps {
 }
 
 /** A save of the route screen that the card reacts to; see {@link StopCardProps.justSaved}. */
-export type JustSaved = 'collected' | 'moved';
+export type JustSaved = 'collected' | 'notFound' | 'moved';
 
 /** What is open in a card still to collect: nothing, the quantity stepper, or the "⋯" sheet. */
 type OpenPart = 'none' | 'quantity' | 'more';
@@ -178,6 +175,16 @@ export function StopCard(props: StopCardProps) {
     thanksTitleRef.current?.focus();
     onJustSavedSeenRef.current?.();
   }, [collectedHere, showThanks]);
+  // Yoel's own "כן, לא נמצא" was saved: the sheet he answered in is gone with the card it was in,
+  // and the focus would fall to the page. The handled card's name takes it, so a screen reader
+  // says which stop moved and he goes on from there. A stop seen not found on a reload does not.
+  const nameRef = useRef<HTMLHeadingElement>(null);
+  const notFoundHere = justSaved === 'notFound' && stop.state === 'notFound';
+  useEffect(() => {
+    if (!notFoundHere) return;
+    nameRef.current?.focus();
+    onJustSavedSeenRef.current?.();
+  }, [notFoundHere]);
   // An arrow's move was saved. Focus that was on this card's "⋯" is lost when the move took the
   // card into the other list; put it back on the new "⋯", but never take it from somewhere else.
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -190,7 +197,7 @@ export function StopCard(props: StopCardProps) {
   }, [movedHere]);
 
   if (handled) {
-    return <HandledStopCard {...props} thanksTitleRef={thanksTitleRef} />;
+    return <HandledStopCard {...props} nameRef={nameRef} thanksTitleRef={thanksTitleRef} />;
   }
   return (
     <ToCollectStopCard
@@ -502,8 +509,11 @@ function ToCollectStopCard({
   );
 }
 
-/** Props of {@link HandledStopCard}: the card's, plus the thank-you title to focus. */
+/** Props of {@link HandledStopCard}: the card's, plus the headings StopCard focuses. */
 interface HandledStopCardProps extends StopCardProps {
+  /** The name, focused after Yoel's own "כן, לא נמצא" saved. */
+  nameRef: RefObject<HTMLHeadingElement | null>;
+  /** "שלח תודה", focused after Yoel's own "אספתי" saved. */
   thanksTitleRef: RefObject<HTMLHeadingElement | null>;
 }
 
@@ -512,14 +522,17 @@ interface HandledStopCardProps extends StopCardProps {
  * signal), the name and the street, and no action or arrow. A collected stop with a thank-you to
  * send shows its "שלח תודה" row; SendList keeps what Yoel tapped while the row stays mounted.
  */
-function HandledStopCard({ stop, error, markOpened, thanksTitleRef }: HandledStopCardProps) {
+function HandledStopCard({ stop, error, nameRef, thanksTitleRef }: HandledStopCardProps) {
   const { order } = stop;
   // isStopHandled already excluded 'toCollect'; the check narrows the type for the label lookup.
   const label = stop.state === 'toCollect' ? undefined : STOP_STATE_LABELS[stop.state];
 
   return (
     <li className="stop-card stop-card-handled">
-      <h3 className="stop-card-name">{order.contact.name}</h3>
+      {/* tabIndex -1: focused from code after "כן, לא נמצא" saved, never a Tab stop. */}
+      <h3 ref={nameRef} tabIndex={-1} className="stop-card-name">
+        {order.contact.name}
+      </h3>
       <p className="stop-card-state">{label}</p>
       <p className="stop-card-street">{stopAddressLines(order.address).street}</p>
       {stop.state === 'collected' && stop.thankYou !== undefined && (
@@ -528,7 +541,7 @@ function HandledStopCard({ stop, error, markOpened, thanksTitleRef }: HandledSto
           <h4 ref={thanksTitleRef} tabIndex={-1} className="stop-card-thanks-title">
             {SEND_THANKS_TITLE}
           </h4>
-          <SendList rows={[stop.thankYou]} markOpened={markOpened} />
+          <SendList rows={[stop.thankYou]} />
         </div>
       )}
       {error !== undefined && (

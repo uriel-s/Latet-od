@@ -10,21 +10,11 @@ import {
 import { ORDER_FORM_ERRORS, orderSchema, type Address, type Order } from './order.ts';
 import { formFieldErrors } from './orderApi.ts';
 import type { Round } from './round.ts';
-import { STREETS, type Street } from './streets.ts';
+import { MADE_ORDER_ID, MADE_ORDER_TOKEN, firstRealStreet, makeOrder } from './testing/index.ts';
 
 const ERR = ORDER_FORM_ERRORS;
-/** 43 base64url characters, the shape of a real token. */
-const TOKEN = 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
-const ORDER_ID = '6710f3a2c4b5d6e7f8a9b0c1';
 const ROUND_ID = '6720a1b2c3d4e5f6a7b8c9d0';
 const CREATED_AT = new Date('2026-11-04T17:00:00.000Z');
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const RAMAT_STREET = firstRealStreet((street) => street.region === 'ramat');
 const OLD_STREET = firstRealStreet((street) => street.region === 'old');
@@ -39,35 +29,29 @@ const STORED_ADDRESS: Address = {
   note: 'קוד לבניין 1234',
 };
 
-/** A stored order, pending in round {@link ROUND_ID}, with every internal field set. */
-function makeOrder(overrides: Partial<Order> = {}): Order {
-  return {
-    id: ORDER_ID,
-    contact: { name: 'משה כהן', phone: '+972501234567', method: 'whatsapp' },
-    address: { ...STORED_ADDRESS, nearStreetCode: OLD_STREET.code },
-    bottlesEstimated: 45,
-    status: 'pending',
-    region: 'ramat',
-    token: TOKEN,
-    roundId: ROUND_ID,
-    lastMiss: { date: '2026-10-29', reason: 'notConfirmed', roundId: 'round-0' },
-    messages: [
-      {
-        kind: 'confirmRequest',
-        at: CREATED_AT,
-        mode: 'manual',
-        url: 'https://wa.me/972501234567?text=x',
-      },
-    ],
-    source: 'form',
-    lang: 'he',
-    createdAt: CREATED_AT,
-    updatedAt: CREATED_AT,
-    ...overrides,
-  };
-}
+/**
+ * What these tests start from, on top of makeOrder: a legacy pending order in round
+ * {@link ROUND_ID}, with its round message, a near street and every internal field set.
+ */
+const IN_ROUND: Partial<Order> = {
+  address: { ...STORED_ADDRESS, nearStreetCode: OLD_STREET.code },
+  status: 'pending',
+  region: 'ramat',
+  roundId: ROUND_ID,
+  lastMiss: { date: '2026-10-29', reason: 'notConfirmed', roundId: 'round-0' },
+  messages: [
+    {
+      kind: 'confirmRequest',
+      at: CREATED_AT,
+      mode: 'manual',
+      url: 'https://wa.me/972501234567?text=x',
+    },
+  ],
+  createdAt: CREATED_AT,
+  updatedAt: CREATED_AT,
+};
 
-/** A stored open round in its confirmation step, with the order of {@link makeOrder}. */
+/** A stored open round in its confirmation step, with the order of {@link IN_ROUND}. */
 function makeRound(overrides: Partial<Round> = {}): Round {
   return {
     id: ROUND_ID,
@@ -77,7 +61,7 @@ function makeRound(overrides: Partial<Round> = {}): Round {
     phase: 'confirming',
     personalText: 'השבוע נגיע מוקדם.',
     pickupBy: '08:00',
-    orderIds: [ORDER_ID, 'another-customer'],
+    orderIds: [MADE_ORDER_ID, 'another-customer'],
     stops: [],
     createdAt: CREATED_AT,
     ...overrides,
@@ -93,7 +77,7 @@ function updateIssuesOf(body: unknown): string[] {
 
 describe('toCustomerOrder', () => {
   it('keeps only the fields the customer page shows', () => {
-    expect(toCustomerOrder(makeOrder(), makeRound())).toStrictEqual({
+    expect(toCustomerOrder(makeOrder(IN_ROUND), makeRound())).toStrictEqual({
       contact: { name: 'משה כהן', phone: '+972501234567' },
       address: STORED_ADDRESS,
       bottlesEstimated: 45,
@@ -104,7 +88,7 @@ describe('toCustomerOrder', () => {
   });
 
   it('never carries the token, the ids or any other internal field', () => {
-    const order = makeOrder({ bottlesCollected: 50, cancelledAt: CREATED_AT });
+    const order = makeOrder({ ...IN_ROUND, bottlesCollected: 50, cancelledAt: CREATED_AT });
     const customerOrder = toCustomerOrder(order, makeRound());
     expect(Object.keys(customerOrder).sort()).toEqual(
       ['address', 'bottlesEstimated', 'contact', 'lang', 'round', 'status'].sort(),
@@ -114,18 +98,25 @@ describe('toCustomerOrder', () => {
     expect(Object.keys(customerOrder.round ?? {}).sort()).toEqual(['date', 'pickupBy']);
     // Nothing of the order's or the round's internals, and nothing of the other customer.
     const json = JSON.stringify(customerOrder);
-    for (const secret of [TOKEN, ORDER_ID, ROUND_ID, 'another-customer', 'round-0', 'wa.me']) {
+    for (const secret of [
+      MADE_ORDER_TOKEN,
+      MADE_ORDER_ID,
+      ROUND_ID,
+      'another-customer',
+      'round-0',
+      'wa.me',
+    ]) {
       expect(json, secret).not.toContain(secret);
     }
   });
 
   it('carries the language the customer booked in, so the page can speak it', () => {
-    expect(toCustomerOrder(makeOrder({ lang: 'en' }), makeRound()).lang).toBe('en');
+    expect(toCustomerOrder(makeOrder({ ...IN_ROUND, lang: 'en' }), makeRound()).lang).toBe('en');
   });
 
   it('gives Hebrew for a stored order without a language', () => {
     // An order stored before languages existed: read through orderSchema, as the repo reads it.
-    const withoutLang: Record<string, unknown> = { ...makeOrder() };
+    const withoutLang: Record<string, unknown> = { ...makeOrder(IN_ROUND) };
     delete withoutLang.lang;
     const stored = orderSchema.parse(withoutLang);
 
@@ -134,7 +125,10 @@ describe('toCustomerOrder', () => {
 
   it('gives a pending and a confirmed order in the round its date and pickup time', () => {
     for (const status of ['pending', 'confirmed'] as const) {
-      expect(toCustomerOrder(makeOrder({ status }), makeRound()).round, status).toStrictEqual({
+      expect(
+        toCustomerOrder(makeOrder({ ...IN_ROUND, status }), makeRound()).round,
+        status,
+      ).toStrictEqual({
         date: '2026-11-05',
         pickupBy: '08:00',
       });
@@ -142,7 +136,7 @@ describe('toCustomerOrder', () => {
   });
 
   it('gives the pickup window start too when the round has one', () => {
-    const customerOrder = toCustomerOrder(makeOrder(), makeRound({ pickupFrom: '07:00' }));
+    const customerOrder = toCustomerOrder(makeOrder(IN_ROUND), makeRound({ pickupFrom: '07:00' }));
     expect(customerOrder.round).toStrictEqual({
       date: '2026-11-05',
       pickupBy: '08:00',
@@ -158,24 +152,25 @@ describe('toCustomerOrder', () => {
   it('leaves pickupBy out when the round has none', () => {
     const round = makeRound();
     delete round.pickupBy;
-    expect(toCustomerOrder(makeOrder(), round).round).toStrictEqual({ date: '2026-11-05' });
+    expect(toCustomerOrder(makeOrder(IN_ROUND), round).round).toStrictEqual({ date: '2026-11-05' });
   });
 
   it('shows no round for a waiting, collected or cancelled order', () => {
     // Even with a roundId left behind and that round given: the status decides.
     for (const status of ['waiting', 'collected', 'cancelled'] as const) {
-      expect(toCustomerOrder(makeOrder({ status }), makeRound()), status).not.toHaveProperty(
-        'round',
-      );
+      expect(
+        toCustomerOrder(makeOrder({ ...IN_ROUND, status }), makeRound()),
+        status,
+      ).not.toHaveProperty('round');
     }
   });
 
   it('shows no round when the round given is another one, or none is given', () => {
     const otherRound = makeRound({ id: 'another-round' });
-    expect(toCustomerOrder(makeOrder(), otherRound)).not.toHaveProperty('round');
-    expect(toCustomerOrder(makeOrder(), null)).not.toHaveProperty('round');
-    expect(toCustomerOrder(makeOrder(), undefined)).not.toHaveProperty('round');
-    const notInARound = makeOrder({ status: 'waiting' });
+    expect(toCustomerOrder(makeOrder(IN_ROUND), otherRound)).not.toHaveProperty('round');
+    expect(toCustomerOrder(makeOrder(IN_ROUND), null)).not.toHaveProperty('round');
+    expect(toCustomerOrder(makeOrder(IN_ROUND), undefined)).not.toHaveProperty('round');
+    const notInARound = makeOrder({ ...IN_ROUND, status: 'waiting' });
     delete notInARound.roundId;
     expect(toCustomerOrder(notInARound, makeRound())).not.toHaveProperty('round');
   });
@@ -184,7 +179,7 @@ describe('toCustomerOrder', () => {
 describe('customerOrderResponseSchema', () => {
   it('reads the JSON of a response back into the same response, with and without a round', () => {
     for (const round of [makeRound(), undefined]) {
-      const response = { order: toCustomerOrder(makeOrder(), round) };
+      const response = { order: toCustomerOrder(makeOrder(IN_ROUND), round) };
       expect(customerOrderResponseSchema.parse(JSON.parse(JSON.stringify(response)))).toStrictEqual(
         response,
       );
@@ -192,7 +187,7 @@ describe('customerOrderResponseSchema', () => {
   });
 
   it('rejects a round date that is not YYYY-MM-DD', () => {
-    const order = toCustomerOrder(makeOrder(), makeRound());
+    const order = toCustomerOrder(makeOrder(IN_ROUND), makeRound());
     const body = { order: { ...order, round: { date: '05/11' } } };
     expect(customerOrderResponseSchema.safeParse(body).success).toBe(false);
   });

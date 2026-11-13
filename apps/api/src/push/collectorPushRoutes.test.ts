@@ -13,7 +13,6 @@ import { createApp } from '../app.ts';
 import { loggedInCookie } from '../auth/testSession.ts';
 import { createFakeAuth, createFakeDeps, createFakePush } from '../fakeDeps.ts';
 import { SAME_ORIGIN_HEADERS } from '../testRequest.ts';
-import { DisabledPushSender } from './pushSender.ts';
 import { InMemoryPushSubscriptionsRepo } from './inMemoryPushSubscriptionsRepo.ts';
 
 const VALID_SUBSCRIPTION: PushSubscription = {
@@ -100,8 +99,8 @@ describe('GET /api/collector/push/config', () => {
   it('returns 200 with enabled: false when Web Push is disabled', async () => {
     const auth = createFakeAuth();
     const cookie = loggedInCookie(auth, new Date());
-    const push = { sender: new DisabledPushSender(), publicKey: null };
-    const app = createApp(createFakeDeps({ auth, push }));
+    // Web Push disabled is `push: null`, what pushDepsFromEnv returns without VAPID_* vars.
+    const app = createApp(createFakeDeps({ auth, push: null }));
 
     const res = await request(app).get('/api/collector/push/config').set('Cookie', cookie);
 
@@ -197,7 +196,7 @@ describe('POST /api/collector/push/subscribe', () => {
         // The same auth as the cookie was signed with, or the request would be a 401.
         auth,
         pushSubscriptions,
-        push: { sender: new DisabledPushSender(), publicKey: null },
+        push: null,
       }),
     );
     const res = await request(disabledApp)

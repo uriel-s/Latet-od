@@ -1,10 +1,13 @@
 // The collector's login at `/login` (spec §3.4, ADR-0004): one password field, no username (there
-// is one collector, Yoel). The check and the session cookie are the api's (api.ts `login`); this
-// screen holds what he typed, shows each answer in plain words, and opens the app on success.
+// is one collector, Yoel). The check and the session cookie are the api's (authApi.ts `login`,
+// reached through useApi()); this screen holds what he typed, shows each answer in plain words,
+// and opens the app on success.
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { LOGIN_MESSAGES, LOGIN_PASSWORD_MAX_LENGTH } from '@bottlerun/shared';
-import { NETWORK_ERROR_MESSAGE, login, type LoginOutcome } from '../api.ts';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import { type LoginOutcome } from '../api/authApi.ts';
+import { useApi } from '../api/ApiContext.tsx';
 import { TextField } from '../components/TextField.tsx';
 import { navigate } from '../router.tsx';
 import {
@@ -18,11 +21,6 @@ const SENDING_LABEL = 'נכנס...';
 
 /** Props of {@link LoginPage}. */
 export interface LoginPageProps {
-  /**
-   * Sends the password. Defaults to {@link login} (POST /api/auth/login, never retried); tests
-   * pass a fake that records what it was given.
-   */
-  submitLogin?: (password: string) => Promise<LoginOutcome>;
   /**
    * The browser the install hint is decided for. Defaults to the real `navigator`; tests pass an
    * iPhone, a desktop or the installed app without stubbing the global.
@@ -39,7 +37,10 @@ export interface LoginPageProps {
  * On success the app opens in place of this screen, which leaves the history: "back" from the app
  * must not land on a password form for a session that is already open.
  */
-export function LoginPage({ submitLogin = login, browser = navigator }: LoginPageProps) {
+export function LoginPage({ browser = navigator }: LoginPageProps) {
+  // POST /api/auth/login (authApi.ts, never retried); tests give a fake through the ApiProvider
+  // (renderWithApi.tsx).
+  const { login: submitLogin } = useApi();
   // Decided once: the browser and whether the page runs as the installed app do not change while
   // it is open.
   const [showInstallHint] = useState(() => shouldShowInstallHint(browser));

@@ -27,14 +27,8 @@ import {
   type RoundOrderGroup,
   type RoundView,
 } from '@bottlerun/shared';
-import {
-  buildRoute as apiBuildRoute,
-  closeRound as apiCloseRound,
-  fetchRounds,
-  type BuildRouteOutcome,
-  type CloseRoundOutcome,
-  type RoundsOutcome,
-} from '../api.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { BuildRouteOutcome, CloseRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { Link, navigate, searchParam, useLocation } from '../router.tsx';
 import {
   BuildRouteConfirm,
@@ -48,7 +42,7 @@ import { orderTags } from './orderTags.ts';
 import { pickSelectedRound } from './roundPicker.ts';
 import { RoundPicker } from './RoundPickerSheet.tsx';
 import { RouteScreen, type RouteScreenProps } from './RouteScreen.tsx';
-import { SendList, type SendListProps } from './SendList.tsx';
+import { SendList } from './SendList.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
 
 /** Shown when the rounds got no usable answer (network error, 5xx, unreadable body). */
@@ -114,32 +108,6 @@ function withId(ids: ReadonlySet<string>, id: string, present: boolean): Readonl
   return next;
 }
 
-/** Props of {@link RoundsScreen}. Each function must keep its identity across renders. */
-export interface RoundsScreenProps {
-  /**
-   * Loads the open rounds. Defaults to {@link fetchRounds}; tests pass a fake. A module function,
-   * not an inline arrow: a new one loads again.
-   */
-  loadRounds?: () => Promise<RoundsOutcome>;
-  /**
-   * "התחל מסלול". Defaults to the api's {@link apiBuildRoute}; tests pass a fake.
-   */
-  buildRoute?: (roundId: string) => Promise<BuildRouteOutcome>;
-  /** The close button ("בטל את הסבב" / "סיימתי את הסבב"), in either phase. Defaults to the api's {@link apiCloseRound}; tests pass a fake. */
-  closeRound?: (roundId: string) => Promise<CloseRoundOutcome>;
-  /** A route's arrows; undefined keeps RouteScreen's own default (the api). */
-  moveStop?: RouteScreenProps['moveStop'];
-  /** A stop's "אספתי"; undefined keeps RouteScreen's own default (the api). */
-  collectStop?: RouteScreenProps['collectStop'];
-  /** A stop's "לא נמצא"; undefined keeps RouteScreen's own default (the api). */
-  markStopNotFound?: RouteScreenProps['markStopNotFound'];
-  /**
-   * Passed to the "שלח" list and the route's "שלח תודה" rows; undefined keeps SendList's own
-   * default (the api).
-   */
-  markOpened?: SendListProps['markOpened'];
-}
-
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
 type ScreenState =
   { kind: 'loading' } | { kind: 'failed' } | { kind: 'loaded'; rounds: RoundView[] };
@@ -189,16 +157,15 @@ interface Notice {
  * closes its field). The usual trip away mid-route is to Waze or the dialler; once the field is
  * closed, the next return reloads as before. Picking another round while a field is open unmounts
  * that round's route, which reports "not typing" on its way out, so the pause cannot outlast it.
+ *
+ * The screen's own requests are `fetchRounds`, `buildRoute` and `closeRound` of {@link useApi}.
+ * The stop actions are RouteScreen's and the "שלח" rows' are SendList's: each part takes its own
+ * from the client, so none passes through this screen.
  */
-export function RoundsScreen({
-  loadRounds = fetchRounds,
-  buildRoute = apiBuildRoute,
-  closeRound = apiCloseRound,
-  moveStop,
-  collectStop,
-  markStopNotFound,
-  markOpened,
-}: RoundsScreenProps) {
+export function RoundsScreen() {
+  // The client keeps its functions' identity, so listing `loadRounds` as an effect dependency does
+  // not run the load again.
+  const { fetchRounds: loadRounds, buildRoute, closeRound } = useApi();
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   // Counts the loads asked for after the first ("לנסות שוב", a reload after a refused action, or
   // Yoel coming back to the app): a new value runs the load below again.
@@ -475,7 +442,6 @@ export function RoundsScreen({
           <RoundSection
             key={selected.round.id}
             view={selected}
-            markOpened={markOpened}
             buildRoute={{
               building: buildingIds.has(selected.round.id),
               failed: buildFailedIds.has(selected.round.id),
@@ -498,10 +464,6 @@ export function RoundsScreen({
               },
               onStale: showStale,
               onTypingChange: (typing) => typingChanged(selected.round.id, typing),
-              moveStop,
-              collectStop,
-              markStopNotFound,
-              markOpened,
             }}
           />
         </>
@@ -512,9 +474,9 @@ export function RoundsScreen({
 
 /**
  * What a section needs for the close button, in either phase: everything of {@link CloseRoundConfirm}
- * but the view and markOpened, which the section has already. The screen sends the request.
+ * but the view, which the section has already. The screen sends the request.
  */
-type SectionCloseRound = Omit<CloseRoundConfirmProps, 'view' | 'markOpened'>;
+type SectionCloseRound = Omit<CloseRoundConfirmProps, 'view'>;
 
 /** What a step-2 section passes to its {@link RouteScreen}: everything but the view. */
 type SectionRoute = Omit<RouteScreenProps, 'view'>;
@@ -522,7 +484,6 @@ type SectionRoute = Omit<RouteScreenProps, 'view'>;
 /** Props of {@link RoundSection}. */
 interface RoundSectionProps {
   view: RoundView;
-  markOpened: SendListProps['markOpened'];
   /** Step 1's last button. */
   buildRoute: BuildRouteControl;
   /** Step 2's route. */
@@ -562,7 +523,7 @@ interface RoundSectionProps {
  * itself, or still in this section): a notice the screen focused meanwhile keeps it, and so does
  * an open close question, which stays where it was.
  */
-function RoundSection({ view, markOpened, buildRoute, route, closeRound }: RoundSectionProps) {
+function RoundSection({ view, buildRoute, route, closeRound }: RoundSectionProps) {
   const headingId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -652,7 +613,7 @@ function RoundSection({ view, markOpened, buildRoute, route, closeRound }: Round
           {sendList.length > 0 && <p className="round-hint">{SEND_LIST_HINT}</p>}
           {/* Always rendered at this place, so it stays mounted across a swapped view; it shows its
               own text when no message is left to send. */}
-          <SendList rows={sendList} markOpened={markOpened} grouped />
+          <SendList rows={sendList} grouped />
 
           {ROUND_GROUP_KEYS.map((key) => (
             <RoundGroupSection key={key} groupKey={key} orders={ordersOfGroup(groups, key)} />
@@ -668,7 +629,7 @@ function RoundSection({ view, markOpened, buildRoute, route, closeRound }: Round
       {/* Outside the branch above, so it stays mounted when the build swaps the step. The wrapper
           lets the effect above tell focus in this question from focus lost. */}
       <div ref={closeRef}>
-        <CloseRoundConfirm view={view} markOpened={markOpened} {...closeRound} />
+        <CloseRoundConfirm view={view} {...closeRound} />
       </div>
     </section>
   );

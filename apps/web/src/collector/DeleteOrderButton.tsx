@@ -4,7 +4,8 @@
 // refused); the question itself is the shared CancelConfirm.
 import { useEffect, useRef, useState } from 'react';
 import { COLLECTOR_ORDER_MESSAGES, type CollectorOrder } from '@bottlerun/shared';
-import { deleteCollectorOrder, type DeleteCollectorOrderOutcome } from '../api.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { DeleteCollectorOrderOutcome } from '../api/collectorOrdersApi.ts';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { navigate } from '../router.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
@@ -16,18 +17,15 @@ export const DELETE_FAILED_MESSAGE = 'לא הצלחנו למחוק. נא לבד�
 /** Props of {@link DeleteOrderButton}. */
 export interface DeleteOrderButtonProps {
   order: CollectorOrder;
-  /** Deletes the order. Defaults to {@link deleteCollectorOrder}; tests pass a fake. */
-  deleteOrder?: (id: string) => Promise<DeleteCollectorOrderOutcome>;
 }
 
 /**
  * The delete button and its question. Renders nothing for an order the api would refuse
  * (`order.deletable` false: collected, or in a round), so Yoel is never offered a dead button.
+ * The delete is `deleteCollectorOrder` of {@link useApi} (DELETE /api/collector/orders/<id>).
  */
-export function DeleteOrderButton({
-  order,
-  deleteOrder = deleteCollectorOrder,
-}: DeleteOrderButtonProps) {
+export function DeleteOrderButton({ order }: DeleteOrderButtonProps) {
+  const { deleteCollectorOrder: deleteOrder } = useApi();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Stops a second tap that comes before the re-render with `deleting`.

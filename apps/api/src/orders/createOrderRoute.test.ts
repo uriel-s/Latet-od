@@ -31,7 +31,7 @@ import { InMemoryPushSubscriptionsRepo } from '../push/inMemoryPushSubscriptions
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { ORDER_RATE_LIMIT } from './createOrderRoute.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 
 // The customer's data. Distinctive values (a Hebrew letter in the house number, no bare digits),
 // so "the log does not contain it" cannot pass or fail by accident on a line number.
@@ -624,6 +624,21 @@ describe('POST /api/orders: Web Push notifications', () => {
     expect(resCrashing.status).toBe(201);
     expect(crashingSender.sent).toHaveLength(1);
     expect(await orders.list()).toHaveLength(2);
+  });
+
+  it('creates the order (201) when Web Push is disabled (push is null, no VAPID_* vars)', async () => {
+    const pushSubscriptions = new InMemoryPushSubscriptionsRepo();
+    await pushSubscriptions.save(SUB);
+    const target = createApp(createFakeDeps({ orders, attempts, pushSubscriptions, push: null }));
+
+    const res = await postOrder(validBody(), IP, target);
+
+    expect(res.status).toBe(201);
+    expect(await orders.list()).toHaveLength(1);
+    expect(await pushSubscriptions.list()).toEqual([SUB]);
+    // notifyNewOrder logs errors instead of rejecting, so a 201 alone would not show that the
+    // null push was skipped rather than dereferenced: nothing may reach console.error.
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });
 

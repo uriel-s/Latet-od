@@ -11,7 +11,7 @@ import {
   type Round,
 } from '@bottlerun/shared';
 import { InMemoryOrdersRepo } from '../orders/inMemoryOrdersRepo.ts';
-import { makeNewOrder } from '../orders/makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import { leaveRoundPatch } from './leaveRound.ts';
 import { makeNewRound } from './makeRound.ts';
 

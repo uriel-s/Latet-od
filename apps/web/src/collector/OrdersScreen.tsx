@@ -18,7 +18,8 @@ import {
   type CollectorOrder,
   type OrderGroup,
 } from '@bottlerun/shared';
-import { fetchWaitingOrders, type WaitingOrdersOutcome } from '../api.ts';
+import { useApi } from '../api/ApiContext.tsx';
+import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import { Link, navigate } from '../router.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
@@ -41,7 +42,7 @@ const PLAN_ROUND_PATH = '/app/orders/plan';
 
 /**
  * The edit screen of one order. The id is encoded, so a `/` or `?` in it stays part of the id
- * instead of adding a path segment or a query (the same rule as api.ts's request paths).
+ * instead of adding a path segment or a query (the same rule as collectorOrdersApi.ts's request paths).
  */
 function editOrderPath(id: string): string {
   return `/app/orders/${encodeURIComponent(id)}`;
@@ -86,15 +87,6 @@ export function waitingSummary(groups: readonly OrderGroup[]): string {
   return `${waiting} · כ־${bottlesText(bottles)}`;
 }
 
-/** Props of {@link OrdersScreen}. */
-export interface OrdersScreenProps {
-  /**
-   * Loads the waiting orders. Defaults to {@link fetchWaitingOrders}; tests pass a fake. Must keep
-   * its identity across renders (a module function, not an inline arrow): a new one loads again.
-   */
-  loadOrders?: () => Promise<WaitingOrdersOutcome>;
-}
-
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
 type ScreenState =
   { kind: 'loading' } | { kind: 'failed' } | { kind: 'loaded'; groups: OrderGroup[] };
@@ -111,8 +103,12 @@ type ScreenState =
  * A 401 means the session ended (expired, or logged out on another tab): to the login, like the
  * guard in CollectorApp.tsx. A failed load stays here with a retry: a dropped connection is not a
  * logout.
+ *
+ * The list comes from `fetchWaitingOrders` of {@link useApi} (GET /api/collector/orders).
  */
-export function OrdersScreen({ loadOrders = fetchWaitingOrders }: OrdersScreenProps) {
+export function OrdersScreen() {
+  // The client keeps its functions' identity, so this effect dependency does not reload.
+  const { fetchWaitingOrders: loadOrders } = useApi();
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   // Counts the loads asked for after the first ("לנסות שוב", or Yoel coming back to the app): a
   // new value runs the load below again.

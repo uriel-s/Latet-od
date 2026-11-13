@@ -1,15 +1,10 @@
-import { StrictMode } from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  groupWaitingOrders,
-  type CollectorOrder,
-  type CollectorOrderResponse,
-  type CollectorOrdersResponse,
-  type HistoryResponse,
-  type RoundsResponse,
-} from '@bottlerun/shared';
-import type { SessionOutcome } from '../api.ts';
+import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
+import type { Api } from '../api/ApiContext.tsx';
+import type { SessionOutcome } from '../api/authApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { matchRoute, navigate, useLocation } from '../router.tsx';
 import { CollectorApp, SESSION_CHECK_FAILED_MESSAGE } from './CollectorApp.tsx';
 
@@ -17,80 +12,70 @@ const LOGGED_IN: SessionOutcome = { kind: 'loggedIn', user: { sub: 'collector' }
 const LOGGED_OUT: SessionOutcome = { kind: 'loggedOut' };
 const FAILED: SessionOutcome = { kind: 'failed' };
 
-/** A waiting order with a street written by hand, named `name`, for the edit screen to load. */
-function makeOrder(id: string, name: string): CollectorOrder {
-  return {
-    id,
-    contact: { name, phone: '+972501234567' },
-    address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'privateHouse' },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: false,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: a street written by hand, no map point. */
+const HAND_WRITTEN: Partial<CollectorOrder> = {
+  address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'privateHouse' },
+  region: undefined,
+  hasLocation: false,
+};
 
-/** The orders GET /api/collector/orders/<id> answers with; any other id answers 404. */
+/** The orders the edit screen can load; any other id is not found. */
 const ORDERS_BY_ID: readonly CollectorOrder[] = [
-  makeOrder('o1', 'דנה כהן'),
-  makeOrder('o2', 'משה לוי'),
+  makeCollectorOrder({ ...HAND_WRITTEN, id: 'o1' }),
+  makeCollectorOrder({
+    ...HAND_WRITTEN,
+    id: 'o2',
+    contact: { name: 'משה לוי', phone: '+972501234567' },
+  }),
 ];
 
-/** A 200 with `body` as JSON. */
-function jsonResponse(
-  body: CollectorOrdersResponse | CollectorOrderResponse | RoundsResponse | HistoryResponse,
-): Promise<Response> {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
+/**
+ * The client functions the tabs call on opening (useApi), faked: no waiting order,
+ * {@link ORDERS_BY_ID} for the edit screen, no open round (for the rounds tab and the planning
+ * screen), nothing closed in any month, and push off on the server. The session check and the
+ * logout are faked per test (see renderAt).
+ */
+const SCREENS_API: Partial<Api> = {
+  fetchRounds: () => Promise.resolve({ kind: 'loaded', rounds: [] }),
+  fetchWaitingOrders: () => Promise.resolve({ kind: 'loaded', groups: groupWaitingOrders([]) }),
+  fetchCollectorOrder: (id) => {
+    const order = ORDERS_BY_ID.find((candidate) => candidate.id === id);
+    return Promise.resolve(order === undefined ? { kind: 'notFound' } : { kind: 'loaded', order });
+  },
+  fetchHistory: (month) =>
+    Promise.resolve({
+      kind: 'loaded',
+      history: {
+        month,
+        totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
+        orders: [],
+      },
     }),
-  );
-}
+  fetchPushConfig: () => Promise.resolve({ kind: 'loaded', config: { enabled: false } }),
+};
 
 /**
- * The orders screens call the real api functions (CollectorShell passes no fake), so every test
- * here stubs the global fetch: GET /api/collector/orders answers an empty list, GET
- * /api/collector/orders/<id> one of {@link ORDERS_BY_ID}, GET /api/collector/rounds no rounds,
- * GET /api/collector/history?month=<month> nothing closed in that month, and no test sends a
- * request from jsdom.
- * The session itself is checked by the fake loadSession.
+ * What reached the global fetch during the test. Every screen takes its calls from useApi, so a
+ * request here is a client function no test faked: the real one sent it (answered 404 below, so
+ * it would only show `failed`), and afterEach fails the test for it rather than letting it pass
+ * for the wrong reason.
  */
-function fakeApi(input: string): Promise<Response> {
-  if (input === '/api/collector/orders') return jsonResponse({ groups: groupWaitingOrders([]) });
-  if (input === '/api/collector/rounds') return jsonResponse({ rounds: [] });
-  const historyMonth = /^\/api\/collector\/history\?month=(\d{4}-\d{2})$/.exec(input)?.[1];
-  if (historyMonth !== undefined) {
-    return jsonResponse({
-      month: historyMonth,
-      totals: { bottlesCollected: 0, addressesCollected: 0, valueAgorot: 0 },
-      orders: [],
-    });
-  }
-  const order = ORDERS_BY_ID.find(({ id }) => input === `/api/collector/orders/${id}`);
-  if (order !== undefined) return jsonResponse({ order });
-  return Promise.resolve(new Response(null, { status: 404 }));
-}
+let unfakedRequests: string[] = [];
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fakeApi);
+  unfakedRequests = [];
+  vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+    unfakedRequests.push(input instanceof Request ? input.url : String(input));
+    return Promise.resolve(new Response(null, { status: 404 }));
+  });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  expect(unfakedRequests).toEqual([]);
 });
 
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-
-/** A fake `loadSession`: answers each call with the next answer given (the last one repeats). */
+/** A fake `fetchSession`: answers each call with the next answer given (the last one repeats). */
 function fakeSession(...answers: (SessionOutcome | Promise<SessionOutcome>)[]): {
   load: () => Promise<SessionOutcome>;
   calls: () => number;
@@ -104,7 +89,7 @@ function fakeSession(...answers: (SessionOutcome | Promise<SessionOutcome>)[]): 
   return { load, calls: () => calls };
 }
 
-/** A fake `logOut` that records how often it was called and answers `succeeded`. */
+/** A fake `logout` that records how often it was called and answers `succeeded`. */
 function fakeLogout(succeeded = true): { logOut: () => Promise<boolean>; calls: () => number } {
   let calls = 0;
   return {
@@ -118,7 +103,9 @@ function fakeLogout(succeeded = true): { logOut: () => Promise<boolean>; calls: 
 
 /**
  * Opens `path` the way App.tsx does: the collector app while the URL is under /app (the same
- * mounted component for every tab), and a plain marker for any other page, such as /login.
+ * mounted component for every tab), and a plain marker for any other page, such as /login. The
+ * client answers the session check with `loadSession`, the logout with `logOut`, and the screens
+ * with {@link SCREENS_API}. `strict` puts StrictMode around the whole tree, as in development.
  */
 function renderAt(
   path: string,
@@ -129,20 +116,12 @@ function renderAt(
   window.history.replaceState(null, '', path);
   function Pages() {
     const route = matchRoute(useLocation().pathname);
-    return route.name === 'collector' ? (
-      <CollectorApp path={route.path} loadSession={loadSession} logOut={logOut} />
-    ) : (
-      <p>עמוד אחר</p>
-    );
+    return route.name === 'collector' ? <CollectorApp path={route.path} /> : <p>עמוד אחר</p>;
   }
-  return render(
-    strict ? (
-      <StrictMode>
-        <Pages />
-      </StrictMode>
-    ) : (
-      <Pages />
-    ),
+  return renderWithApi(
+    <Pages />,
+    { ...SCREENS_API, fetchSession: loadSession, logout: logOut },
+    { reactStrictMode: strict },
   );
 }
 

@@ -31,8 +31,12 @@ export interface AppDeps {
   messaging: MessagingDeps;
   /** Where routes start and how far apart two points are, for planning a round (ADR-0005). */
   route: RouteDeps;
-  /** Web Push sender and VAPID public key (ADR-0013). */
-  push: PushDeps;
+  /**
+   * Web Push sender and VAPID public key (ADR-0013), or `null` when Web Push is disabled (all
+   * three `VAPID_*` env vars unset). `null` is the one "disabled" signal: the push routes and
+   * notifyNewOrder check `deps.push === null`, and there is no no-op sender.
+   */
+  push: PushDeps | null;
 }
 
 /**
@@ -93,18 +97,13 @@ export interface RouteDeps {
 }
 
 /**
- * What Web Push notifications need (ADR-0013). Production builds it from env
- * (pushDepsFromEnv, push/pushConfig.ts); tests use createFakePush (fakeDeps.ts).
+ * What Web Push notifications need when they are enabled (ADR-0013). Production builds it from
+ * env (pushDepsFromEnv, push/pushConfig.ts), which returns `null` instead when the `VAPID_*` vars
+ * are unset; tests use createFakePush (fakeDeps.ts), or `push: null` for the disabled case.
  */
 export interface PushDeps {
-  /**
-   * Sends a Web Push notification (`WebPushSender` when VAPID is configured, or
-   * `DisabledPushSender` when VAPID env vars are unset).
-   */
+  /** Sends a Web Push notification: `WebPushSender` in production, `FakePushSender` in tests. */
   sender: PushSender;
-  /**
-   * The base64url VAPID public key (`VAPID_PUBLIC_KEY`) exposed by `GET /api/collector/push/config`,
-   * or `null` when Web Push is disabled (all three `VAPID_*` env vars unset).
-   */
-  publicKey: string | null;
+  /** The base64url VAPID public key (`VAPID_PUBLIC_KEY`) exposed by `GET /api/collector/push/config`. */
+  publicKey: string;
 }

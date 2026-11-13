@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   CREATE_ORDER_MESSAGES,
@@ -6,7 +6,10 @@ import {
   type CreateOrderRequest,
   type CreateOrderResponse,
 } from '@bottlerun/shared';
-import { NETWORK_ERROR_MESSAGE, type CreateOrderOutcome } from '../api.ts';
+import { deferred } from '@bottlerun/shared/testing';
+import { NETWORK_ERROR_MESSAGE } from '../api/request.ts';
+import type { CreateOrderOutcome } from '../api/bookingApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors } from './formValues.ts';
 import { OrderFormPage } from './OrderFormPage.tsx';
 import {
@@ -53,24 +56,15 @@ function makePrefill(contact: Partial<OrderPrefill['contact']> = {}): OrderPrefi
   };
 }
 
-/** A promise the test settles by hand, to look at the form while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-
 /** Presses "הבנתי, להזמנה": the rules notice gives way to the form. */
 function acceptNotice(): void {
   fireEvent.click(screen.getByRole('button', { name: 'הבנתי, להזמנה' }));
 }
 
 /**
- * Renders the page with a fake `submitOrder` that records every request and answers `outcome`,
- * and goes past the rules notice to the form (`passNotice: false` stays on the notice).
- * Returns the requests, in order.
+ * Renders the page with a fake `createOrder` (through the ApiProvider) that records every request
+ * and answers `outcome`, and goes past the rules notice to the form (`passNotice: false` stays on
+ * the notice). Returns the requests, in order.
  */
 function renderForm(
   outcome: CreateOrderOutcome | Promise<CreateOrderOutcome> = CREATED,
@@ -81,11 +75,11 @@ function renderForm(
   unmount: () => void;
 } {
   const requests: CreateOrderRequest[] = [];
-  const submitOrder = (request: CreateOrderRequest): Promise<CreateOrderOutcome> => {
+  const createOrder = (request: CreateOrderRequest): Promise<CreateOrderOutcome> => {
     requests.push(request);
     return Promise.resolve(outcome);
   };
-  const { container, unmount } = render(<OrderFormPage submitOrder={submitOrder} />);
+  const { container, unmount } = renderWithApi(<OrderFormPage />, { createOrder });
   if (passNotice) acceptNotice();
   return { requests, container, unmount };
 }

@@ -40,7 +40,7 @@ import { FakeSender } from '../messages/fakeSender.ts';
 import type { MessageSender } from '../messages/messageSender.ts';
 import { WaMeLinkSender } from '../messages/waMeLinkSender.ts';
 import { InMemoryOrdersRepo } from '../orders/inMemoryOrdersRepo.ts';
-import { makeNewOrder } from '../orders/makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import type { OrderPatch, OrderUpdateOptions } from '../orders/ordersRepo.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { InMemoryRoundsRepo } from './inMemoryRoundsRepo.ts';

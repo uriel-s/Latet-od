@@ -3,8 +3,9 @@
 // validateOrderDetails), without the parts only the public form has: no honeypot (the route is
 // behind the login) and no privacy line. The api stores the order with `source: 'collector'`.
 import { useEffect, useRef, useState } from 'react';
-import type { AddOrderRequest, Lang } from '@bottlerun/shared';
-import { addCollectorOrder, type CollectorOrderWriteOutcome } from '../api.ts';
+import type { Lang } from '@bottlerun/shared';
+import { useApi } from '../api/ApiContext.tsx';
+import type { CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
 import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderForm/formValues.ts';
 import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
@@ -24,18 +25,14 @@ const CUSTOMER_LANGS: { lang: Lang; label: string }[] = [
   { lang: 'en', label: 'אנגלית' },
 ];
 
-/** Props of {@link AddOrderScreen}. */
-export interface AddOrderScreenProps {
-  /** Sends the new order. Defaults to {@link addCollectorOrder}; tests pass a fake. */
-  addOrder?: (request: AddOrderRequest) => Promise<CollectorOrderWriteOutcome>;
-}
-
 /**
  * The add screen. Renders the page's only `<h1>` (Layout's heading rule), a way back to the list,
  * and a blank booking form. Every mistake shows next to its field before anything is sent; a saved
- * order returns to the list, where it now waits in its region's group.
+ * order returns to the list, where it now waits in its region's group. The order is sent with
+ * `addCollectorOrder` of {@link useApi} (POST /api/collector/orders).
  */
-export function AddOrderScreen({ addOrder = addCollectorOrder }: AddOrderScreenProps) {
+export function AddOrderScreen() {
+  const { addCollectorOrder: addOrder } = useApi();
   const { values, errors, setErrors, setField, formRef, showErrors } =
     useOrderForm(emptyOrderFormValues);
   const [saving, setSaving] = useState(false);

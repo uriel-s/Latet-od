@@ -1,8 +1,10 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
-import type { WaitingOrdersOutcome } from '../api.ts';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
+import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
+import type { PushConfigOutcome } from '../api/pushApi.ts';
+import { renderWithApi } from '../api/renderWithApi.tsx';
 import {
   ORDERS_LOAD_FAILED_MESSAGE,
   OrdersScreen,
@@ -11,33 +13,16 @@ import {
 } from './OrdersScreen.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
-/** A waiting order on a listed street in רמת בית שמש, with a map point; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-      note: 'לדפוק חזק',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: a floor, an apartment and a note. */
+const WITH_DETAILS: Partial<CollectorOrder> = {
+  address: { ...makeCollectorOrder().address, floorApt: 'קומה 3, דירה 12', note: 'לדפוק חזק' },
+};
 
 /** Two orders in רמת בית שמש (one back from a round), none in בית שמש, one without a region. */
 const ORDERS: CollectorOrder[] = [
-  makeOrder(),
-  makeOrder({
+  makeCollectorOrder(WITH_DETAILS),
+  makeCollectorOrder({
+    ...WITH_DETAILS,
     id: 'o2',
     contact: { name: 'משה לוי', phone: '+972527654321' },
     address: {
@@ -49,7 +34,8 @@ const ORDERS: CollectorOrder[] = [
     bottlesEstimated: 80,
     lastMiss: { date: '2026-11-12', reason: 'notConfirmed', roundId: 'r1' },
   }),
-  makeOrder({
+  makeCollectorOrder({
+    ...WITH_DETAILS,
     id: 'o3',
     contact: { name: 'רחל אברהם', phone: '+972541112233' },
     address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'buildingEntrance' },
@@ -63,16 +49,7 @@ const LOADED: WaitingOrdersOutcome = { kind: 'loaded', groups: groupWaitingOrder
 const LOGGED_OUT: WaitingOrdersOutcome = { kind: 'loggedOut' };
 const FAILED: WaitingOrdersOutcome = { kind: 'failed' };
 
-/** A promise the test settles by hand, to look at the screen while its request is on its way. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-}
-
-/** A fake `loadOrders`: answers each call with the next answer given (the last one repeats). */
+/** A fake `fetchWaitingOrders`: answers each call with the next answer given (the last one repeats). */
 function fakeLoad(...answers: (WaitingOrdersOutcome | Promise<WaitingOrdersOutcome>)[]): {
   load: () => Promise<WaitingOrdersOutcome>;
   calls: () => number;
@@ -86,14 +63,28 @@ function fakeLoad(...answers: (WaitingOrdersOutcome | Promise<WaitingOrdersOutco
   return { load, calls: () => calls };
 }
 
-/** Opens the orders tab at /app/orders with `loadOrders`. */
+/**
+ * Push turned off on the server: the push control (PushNotificationsControl.tsx) shows nothing.
+ * jsdom has no service worker, so the control stops before asking; faked anyway, so no request
+ * can leave the test.
+ */
+const PUSH_DISABLED = (): Promise<PushConfigOutcome> =>
+  Promise.resolve({ kind: 'loaded', config: { enabled: false } });
+
+/**
+ * Opens the orders tab at /app/orders, its list from `loadOrders` (the client's
+ * `fetchWaitingOrders`). `strict` puts StrictMode around the whole tree, as in development.
+ */
 function renderScreen(
   loadOrders: () => Promise<WaitingOrdersOutcome>,
   { strict = false }: { strict?: boolean } = {},
 ): { unmount: () => void } {
   window.history.replaceState(null, '', '/app/orders');
-  const screenElement = <OrdersScreen loadOrders={loadOrders} />;
-  return render(strict ? <StrictMode>{screenElement}</StrictMode> : screenElement);
+  return renderWithApi(
+    <OrdersScreen />,
+    { fetchWaitingOrders: loadOrders, fetchPushConfig: PUSH_DISABLED },
+    { reactStrictMode: strict },
+  );
 }
 
 /** Renders the loaded list of {@link ORDERS} and waits for it. */
@@ -194,7 +185,10 @@ describe('OrdersScreen', () => {
   describe('the notice from the screen Yoel just left', () => {
     it('tells it under the heading, once', async () => {
       window.history.replaceState({ notice: 'ההזמנה נוספה.' }, '', '/app/orders');
-      render(<OrdersScreen loadOrders={fakeLoad(LOADED).load} />);
+      renderWithApi(<OrdersScreen />, {
+        fetchWaitingOrders: fakeLoad(LOADED).load,
+        fetchPushConfig: PUSH_DISABLED,
+      });
 
       const notice = await screen.findByText('ההזמנה נוספה.');
       expect(notice.getAttribute('role')).toBe('status');
@@ -326,7 +320,8 @@ describe('OrdersScreen', () => {
     });
 
     it('shows the near street Yoel picked by its official name', async () => {
-      const order = makeOrder({
+      const order = makeCollectorOrder({
+        ...WITH_DETAILS,
         id: 'o4',
         contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
         address: {
@@ -359,7 +354,7 @@ describe('OrdersScreen', () => {
     });
 
     it('encodes an order id in its edit link', async () => {
-      const order = makeOrder({ id: 'a/b?c' });
+      const order = makeCollectorOrder({ ...WITH_DETAILS, id: 'a/b?c' });
       renderScreen(fakeLoad({ kind: 'loaded', groups: groupWaitingOrders([order]) }).load);
 
       const edit = await screen.findByRole('link', { name: 'עריכה, ההזמנה של דנה כהן' });
@@ -496,7 +491,8 @@ describe('OrdersScreen', () => {
       expect(screen.queryByRole('status')).toBeNull();
       expect(cardOf('דנה כהן')).toBeDefined();
 
-      const newOrder = makeOrder({
+      const newOrder = makeCollectorOrder({
+        ...WITH_DETAILS,
         id: 'o5',
         contact: { name: 'שרה גולן', phone: '+972509998877' },
       });

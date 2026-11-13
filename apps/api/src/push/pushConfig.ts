@@ -3,7 +3,6 @@
 // and the api runs normally. When any one is set, all three must be present and valid, or startup
 // fails immediately without repeating secret values.
 import type { PushDeps } from '../deps.ts';
-import { DisabledPushSender } from './pushSender.ts';
 import { WebPushSender } from './webPushSender.ts';
 
 const ENV_HINT = 'Set them in apps/api/.env (see .env.example) or in the hosting env.';
@@ -57,24 +56,21 @@ export function parseVapidSubject(value: string): string {
 /**
  * Builds {@link PushDeps} from `env` (normally `process.env`, ADR-0013):
  *
- * - All three `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` unset or empty: Web Push is
- *   disabled (`{ publicKey: null, sender: new DisabledPushSender() }`).
+ * - All three `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` unset or empty: returns
+ *   `null`, Web Push disabled (`AppDeps.push` is null; the api runs normally without it).
  * - Partially set: throws naming the missing variable(s).
  * - All three set: validates `VAPID_SUBJECT` and the P-256 key pair, and returns a
- *   {@link WebPushSender}.
+ *   {@link WebPushSender} with the public key.
  *
  * @throws Error naming the offending `VAPID_*` variable(s), never repeating any env value.
  */
-export function pushDepsFromEnv(env: NodeJS.ProcessEnv): PushDeps {
+export function pushDepsFromEnv(env: NodeJS.ProcessEnv): PushDeps | null {
   const publicKey = env.VAPID_PUBLIC_KEY ?? '';
   const privateKey = env.VAPID_PRIVATE_KEY ?? '';
   const subject = env.VAPID_SUBJECT ?? '';
 
   if (publicKey === '' && privateKey === '' && subject === '') {
-    return {
-      publicKey: null,
-      sender: new DisabledPushSender(),
-    };
+    return null;
   }
 
   const missing: string[] = [];

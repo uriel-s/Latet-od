@@ -2,8 +2,8 @@
 // unset, fails fast when partially set or malformed, and never repeats secret values in errors.
 import { describe, expect, it } from 'vitest';
 import { parseVapidSubject, pushDepsFromEnv } from './pushConfig.ts';
-import { DisabledPushSender } from './pushSender.ts';
-import { generateVapidKeys, WebPushSender } from './webPushSender.ts';
+import { makeVapidKeys } from './testVapidKeys.ts';
+import { WebPushSender } from './webPushSender.ts';
 
 /** Returns the Error message thrown by `action`, or fails the test if it does not throw. */
 function startupError(action: () => unknown): string {
@@ -48,23 +48,20 @@ describe('pushDepsFromEnv', () => {
   it.each([
     ['all unset', {}],
     ['all empty strings', { VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', VAPID_SUBJECT: '' }],
-  ])('returns DisabledPushSender and publicKey: null when %s', (_label, env) => {
-    const push = pushDepsFromEnv(env);
-
-    expect(push.publicKey).toBeNull();
-    expect(push.sender).toBeInstanceOf(DisabledPushSender);
+  ])('returns null (Web Push disabled) when %s', (_label, env) => {
+    expect(pushDepsFromEnv(env)).toBeNull();
   });
 
   it('builds a WebPushSender and exposes publicKey when all three VAPID_* vars are valid', () => {
-    const { publicKey, privateKey } = generateVapidKeys();
+    const { publicKey, privateKey } = makeVapidKeys();
     const push = pushDepsFromEnv({
       VAPID_PUBLIC_KEY: publicKey,
       VAPID_PRIVATE_KEY: privateKey,
       VAPID_SUBJECT: 'mailto:yoel@example.com',
     });
 
-    expect(push.publicKey).toBe(publicKey);
-    expect(push.sender).toBeInstanceOf(WebPushSender);
+    expect(push?.publicKey).toBe(publicKey);
+    expect(push?.sender).toBeInstanceOf(WebPushSender);
   });
 
   it.each([
@@ -97,7 +94,7 @@ describe('pushDepsFromEnv', () => {
   );
 
   it('refuses an invalid VAPID_PUBLIC_KEY without repeating any env value', () => {
-    const { privateKey } = generateVapidKeys();
+    const { privateKey } = makeVapidKeys();
     const badPublic = 'bad-public-key-secret-value';
 
     const message = startupError(() =>
@@ -114,7 +111,7 @@ describe('pushDepsFromEnv', () => {
   });
 
   it('refuses an invalid VAPID_PRIVATE_KEY without repeating any env value', () => {
-    const { publicKey } = generateVapidKeys();
+    const { publicKey } = makeVapidKeys();
     const badPrivate = 'bad-private-key-secret-value';
 
     const message = startupError(() =>
@@ -131,8 +128,8 @@ describe('pushDepsFromEnv', () => {
   });
 
   it('refuses mismatched VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY without repeating either value', () => {
-    const first = generateVapidKeys();
-    const second = generateVapidKeys();
+    const first = makeVapidKeys();
+    const second = makeVapidKeys();
 
     const message = startupError(() =>
       pushDepsFromEnv({

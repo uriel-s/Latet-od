@@ -9,7 +9,8 @@ import {
   toMessageLink,
   type MessageVars,
 } from './messages.ts';
-import type { MessageKind, MessageLogEntry, Order } from './order.ts';
+import type { MessageKind, MessageLogEntry } from './order.ts';
+import { makeOrder } from './testing/index.ts';
 
 const LINK = 'https://bottlerun.example/o/Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv';
 const AT = new Date('2026-11-04T17:00:00.000Z');
@@ -23,24 +24,6 @@ function makeVars(overrides: Partial<MessageVars> = {}): MessageVars {
 /** A manual (wa.me) log entry of the given kind. */
 function manualEntry(kind: MessageLogEntry['kind'], url: string, openedAt?: Date): MessageLogEntry {
   return { kind, at: AT, mode: 'manual', url, ...(openedAt === undefined ? {} : { openedAt }) };
-}
-
-/** A stored order in a round, with the given message log. */
-function makeOrder(messages: MessageLogEntry[]): Order {
-  return {
-    id: '6710f3a2c4b5d6e7f8a9b0c1',
-    contact: { name: 'משה כהן', phone: '+972501234567', method: 'whatsapp' },
-    address: { streetName: 'רחוב חדש', houseNumber: '5', bottlesSpot: 'privateHouse' },
-    bottlesEstimated: 45,
-    status: 'pending',
-    token: 'Qm9ZtL3x_8Vb-1kHw2Rj5NpA7cYeG0sUoDfIiKqTnWv',
-    roundId: 'round-1',
-    messages,
-    source: 'form',
-    lang: 'he',
-    createdAt: AT,
-    updatedAt: AT,
-  };
 }
 
 /** The error `action` throws, or a failed test if it does not throw. */
@@ -399,10 +382,12 @@ describe('pickupTimeSchema', () => {
 
 describe('toMessageLink', () => {
   it('returns the latest manual entry of the kind, with its index and the customer name', () => {
-    const order = makeOrder([
-      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old'),
-      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=new'),
-    ]);
+    const order = makeOrder({
+      messages: [
+        manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old'),
+        manualEntry('confirmRequest', 'https://wa.me/972501234567?text=new'),
+      ],
+    });
     expect(toMessageLink(order, 'confirmRequest')).toEqual({
       orderId: '6710f3a2c4b5d6e7f8a9b0c1',
       messageIndex: 1,
@@ -413,11 +398,13 @@ describe('toMessageLink', () => {
   });
 
   it('skips entries of the other kind', () => {
-    const order = makeOrder([
-      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=confirm'),
-      manualEntry('thankYou', 'https://wa.me/972501234567?text=thanks'),
-      { kind: 'thankYou', at: AT, mode: 'failed', reason: 'timeout' },
-    ]);
+    const order = makeOrder({
+      messages: [
+        manualEntry('confirmRequest', 'https://wa.me/972501234567?text=confirm'),
+        manualEntry('thankYou', 'https://wa.me/972501234567?text=thanks'),
+        { kind: 'thankYou', at: AT, mode: 'failed', reason: 'timeout' },
+      ],
+    });
     expect(toMessageLink(order, 'confirmRequest')).toMatchObject({
       messageIndex: 0,
       url: 'https://wa.me/972501234567?text=confirm',
@@ -426,16 +413,20 @@ describe('toMessageLink', () => {
 
   // An older manual link belongs to an earlier round (another date): sending it would be wrong.
   it('returns undefined when a newer sent or failed entry of the kind follows a manual one', () => {
-    const thenSent = makeOrder([
-      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old-round'),
-      { kind: 'confirmRequest', at: AT, mode: 'sent', providerId: 'wamid.1' },
-    ]);
+    const thenSent = makeOrder({
+      messages: [
+        manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old-round'),
+        { kind: 'confirmRequest', at: AT, mode: 'sent', providerId: 'wamid.1' },
+      ],
+    });
     expect(toMessageLink(thenSent, 'confirmRequest')).toBeUndefined();
-    const thenFailed = makeOrder([
-      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old-round'),
-      { kind: 'confirmRequest', at: AT, mode: 'failed', reason: 'timeout' },
-      manualEntry('thankYou', 'https://wa.me/972501234567?text=thanks'),
-    ]);
+    const thenFailed = makeOrder({
+      messages: [
+        manualEntry('confirmRequest', 'https://wa.me/972501234567?text=old-round'),
+        { kind: 'confirmRequest', at: AT, mode: 'failed', reason: 'timeout' },
+        manualEntry('thankYou', 'https://wa.me/972501234567?text=thanks'),
+      ],
+    });
     expect(toMessageLink(thenFailed, 'confirmRequest')).toBeUndefined();
     expect(toMessageLink(thenFailed, 'thankYou')).toMatchObject({
       messageIndex: 2,
@@ -444,23 +435,27 @@ describe('toMessageLink', () => {
   });
 
   it('returns undefined when the order has no manual entry of the kind', () => {
-    expect(toMessageLink(makeOrder([]), 'confirmRequest')).toBeUndefined();
-    const order = makeOrder([
-      { kind: 'thankYou', at: AT, mode: 'sent', providerId: 'wamid.1' },
-      manualEntry('confirmRequest', 'https://wa.me/972501234567?text=confirm'),
-    ]);
+    expect(toMessageLink(makeOrder({ messages: [] }), 'confirmRequest')).toBeUndefined();
+    const order = makeOrder({
+      messages: [
+        { kind: 'thankYou', at: AT, mode: 'sent', providerId: 'wamid.1' },
+        manualEntry('confirmRequest', 'https://wa.me/972501234567?text=confirm'),
+      ],
+    });
     expect(toMessageLink(order, 'thankYou')).toBeUndefined();
   });
 
   it('carries openedAt when the link was opened, and leaves it out when not', () => {
-    const opened = makeOrder([manualEntry('thankYou', 'https://wa.me/1', OPENED_AT)]);
+    const opened = makeOrder({ messages: [manualEntry('thankYou', 'https://wa.me/1', OPENED_AT)] });
     expect(toMessageLink(opened, 'thankYou')?.openedAt).toEqual(OPENED_AT);
-    const notOpened = makeOrder([manualEntry('thankYou', 'https://wa.me/1')]);
+    const notOpened = makeOrder({ messages: [manualEntry('thankYou', 'https://wa.me/1')] });
     expect(toMessageLink(notOpened, 'thankYou')).not.toHaveProperty('openedAt');
   });
 
   it('builds a row that messageLinkSchema accepts', () => {
-    const order = makeOrder([manualEntry('confirmRequest', 'https://wa.me/1', OPENED_AT)]);
+    const order = makeOrder({
+      messages: [manualEntry('confirmRequest', 'https://wa.me/1', OPENED_AT)],
+    });
     const link = toMessageLink(order, 'confirmRequest');
     expect(messageLinkSchema.parse(link)).toEqual(link);
   });

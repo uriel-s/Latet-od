@@ -13,7 +13,6 @@ import {
   CREATE_ORDER_MESSAGES,
   ORDER_FORM_ERRORS,
   ORDER_STATUSES,
-  STREETS,
   collectorOrderResponseSchema,
   collectorOrdersResponseSchema,
   messageOpenedResponseSchema,
@@ -32,7 +31,7 @@ import { loggedInCookie } from '../auth/testSession.ts';
 import { createFakeAuth, createFakeDeps } from '../fakeDeps.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { MADE_ORDER_CREATED_AT, makeNewOrder } from './makeOrder.ts';
+import { MADE_ORDER_CREATED_AT, firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 
 const BASE = '/api/collector/orders';
 /** Shaped like a Mongo ObjectId, but no order has it. */
@@ -46,13 +45,6 @@ const PHONE = '054-7654321';
 const PHONE_DIGITS = '0547654321';
 const PHONE_E164 = '+972547654321';
 const HOUSE_NUMBER = '17ב';
-
-/** The first street of the real list that matches, or a failed test if there is none. */
-function firstRealStreet(predicate: (street: Street) => boolean): Street {
-  const street = STREETS.find(predicate);
-  if (street === undefined) throw new Error('no street in data/streets.json matches');
-  return street;
-}
 
 const hasPoint = (street: Street): boolean => street.lat !== undefined && street.lng !== undefined;
 

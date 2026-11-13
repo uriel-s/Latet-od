@@ -6,39 +6,24 @@ import type {
   RoundView,
   RouteStopView,
 } from '@bottlerun/shared';
+import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import {
   filterRoundsByRegion,
   pickSelectedRound,
   regionsPresent,
   roundPhaseLabel,
-  roundPickerLabel,
   roundPickerParts,
 } from './roundPicker.ts';
 
-/** An order of the given id; the picker only counts orders, so the rest is fixed. */
-function makeOrder(id: string, overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id,
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'privateHouse',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: the picker only counts orders. */
+const IN_ROUND: Partial<CollectorOrder> = {
+  status: 'confirmed',
+  address: { ...makeCollectorOrder().address, bottlesSpot: 'privateHouse' },
+};
 
 /** A stop of a routed round. */
 function makeStop(id: string): RouteStopView {
-  return { order: makeOrder(id), hasLocation: true, state: 'toCollect' };
+  return { order: makeCollectorOrder({ ...IN_ROUND, id }), hasLocation: true, state: 'toCollect' };
 }
 
 /**
@@ -63,7 +48,9 @@ function makeRoundView(
     },
     groups: keys.map((key) => ({
       key,
-      orders: Array.from({ length: counts[key] ?? 0 }, (_, i) => makeOrder(`${key}-${i}`)),
+      orders: Array.from({ length: counts[key] ?? 0 }, (_, i) =>
+        makeCollectorOrder({ ...IN_ROUND, id: `${key}-${i}` }),
+      ),
     })),
     sendList: [],
     stops: Array.from({ length: stops }, (_, i) => makeStop(`s${i}`)),
@@ -123,7 +110,7 @@ describe('regionsPresent', () => {
   });
 });
 
-describe('roundPickerParts and roundPickerLabel', () => {
+describe('roundPickerParts', () => {
   it('shows how many customers are in the round before the route, not "ביקשו מועד אחר"', () => {
     const view = makeRoundView({}, { inRound: 4, otherDate: 1 });
     expect(roundPickerParts(view)).toEqual({
@@ -131,12 +118,15 @@ describe('roundPickerParts and roundPickerLabel', () => {
       region: 'רמת בית שמש',
       summary: '4 בסבב',
     });
-    expect(roundPickerLabel(view)).toBe('28/10 · רמת בית שמש · 4 בסבב');
   });
 
   it('shows the number of stops once the round is routed', () => {
     const view = makeRoundView({ phase: 'routed', region: 'old', date: '2026-11-02' }, {}, 7);
-    expect(roundPickerLabel(view)).toBe('02/11 · בית שמש · 7 עצירות');
+    expect(roundPickerParts(view)).toEqual({
+      date: '02/11',
+      region: 'בית שמש',
+      summary: '7 עצירות',
+    });
   });
 
   it('shows zero in the round for a confirming round with no orders', () => {
