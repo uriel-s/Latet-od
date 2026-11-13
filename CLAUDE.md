@@ -149,6 +149,15 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 7. **Commit** with explicit paths (`git add <files>`, never `git add -A` / `git add .`) and an English message in the imperative. Never commit `.env`, `.work-context.md`, or `.dev-*` files.
 8. **Never push or merge without the user's explicit approval.** Pushing `main` is blocked by the pre-push hook; open a PR (/pr).
 
+## Proportion
+
+The scale is one collector, about 1.5 orders a day, a few hundred orders a year. Size every change to that.
+
+- Before adding a layer, an abstraction, a retry, or handling for an edge case, ask: has this happened, or could it only happen? Prefer what has happened.
+- Removing code, a comment or a document is as welcome as adding. A review names what can be deleted, not only what can be improved.
+- Refactoring with no visible or maintenance gain (moving code around, renaming for taste) needs a reason in the commit message.
+- An ADR only for a decision that is hard to reverse (stack, hosting, data model, auth, an external service). A UI or wording change does not need one.
+
 ## Rules
 
 - **Hebrew and RTL.** The collector app is Hebrew only, and so are the Open Graph tags. The booking form (`/` Hebrew, `/en` English) and the customer page `/o/<token>` follow the order's `lang` (`he`|`en`, ADR-0010): texts come from the `t()` dictionary in `packages/shared/src/i18n.ts`, no i18n library, and the document `lang`/`dir` switch with it (`rtl` for Hebrew). Hebrew pages use `dir="rtl"`. Phone numbers and digits render LTR inside the text (`<bdi>` / `dir="ltr"`). Dates `DD/MM`. Time zone `Asia/Jerusalem`, also for monthly statistics.
