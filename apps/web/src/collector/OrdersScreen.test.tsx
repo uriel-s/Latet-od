@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { groupWaitingOrders, type CollectorOrder } from '@bottlerun/shared';
-import { deferred } from '@bottlerun/shared/testing';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import type { PushConfigOutcome } from '../api/pushApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -13,33 +13,16 @@ import {
 } from './OrdersScreen.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
-/** A waiting order on a listed street in רמת בית שמש, with a map point; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-      floorApt: 'קומה 3, דירה 12',
-      note: 'לדפוק חזק',
-    },
-    bottlesEstimated: 40,
-    status: 'waiting',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: a floor, an apartment and a note. */
+const WITH_DETAILS: Partial<CollectorOrder> = {
+  address: { ...makeCollectorOrder().address, floorApt: 'קומה 3, דירה 12', note: 'לדפוק חזק' },
+};
 
 /** Two orders in רמת בית שמש (one back from a round), none in בית שמש, one without a region. */
 const ORDERS: CollectorOrder[] = [
-  makeOrder(),
-  makeOrder({
+  makeCollectorOrder(WITH_DETAILS),
+  makeCollectorOrder({
+    ...WITH_DETAILS,
     id: 'o2',
     contact: { name: 'משה לוי', phone: '+972527654321' },
     address: {
@@ -51,7 +34,8 @@ const ORDERS: CollectorOrder[] = [
     bottlesEstimated: 80,
     lastMiss: { date: '2026-11-12', reason: 'notConfirmed', roundId: 'r1' },
   }),
-  makeOrder({
+  makeCollectorOrder({
+    ...WITH_DETAILS,
     id: 'o3',
     contact: { name: 'רחל אברהם', phone: '+972541112233' },
     address: { streetName: 'סמטת הגפנים', houseNumber: '7', bottlesSpot: 'buildingEntrance' },
@@ -336,7 +320,8 @@ describe('OrdersScreen', () => {
     });
 
     it('shows the near street Yoel picked by its official name', async () => {
-      const order = makeOrder({
+      const order = makeCollectorOrder({
+        ...WITH_DETAILS,
         id: 'o4',
         contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
         address: {
@@ -369,7 +354,7 @@ describe('OrdersScreen', () => {
     });
 
     it('encodes an order id in its edit link', async () => {
-      const order = makeOrder({ id: 'a/b?c' });
+      const order = makeCollectorOrder({ ...WITH_DETAILS, id: 'a/b?c' });
       renderScreen(fakeLoad({ kind: 'loaded', groups: groupWaitingOrders([order]) }).load);
 
       const edit = await screen.findByRole('link', { name: 'עריכה, ההזמנה של דנה כהן' });
@@ -506,7 +491,8 @@ describe('OrdersScreen', () => {
       expect(screen.queryByRole('status')).toBeNull();
       expect(cardOf('דנה כהן')).toBeDefined();
 
-      const newOrder = makeOrder({
+      const newOrder = makeCollectorOrder({
+        ...WITH_DETAILS,
         id: 'o5',
         contact: { name: 'שרה גולן', phone: '+972509998877' },
       });

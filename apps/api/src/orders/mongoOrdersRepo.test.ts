@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { MongoServerError, ObjectId } from 'mongodb';
 import { OPEN_ORDER_STATUSES } from '@bottlerun/shared';
-import { makeNewOrder } from './makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import {
   buildListFilter,
   buildUpdate,

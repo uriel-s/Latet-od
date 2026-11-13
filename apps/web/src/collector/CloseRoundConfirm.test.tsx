@@ -7,6 +7,7 @@ import type {
   RoundView,
   RouteStopView,
 } from '@bottlerun/shared';
+import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -22,31 +23,25 @@ import {
   type CloseRoundConfirmProps,
 } from './CloseRoundConfirm.tsx';
 
-/** A confirmed order of the round; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: an order of the round, confirmed. */
+const IN_ROUND: Partial<CollectorOrder> = { status: 'confirmed' };
 
-const DANA = makeOrder();
-const MOSHE = makeOrder({ id: 'o2', contact: { name: 'משה לוי', phone: '+972527654321' } });
-const YOSSI = makeOrder({ id: 'o3', contact: { name: 'יוסי מזרחי', phone: '+972501239999' } });
-const RINA = makeOrder({ id: 'o4', contact: { name: 'רינה פרץ', phone: '+972541112222' } });
+const DANA = makeCollectorOrder(IN_ROUND);
+const MOSHE = makeCollectorOrder({
+  ...IN_ROUND,
+  id: 'o2',
+  contact: { name: 'משה לוי', phone: '+972527654321' },
+});
+const YOSSI = makeCollectorOrder({
+  ...IN_ROUND,
+  id: 'o3',
+  contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
+});
+const RINA = makeCollectorOrder({
+  ...IN_ROUND,
+  id: 'o4',
+  contact: { name: 'רינה פרץ', phone: '+972541112222' },
+});
 
 /** Round r1 in `phase`. */
 function roundIn(phase: CollectorRound['phase']): CollectorRound {
@@ -208,10 +203,10 @@ describe('ordersSentBackCount', () => {
     const view = confirmingView({
       inRound: [
         DANA,
-        makeOrder({ ...MOSHE, status: 'pending' }),
-        makeOrder({ ...YOSSI, status: 'confirmed' }),
+        makeCollectorOrder({ ...MOSHE, status: 'pending' }),
+        makeCollectorOrder({ ...YOSSI, status: 'confirmed' }),
       ],
-      otherDate: [makeOrder({ ...RINA, status: 'waiting' })],
+      otherDate: [makeCollectorOrder({ ...RINA, status: 'waiting' })],
     });
 
     expect(ordersSentBackCount(view)).toBe(3);
@@ -219,7 +214,7 @@ describe('ordersSentBackCount', () => {
 
   it('does not count a collected order in the "בסבב" group', () => {
     const view = confirmingView({
-      inRound: [DANA, makeOrder({ ...MOSHE, status: 'collected' })],
+      inRound: [DANA, makeCollectorOrder({ ...MOSHE, status: 'collected' })],
     });
 
     expect(ordersSentBackCount(view)).toBe(1);
@@ -292,7 +287,9 @@ describe('CloseRoundConfirm', () => {
 
   it('asks about every order still in a confirming round, as "בטל את הסבב"', () => {
     renderConfirm({
-      view: confirmingView({ inRound: [DANA, makeOrder({ ...MOSHE, status: 'confirmed' })] }),
+      view: confirmingView({
+        inRound: [DANA, makeCollectorOrder({ ...MOSHE, status: 'confirmed' })],
+      }),
     });
 
     openQuestion('בטל את הסבב');

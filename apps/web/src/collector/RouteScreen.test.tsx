@@ -9,7 +9,7 @@ import {
   type RoundView,
   type RouteStopView,
 } from '@bottlerun/shared';
-import { deferred } from '@bottlerun/shared/testing';
+import { deferred, makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { Api } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
@@ -30,29 +30,12 @@ import {
 import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
 
-/** A confirmed order in round r1, in רמת בית שמש; overrides change it. */
-function makeOrder(overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id: 'o1',
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'apartmentDoor',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: confirmed in round r1. */
+const IN_ROUND: Partial<CollectorOrder> = { status: 'confirmed' };
 
-const DANA = makeOrder();
-const MOSHE = makeOrder({
+const DANA = makeCollectorOrder(IN_ROUND);
+const MOSHE = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o2',
   contact: { name: 'משה לוי', phone: '+972527654321' },
   address: {
@@ -63,7 +46,8 @@ const MOSHE = makeOrder({
   },
   bottlesEstimated: 80,
 });
-const YOSSI = makeOrder({
+const YOSSI = makeCollectorOrder({
+  ...IN_ROUND,
   id: 'o3',
   contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
   address: { streetCode: 101, streetName: 'הרצל', houseNumber: '3', bottlesSpot: 'privateHouse' },
@@ -387,9 +371,16 @@ describe('RouteScreen order', () => {
       stopOf(DANA, { state: 'notFound' }),
       stopOf(MOSHE),
       stopOf(YOSSI),
-      stopOf(makeOrder({ id: 'o4', contact: { name: 'רות בר', phone: '+972521111111' } }), {
-        state: 'collected',
-      }),
+      stopOf(
+        makeCollectorOrder({
+          ...IN_ROUND,
+          id: 'o4',
+          contact: { name: 'רות בר', phone: '+972521111111' },
+        }),
+        {
+          state: 'collected',
+        },
+      ),
     ];
     renderRoute(makeView(stops));
 

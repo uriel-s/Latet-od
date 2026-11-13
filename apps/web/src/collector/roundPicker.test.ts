@@ -6,6 +6,7 @@ import type {
   RoundView,
   RouteStopView,
 } from '@bottlerun/shared';
+import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import {
   filterRoundsByRegion,
   pickSelectedRound,
@@ -14,30 +15,15 @@ import {
   roundPickerParts,
 } from './roundPicker.ts';
 
-/** An order of the given id; the picker only counts orders, so the rest is fixed. */
-function makeOrder(id: string, overrides: Partial<CollectorOrder> = {}): CollectorOrder {
-  return {
-    id,
-    contact: { name: 'דנה כהן', phone: '+972501234567' },
-    address: {
-      streetCode: 201,
-      streetName: 'שד נהר הדן',
-      houseNumber: '12',
-      bottlesSpot: 'privateHouse',
-    },
-    bottlesEstimated: 40,
-    status: 'confirmed',
-    region: 'ramat',
-    source: 'form',
-    createdAt: new Date('2026-10-01T08:00:00Z'),
-    hasLocation: true,
-    ...overrides,
-  };
-}
+/** What these tests start from, on top of makeCollectorOrder: the picker only counts orders. */
+const IN_ROUND: Partial<CollectorOrder> = {
+  status: 'confirmed',
+  address: { ...makeCollectorOrder().address, bottlesSpot: 'privateHouse' },
+};
 
 /** A stop of a routed round. */
 function makeStop(id: string): RouteStopView {
-  return { order: makeOrder(id), hasLocation: true, state: 'toCollect' };
+  return { order: makeCollectorOrder({ ...IN_ROUND, id }), hasLocation: true, state: 'toCollect' };
 }
 
 /**
@@ -62,7 +48,9 @@ function makeRoundView(
     },
     groups: keys.map((key) => ({
       key,
-      orders: Array.from({ length: counts[key] ?? 0 }, (_, i) => makeOrder(`${key}-${i}`)),
+      orders: Array.from({ length: counts[key] ?? 0 }, (_, i) =>
+        makeCollectorOrder({ ...IN_ROUND, id: `${key}-${i}` }),
+      ),
     })),
     sendList: [],
     stops: Array.from({ length: stops }, (_, i) => makeStop(`s${i}`)),

@@ -26,13 +26,12 @@ import {
   type Street,
   type UpdateOrderRequest,
 } from '@bottlerun/shared';
-import { firstRealStreet } from '@bottlerun/shared/testing';
 import { createApp } from '../app.ts';
 import { loggedInCookie } from '../auth/testSession.ts';
 import { createFakeAuth, createFakeDeps } from '../fakeDeps.ts';
 import { SAME_ORIGIN_HEADERS, TEST_HOST } from '../testRequest.ts';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { MADE_ORDER_CREATED_AT, makeNewOrder } from './makeOrder.ts';
+import { MADE_ORDER_CREATED_AT, firstRealStreet, makeNewOrder } from '@bottlerun/shared/testing';
 
 const BASE = '/api/collector/orders';
 /** Shaped like a Mongo ObjectId, but no order has it. */

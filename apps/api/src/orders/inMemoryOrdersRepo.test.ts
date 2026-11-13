@@ -2,7 +2,7 @@
 // test uses behaves like a real orders repository.
 import { describe, expect, it } from 'vitest';
 import { InMemoryOrdersRepo } from './inMemoryOrdersRepo.ts';
-import { makeNewOrder } from './makeOrder.ts';
+import { makeNewOrder } from '@bottlerun/shared/testing';
 import { describeOrdersRepoContract } from './ordersRepo.contract.ts';
 
 describeOrdersRepoContract('InMemoryOrdersRepo', () => new InMemoryOrdersRepo());

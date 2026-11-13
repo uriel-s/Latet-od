@@ -1,6 +1,7 @@
 // Helpers for tests, shared by every workspace: `@bottlerun/shared/testing` (its own entry in
 // packages/shared/package.json, so nothing in the main `@bottlerun/shared` entry pulls it into a
 // production bundle). Plain TypeScript with no vitest import, so any test runner can load it.
+// Order fixtures (makeOrder and its view-shaped siblings) live in makeOrder.ts, re-exported below.
 // Only test files may import it: *.test.ts(x) and *.contract.ts (enforced in eslint.config.js).
 import { STREETS, type Street } from '../streets.ts';
 
@@ -33,3 +34,13 @@ export function firstRealStreet(predicate: (street: Street) => boolean): Street 
   if (street === undefined) throw new Error('no street in data/streets.json matches');
   return street;
 }
+
+export {
+  MADE_ORDER_CREATED_AT,
+  MADE_ORDER_ID,
+  MADE_ORDER_TOKEN,
+  makeCollectorOrder,
+  makeCustomerOrder,
+  makeNewOrder,
+  makeOrder,
+} from './makeOrder.ts';
