@@ -136,7 +136,8 @@ describeEveryEndpoint(
       call: async (fetchFn) => ((await logout(fetchFn)) ? { kind: 'cleared' } : { kind: 'failed' }),
       success: { status: 204, noBody: true },
       on401: 'failed',
-      alsoFailed: [],
+      // Only the 204 clears the session: even a 200 is not the logout route's answer.
+      alsoFailed: [200, 400, 404],
     },
   ],
   [PASSWORD.trim()],
