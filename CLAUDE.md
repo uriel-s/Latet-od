@@ -141,6 +141,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 2. **Read before writing.** Find the spec section and ADR the change touches; follow them, or say explicitly where you deviate and why.
 3. **Interfaces first.** Shared types / zod schemas in `packages/shared`, then the api, then the web UI.
 4. **Tests with every change.** Write or update the test next to the code (`foo.ts` → `foo.test.ts`).
+   Test by risk: thoroughly where a break hurts (bottle counts, messages to customers, data loss, privacy and access, status transitions); one happy-path test for the rest.
 5. **Narrow check while working:** `bash .claude/checks.sh test <the test files you touched>` — explicit file paths only, never a bare `test` or a directory. Then `bash .claude/checks.sh lint`.
    While iterating on a sub-task, lint only the files you touched (`npx eslint <files>`); the whole-repo `lint` takes ~90 s here, so run it once at the end, not after every small fix.
 6. **Full check before every commit you hand over:** `bash .claude/checks.sh all` must be green.
