@@ -172,11 +172,12 @@ The scale is one collector, about 1.5 orders a day, a few hundred orders a year.
 
 ## Code Readability & Comments
 
-- When adding or changing code, add or update comments so intent and non-obvious behaviour are clear. Comment the *why* — business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions — not the obvious *what*.
-- A one- or two-line comment at the top of each module that is not self-explanatory: what it does and how it fits in.
-- JSDoc (`/** … */`) on exported functions, types and components whose name does not already say everything.
+- Comment the *why* only: business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions. Not the obvious *what*, and not the history (git and the ADRs keep that).
+- Keep comments short, usually one to three lines. A longer one is for a non-obvious algorithm, order of steps (like `closeRound`'s) or a business rule that needs its context, never to retell what the code or the screen shows.
+- Module header: one or two lines, only when the file name does not already say what it does and how it fits in.
+- JSDoc (`/** … */`) only where the name and types do not already say it; one line is the norm.
 - Descriptive names (`bottlesEstimated`, not `count`); small single-purpose functions; explicit types on exported signatures.
-- When you touch a file, leave its comments a little better than you found them.
+- When you touch a file, leave its comments shorter and more accurate than you found them. "Better" means fewer, not more.
 
 ## Testing Conventions
 
