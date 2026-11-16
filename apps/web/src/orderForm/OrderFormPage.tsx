@@ -30,7 +30,7 @@ import { ThankYou } from './ThankYou.tsx';
 import { useOrderForm } from './useOrderForm.ts';
 
 /**
- * The values the form opens with. Section 9's "הזמנה חדשה עם אותם פרטים" (the details passed in
+ * The values the form opens with. OrderPage's "הזמנה חדשה עם אותם פרטים" (the details passed in
  * the navigation state) comes first: the customer just asked for exactly those. Otherwise the
  * details this browser saved after its last order, otherwise a blank form. Never the number of
  * bottles: neither prefill carries it.
@@ -149,7 +149,7 @@ export function OrderFormPage({ lang = DEFAULT_LANG }: OrderFormPageProps) {
       case 'created':
         saveDetails(outcome.response.order);
         // A reload must show the form filled with the details just saved, not with the older
-        // ones section 9 passed in this history entry's state.
+        // ones OrderPage passed in this history entry's state.
         if (prefillFromNavigationState(navigationState) !== null)
           navigate(homePath, { replace: true });
         setCreatedToken(outcome.response.token);

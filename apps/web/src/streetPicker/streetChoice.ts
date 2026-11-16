@@ -1,5 +1,5 @@
 // The value a StreetPicker holds (spec §3.1, ADR-0005). The booking form turns it into the
-// request's `streetCode` / `streetName`; Yoel's "רחוב קרוב" picker reuses it later (section 6).
+// request's `streetCode` / `streetName`; Yoel's "רחוב קרוב" picker (EditOrderScreen) reuses it.
 
 /**
  * What a StreetPicker holds: a street from the official list, or a name typed by hand

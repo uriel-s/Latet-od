@@ -1,7 +1,7 @@
 // A returning customer's details (spec §3.1, "לקוח חוזר"): the browser remembers them and fills
 // the form in the next time. Two sources feed the same prefill: localStorage, written after a
-// successful order, and the navigation state of "הזמנה חדשה עם אותם פרטים" on the customer page
-// (section 9). Both are read through the shared schema, because both can hold anything: an old
+// successful order, and the navigation state of "הזמנה חדשה עם אותם פרטים" on the customer page.
+// Both are read through the shared schema, because both can hold anything: an old
 // app version's shape, hand-edited storage, a stale history entry.
 import {
   findStreet,
@@ -63,7 +63,7 @@ export function saveDetails(details: OrderPrefill, storage?: Pick<Storage, 'setI
 
 /**
  * The navigation state that opens the booking form at `/` filled with `prefill` ("הזמנה חדשה עם
- * אותם פרטים" on the customer page, section 9). Read back with {@link prefillFromNavigationState}.
+ * אותם פרטים" on the customer page). Read back with {@link prefillFromNavigationState}.
  */
 export function orderFormNavigationState(prefill: OrderPrefill): { orderPrefill: OrderPrefill } {
   return { orderPrefill: prefill };

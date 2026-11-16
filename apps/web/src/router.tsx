@@ -13,12 +13,12 @@ export type Route =
   | { name: 'orderForm' }
   /** `/en`: the same booking form in English (left to right). A direct link, and a reload stays English. */
   | { name: 'orderFormEn' }
-  /** `/o/<token>`: the customer's own order page (spec §3.3, section 9). */
+  /** `/o/<token>`: the customer's own order page (spec §3.3). */
   | { name: 'orderPage'; token: string }
-  /** `/login`: the collector's login (spec §3.4, section 5). */
+  /** `/login`: the collector's login (spec §3.4). */
   | { name: 'login' }
   /**
-   * `/app` and everything under it: the collector app (section 5). `path` is the rest after
+   * `/app` and everything under it: the collector app. `path` is the rest after
    * `/app/`, without slashes at either end: `/app` → `''`, `/app/rounds/` → `'rounds'`.
    */
   | { name: 'collector'; path: string }
@@ -26,7 +26,7 @@ export type Route =
   | { name: 'notFound' };
 
 // One non-empty segment of base64url characters, optionally followed by a slash. Whether it is a
-// real token is the api's question (section 9); here it only has to look like one path segment.
+// real token is the api's question; here it only has to look like one path segment.
 const ORDER_PAGE_PATH = /^\/o\/([A-Za-z0-9_-]+)\/?$/;
 // `/app`, `/app/` and `/app/...`, but not `/apps` or `/application`.
 const COLLECTOR_PATH = /^\/app(?:\/(.*))?$/;
@@ -56,7 +56,7 @@ function trimSlashes(path: string): string {
 export interface NavigateOptions {
   /**
    * Stored as `history.state` and read back through `useLocation().state`. It survives a reload
-   * and the back button, so it must be structured-cloneable (plain data). Section 9 navigates to
+   * and the back button, so it must be structured-cloneable (plain data). OrderPage navigates to
    * `/` with `{ orderPrefill }` ("הזמנה חדשה עם אותם פרטים") and the form reads it. The keys in use:
    * `orderPrefill` (savedDetails.ts) and `notice` (collector/flashNotice.ts); a new one goes here.
    */

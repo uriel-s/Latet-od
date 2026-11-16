@@ -1,7 +1,7 @@
 // The "שלח" list of the collector app (ADR-0003): one row per customer with a link that opens
 // WhatsApp with the message already written (a wa.me url), for Yoel to tap "send" there. Tapping
 // marks the row opened at once and tells the api (`markMessageOpened` of useApi), so a row he
-// already sent stands out. Reusable: the hosting screen (a planned round, section 8) owns the heading and
+// already sent stands out. Reusable: the hosting screen (a planned round) owns the heading and
 // passes the rows (`MessageLink`, built by the api with `toMessageLink`). Two looks: framed rows by
 // default (the route's thank-you row, the close question), or one card of thin rows (`grouped`).
 import { useEffect, useRef, useState } from 'react';

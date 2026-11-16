@@ -62,7 +62,6 @@ export const GOOGLE_MAPS_ROUTE_HINT = 'מציג רק עצירות שעוד לא 
 /** The title of the timeline of the stops still to collect after the current one. */
 export const UPCOMING_TITLE = 'הבאות';
 
-/** The title of the list of handled stops. */
 export const HANDLED_TITLE = 'טופלו';
 
 /** The accessible name of the current stop's list, which holds the one big card. */
