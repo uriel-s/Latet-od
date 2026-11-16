@@ -81,7 +81,7 @@ import {
  * - 200 {@link RoundView}: the stop swapped with the one before it (`up`) or after it (`down`) in
  *   the stored `stops`; every other stop keeps its place. The route is never recomputed. Any stop
  *   may be moved, whatever its state (collected, not found, left): the route screen sorts the
- *   handled cards itself (section 6).
+ *   handled cards itself.
  * - 400 {@link InvalidMoveErrorBody}: no body, an unknown key, or another direction. Checked first.
  * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
  * - 409 {@link RouteNotOpenErrorBody}: the round is closed, or its route is not built yet (phase

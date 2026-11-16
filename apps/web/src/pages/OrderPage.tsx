@@ -640,7 +640,7 @@ function startNewOrder(order: CustomerOrder, lang: Lang): void {
 /**
  * The status in plain words, and what it means for the customer now (spec §3.3): one card at the
  * top of the page, the status as a large badge and the sentence that explains it under it, so the
- * customer reads both together (design run 6, section 4).
+ * customer reads both together.
  */
 function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   return (

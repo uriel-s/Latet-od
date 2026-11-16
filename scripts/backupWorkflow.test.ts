@@ -1,4 +1,4 @@
-// The "workflow parses" acceptance check of section 10: .github/workflows/backup.yml, the weekly
+// The "workflow parses" check: .github/workflows/backup.yml, the weekly
 // mongodump of ADR-0002, is valid YAML and keeps the shape that makes it a safe backup. GitHub only
 // reports a broken workflow after it is on main and the schedule fires, so this catches it first.
 //

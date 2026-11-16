@@ -62,7 +62,7 @@ export type MoveStopRefusal = 'notFound' | 'atEdge';
  * recomputed, only Yoel's one change is applied. A new array; `stops` is not changed.
  *
  * Any stop may be moved, whatever its state (collected, not found, left the round): the route
- * screen sorts the handled cards itself (section 6), so the stored order only has to be what Yoel
+ * screen sorts the handled cards itself, so the stored order only has to be what Yoel
  * asked for.
  *
  * @returns The moved stops; `'notFound'` when no stop has `orderId`; `'atEdge'` for the first

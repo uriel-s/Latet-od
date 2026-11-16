@@ -1,6 +1,6 @@
 // Sending one WhatsApp message for one order, and keeping a record of it (ADR-0003): build the
 // message from the order (orderMessage), hand it to the MessageSender, and append what the sender
-// answered to the order's `messages` log (sendAndLog). Round planning (section 8, the round message)
+// answered to the order's `messages` log (sendAndLog). Round planning (the round message)
 // and "אספתי" ("תודה") call these; the collector app then shows each `manual` entry as a "שלח"
 // button (toMessageLink in packages/shared).
 import {

@@ -1,5 +1,5 @@
 // Tests of the collector guard (ADR-0004) through supertest against createApp(fakes): on
-// /api/collector/* (every collector route of sections 6+) and on GET /api/auth/me. Sessions are
+// /api/collector/* (every collector route) and on GET /api/auth/me. Sessions are
 // signed in the test with the app's own secret, and time is driven with the injected `auth.now`.
 import express, { type Express } from 'express';
 import request from 'supertest';

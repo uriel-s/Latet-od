@@ -1,6 +1,6 @@
 // The street field (spec §3.1, ADR-0005): the customer types part of the name, taps their street
 // in a short list from the official Beit Shemesh list, or taps "הרחוב שלי לא ברשימה" and writes
-// it by hand. The booking form renders it for "רחוב"; Yoel's screen (section 6) renders it with
+// it by hand. The booking form renders it for "רחוב"; EditOrderScreen renders it with
 // `allowFreeText={false}` for "רחוב קרוב", which maps a hand-written address onto a listed street.
 //
 // Built for elderly customers: one big input, the matches as big buttons right under it (an

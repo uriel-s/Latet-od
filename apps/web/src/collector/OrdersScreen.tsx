@@ -159,7 +159,7 @@ export function OrdersScreen() {
       {/* What the screen Yoel just left did ("ההזמנה נשמרה"): its form is gone, so this tells it. */}
       <FlashNotice />
       <PushNotificationsControl />
-      {/* Side by side in one row of two columns, like an app's action bar (mockup §2). */}
+      {/* Side by side in one row of two columns, like an app's action bar. */}
       <div className="orders-actions">
         <Link to={ADD_ORDER_PATH} className="button button-primary button-block">
           הוספת הזמנה
