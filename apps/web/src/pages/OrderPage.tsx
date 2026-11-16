@@ -8,17 +8,14 @@
 // ההזמנה" (with a question first). Every button is a POST or a PATCH, never a link to open:
 // WhatsApp's preview opens links. The page always draws the order the api answered with, not what
 // it expected the button to do.
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
   CUSTOMER_ORDER_MESSAGES,
   DEFAULT_LANG,
-  findStreet,
   formatDayMonth,
-  formatIsraeliMobileLocal,
   isLocationChange,
   isOpenStatus,
-  streetDisplayName,
   t,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
@@ -47,6 +44,7 @@ import { Link, navigate } from '../router.tsx';
 import { useDocumentLanguage } from '../useDocumentLanguage.ts';
 import { useMountedRef } from '../useMountedRef.ts';
 import { tWithDay } from './bidiText.tsx';
+import { OrderDetails } from './OrderDetails.tsx';
 import { OrderStatus } from './OrderStatus.tsx';
 
 // Every text of the page comes from the dictionary (i18n.ts, 'orderPage.*'), in the order's
@@ -595,55 +593,4 @@ function startNewOrder(order: CustomerOrder, lang: Lang): void {
   navigate(lang === 'en' ? '/en' : '/', {
     state: orderFormNavigationState({ contact: order.contact, address: order.address }),
   });
-}
-
-/**
- * The order's details as the customer gave them: only what the api sent, which is the order's
- * own (no id, no region, nothing of another customer). Drawn as settings-style rows: each
- * name/value pair in its own `<div>` inside the `<dl>` (valid HTML), so CSS can lay out a row
- * with the name at the start, the value at the end and a line between rows.
- */
-function OrderDetails({ order, lang }: { order: CustomerOrder; lang: Lang }) {
-  const headingId = useId();
-  const { contact, address } = order;
-  // Where at the address: the spot in the form's words, then the floor and apartment if given.
-  const spot = [t(lang, `bottlesSpot.${address.bottlesSpot}`), address.floorApt]
-    .filter((part) => part !== undefined && part !== '')
-    .join(' · ');
-  // A listed street reads in the page's language; a hand-written one stays as the customer typed it.
-  const listedStreet =
-    address.streetCode === undefined ? undefined : findStreet(address.streetCode);
-  const streetName =
-    listedStreet === undefined ? address.streetName : streetDisplayName(listedStreet, lang);
-
-  return (
-    <section className="order-details card" aria-labelledby={headingId}>
-      <h2 id={headingId}>{t(lang, 'orderPage.details')}</h2>
-      <dl>
-        <DetailRow label={t(lang, 'orderPage.detailName')}>{contact.name}</DetailRow>
-        <DetailRow label={t(lang, 'orderPage.detailPhone')}>
-          {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
-          <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>
-        </DetailRow>
-        <DetailRow label={t(lang, 'orderPage.detailAddress')}>
-          {streetName} {address.houseNumber}
-        </DetailRow>
-        <DetailRow label={t(lang, 'orderPage.detailSpot')}>{spot}</DetailRow>
-        {address.note !== undefined && address.note !== '' && (
-          <DetailRow label={t(lang, 'orderPage.detailNote')}>{address.note}</DetailRow>
-        )}
-        <DetailRow label={t(lang, 'orderPage.detailBottles')}>{order.bottlesEstimated}</DetailRow>
-      </dl>
-    </section>
-  );
-}
-
-/** One row of {@link OrderDetails}: the detail's name (`dt`) and its value (`dd`). */
-function DetailRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="order-detail-row">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
 }
