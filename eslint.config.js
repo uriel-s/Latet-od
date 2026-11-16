@@ -154,6 +154,9 @@ export default tseslint.config(
                 'testSession.ts',
                 'testMongo.ts',
                 'testVapidKeys.ts',
+                // Test-data and visibility helpers that only tests import.
+                'makeRound.ts',
+                'visibilityTestHelper.ts',
                 // The shared suites every implementation's tests run (they import vitest).
                 '*.contract.ts',
               ],
