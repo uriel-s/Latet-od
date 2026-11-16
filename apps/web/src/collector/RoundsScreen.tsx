@@ -38,6 +38,7 @@ import { RoundPicker } from './RoundPickerSheet.tsx';
 import { RouteScreen, type RouteScreenProps } from './RouteScreen.tsx';
 import { SendList } from './SendList.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
+import { withId } from './withId.ts';
 
 /** Shown when the rounds got no usable answer (network error, 5xx, unreadable body). */
 export const ROUNDS_LOAD_FAILED_MESSAGE =
@@ -91,15 +92,6 @@ export function roundGroupsSummary(groups: readonly RoundOrderGroup[]): string {
   return ROUND_GROUP_KEYS.map(
     (key) => `${ROUND_GROUP_LABELS[key]}: ${ordersOfGroup(groups, key).length}`,
   ).join(' · ');
-}
-
-/** `ids` with `id` in it (`present`) or out of it; the same set when nothing changes. */
-function withId(ids: ReadonlySet<string>, id: string, present: boolean): ReadonlySet<string> {
-  if (ids.has(id) === present) return ids;
-  const next = new Set(ids);
-  if (present) next.add(id);
-  else next.delete(id);
-  return next;
 }
 
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */

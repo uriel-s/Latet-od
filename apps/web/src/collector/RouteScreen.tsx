@@ -25,6 +25,7 @@ import {
   storedMovesFor,
 } from './routeStops.ts';
 import { StopCard, type JustSaved } from './StopCard.tsx';
+import { withId } from './withId.ts';
 
 /** In place of the list when the route has no stop at all. */
 export const NO_STOPS_TEXT = 'אין עצירות במסלול.';
@@ -83,15 +84,6 @@ export function routeSummary(stops: readonly Pick<RouteStopView, 'state'>[]): st
   const collected = stops.filter((stop) => stop.state === 'collected').length;
   const toCollect = stops.filter((stop) => stop.state === 'toCollect').length;
   return `נאספו ${collected} מתוך ${stops.length} · נשארו ${toCollect}`;
-}
-
-/** `ids` with `id` in it (`present`) or out of it; the same set when nothing changes. */
-function withId(ids: ReadonlySet<string>, id: string, present: boolean): ReadonlySet<string> {
-  if (ids.has(id) === present) return ids;
-  const next = new Set(ids);
-  if (present) next.add(id);
-  else next.delete(id);
-  return next;
 }
 
 /** `messages` with `message` for `id`, or without `id` when undefined; the same map if unchanged. */
