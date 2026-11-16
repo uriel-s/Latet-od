@@ -1,10 +1,9 @@
 // The web app's network core: every call to the api goes through `request()`, which handles what
 // every endpoint shares (a network error, a 401 behind the login, a status the endpoint does not
 // know, an unreadable body, an unexpected error). The endpoints themselves live next to it, one
-// module per resource as in packages/shared (authApi.ts, bookingApi.ts, customerOrderApi.ts,
-// collectorOrdersApi.ts, roundsApi.ts, historyApi.ts, pushApi.ts). Each endpoint takes the fetch
-// to use, so tests pass a fake and never touch the network (CLAUDE.md: every external call sits
-// behind an interface). The api is same-origin (ADR-0002), so paths are relative.
+// module per resource as in packages/shared. Each endpoint takes the fetch to use, so tests pass a
+// fake and never touch the network (CLAUDE.md: every external call sits behind an interface). The
+// api is same-origin (ADR-0002), so paths are relative.
 import { DEFAULT_LANG, t, type Lang } from '@bottlerun/shared';
 import { UNKNOWN_FIELD_ERROR, mapFieldErrors, type FormErrors } from '../orderForm/formValues.ts';
 
