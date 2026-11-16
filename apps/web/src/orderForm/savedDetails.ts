@@ -62,7 +62,7 @@ export function saveDetails(details: OrderPrefill, storage?: Pick<Storage, 'setI
 }
 
 /**
- * The navigation state that opens the booking form at `/` filled with `prefill` ("הזמנה חדשה עם
+ * The navigation state that opens the booking form filled with `prefill` ("הזמנה חדשה עם
  * אותם פרטים" on the customer page). Read back with {@link prefillFromNavigationState}.
  */
 export function orderFormNavigationState(prefill: OrderPrefill): { orderPrefill: OrderPrefill } {

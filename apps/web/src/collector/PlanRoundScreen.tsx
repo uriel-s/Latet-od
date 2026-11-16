@@ -61,7 +61,7 @@ export const PICKUP_BY_HINT =
 export const PICKUP_FROM_LABEL = 'מאיזו שעה מגיעים (לא חובה)';
 export const PICKUP_BY_LABEL = 'עד איזו שעה מגיעים (לא חובה)';
 
-// The form's three cards (mockup §6), top to bottom.
+// The form's three cards, top to bottom.
 const WHERE_CARD_TITLE = 'איפה';
 const WHEN_CARD_TITLE = 'מתי';
 const MESSAGE_CARD_TITLE = 'הודעה';
@@ -251,7 +251,7 @@ interface PlanRoundFormProps {
 }
 
 /**
- * The plan's form, in three cards (mockup §6): "איפה" (the region with its waiting-order counts,
+ * The plan's form, in three cards: "איפה" (the region with its waiting-order counts,
  * then the region's orders as checkboxes, all marked when the region is chosen, spec §3.5),
  * "מתי" (the date and the pickup window) and "הודעה" (the personal text); then
  * "שלח הודעות". Every mistake shows next to its field, checked with the
@@ -467,7 +467,7 @@ function PlanRoundForm({
         void submit();
       }}
     >
-      {/* Three cards, as in the mockup (§6): where (the region, and right under it its orders),
+      {/* Three cards: where (the region, and right under it its orders),
           when, and the message. The first field with an error is focused in this DOM order. */}
       <FormCard title={WHERE_CARD_TITLE} icon="pin">
         <fieldset

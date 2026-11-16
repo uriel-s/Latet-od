@@ -296,7 +296,7 @@ describe('styles.css tap targets', () => {
     expect(disabled).not.toContain('dashed');
   });
 
-  // The planning screen (mockup §6): the region is a words-only choice card, each order a grouped
+  // The planning screen: the region is a words-only choice card, each order a grouped
   // row whose whole height is the checkbox's tap target.
   it('keeps the planning screen region cards and order rows at least 48px tall', () => {
     expect(ruleBody(stylesCss, '.choice-card:not(:has(svg))')).toContain(

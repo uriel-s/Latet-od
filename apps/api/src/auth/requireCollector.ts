@@ -1,6 +1,6 @@
 // The guard of every collector-only route (ADR-0004): a request passes only with a valid session
 // cookie, and a session more than a day old is renewed on the way through. createApp mounts it on
-// /api/collector (so every route sections 6+ add there is protected) and on GET /api/auth/me.
+// /api/collector (so every collector route is protected) and on GET /api/auth/me.
 import type { RequestHandler, Response } from 'express';
 import type { SessionUser, UnauthenticatedErrorBody } from '@bottlerun/shared';
 import type { AuthDeps } from '../deps.ts';

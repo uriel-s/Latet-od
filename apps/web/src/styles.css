@@ -935,8 +935,8 @@ html:has(.bottom-nav) {
   font-weight: 700;
 }
 
-/* "הוספת הזמנה" and "תכנון סבב" right under the heading, side by side in two equal columns
-   (mockup §2), with room before the list. Each keeps .button's --tap-target height (≥48px). */
+/* "הוספת הזמנה" and "תכנון סבב" right under the heading, side by side in two equal columns,
+   with room before the list. Each keeps .button's --tap-target height (≥48px). */
 .orders-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1206,7 +1206,7 @@ html:has(.bottom-nav) {
 /* --- Planning screen (collector/PlanRoundScreen.tsx) ------------------------------- */
 
 /*
- * The region's orders (mockup §6): a .grouped-list of thin rows inside the "איפה" card. That card
+ * The region's orders: a .grouped-list of thin rows inside the "איפה" card. That card
  * is already the .card, so the list gets a light frame of its own instead of a second card; an
  * error on the list turns the frame red.
  */
@@ -2285,7 +2285,7 @@ html:has(.bottom-nav) {
 /* --- The edit screen's destructive actions (collector/EditOrderScreen.tsx) ---------------- */
 
 /*
- * "ביטול ההזמנה" and "מחיקת ההזמנה" at the bottom, under one dividing line (mockup §5), apart
+ * "ביטול ההזמנה" and "מחיקת ההזמנה" at the bottom, under one dividing line, apart
  * from "שמירת השינויים". Each CancelConfirm brings its own gap and line (.cancel-order); here the
  * one line above the group replaces them.
  */

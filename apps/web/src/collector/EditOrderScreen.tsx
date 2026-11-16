@@ -280,7 +280,7 @@ function EditOrderForm({ order }: EditOrderFormProps) {
   }
 
   // "רחוב קרוב" and "אזור", Yoel's own fields: their own card between the address and the
-  // bottles (mockup §5), so the form keeps one level of cards.
+  // bottles, so the form keeps one level of cards.
   const locationCard = (
     <FormCard title={LOCATION_CARD_TITLE}>
       {/* Shown for every order, not only one written by hand: a listed street with no point,
@@ -356,7 +356,7 @@ function EditOrderForm({ order }: EditOrderFormProps) {
         </button>
       </form>
 
-      {/* The destructive actions, at the bottom after a dividing line (mockup §5), so they are
+      {/* The destructive actions, at the bottom after a dividing line, so they are
           never the next tap after "שמירת השינויים". Outside the form, so Enter in a field never
           reaches them. */}
       <div className="danger-zone">
