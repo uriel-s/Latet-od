@@ -141,7 +141,6 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 2. **Read before writing.** Find the spec section and ADR the change touches; follow them, or say explicitly where you deviate and why.
 3. **Interfaces first.** Shared types / zod schemas in `packages/shared`, then the api, then the web UI.
 4. **Tests with every change.** Write or update the test next to the code (`foo.ts` → `foo.test.ts`).
-   Test by risk: thoroughly where a break hurts (bottle counts, messages to customers, data loss, privacy and access, status transitions); one happy-path test for the rest.
 5. **Narrow check while working:** `bash .claude/checks.sh test <the test files you touched>` — explicit file paths only, never a bare `test` or a directory. Then `bash .claude/checks.sh lint`.
    While iterating on a sub-task, lint only the files you touched (`npx eslint <files>`); the whole-repo `lint` takes ~90 s here, so run it once at the end, not after every small fix.
 6. **Full check before every commit you hand over:** `bash .claude/checks.sh all` must be green.
@@ -154,7 +153,7 @@ A check whose tool is not installed prints `SKIP: <tool> not installed` and pass
 
 The scale is one collector, about 1.5 orders a day, a few hundred orders a year. Size every change to that.
 
-- Before adding a layer, an abstraction, a retry, or handling for an edge case, ask: has this happened, or could it only happen? Prefer what has happened.
+- Before adding a layer, an abstraction, a retry, or handling for an edge case, ask: has this happened, or could it only happen? Prefer what has happened. Security, privacy and data integrity are the exception: their guards (rate limits, `$eq`, unique indexes, conditional writes) come before any incident, and stay.
 - Removing code, a comment or a document is as welcome as adding. A review names what can be deleted, not only what can be improved.
 - Refactoring with no visible or maintenance gain (moving code around, renaming for taste) needs a reason in the commit message.
 - An ADR only for a decision that is hard to reverse (stack, hosting, data model, auth, an external service). A UI or wording change does not need one.
@@ -173,12 +172,11 @@ The scale is one collector, about 1.5 orders a day, a few hundred orders a year.
 
 ## Code Readability & Comments
 
-- Comment the *why* only: business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions. Not the obvious *what*, and not the history (git and the ADRs keep that).
-- Keep comments short, usually one to three lines. A longer one is for a non-obvious algorithm, order of steps (like `closeRound`'s) or a business rule that needs its context, never to retell what the code or the screen shows.
-- Module header: one or two lines, only when the file name does not already say what it does and how it fits in.
-- JSDoc (`/** … */`) only where the name and types do not already say it; one line is the norm.
+- Comment the *why*: business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions. Not what the code or the screen already shows, no lists of files or callers, and no references to a plan section, run or task: they go stale or mean nothing later.
+- Never delete a comment that explains why something must not change, while that thing is still in the code: a stored name or legacy value, a deviation from an ADR, a security or race guard (`$eq`, a conditional write), why steps run in this order.
+- Keep comments short, usually one to three lines. Longer only for a non-obvious algorithm, an order of steps (like `closeRound`'s) or a business rule that needs its context. A module header or JSDoc only where the name and types do not already say it.
+- When you change code, fix or shorten the comments on the lines you changed and any comment your change makes wrong; do not grow a header or JSDoc to describe the new feature. Leave the rest of the file alone.
 - Descriptive names (`bottlesEstimated`, not `count`); small single-purpose functions; explicit types on exported signatures.
-- When you touch a file, leave its comments shorter and more accurate than you found them. "Better" means fewer, not more.
 
 ## Testing Conventions
 
@@ -189,12 +187,12 @@ The scale is one collector, about 1.5 orders a day, a few hundred orders a year.
 - Fakes, not mocks, for the external interfaces above; `makeOrder(overrides)`-style helpers for test data.
 - Shared test helpers come from `@bottlerun/shared/testing`: `makeOrder`, `makeNewOrder`, `makeCollectorOrder`, `makeCustomerOrder`, `deferred`, `firstRealStreet`. Lint allows it, and the test-only helpers next to the code (`fakeFetch.ts`, `renderWithApi.tsx`, `testSession.ts`, …), only from `*.test.ts(x)` / `*.contract.ts`.
 - Web screens get the api client from `useApi()` (`apps/web/src/api/ApiContext.tsx`), never as API-function props; tests inject fakes with `renderWithApi(ui, overrides)`.
-- Happy path first, then edges: minimum 20 bottles, Israeli mobile format, duplicate open order, expired/forged token, status transitions that must be refused.
+- Test by risk. Happy path first; edge cases only where a break hurts: bottle counts (minimum 20), messages to customers and the phone format behind them, one open order per phone, data loss, privacy and access (expired/forged token, rate limits), status transitions that must be refused. Elsewhere one happy-path test is enough, and a missing edge case there is not a review finding.
 
 ## Adding Dependencies
 
 1. `npm install <pkg> --workspace apps/api` (or `apps/web`); dev tools used repo-wide go in the root with `-D`.
-2. Prefer no dependency when a built-in does the job (`node:crypto` scrypt instead of bcrypt, ADR-0004). But never hand-write a security protocol or a standard format (encryption schemes, Web Push/VAPID, auth tokens, time zones, parsers): use the well-known library. A built-in primitive is fine; reimplementing an RFC is not.
+2. Prefer no dependency when a built-in does the job (`node:crypto` scrypt instead of bcrypt, ADR-0004). But in new code, never hand-write a security protocol or a standard format (encryption, Web Push/VAPID, auth tokens, time zones, parsers): use the well-known library. Calling a built-in primitive is fine (scrypt, an HMAC, `Intl` with `timeZone`). Existing hand-written code approved by an ADR (`webPushSender.ts`, ADR-0013; `session.ts`, ADR-0004) stays: replacing it is a task of its own, never part of unrelated work.
 3. `bash .claude/checks.sh sec` — no high/critical advisories in production deps.
 4. Commit `package.json` and `package-lock.json` together.
 5. **TypeScript stays on 6.0.x** until typescript-eslint supports 7 (its peer range is `<6.1.0`).
