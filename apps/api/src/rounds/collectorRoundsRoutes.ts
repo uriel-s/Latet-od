@@ -1,15 +1,7 @@
-// /api/collector/rounds: the api of Yoel's round screens (spec §3.5 "תכנון סבב", §3.6 step 1):
-// planning a round and sending the messages that announce it (ADR-0003; the customer confirms
-// nothing, ADR-0012), the open rounds of the "סבבים" tab, one round, "התחל מסלול" (the orders
-// still in the round are ordered into the stored route),
-// moving one stop of that route up or down by hand (spec §3.6 step 2), and "סגור סבב" (the close
-// itself is closeRound.ts). The stop actions on that route ("אספתי", "לא נמצא") are in
-// collectorStopActionsRoutes.ts, mounted on the same path.
-// createApp mounts the router built here AFTER requireCollector, so every route needs the login
-// (ADR-0004). The shapes are the shared contract (packages/shared/src/roundsApi.ts); rounds and
-// orders are read and written through RoundsRepo and OrdersRepo, each round message goes
-// through messages/sendAndLog.ts, and the route's order (and each manual move) comes from
-// buildRoute.ts (planRoute, moveStop). The answers both routers send are in roundResponses.ts.
+// /api/collector/rounds, Yoel's round screens (spec §3.5, §3.6): planning a round and its
+// messages, the open rounds, one round, "התחל מסלול", moving a stop by hand and "סגור סבב".
+// The stop actions ("אספתי", "לא נמצא") are in collectorStopActionsRoutes.ts, on the same path.
+// createApp mounts this router AFTER requireCollector, so every route needs the login (ADR-0004).
 import { Router, type Response } from 'express';
 import {
   ROUND_MESSAGES,
@@ -43,74 +35,35 @@ import {
 } from './roundResponses.ts';
 
 /**
- * The router of /api/collector/rounds. Mount it with
- * `app.use('/api/collector/rounds', createCollectorRoundsRouter(deps))`, after the Origin check,
- * the JSON body parser and `requireCollector` (which answers 401 without a session and sets
- * `Cache-Control: no-store` on every answer).
+ * POST / plans a round: its orders become `confirmed` at once, with no confirmation step
+ * (ADR-0012). If some order is unknown, not `waiting` or already in a round, the answer is 409 and
+ * nothing is written: no round, no order change, no message.
  *
- * POST / — "תכנון סבב" + "שלח הודעות"; body `planRoundRequestSchema`:
- * - 201 {@link RoundView}: the new round (open, phase `confirming`), its orders now `confirmed` in
- *   it (no confirmation step, ADR-0012), and the "שלח" list: one wa.me link per order (ADR-0003).
- * - 400 {@link InvalidRoundErrorBody}: the plan did not validate (also: more than 25 orders, an
- *   unknown key, no body).
- * - 409 {@link OrdersNotWaitingErrorBody}: some id is unknown, malformed, not `waiting`, or already
- *   in a round. Nothing is written then: no round, no order change, no message.
+ * GET / lists only the OPEN rounds; `previousPickupBy` / `previousPickupFrom` come from the round
+ * created last, whatever its status.
  *
- * GET / — the "סבבים" tab:
- * - 200 {@link RoundsResponse}: every OPEN round's view, by date, then by when it was created; and
- *   `previousPickupBy` and `previousPickupFrom`, the `pickupBy` and `pickupFrom` of the round
- *   created last (any status), each when it had one.
+ * POST /:id/route ("התחל מסלול"): every order still in the round is a stop, nobody is sent back
+ * for not answering (ADR-0012); a legacy `pending` order is moved to `confirmed`. A round whose
+ * orders all left still becomes routed, with no stops. The route is computed once (spec §3.6: its
+ * order must not change in the middle of the drive), so a second build is a 409 that recomputes
+ * nothing; Yoel moves a stop by hand instead.
  *
- * GET /:id — one round, whatever its status:
- * - 200 {@link RoundView}.
- * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
+ * POST /:id/stops/:orderId/move swaps one stop with its neighbour in the stored stops; the route
+ * is never recomputed. Any stop may move, whatever its state: the screen sorts handled cards
+ * itself. 409 when the round is closed or not routed, also when it was closed while the move was
+ * on its way. Two moves racing: the later write wins (each is one swap of the stops it read).
  *
- * POST /:id/route — "התחל מסלול" (spec §3.6, ADR-0005); no body (any body is ignored):
- * - 200 {@link RoundView}: the round now in phase `routed`, its `stops` the stored route in driving
- *   order (home → stops → DROP_OFF), each with its order, `hasLocation` and state. Every order
- *   still in the round is a stop; nobody is sent back for not answering (ADR-0012). A legacy
- *   `pending` order (planned before ADR-0012) is moved to `confirmed` and is a stop too. A round
- *   whose orders all left still becomes routed, with no stops: Yoel then closes it ("סגור סבב").
- * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
- * - 409 {@link ConfirmationsClosedErrorBody}: the round is closed, or already routed. The route is
- *   computed once (spec §3.6: its order must not change in the middle of the drive), so a second
- *   build is refused and recomputes nothing; Yoel moves a stop by hand instead.
- *
- * POST /:id/stops/:orderId/move — move one stop up or down by hand (spec §3.6 step 2: "אפשר להזיז
- * עצירה למעלה או למטה ידנית"); body `moveStopRequestSchema` (`{ direction: 'up' | 'down' }`):
- * - 200 {@link RoundView}: the stop swapped with the one before it (`up`) or after it (`down`) in
- *   the stored `stops`; every other stop keeps its place. The route is never recomputed. Any stop
- *   may be moved, whatever its state (collected, not found, left): the route screen sorts the
- *   handled cards itself.
- * - 400 {@link InvalidMoveErrorBody}: no body, an unknown key, or another direction. Checked first.
- * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
- * - 409 {@link RouteNotOpenErrorBody}: the round is closed, or its route is not built yet (phase
- *   `confirming`); also when it was closed while the move was on its way.
- * - 404 {@link OrderNotFoundErrorBody}: the order is not one of the route's stops (another round's,
- *   or one that left the round before the build).
- * - 409 {@link StopAtEdgeErrorBody}: the first stop moved up, or the last one down. Nothing is
- *   written.
- * Two moves racing on one round: the later write wins (each is one swap of the stops it read).
- *
- * POST /:id/close — "סגור סבב" (spec §3.6, §4); no body (any body is ignored); see closeRound.ts:
- * - 200 {@link RoundView}: the round is now `closed`, with `closedAt`, in the phase it was closed
- *   in (`confirming` or `routed`, unchanged), so it leaves GET / (the "סבבים" tab) while GET /:id
- *   still answers it. Every order still in it and `pending` or `confirmed` is `waiting` again, out
- *   of the round, with `lastMiss` reason `notReached`. Collected, cancelled and not-found stops, and orders that already
- *   left the round, stay as they are. No message is sent.
- * - 200 {@link RoundView} again for a round already closed: it keeps its first `closedAt`, and the
- *   sweep runs again, so an order a first close left behind (it failed half way) is sent back now.
- * - 404 {@link RoundNotFoundErrorBody}: no round has this id, or the id is not one at all.
- * The round is closed BEFORE its orders are swept, so a stop action or a move arriving meanwhile
- * is refused with 409 instead of acting on a closing round.
+ * POST /:id/close (closeRound.ts): the round becomes `closed` with `closedAt`, phase unchanged; it
+ * leaves GET / but GET /:id still answers. Its orders still in it and `pending`/`confirmed` go back
+ * to `waiting` with `lastMiss` `notReached`; every other order is untouched; no message. Closing
+ * it again keeps the first `closedAt` and re-runs the sweep, so an order a half-failed first close
+ * left behind is sent back now. The round is closed BEFORE its orders are swept, so a stop action
+ * or a move arriving meanwhile is refused with 409 instead of acting on a closing round.
  *
  * Every order status change goes through `canTransition` and is conditional on the status it was
- * decided on (`ifStatus`), so two screens (or the customer's own page) racing on one order cannot
- * both win.
- *
- * Logs nothing: bodies hold phones and addresses (CLAUDE.md, privacy). An unexpected error goes to
- * the app's error handler, which logs it without the request and answers 500. Times are the real
- * clock (`new Date()`), like the orders routes; tests check them against a window around the call.
+ * decided on (`ifStatus`), so two screens (or the customer's page) racing on one order cannot both
+ * win. Logs nothing: bodies hold phones and addresses; an unexpected error goes to the app's error
+ * handler, which logs it without the request and answers 500.
  */
 export function createCollectorRoundsRouter(
   deps: Pick<AppDeps, 'orders' | 'rounds' | 'messaging' | 'route'>,

@@ -1,16 +1,9 @@
-// The "סבבים" tab of the collector app (spec §3.6): ONE open round at a time. A picker above it
-// (RoundPickerSheet.tsx) switches rounds when more than one is open; the chosen round's id lives in
-// the URL as `?round=<id>`, and without it (or with an id that is not open any more) the nearest
-// open round shows. Only open rounds are listed, so a closed round is never an option.
-// Step 1 "תכנון" (phase `confirming`, a name from before ADR-0012): who is in the round and who
-// asked for another date; the round's "שלח" list of messages (ADR-0003, SendList.tsx), which only
-// announce the pickup (nobody confirms, ADR-0012); and "התחל מסלול", asked as a question first
-// (BuildRouteConfirm.tsx). Step 2 "מסלול" (phase `routed`): the route's
-// stops (RouteScreen.tsx). In both steps the round ends with its close button (CloseRoundConfirm.tsx),
-// after which it leaves the tab. GET /api/collector/rounds sends the open rounds already grouped
-// and routed (the shared buildRoundView), so this screen only shows them, and after each action it
-// swaps in the round as the api answers it. The question components own only their open state and
-// focus; this screen sends every request and keeps its double-tap guards.
+// The "סבבים" tab (spec §3.6): ONE open round at a time, its id in the URL as `?round=<id>`;
+// without it, or with an id no longer open, the nearest open round shows. Only open rounds are
+// listed. Phase `confirming` (step 1 "תכנון") is a stored name from before ADR-0012: messages only
+// announce the pickup, nobody confirms. GET /api/collector/rounds sends rounds already grouped and
+// routed (shared buildRoundView); this screen shows them and swaps in the round an action returns.
+// Question components own only open state and focus; requests and double-tap guards stay here.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
