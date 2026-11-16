@@ -21102,7 +21102,6 @@ var bottlesSpotSchema = external_exports.enum([
   "other"
 ]);
 var missReasonSchema = external_exports.enum([
-  "notConfirmed",
   "askedOtherDate",
   "notFound",
   "notReached",

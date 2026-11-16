@@ -119,10 +119,8 @@ export const BOTTLES_SPOT_LABELS: Readonly<Record<BottlesSpot, string>> = {
 /**
  * Why an order left a round without being collected (spec §4, "יציאה מסבב"). A reason, not a
  * status: the order goes back to `waiting` and `lastMiss` keeps the reason for its tag.
- * `notConfirmed` is legacy (ADR-0012): nothing gives it any more, but stored orders may hold it.
  */
 export const missReasonSchema = z.enum([
-  'notConfirmed',
   'askedOtherDate',
   'notFound',
   'notReached',
@@ -132,7 +130,6 @@ export type MissReason = z.infer<typeof missReasonSchema>;
 
 /** Hebrew text of each reason, shown in the tag of an order back from a round ("לא נמצא במקום · 12/11"). */
 export const MISS_REASON_LABELS: Readonly<Record<MissReason, string>> = {
-  notConfirmed: 'לא אישר בזמן',
   askedOtherDate: 'ביקש מועד אחר',
   notFound: 'לא נמצא במקום',
   notReached: 'לא הגענו אליו',

@@ -38,7 +38,7 @@ const IN_ROUND: Partial<Order> = {
   status: 'confirmed',
   region: 'ramat',
   roundId: ROUND_ID,
-  lastMiss: { date: '2026-10-29', reason: 'notConfirmed', roundId: 'round-0' },
+  lastMiss: { date: '2026-10-29', reason: 'notReached', roundId: 'round-0' },
   messages: [
     {
       kind: 'confirmRequest',
