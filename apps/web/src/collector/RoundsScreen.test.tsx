@@ -58,14 +58,10 @@ const MOSHE = makeCollectorOrder({
   },
   bottlesEstimated: 80,
 });
-/**
- * In the round as a legacy `pending` order (planned before ADR-0012), shown like a confirmed one;
- * no map point: its card has "בלי מיקום".
- */
+/** In the round, with no map point: its card has "בלי מיקום". */
 const YOSSI = makeCollectorOrder({
   ...IN_ROUND,
   id: 'o4',
-  status: 'pending',
   contact: { name: 'יוסי מזרחי', phone: '+972501239999' },
   address: { streetCode: 101, streetName: 'הרצל', houseNumber: '3', bottlesSpot: 'privateHouse' },
   bottlesEstimated: 50,
@@ -583,7 +579,7 @@ describe('RoundsScreen', () => {
       expect(within(groupRegion('ביקשו מועד אחר')).getByText('הזמנה אחת')).toBeDefined();
     });
 
-    it('puts each customer in the right group, a legacy pending one in "בסבב", in the order the api gave', async () => {
+    it('puts each customer in the right group, in the order the api gave', async () => {
       await renderLoaded();
 
       expect(namesIn(groupRegion('בסבב'))).toEqual(['דנה כהן', 'משה לוי', 'יוסי מזרחי']);
