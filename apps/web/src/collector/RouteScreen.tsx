@@ -1,13 +1,6 @@
-// The route of one routed round (spec §3.6 step 2, "מסלול"): its stops as StopCards, still to
-// collect in driving order and handled ones at the end, and every request a card asks for: the
-// arrows (moveStop), "אספתי" (collectStop) and "לא נמצא" (markStopNotFound). At the top, a progress
-// card ("עצירה N מתוך M" and one segment per stop); the first stop to collect is the big "העצירה
-// הבאה" card whose "נווט" is the ADR-0007 Waze link (the drop-off card once none is left); after
-// it come the upcoming stops as a timeline ("הבאות") and the handled ones ("טופלו"); a donation line
-// ("בסבב הזה נאספו N בקבוקים, כ־X לתפילין") once something was collected; then the secondary link "כל המסלול ב-Google Maps". Part of the "סבבים"
-// tab, not a page of its own: RoundsScreen owns the rounds, renders this under the round's <h2>
-// once its phase is `routed`, swaps in every view a saved action answers, and reloads when this
-// part says the screen is out of date.
+// The route of a round in phase `routed` (spec §3.6 step 2); "נווט" is the ADR-0007 Waze link.
+// Part of the "סבבים" tab, not a page of its own: RoundsScreen owns the rounds, renders this once
+// `routed`, swaps in every view a saved action answers, and reloads when this calls `onStale`.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
