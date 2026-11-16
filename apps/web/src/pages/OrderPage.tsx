@@ -54,6 +54,7 @@ import { formValuesFromPrefill, orderFormNavigationState } from '../orderForm/sa
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
 import { useDocumentLanguage } from '../useDocumentLanguage.ts';
+import { useMountedRef } from '../useMountedRef.ts';
 
 // Every text of the page comes from the dictionary (i18n.ts, 'orderPage.*'), in the order's
 // language; tests read the Hebrew ones through t('he', …) too.
@@ -182,17 +183,10 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
   // One request at a time: `busy` reaches the handlers only after a re-render, and this ref stops
   // a second tap that comes before it.
   const busyRef = useRef(false);
-  // False once the page is gone: an answer that comes after the customer left changes nothing.
-  const mountedRef = useRef(false);
+  // An answer after the customer left changes nothing.
+  const mountedRef = useMountedRef();
   const noticeRef = useRef<HTMLParagraphElement>(null);
   const changeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     // False once this load's answer no longer matters: the customer left the page, a newer load

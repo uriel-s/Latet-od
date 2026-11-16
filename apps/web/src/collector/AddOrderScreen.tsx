@@ -2,7 +2,7 @@
 // phoned. The same form and the same rules as the public booking form (OrderFields, checked with
 // validateOrderDetails), without the parts only the public form has: no honeypot (the route is
 // behind the login) and no privacy line. The api stores the order with `source: 'collector'`.
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Lang } from '@bottlerun/shared';
 import { useApi } from '../api/ApiContext.tsx';
 import type { CollectorOrderWriteOutcome } from '../api/collectorOrdersApi.ts';
@@ -10,6 +10,7 @@ import { NO_ERRORS, emptyOrderFormValues, validateOrderDetails } from '../orderF
 import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { ORDERS_LIST_PATH, saveErrors } from './orderEditing.ts';
@@ -40,16 +41,8 @@ export function AddOrderScreen() {
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
   // Enter that comes before it, so one phone call does not add two orders.
   const savingRef = useRef(false);
-  // False once the screen is gone: an answer that comes after Yoel left (the bottom navigation)
-  // must not pull him back to the list, or to the login, from the screen he went to.
-  const mountedRef = useRef(false);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // An answer after Yoel left must not pull him back to the list, or to the login.
+  const mountedRef = useMountedRef();
 
   async function save(): Promise<void> {
     if (savingRef.current) return;

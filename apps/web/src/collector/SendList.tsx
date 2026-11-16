@@ -4,11 +4,12 @@
 // already sent stands out. Reusable: the hosting screen (a planned round) owns the heading and
 // passes the rows (`MessageLink`, built by the api with `toMessageLink`). Two looks: framed rows by
 // default (the route's thank-you row, the close question), or one card of thin rows (`grouped`).
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { formatDayMonth, type MessageLink } from '@bottlerun/shared';
 import { useApi } from '../api/ApiContext.tsx';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 
 /** Shown in place of the list when there is no message to send. */
 export const EMPTY_SEND_LIST_TEXT = 'אין הודעות לשליחה.';
@@ -68,16 +69,8 @@ function rowKey(row: Pick<MessageLink, 'orderId' | 'messageIndex'>): string {
 export function SendList({ rows, grouped = false }: SendListProps) {
   const { markMessageOpened } = useApi();
   const [openedLocally, setOpenedLocally] = useState<Readonly<Record<string, OpenedLocally>>>({});
-  // False once the list is gone: an answer that comes after Yoel left the screen must not pull
-  // him to the login from the screen he went to.
-  const mountedRef = useRef(false);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // An answer after Yoel left the screen must not pull him to the login.
+  const mountedRef = useMountedRef();
 
   /** The local state of `key` after `change`; the other rows stay as they are. */
   function updateRow(key: string, change: (previous: OpenedLocally | undefined) => OpenedLocally) {

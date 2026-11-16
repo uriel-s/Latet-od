@@ -23,6 +23,7 @@ import {
 import { useApi } from '../api/ApiContext.tsx';
 import type { BuildRouteOutcome, CloseRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { Link, navigate, searchParam, useLocation } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import {
   BuildRouteConfirm,
   buildRouteQuestion,
@@ -181,17 +182,9 @@ export function RoundsScreen() {
   // The routed rounds with a quantity field open (RouteScreen's onTypingChange). A ref, not state:
   // only the reload-on-return callback reads it, and a change must not re-render the screen.
   const typingRoundIdsRef = useRef(new Set<string>());
-  // False once the screen is gone: an answer that comes after Yoel left the tab must not pull him
-  // to the login from the screen he went to.
-  const mountedRef = useRef(false);
+  // An answer after Yoel left the tab must not pull him to the login.
+  const mountedRef = useMountedRef();
   const noticeRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     // False once this load's answer no longer matters: Yoel left the tab, a newer load started,

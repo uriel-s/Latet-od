@@ -2,12 +2,13 @@
 // plain words. Used by the edit screen for an open order and for a cancelled one. It owns the
 // request and what follows (back to the list with a notice, to the login, or the reason it was
 // refused); the question itself is the shared CancelConfirm.
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { COLLECTOR_ORDER_MESSAGES, type CollectorOrder } from '@bottlerun/shared';
 import { useApi } from '../api/ApiContext.tsx';
 import type { DeleteCollectorOrderOutcome } from '../api/collectorOrdersApi.ts';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { ORDERS_LIST_PATH } from './orderEditing.ts';
 
@@ -30,15 +31,8 @@ export function DeleteOrderButton({ order }: DeleteOrderButtonProps) {
   const [error, setError] = useState<string | null>(null);
   // Stops a second tap that comes before the re-render with `deleting`.
   const busyRef = useRef(false);
-  // False once the screen is gone: a late answer must not pull Yoel back from where he went.
-  const mountedRef = useRef(false);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  // A late answer must not pull Yoel back from where he went.
+  const mountedRef = useMountedRef();
 
   if (!order.deletable) return null;
 

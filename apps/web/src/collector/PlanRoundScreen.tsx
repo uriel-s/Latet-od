@@ -26,6 +26,7 @@ import { TextField } from '../components/TextField.tsx';
 import { FormCard } from '../orderForm/OrderFields.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE, bottlesText } from './OrdersScreen.tsx';
@@ -285,9 +286,8 @@ function PlanRoundForm({
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
   // Enter that comes before it, so one plan does not send two rounds of requests.
   const busyRef = useRef(false);
-  // False once the screen is gone: an answer that comes after Yoel left (the bottom navigation)
-  // must not pull him to the rounds, or to the login, from the screen he went to.
-  const mountedRef = useRef(false);
+  // An answer after Yoel left must not pull him to the rounds, or to the login.
+  const mountedRef = useMountedRef();
   const formRef = useRef<HTMLFormElement>(null);
   const regionGroupName = useId();
   const regionHintId = useId();
@@ -297,13 +297,6 @@ function PlanRoundForm({
   const textId = useId();
   const textHintId = useId();
   const textErrorId = useId();
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   const regionOrders = ordersOfRegion(groups, region);
   const checkedCount = regionOrders.filter((order) => checkedIds.has(order.id)).length;
