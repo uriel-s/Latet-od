@@ -54,7 +54,7 @@ describe('leaveRoundPatch', () => {
   });
 
   it('removes roundId: the key is present with the value undefined ($unset)', () => {
-    const patch = leaveRoundPatch(orderInRound(), ROUND, 'notConfirmed', NOW);
+    const patch = leaveRoundPatch(orderInRound(), ROUND, 'notReached', NOW);
 
     expect(Object.keys(patch)).toContain('roundId');
     expect(patch.roundId).toBeUndefined();

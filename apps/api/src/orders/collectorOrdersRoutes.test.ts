@@ -279,7 +279,7 @@ describe('GET /api/collector/orders: the waiting orders by region', () => {
       region: 'old',
       bottlesEstimated: 35,
     });
-    const lastMiss = { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-1' } as const;
+    const lastMiss = { date: '2026-10-12', reason: 'notReached', roundId: 'round-1' } as const;
     const noRegion = await seed({ address: FREE_TEXT_ADDRESS, bottlesEstimated: 50, lastMiss });
     // Not waiting: none of these is listed.
     const notListed = await Promise.all(
