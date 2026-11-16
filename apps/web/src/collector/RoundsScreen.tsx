@@ -2,22 +2,22 @@
 // without it, or with an id no longer open, the nearest open round shows. Only open rounds are
 // listed. GET /api/collector/rounds sends rounds already grouped and routed (shared
 // buildRoundView); this screen shows them and swaps in the round an action returns.
-// Question components own only open state and focus; requests and double-tap guards stay here.
+// Question components own only open state and focus; the requests and their double-tap guard
+// (useRoundAction.ts) stay with this screen.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { ROUND_MESSAGES, type RoundView } from '@bottlerun/shared';
 import { useApi } from '../api/ApiContext.tsx';
-import type { BuildRouteOutcome, CloseRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
+import type { RoundsOutcome } from '../api/roundsApi.ts';
 import { Link, navigate, searchParam, useLocation } from '../router.tsx';
-import { useMountedRef } from '../useMountedRef.ts';
 import { FlashNotice } from './FlashNotice.tsx';
 import { pickSelectedRound } from './roundPicker.ts';
 import { RoundPicker } from './RoundPickerSheet.tsx';
 import { RoundSection } from './RoundSection.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
-import { withId } from './withId.ts';
+import { useRoundAction } from './useRoundAction.ts';
 
 /** Shown when the rounds got no usable answer (network error, 5xx, unreadable body). */
 export const ROUNDS_LOAD_FAILED_MESSAGE =
@@ -98,16 +98,9 @@ export function RoundsScreen() {
   // Yoel coming back to the app): a new value runs the load below again.
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // The rounds whose route build is on its way ("מתחיל מסלול..."), and those whose last one failed,
-  // by round id. The state reaches the handler only after a re-render; the ref stops a second tap
-  // that comes before it, so one tap sends one request.
-  const [buildingIds, setBuildingIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [buildFailedIds, setBuildFailedIds] = useState<ReadonlySet<string>>(() => new Set());
-  const buildingIdsRef = useRef(new Set<string>());
-  // The same three for the close button, by round id.
-  const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [closeFailedIds, setCloseFailedIds] = useState<ReadonlySet<string>>(() => new Set());
-  const closingIdsRef = useRef(new Set<string>());
+  // "התחל מסלול" and the close button, by round id. A new request clears an old notice first.
+  const buildAction = useRoundAction(buildRoute, () => setNotice(undefined));
+  const closeAction = useRoundAction(closeRound, () => setNotice(undefined));
   // The rounds closed on this screen. A load answer is filtered through it: a reload that started
   // before the close answered still lists the round, and must not bring it back. A closed round
   // never opens again, so the set only grows while the screen is shown.
@@ -115,8 +108,6 @@ export function RoundsScreen() {
   // The routed rounds with a quantity field open (RouteScreen's onTypingChange). A ref, not state:
   // only the reload-on-return callback reads it, and a change must not re-render the screen.
   const typingRoundIdsRef = useRef(new Set<string>());
-  // An answer after Yoel left the tab must not pull him to the login.
-  const mountedRef = useMountedRef();
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -213,82 +204,44 @@ export function RoundsScreen() {
   }
 
   /** Yoel's "כן, להתחיל" for round `roundId` (spec §3.6, "התחל מסלול"). */
-  async function buildRouteOf(roundId: string): Promise<void> {
-    if (buildingIdsRef.current.has(roundId)) return;
-    buildingIdsRef.current.add(roundId);
-    setBuildingIds((previous) => withId(previous, roundId, true));
-    setBuildFailedIds((previous) => withId(previous, roundId, false));
-    setNotice(undefined);
-
-    let outcome: BuildRouteOutcome;
-    try {
-      outcome = await buildRoute(roundId);
-    } catch {
-      // buildRoute never rejects, but a rejection must not leave the question on "מתחיל מסלול...".
-      outcome = { kind: 'failed' };
-    }
-    buildingIdsRef.current.delete(roundId);
-    if (!mountedRef.current) return;
-    setBuildingIds((previous) => withId(previous, roundId, false));
-
-    switch (outcome.kind) {
-      case 'built':
-        // Phase `routed`: the section shows the route in place of step 1.
-        replaceRound(outcome.view);
-        return;
-      case 'closed':
-        // Built already (a second tap's answer, another phone or tab) or closed: out of date.
-        showStale(outcome.message);
-        return;
-      case 'notFound':
-        showStale(ROUND_MESSAGES.roundNotFound);
-        return;
-      case 'loggedOut':
-        navigate('/login', { replace: true });
-        return;
-      case 'failed':
-        // Nothing to reload: the request may not have arrived. The question stays open for "כן".
-        setBuildFailedIds((previous) => withId(previous, roundId, true));
-        return;
-    }
+  function buildRouteOf(roundId: string): Promise<void> {
+    return buildAction.run(roundId, (outcome) => {
+      switch (outcome.kind) {
+        case 'built':
+          // Phase `routed`: the section shows the route in place of step 1.
+          replaceRound(outcome.view);
+          return;
+        case 'closed':
+          // Built already (a second tap's answer, another phone or tab) or closed: out of date.
+          showStale(outcome.message);
+          return;
+        case 'notFound':
+          showStale(ROUND_MESSAGES.roundNotFound);
+          return;
+        case 'loggedOut':
+          navigate('/login', { replace: true });
+          return;
+      }
+    });
   }
 
   /** Yoel's "yes" to the close question for round `roundId`, in either phase (spec §3.6). */
-  async function closeRoundOf(roundId: string): Promise<void> {
-    if (closingIdsRef.current.has(roundId)) return;
-    closingIdsRef.current.add(roundId);
-    setClosingIds((previous) => withId(previous, roundId, true));
-    setCloseFailedIds((previous) => withId(previous, roundId, false));
-    setNotice(undefined);
-
-    let outcome: CloseRoundOutcome;
-    try {
-      outcome = await closeRound(roundId);
-    } catch {
-      // closeRound never rejects, but a rejection must not leave the question on its busy label.
-      outcome = { kind: 'failed' };
-    }
-    closingIdsRef.current.delete(roundId);
-    if (!mountedRef.current) return;
-    setClosingIds((previous) => withId(previous, roundId, false));
-
-    switch (outcome.kind) {
-      case 'closed':
-        // Off the tab, which lists open rounds only; the notice takes the focus of the section.
-        removeRound(roundId);
-        setNotice({ message: ROUND_CLOSED_MESSAGE });
-        return;
-      case 'notFound':
-        showStale(ROUND_MESSAGES.roundNotFound);
-        return;
-      case 'loggedOut':
-        navigate('/login', { replace: true });
-        return;
-      case 'failed':
-        // Nothing to reload: the request may not have arrived. The question stays open for "כן".
-        setCloseFailedIds((previous) => withId(previous, roundId, true));
-        return;
-    }
+  function closeRoundOf(roundId: string): Promise<void> {
+    return closeAction.run(roundId, (outcome) => {
+      switch (outcome.kind) {
+        case 'closed':
+          // Off the tab, which lists open rounds only; the notice takes the focus of the section.
+          removeRound(roundId);
+          setNotice({ message: ROUND_CLOSED_MESSAGE });
+          return;
+        case 'notFound':
+          showStale(ROUND_MESSAGES.roundNotFound);
+          return;
+        case 'loggedOut':
+          navigate('/login', { replace: true });
+          return;
+      }
+    });
   }
 
   // The round on screen: the `?round=` of the URL, else the nearest open one. A stale or unknown
@@ -355,18 +308,16 @@ export function RoundsScreen() {
             key={selected.round.id}
             view={selected}
             buildRoute={{
-              building: buildingIds.has(selected.round.id),
-              failed: buildFailedIds.has(selected.round.id),
+              building: buildAction.busyIds.has(selected.round.id),
+              failed: buildAction.failedIds.has(selected.round.id),
               onBuild: () => void buildRouteOf(selected.round.id),
-              onOpenChange: () =>
-                setBuildFailedIds((previous) => withId(previous, selected.round.id, false)),
+              onOpenChange: () => buildAction.clearFailed(selected.round.id),
             }}
             closeRound={{
-              closing: closingIds.has(selected.round.id),
-              failed: closeFailedIds.has(selected.round.id),
+              closing: closeAction.busyIds.has(selected.round.id),
+              failed: closeAction.failedIds.has(selected.round.id),
               onClose: () => void closeRoundOf(selected.round.id),
-              onOpenChange: () =>
-                setCloseFailedIds((previous) => withId(previous, selected.round.id, false)),
+              onOpenChange: () => closeAction.clearFailed(selected.round.id),
             }}
             route={{
               // A saved stop action: its answer replaces the round, and an old notice has served.
