@@ -8,15 +8,7 @@
 // ההזמנה" (with a question first). Every button is a POST or a PATCH, never a link to open:
 // WhatsApp's preview opens links. The page always draws the order the api answered with, not what
 // it expected the button to do.
-import {
-  Fragment,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import {
   CUSTOMER_ORDER_MESSAGES,
@@ -31,7 +23,6 @@ import {
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
   type Lang,
-  type MessageKey,
 } from '@bottlerun/shared';
 import { networkErrorMessage } from '../api/request.ts';
 import {
@@ -56,6 +47,7 @@ import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { Link, navigate } from '../router.tsx';
 import { useDocumentLanguage } from '../useDocumentLanguage.ts';
 import { useMountedRef } from '../useMountedRef.ts';
+import { TIME_PLACEHOLDERS, tWithDay, timesText } from './bidiText.tsx';
 
 // Every text of the page comes from the dictionary (i18n.ts, 'orderPage.*'), in the order's
 // language; tests read the Hebrew ones through t('he', …) too.
@@ -74,29 +66,6 @@ function closedMessageText(lang: Lang, message: string): string {
   if (message === CUSTOMER_ORDER_MESSAGES.orderNotFound)
     return t(lang, 'customerOrder.orderNotFound');
   return message;
-}
-
-/**
- * `text` (from t(), written with a `{date}` placeholder) with the day set in a left-to-right
- * `<bdi>`: DD/MM and "Nov 12" read left to right inside right-to-left text (CLAUDE.md).
- */
-function withDay(text: string, day: string): ReactNode {
-  const [before = '', after = ''] = text.split(DAY_PLACEHOLDER);
-  return (
-    <>
-      {before}
-      <bdi dir="ltr">{day}</bdi>
-      {after}
-    </>
-  );
-}
-
-/** A `{date}` that t() leaves as it is when passed as its own value. */
-const DAY_PLACEHOLDER = '{date}';
-
-/** {@link t} with `{date}` left in the text, for {@link withDay}. */
-function tWithDay(lang: Lang, key: MessageKey, day: string): ReactNode {
-  return withDay(t(lang, key, { date: DAY_PLACEHOLDER }), day);
 }
 
 /** A request of the page, by what it asks the api to do; each has its 'orderPage.saved.*' text. */
@@ -683,21 +652,6 @@ function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
       // the notice announced right after the customer's own cancel.
       return <p>{t(lang, 'orderPage.cancelled')}</p>;
   }
-}
-
-/** `{from}` and `{by}` left in the text by t(), for {@link timesText} to fill. */
-const TIME_PLACEHOLDERS = { from: '{from}', by: '{by}' } as const;
-
-/** `text` with each time (in the order they appear) set in a left-to-right `<bdi>`. */
-function timesText(text: string, times: readonly string[]): ReactNode {
-  const parts = text.split(/\{(?:from|by)\}/);
-  return parts.map((part, index) => (
-    // The parts never reorder, so the index is a stable key.
-    <Fragment key={index}>
-      {part}
-      {index < times.length && <bdi dir="ltr">{times[index]}</bdi>}
-    </Fragment>
-  ));
 }
 
 /**
