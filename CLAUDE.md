@@ -172,10 +172,10 @@ The scale is one collector, about 1.5 orders a day, a few hundred orders a year.
 
 ## Code Readability & Comments
 
-- Comment the *why* only: business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions. Not the obvious *what*.
-- Never delete a comment that explains why something must not change: a stored name or legacy value, a deviation from an ADR, a security guard (`$eq`), an order of steps.
+- Comment the *why*: business rules (minimum 20 bottles, one open order per phone), workarounds, assumptions. Not what the code or the screen already shows, no lists of files or callers, and no references to a plan section, run or task: they go stale or mean nothing later.
+- Never delete a comment that explains why something must not change, while that thing is still in the code: a stored name or legacy value, a deviation from an ADR, a security or race guard (`$eq`, a conditional write), why steps run in this order.
 - Keep comments short, usually one to three lines. Longer only for a non-obvious algorithm, an order of steps (like `closeRound`'s) or a business rule that needs its context. A module header or JSDoc only where the name and types do not already say it.
-- When you change code, fix or shorten the comments on the lines you changed; leave the rest of the file alone.
+- When you change code, fix or shorten the comments on the lines you changed and any comment your change makes wrong; do not grow a header or JSDoc to describe the new feature. Leave the rest of the file alone.
 - Descriptive names (`bottlesEstimated`, not `count`); small single-purpose functions; explicit types on exported signatures.
 
 ## Testing Conventions
