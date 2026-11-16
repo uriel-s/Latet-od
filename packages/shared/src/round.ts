@@ -56,8 +56,8 @@ export const roundStopSchema = z.object({
    * Whether the order had a map point when the route was built. Stops without one were put at
    * the end by `planRoute` (ADR-0005), and the card shows the "בלי מיקום" tag. Stored, not
    * re-derived from the order: if Yoel picks a near street later, the stop stays where the route
-   * put it, and the tag still explains why it is there. Required, which is safe: no stored round
-   * has stops yet (they stay empty until the route is built).
+   * put it, and the tag still explains why it is there. Required: every stored stop has it, since
+   * it was added before the first route was built.
    */
   hasLocation: z.boolean(),
 });
