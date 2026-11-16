@@ -4,6 +4,7 @@
 // personal text go into every message; the message announces the pickup, nobody confirms
 // (ADR-0012). "שלח הודעות" plans the round
 // (POST /api/collector/rounds) and opens the "סבבים" tab, where the round's "שלח" list waits.
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -23,12 +24,15 @@ import { useApi } from '../api/ApiContext.tsx';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { TextField } from '../components/TextField.tsx';
+import { describedBy } from '../components/describedBy.ts';
 import { FormCard } from '../orderForm/OrderFields.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
-import { ORDERS_LOAD_FAILED_MESSAGE, bottlesText } from './OrdersScreen.tsx';
+import { bottlesText } from './countText.ts';
+import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 
 /** Where a planned round leads: the "סבבים" tab, with the round's "שלח" list (ADR-0003). */
@@ -136,12 +140,6 @@ function checkedSummary(checkedCount: number, total: number): string {
   return `מסומנות: ${checkedCount} מתוך ${total}`;
 }
 
-/** The ids for `aria-describedby`, space-separated; undefined when there is none. */
-function describedBy(...ids: (string | undefined)[]): string | undefined {
-  const present = ids.filter((id) => id !== undefined);
-  return present.length === 0 ? undefined : present.join(' ');
-}
-
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
 type ScreenState =
   | { kind: 'loading' }
@@ -219,14 +217,7 @@ export function PlanRoundScreen() {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ORDERS_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ORDERS_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'loaded' && (
@@ -285,9 +276,8 @@ function PlanRoundForm({
   // The state above reaches the handler only after a re-render; this ref stops a second tap or
   // Enter that comes before it, so one plan does not send two rounds of requests.
   const busyRef = useRef(false);
-  // False once the screen is gone: an answer that comes after Yoel left (the bottom navigation)
-  // must not pull him to the rounds, or to the login, from the screen he went to.
-  const mountedRef = useRef(false);
+  // An answer after Yoel left must not pull him to the rounds, or to the login.
+  const mountedRef = useMountedRef();
   const formRef = useRef<HTMLFormElement>(null);
   const regionGroupName = useId();
   const regionHintId = useId();
@@ -297,13 +287,6 @@ function PlanRoundForm({
   const textId = useId();
   const textHintId = useId();
   const textErrorId = useId();
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   const regionOrders = ordersOfRegion(groups, region);
   const checkedCount = regionOrders.filter((order) => checkedIds.has(order.id)).length;

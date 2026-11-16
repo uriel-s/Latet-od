@@ -6,6 +6,7 @@
 // Question components own only open state and focus; requests and double-tap guards stay here.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -23,6 +24,7 @@ import {
 import { useApi } from '../api/ApiContext.tsx';
 import type { BuildRouteOutcome, CloseRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { Link, navigate, searchParam, useLocation } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import {
   BuildRouteConfirm,
   buildRouteQuestion,
@@ -30,13 +32,14 @@ import {
 } from './BuildRouteConfirm.tsx';
 import { CloseRoundConfirm, type CloseRoundConfirmProps } from './CloseRoundConfirm.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
-import { bottlesText, ordersText } from './OrdersScreen.tsx';
+import { bottlesText, ordersText } from './countText.ts';
 import { orderTags } from './orderTags.ts';
 import { pickSelectedRound } from './roundPicker.ts';
 import { RoundPicker } from './RoundPickerSheet.tsx';
 import { RouteScreen, type RouteScreenProps } from './RouteScreen.tsx';
 import { SendList } from './SendList.tsx';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
+import { withId } from './withId.ts';
 
 /** Shown when the rounds got no usable answer (network error, 5xx, unreadable body). */
 export const ROUNDS_LOAD_FAILED_MESSAGE =
@@ -90,15 +93,6 @@ export function roundGroupsSummary(groups: readonly RoundOrderGroup[]): string {
   return ROUND_GROUP_KEYS.map(
     (key) => `${ROUND_GROUP_LABELS[key]}: ${ordersOfGroup(groups, key).length}`,
   ).join(' · ');
-}
-
-/** `ids` with `id` in it (`present`) or out of it; the same set when nothing changes. */
-function withId(ids: ReadonlySet<string>, id: string, present: boolean): ReadonlySet<string> {
-  if (ids.has(id) === present) return ids;
-  const next = new Set(ids);
-  if (present) next.add(id);
-  else next.delete(id);
-  return next;
 }
 
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
@@ -181,17 +175,9 @@ export function RoundsScreen() {
   // The routed rounds with a quantity field open (RouteScreen's onTypingChange). A ref, not state:
   // only the reload-on-return callback reads it, and a change must not re-render the screen.
   const typingRoundIdsRef = useRef(new Set<string>());
-  // False once the screen is gone: an answer that comes after Yoel left the tab must not pull him
-  // to the login from the screen he went to.
-  const mountedRef = useRef(false);
+  // An answer after Yoel left the tab must not pull him to the login.
+  const mountedRef = useMountedRef();
   const noticeRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     // False once this load's answer no longer matters: Yoel left the tab, a newer load started,
@@ -398,14 +384,7 @@ export function RoundsScreen() {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ROUNDS_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ROUNDS_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'loaded' && state.rounds.length === 0 && (

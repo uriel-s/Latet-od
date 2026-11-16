@@ -3,6 +3,7 @@
 // address, which sets both its region and its map point) and the region by hand ("שינוי אזור"),
 // and "ביטול ההזמנה" with a confirmation in plain words. The PATCH body is put together in
 // orderEditing.ts; this file is the screen and what happens after each answer.
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -23,6 +24,7 @@ import { NO_ERRORS, validateOrderDetails } from '../orderForm/formValues.ts';
 import { FormCard, OrderFields } from '../orderForm/OrderFields.tsx';
 import { useOrderForm } from '../orderForm/useOrderForm.ts';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { StreetPicker } from '../streetPicker/StreetPicker.tsx';
 import type { StreetChoice } from '../streetPicker/streetChoice.ts';
@@ -131,14 +133,7 @@ export function EditOrderScreen({ id }: EditOrderScreenProps) {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ORDER_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ORDER_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'notFound' && (
@@ -190,18 +185,10 @@ function EditOrderForm({ order }: EditOrderFormProps) {
   // One request at a time, save or cancel: the states above reach the handlers only after a
   // re-render, and this ref stops a second tap that comes before it.
   const busyRef = useRef(false);
-  // False once the screen is gone: an answer that comes after Yoel left (the bottom navigation)
-  // must not pull him back to the list, or to the login, from the screen he went to.
-  const mountedRef = useRef(false);
+  // An answer after Yoel left must not pull him back to the list, or to the login.
+  const mountedRef = useMountedRef();
   const regionGroupName = useId();
   const regionHintId = useId();
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   async function save(): Promise<void> {
     if (busyRef.current) return;

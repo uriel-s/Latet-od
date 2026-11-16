@@ -3,12 +3,7 @@
 // Styled by the `.field*` classes in styles.css; the page owns the value and the error, this
 // component only shows them.
 import { useId, type ReactNode, type Ref } from 'react';
-
-/** The ids for `aria-describedby`, space-separated; undefined when there is none. */
-function describedBy(...ids: (string | undefined)[]): string | undefined {
-  const present = ids.filter((id) => id !== undefined);
-  return present.length === 0 ? undefined : present.join(' ');
-}
+import { describedBy } from './describedBy.ts';
 
 /** Props of {@link TextField}. */
 export interface TextFieldProps {
