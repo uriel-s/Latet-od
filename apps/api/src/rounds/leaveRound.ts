@@ -2,8 +2,7 @@
 // back to `waiting`, leaves the round, and keeps the round's date and the reason in `lastMiss`,
 // which Yoel's screens show as a tag ("ביקש מועד אחר · 12/11"). One patch for every way out: the
 // customer's "לא מתאים הפעם" (orders/customerOrderRoutes.ts), the customer's address change,
-// "לא נמצא" (notFound) and "סגור סבב" (notReached). The legacy notConfirmed is
-// never given any more (ADR-0012).
+// "לא נמצא" (notFound) and "סגור סבב" (notReached).
 import type { MissReason, Order, Round } from '@bottlerun/shared';
 import type { OrderPatch } from '../orders/ordersRepo.ts';
 

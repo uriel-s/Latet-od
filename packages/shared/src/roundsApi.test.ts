@@ -273,7 +273,7 @@ describe('buildRoundView', () => {
         ...orderInRound('g'),
         status: 'waiting',
         roundId: undefined,
-        lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
+        lastMiss: { date: '2026-11-05', reason: 'addressChanged', roundId: ROUND_ID },
       }),
       makeOrder({ ...orderInRound('f'), status: 'confirmed' }),
       makeOrder({ ...orderInRound('e'), status: 'collected' }),
@@ -291,7 +291,7 @@ describe('buildRoundView', () => {
     expect(view.groups.map((group) => group.key)).toEqual([...ROUND_GROUP_KEYS]);
     // Confirmed and collected orders are both simply "in the round" (ADR-0012).
     expect(idsIn(view, 'inRound')).toEqual(['a', 'b', 'c', 'e', 'f', 'h']);
-    // Only who asked for another date: 'g' left with the legacy "did not confirm", so it is in none.
+    // Only who asked for another date: 'g' left because it changed its address, so it is in none.
     expect(idsIn(view, 'otherDate')).toEqual(['d']);
     expect(view.groups.flatMap((group) => group.orders.map((order) => order.id))).not.toContain(
       'g',
@@ -333,7 +333,7 @@ describe('buildRoundView', () => {
         ...orderInRound('b'),
         status: 'waiting',
         roundId: undefined,
-        lastMiss: { date: '2026-10-29', reason: 'notConfirmed', roundId: 'round-1' },
+        lastMiss: { date: '2026-10-29', reason: 'notReached', roundId: 'round-1' },
       }),
     ]);
     expect(view.groups.flatMap((group) => group.orders)).toEqual([]);
@@ -448,7 +448,7 @@ describe('buildRoundView', () => {
         ...orderInRound('b'),
         status: 'waiting',
         roundId: undefined,
-        lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
+        lastMiss: { date: '2026-11-05', reason: 'askedOtherDate', roundId: ROUND_ID },
       }),
       makeOrder({ ...orderInRound('c'), status: 'confirmed' }),
       makeOrder({
@@ -644,7 +644,7 @@ describe('roundStopStateOf', () => {
 
   // The documented limit: one lastMiss only (spec §4). Still a handled state, never toCollect.
   it('turns left once another round overwrites the lastMiss', () => {
-    for (const reason of ['notConfirmed', 'askedOtherDate', 'notFound'] as const) {
+    for (const reason of ['askedOtherDate', 'notFound', 'notReached'] as const) {
       const missedLater = makeOrder({
         ...orderInRound('a'),
         status: 'waiting',

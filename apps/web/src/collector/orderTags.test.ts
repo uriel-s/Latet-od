@@ -9,7 +9,6 @@ function missOn12November(reason: MissReason): LastMiss {
 
 describe('lastMissTag', () => {
   it.each<[MissReason, string]>([
-    ['notConfirmed', 'לא אישר בזמן · 12/11'],
     ['askedOtherDate', 'ביקש מועד אחר · 12/11'],
     ['notFound', 'לא נמצא במקום · 12/11'],
     ['notReached', 'לא הגענו אליו · 12/11'],
@@ -31,8 +30,8 @@ describe('orderTags', () => {
   });
 
   it('has only the miss tag for an order back from a round that has a location', () => {
-    expect(orderTags({ hasLocation: true, lastMiss: missOn12November('notConfirmed') })).toEqual([
-      'לא אישר בזמן · 12/11',
+    expect(orderTags({ hasLocation: true, lastMiss: missOn12November('notReached') })).toEqual([
+      'לא הגענו אליו · 12/11',
     ]);
   });
 

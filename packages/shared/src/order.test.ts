@@ -159,7 +159,7 @@ describe('orderSchema', () => {
   });
 
   it('accepts a lastMiss with an ISO calendar date and rejects any other date form', () => {
-    const lastMiss = { date: '2026-11-12', reason: 'notConfirmed', roundId: 'r1' } as const;
+    const lastMiss = { date: '2026-11-12', reason: 'notReached', roundId: 'r1' } as const;
     expect(orderSchema.safeParse(makeOrder({ lastMiss })).success).toBe(true);
     for (const date of ['12/11', '2026-11-12T10:00:00Z', '2026-13-01']) {
       const order = makeOrder({ lastMiss: { ...lastMiss, date } });

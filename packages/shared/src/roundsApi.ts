@@ -274,8 +274,8 @@ export type RoundsResponse = z.infer<typeof roundsResponseSchema>;
  *   `lastMiss` is this round, reason `askedOtherDate`: "לא מתאים הפעם" on the customer's page):
  *   "ביקשו מועד אחר".
  * Anything else is in no group: an order cancelled while in the round, and one that left it for
- * another reason (it changed its address, or the legacy "did not confirm in time"), since the title
- * says what they asked for and they did not ask for it.
+ * another reason (it changed its address, say), since the title says what they asked for and they
+ * did not ask for it.
  */
 function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
   if (order.roundId === round.id) {
