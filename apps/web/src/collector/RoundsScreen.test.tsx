@@ -25,10 +25,8 @@ import {
   ROUNDS_LOAD_FAILED_MESSAGE,
   ROUND_CLOSED_MESSAGE,
   RoundsScreen,
-  SEND_LIST_HEADING,
-  SEND_LIST_HINT,
-  roundGroupsSummary,
 } from './RoundsScreen.tsx';
+import { SEND_LIST_HEADING, SEND_LIST_HINT, roundGroupsSummary } from './RoundSection.tsx';
 import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
 import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
