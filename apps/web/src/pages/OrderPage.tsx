@@ -41,6 +41,7 @@ import {
 import { useApi } from '../api/ApiContext.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import {
   NO_ERRORS,
   addressPlaceOf,
@@ -380,14 +381,11 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
       {state.kind === 'loading' && <p role="status">{t(lang, 'orderPage.loading')}</p>}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {t(lang, 'orderPage.loadFailed')}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={reload}>
-            {t(lang, 'orderPage.retry')}
-          </button>
-        </>
+        <LoadFailed
+          message={t(lang, 'orderPage.loadFailed')}
+          onRetry={reload}
+          retryLabel={t(lang, 'orderPage.retry')}
+        />
       )}
 
       {state.kind === 'notFound' && (

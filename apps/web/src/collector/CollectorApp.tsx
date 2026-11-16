@@ -3,6 +3,7 @@
 // of useApi): logged in shows the app (CollectorShell), logged out goes to /login, and no
 // answer offers a retry. The api guards every /api/collector/* route itself; this guard only
 // decides what to show, so Yoel never sees an app whose every request would answer 401.
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
 import { useApi } from '../api/ApiContext.tsx';
@@ -87,14 +88,7 @@ export function CollectorApp({ path }: CollectorAppProps) {
       {guard === 'checking' ? (
         <Skeleton />
       ) : (
-        <>
-          <p className="form-alert" role="alert">
-            {SESSION_CHECK_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={SESSION_CHECK_FAILED_MESSAGE} onRetry={retry} />
       )}
     </>
   );

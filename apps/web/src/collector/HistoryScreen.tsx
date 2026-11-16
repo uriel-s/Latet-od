@@ -6,6 +6,7 @@
 // screen only shows it. Read-only: nothing here changes an order.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useState } from 'react';
 import {
@@ -171,14 +172,7 @@ export function HistoryScreen({ now = systemNow }: HistoryScreenProps) {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {HISTORY_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={HISTORY_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'loaded' && <MonthHistory history={state.history} />}

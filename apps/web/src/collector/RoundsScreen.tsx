@@ -6,6 +6,7 @@
 // Question components own only open state and focus; requests and double-tap guards stay here.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -383,14 +384,7 @@ export function RoundsScreen() {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ROUNDS_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ROUNDS_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'loaded' && state.rounds.length === 0 && (

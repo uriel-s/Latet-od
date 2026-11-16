@@ -3,6 +3,7 @@
 // address, which sets both its region and its map point) and the region by hand ("שינוי אזור"),
 // and "ביטול ההזמנה" with a confirmation in plain words. The PATCH body is put together in
 // orderEditing.ts; this file is the screen and what happens after each answer.
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -132,14 +133,7 @@ export function EditOrderScreen({ id }: EditOrderScreenProps) {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ORDER_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ORDER_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'notFound' && (

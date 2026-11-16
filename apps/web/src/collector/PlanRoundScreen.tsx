@@ -4,6 +4,7 @@
 // personal text go into every message; the message announces the pickup, nobody confirms
 // (ADR-0012). "שלח הודעות" plans the round
 // (POST /api/collector/rounds) and opens the "סבבים" tab, where the round's "שלח" list waits.
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -216,14 +217,7 @@ export function PlanRoundScreen() {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ORDERS_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ORDERS_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'loaded' && (

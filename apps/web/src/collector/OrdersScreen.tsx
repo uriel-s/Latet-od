@@ -6,6 +6,7 @@
 // built from the booking form's parts (OrderFields); "תכנון סבב" leads to /app/orders/plan
 // (PlanRoundScreen.tsx). The cards here only show.
 import { EmptyState } from '../components/EmptyState.tsx';
+import { LoadFailed } from '../components/LoadFailed.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { useEffect, useId, useState } from 'react';
 import {
@@ -157,14 +158,7 @@ export function OrdersScreen() {
       {state.kind === 'loading' && <Skeleton />}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {ORDERS_LOAD_FAILED_MESSAGE}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={retry}>
-            לנסות שוב
-          </button>
-        </>
+        <LoadFailed message={ORDERS_LOAD_FAILED_MESSAGE} onRetry={retry} />
       )}
 
       {state.kind === 'loaded' && <LoadedOrders groups={state.groups} />}
