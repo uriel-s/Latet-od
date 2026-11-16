@@ -189,9 +189,6 @@ describe('GET /api/collector/history', () => {
   it('leaves out the orders still open, whenever they were created or updated', async () => {
     await orders.create(makeNewOrder({ status: 'waiting', updatedAt: MID_OCTOBER }));
     await orders.create(
-      makeNewOrder({ status: 'pending', roundId: 'round-1', updatedAt: MID_OCTOBER }),
-    );
-    await orders.create(
       makeNewOrder({ status: 'confirmed', roundId: 'round-1', updatedAt: MID_OCTOBER }),
     );
 

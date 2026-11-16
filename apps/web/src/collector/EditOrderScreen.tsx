@@ -372,7 +372,7 @@ function EditOrderForm({ order }: EditOrderFormProps) {
           onOpenChange={() => setCancelError(null)}
         />
 
-        {/* Only for an order in no round (ADR-0008); a pending or confirmed one is cancelled first
+        {/* Only for an order in no round (ADR-0008); a confirmed one is cancelled first
             or leaves its round, and the button does not show. */}
         <DeleteOrderButton order={order} />
       </div>

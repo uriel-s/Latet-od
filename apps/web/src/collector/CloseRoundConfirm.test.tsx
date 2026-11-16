@@ -199,11 +199,11 @@ describe('unsentThankYous', () => {
 });
 
 describe('ordersSentBackCount', () => {
-  it('counts the confirmed and legacy pending orders of a confirming round, not "ביקשו מועד אחר"', () => {
+  it('counts the confirmed orders of a confirming round, not "ביקשו מועד אחר"', () => {
     const view = confirmingView({
       inRound: [
         DANA,
-        makeCollectorOrder({ ...MOSHE, status: 'pending' }),
+        makeCollectorOrder({ ...MOSHE, status: 'confirmed' }),
         makeCollectorOrder({ ...YOSSI, status: 'confirmed' }),
       ],
       otherDate: [makeCollectorOrder({ ...RINA, status: 'waiting' })],

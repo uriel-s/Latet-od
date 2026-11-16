@@ -125,7 +125,7 @@ describe('toCollectorOrder', () => {
       false,
     );
     expect(
-      toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'pending', roundId: 'round-1' }))
+      toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'confirmed', roundId: 'round-1' }))
         .deletable,
     ).toBe(false);
     expect(toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'collected' })).deletable).toBe(

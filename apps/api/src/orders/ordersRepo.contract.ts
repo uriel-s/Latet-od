@@ -210,13 +210,13 @@ export function describeOrdersRepoContract(
 
       it('filters by status', async () => {
         const waiting = await repo.create(makeNewOrder({ status: 'waiting' }));
-        const pending = await repo.create(makeNewOrder({ status: 'pending' }));
+        const confirmed = await repo.create(makeNewOrder({ status: 'confirmed' }));
         await repo.create(makeNewOrder({ status: 'collected' }));
         await repo.create(makeNewOrder({ status: 'cancelled' }));
 
-        const open = await repo.list({ statuses: ['pending', 'waiting'] });
+        const open = await repo.list({ statuses: ['confirmed', 'waiting'] });
 
-        expect(ids(open)).toEqual([waiting.id, pending.id]);
+        expect(ids(open)).toEqual([waiting.id, confirmed.id]);
       });
 
       it('returns nothing for an empty status list', async () => {
@@ -226,8 +226,10 @@ export function describeOrdersRepoContract(
       });
 
       it('filters by round', async () => {
-        const inRound = await repo.create(makeNewOrder({ status: 'pending', roundId: 'round-1' }));
-        await repo.create(makeNewOrder({ status: 'pending', roundId: 'round-2' }));
+        const inRound = await repo.create(
+          makeNewOrder({ status: 'confirmed', roundId: 'round-1' }),
+        );
+        await repo.create(makeNewOrder({ status: 'confirmed', roundId: 'round-2' }));
         await repo.create(makeNewOrder());
 
         expect(ids(await repo.list({ roundId: 'round-1' }))).toEqual([inRound.id]);
@@ -277,13 +279,16 @@ export function describeOrdersRepoContract(
       });
 
       it('applies ids and status together', async () => {
-        const pending = await repo.create(makeNewOrder({ status: 'pending' }));
+        const confirmed = await repo.create(makeNewOrder({ status: 'confirmed' }));
         const cancelled = await repo.create(makeNewOrder({ status: 'cancelled' }));
-        await repo.create(makeNewOrder({ status: 'pending' }));
+        await repo.create(makeNewOrder({ status: 'confirmed' }));
 
-        const result = await repo.list({ ids: [pending.id, cancelled.id], statuses: ['pending'] });
+        const result = await repo.list({
+          ids: [confirmed.id, cancelled.id],
+          statuses: ['confirmed'],
+        });
 
-        expect(ids(result)).toEqual([pending.id]);
+        expect(ids(result)).toEqual([confirmed.id]);
       });
 
       describe('closedBetween', () => {
@@ -322,7 +327,7 @@ export function describeOrdersRepoContract(
 
         it('leaves out open orders, even with a close timestamp in the range', async () => {
           await repo.create(makeNewOrder({ status: 'waiting' }));
-          await repo.create(makeNewOrder({ status: 'pending', collectedAt: minutesLater(90) }));
+          await repo.create(makeNewOrder({ status: 'waiting', collectedAt: minutesLater(90) }));
           await repo.create(makeNewOrder({ status: 'confirmed', cancelledAt: minutesLater(90) }));
 
           expect(await repo.list({ closedBetween: range })).toEqual([]);
@@ -369,7 +374,7 @@ export function describeOrdersRepoContract(
       it('applies the patch and returns the updated order', async () => {
         const created = await repo.create(makeNewOrder());
         const patch = {
-          status: 'pending',
+          status: 'confirmed',
           roundId: 'round-1',
           updatedAt: minutesLater(5),
         } as const;
@@ -404,7 +409,9 @@ export function describeOrdersRepoContract(
       });
 
       it('removes a field whose patch value is undefined', async () => {
-        const created = await repo.create(makeNewOrder({ status: 'pending', roundId: 'round-1' }));
+        const created = await repo.create(
+          makeNewOrder({ status: 'confirmed', roundId: 'round-1' }),
+        );
 
         const updated = await repo.update(created.id, { status: 'waiting', roundId: undefined });
         const found = await mustFind(created.id);
@@ -434,7 +441,7 @@ export function describeOrdersRepoContract(
         const result = await repo.update(
           created.id,
           { status: 'cancelled' },
-          { ifStatus: ['waiting', 'pending', 'confirmed'] },
+          { ifStatus: ['waiting', 'confirmed'] },
         );
 
         expect(result).toBeNull();
@@ -442,12 +449,12 @@ export function describeOrdersRepoContract(
       });
 
       it('applies the patch when ifStatus matches', async () => {
-        const created = await repo.create(makeNewOrder({ status: 'pending' }));
+        const created = await repo.create(makeNewOrder({ status: 'waiting' }));
 
         const updated = await repo.update(
           created.id,
           { status: 'confirmed' },
-          { ifStatus: ['pending'] },
+          { ifStatus: ['waiting'] },
         );
 
         expect(updated?.status).toBe('confirmed');
@@ -455,12 +462,12 @@ export function describeOrdersRepoContract(
       });
 
       it('lets the second of two racing updates find the status already changed', async () => {
-        const created = await repo.create(makeNewOrder({ status: 'pending' }));
+        const created = await repo.create(makeNewOrder({ status: 'waiting' }));
         const confirm = { status: 'confirmed' } as const;
 
         const results = await Promise.all([
-          repo.update(created.id, confirm, { ifStatus: ['pending'] }),
-          repo.update(created.id, confirm, { ifStatus: ['pending'] }),
+          repo.update(created.id, confirm, { ifStatus: ['waiting'] }),
+          repo.update(created.id, confirm, { ifStatus: ['waiting'] }),
         ]);
 
         expect(results.filter((result) => result !== null)).toHaveLength(1);
@@ -525,7 +532,7 @@ export function describeOrdersRepoContract(
       });
 
       it('removes nothing and returns false when ifStatus does not match', async () => {
-        const created = await repo.create(makeNewOrder({ status: 'pending' }));
+        const created = await repo.create(makeNewOrder({ status: 'confirmed' }));
 
         expect(await repo.delete(created.id, { ifStatus: ['waiting', 'cancelled'] })).toBe(false);
 

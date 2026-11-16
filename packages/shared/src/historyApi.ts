@@ -15,7 +15,7 @@ import { addressSchema, orderSchema, timestampSchema, type Order } from './order
 
 /**
  * The statuses of a "closed" order: the two final ones (spec §4). The history lists exactly these;
- * an order still open (waiting, pending, confirmed) has not closed in any month yet.
+ * an order still open (waiting, confirmed) has not closed in any month yet.
  */
 export const HISTORY_ORDER_STATUSES = ['collected', 'cancelled'] as const;
 export type HistoryOrderStatus = (typeof HISTORY_ORDER_STATUSES)[number];

@@ -520,7 +520,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/collected: "אספתי"'
     { label: 'an unknown order id', which: 'unknown' },
     { label: 'a malformed order id', which: 'malformed' },
   ] as const)('answers $label with 404 order_not_found, changing nothing', async ({ which }) => {
-    const { round, notAStop } = await seedRoutedRound([{}], { notAStop: [{ status: 'pending' }] });
+    const { round, notAStop } = await seedRoutedRound([{}], { notAStop: [{}] });
     const other = await seedRoutedRound();
     const orderIds: Record<typeof which, string> = {
       notAStop: first(notAStop).id,
@@ -594,16 +594,6 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/collected: "אספתי"'
     const res = await collect(round.id, stop.id, { bottlesCollected: 42 });
 
     expectStopHandled(res);
-    expect(await storedState()).toStrictEqual(before);
-  });
-
-  it('refuses a legacy pending stop with 409 invalid_transition, changing nothing', async () => {
-    const { round, stops } = await seedRoutedRound([{ status: 'pending' }]);
-    const before = await storedState();
-
-    const res = await collect(round.id, first(stops).id, { bottlesCollected: 42 });
-
-    expectInvalidTransition(res);
     expect(await storedState()).toStrictEqual(before);
   });
 });
@@ -743,24 +733,6 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצ�
     expect(sender.sent).toHaveLength(0);
   });
 
-  it('sends a legacy pending stop back to waiting as well', async () => {
-    const { round, stops } = await seedRoutedRound([{ status: 'pending' }]);
-    const stop = first(stops);
-
-    const res = await notFound(round.id, stop.id);
-
-    expect(res.status).toBe(200);
-    const stored = await storedOrder(stop.id);
-    expect(stored.status).toBe('waiting');
-    expect(stored.roundId).toBeUndefined();
-    expect(stored.lastMiss).toStrictEqual({
-      date: round.date,
-      reason: 'notFound',
-      roundId: round.id,
-    });
-    expect(stopOf(viewOf(res), stop.id).state).toBe('notFound');
-  });
-
   it('ignores a body', async () => {
     const { round, stops } = await seedRoutedRound();
     const stop = first(stops);
@@ -820,7 +792,7 @@ describe('POST /api/collector/rounds/:id/stops/:orderId/not-found: "לא נמצ�
     { label: 'an unknown order id', which: 'unknown' },
     { label: 'a malformed order id', which: 'malformed' },
   ] as const)('answers $label with 404 order_not_found, changing nothing', async ({ which }) => {
-    const { round, notAStop } = await seedRoutedRound([{}], { notAStop: [{ status: 'pending' }] });
+    const { round, notAStop } = await seedRoutedRound([{}], { notAStop: [{}] });
     const other = await seedRoutedRound();
     const orderIds: Record<typeof which, string> = {
       notAStop: first(notAStop).id,

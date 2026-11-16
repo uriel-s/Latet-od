@@ -423,9 +423,8 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
             />
           ) : (
             <>
-              {/* In a round: nothing to confirm (ADR-0012), only "not this time". A legacy
-                  pending order (planned before ADR-0012) is in a round too. */}
-              {(state.order.status === 'confirmed' || state.order.status === 'pending') && (
+              {/* In a round: nothing to confirm (ADR-0012), only "not this time". */}
+              {state.order.status === 'confirmed' && (
                 <div className="order-actions">
                   <CancelConfirm
                     inline
@@ -508,7 +507,7 @@ interface ChangeOrderFormProps {
  * without the contact, filled from the order, and the same rules (validateCustomerChange) before
  * anything is sent. Mounted only when opened: the street picker reads its value when it mounts.
  *
- * While the order is in a round (pending or confirmed) and the street or house number differs
+ * While the order is in a round (confirmed) and the street or house number differs
  * from the stored one, a line above the save button says that saving takes the order out of the
  * round (the api's rule, shared `isLocationChange`), before the customer saves.
  */
@@ -527,9 +526,9 @@ function ChangeOrderForm({ order, lang, saving, onSave, onClose }: ChangeOrderFo
     headingRef.current?.focus();
   }, []);
 
-  // A pending or confirmed order is in a round; the api takes it out on a new street or house
-  // number. The round's date shows when the api sent it.
-  const inRound = order.status === 'pending' || order.status === 'confirmed';
+  // A confirmed order is in a round; the api takes it out on a new street or house number. The
+  // round's date shows when the api sent it.
+  const inRound = order.status === 'confirmed';
   const leavesRound = inRound && isLocationChange(order.address, addressPlaceOf(values));
 
   async function save(): Promise<void> {
@@ -655,7 +654,7 @@ function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
 
 /**
  * The lines under the status. The round's date and times show for an order in a round
- * (`confirmed`, or a legacy `pending`) only, and only when the api sent the round: an order whose
+ * (`confirmed`) only, and only when the api sent the round: an order whose
  * round is gone has no date to promise. With both times, the first is when the bottles must be
  * out and the window is when Yoel comes (ADR-0012), so the start time is said twice.
  */
@@ -664,7 +663,6 @@ function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
   switch (order.status) {
     case 'waiting':
       return <p>{t(lang, 'orderPage.waiting')}</p>;
-    case 'pending':
     case 'confirmed':
       if (round === undefined) return null;
       return (

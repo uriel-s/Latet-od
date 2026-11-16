@@ -647,7 +647,9 @@ describe('EditOrderScreen', () => {
     });
 
     it('offers no delete for an order in a round', async () => {
-      await renderLoaded(makeCollectorOrder({ ...EDITABLE, status: 'pending', deletable: false }));
+      await renderLoaded(
+        makeCollectorOrder({ ...EDITABLE, status: 'confirmed', deletable: false }),
+      );
 
       expect(screen.queryByRole('button', { name: 'מחיקת ההזמנה' })).toBeNull();
     });
@@ -688,8 +690,8 @@ describe('EditOrderScreen', () => {
       },
     );
 
-    it.each(['pending', 'confirmed'] as const)('can still edit a %s order', async (status) => {
-      await renderLoaded(makeCollectorOrder({ ...EDITABLE, status }));
+    it('can still edit a confirmed order', async () => {
+      await renderLoaded(makeCollectorOrder({ ...EDITABLE, status: 'confirmed' }));
 
       expect(input('שם').value).toBe('דנה כהן');
     });

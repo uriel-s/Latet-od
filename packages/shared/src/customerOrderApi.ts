@@ -61,25 +61,24 @@ export const customerOrderSchema = orderSummarySchema.extend({
    */
   lang: orderSchema.shape.lang,
   /**
-   * The round the order is in: present for a `confirmed` order (and a legacy `pending` one),
-   * absent otherwise. See {@link toCustomerOrder}.
+   * The round the order is in: present for a `confirmed` order, absent otherwise. See
+   * {@link toCustomerOrder}.
    */
   round: customerRoundSchema.optional(),
 });
 export type CustomerOrder = z.infer<typeof customerOrderSchema>;
 
 /**
- * The statuses whose page shows the round's date (spec §3.3): `confirmed` (and the legacy
- * `pending`, ADR-0012) says "נעבור לאסוף ב-<תאריך>". A `waiting` order is in no round, and a
- * collected or cancelled one is done: its page shows thanks and "הזמנה חדשה", not a date.
+ * The statuses whose page shows the round's date (spec §3.3): `confirmed` says "נעבור לאסוף
+ * ב-<תאריך>". A `waiting` order is in no round, and a collected or cancelled one is done: its page shows thanks and "הזמנה חדשה", not a date.
  */
-const ROUND_SHOWN_STATUSES: readonly OrderStatus[] = ['pending', 'confirmed'];
+const ROUND_SHOWN_STATUSES: readonly OrderStatus[] = ['confirmed'];
 
 /**
  * A stored order as its customer's page gets it: only the fields of {@link customerOrderSchema}.
  *
  * `round` is the given round's date, `pickupBy` and `pickupFrom`, set only when the order is still in that
- * round (`order.roundId === round.id`) and its status is `pending` or `confirmed`. Otherwise the
+ * round (`order.roundId === round.id`) and its status is `confirmed`. Otherwise the
  * key is absent, not `undefined`. The api passes the round it looked up by `order.roundId`, or
  * nothing when the order has none; checking the id here as well means a wrong round is never
  * shown as the customer's.

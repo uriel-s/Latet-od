@@ -72,7 +72,7 @@ describe('closedAtOf', () => {
   });
 
   it('is undefined for an open order, whatever timestamps it carries', () => {
-    for (const status of ['waiting', 'pending', 'confirmed'] as const) {
+    for (const status of ['waiting', 'confirmed'] as const) {
       expect(closedAtOf(makeOrder({ ...COLLECTED, status })), status).toBeUndefined();
     }
   });

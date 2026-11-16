@@ -275,7 +275,7 @@ describe('buildRoundView', () => {
         roundId: undefined,
         lastMiss: { date: '2026-11-05', reason: 'notConfirmed', roundId: ROUND_ID },
       }),
-      makeOrder({ ...orderInRound('f'), status: 'pending' }),
+      makeOrder({ ...orderInRound('f'), status: 'confirmed' }),
       makeOrder({ ...orderInRound('e'), status: 'collected' }),
       makeOrder({
         ...orderInRound('d'),
@@ -284,12 +284,12 @@ describe('buildRoundView', () => {
         lastMiss: { date: '2026-11-05', reason: 'askedOtherDate', roundId: ROUND_ID },
       }),
       makeOrder({ ...orderInRound('c'), status: 'confirmed' }),
-      makeOrder({ ...orderInRound('b'), status: 'pending' }),
+      makeOrder({ ...orderInRound('b'), status: 'collected' }),
       makeOrder({ ...orderInRound('a'), status: 'confirmed' }),
     ];
     const view = buildRoundView(round, orders);
     expect(view.groups.map((group) => group.key)).toEqual([...ROUND_GROUP_KEYS]);
-    // Confirmed, collected and legacy pending orders are all simply "in the round" (ADR-0012).
+    // Confirmed and collected orders are both simply "in the round" (ADR-0012).
     expect(idsIn(view, 'inRound')).toEqual(['a', 'b', 'c', 'e', 'f', 'h']);
     // Only who asked for another date: 'g' left with the legacy "did not confirm", so it is in none.
     expect(idsIn(view, 'otherDate')).toEqual(['d']);
@@ -355,7 +355,6 @@ describe('buildRoundView', () => {
       makeOrder({ ...orderInRound('b'), status: 'collected' }),
       makeOrder({
         ...orderInRound('c'),
-        status: 'pending',
         messages: [confirmLink('c', OPENED_AT)],
       }),
       makeOrder({ ...orderInRound('d'), status: 'waiting', roundId: undefined }),
@@ -580,10 +579,7 @@ describe('roundStopStateOf', () => {
     expect(ROUND_STOP_STATES).toEqual(['toCollect', 'collected', 'notFound', 'cancelled', 'left']);
   });
 
-  it('is toCollect for a confirmed or pending order still in the round', () => {
-    expect(roundStopStateOf(round, makeOrder({ ...orderInRound('a'), status: 'confirmed' }))).toBe(
-      'toCollect',
-    );
+  it('is toCollect for a confirmed order still in the round', () => {
     expect(roundStopStateOf(round, makeOrder(orderInRound('a')))).toBe('toCollect');
   });
 
@@ -603,7 +599,7 @@ describe('roundStopStateOf', () => {
   // What happened at THIS stop: a later round's or a later cancel does not rewrite it.
   it('stays notFound once the order is planned, collected or cancelled elsewhere', () => {
     const later = leftFor('notFound');
-    expect(roundStopStateOf(round, { ...later, status: 'pending', roundId: 'round-3' })).toBe(
+    expect(roundStopStateOf(round, { ...later, status: 'confirmed', roundId: 'round-3' })).toBe(
       'notFound',
     );
     expect(roundStopStateOf(round, { ...later, status: 'collected', roundId: 'round-3' })).toBe(

@@ -105,7 +105,7 @@ describe('toOrder', () => {
   });
 
   it('reads back what toOrderDocument stores', () => {
-    const order = makeNewOrder({ status: 'pending', roundId: 'round-1' });
+    const order = makeNewOrder({ status: 'confirmed', roundId: 'round-1' });
     const _id = new ObjectId();
 
     expect(toOrder(toOrderDocument(order, _id))).toEqual({ ...order, id: _id.toHexString() });
@@ -160,8 +160,8 @@ describe('buildListFilter', () => {
   });
 
   it('filters by statuses with $in', () => {
-    expect(buildListFilter({ statuses: ['waiting', 'pending'] })).toEqual({
-      status: { $in: ['waiting', 'pending'] },
+    expect(buildListFilter({ statuses: ['waiting', 'confirmed'] })).toEqual({
+      status: { $in: ['waiting', 'confirmed'] },
     });
   });
 
@@ -337,8 +337,16 @@ describe('ORDER_INDEXES', () => {
     const phoneIndex = ORDER_INDEXES.find((index) => index.name === ONE_OPEN_ORDER_PER_PHONE_INDEX);
 
     expect(phoneIndex).toMatchObject({ key: { 'contact.phone': 1 }, unique: true });
+    const filter = phoneIndex?.partialFilterExpression as { status: { $in: string[] } } | undefined;
+    expect(filter?.status.$in).toEqual(expect.arrayContaining([...OPEN_ORDER_STATUSES]));
+  });
+
+  it('keeps the stored filter of the phone index, the removed pending too', () => {
+    const phoneIndex = ORDER_INDEXES.find((index) => index.name === ONE_OPEN_ORDER_PER_PHONE_INDEX);
+
+    // Changed options under the same name are an IndexOptionsConflict on every orders operation.
     expect(phoneIndex?.partialFilterExpression).toEqual({
-      status: { $in: [...OPEN_ORDER_STATUSES] },
+      status: { $in: ['waiting', 'pending', 'confirmed'] },
     });
   });
 });

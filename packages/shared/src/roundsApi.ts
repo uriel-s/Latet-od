@@ -185,7 +185,7 @@ export type RoundOrderGroup = z.infer<typeof roundOrderGroupSchema>;
  * Where one stop of the route is (spec §3.6 step 2, §4). A stop stores no state of its own: it is
  * derived from its order by {@link roundStopStateOf}, so "אספתי", "לא נמצא" and a customer's
  * cancel change only the order, and the route can never disagree with it.
- * - `toCollect`: still in this round, confirmed (or a legacy pending): Yoel has yet to stop there.
+ * - `toCollect`: still in this round, confirmed: Yoel has yet to stop there.
  * - `collected`: "אספתי" was tapped. Final.
  * - `notFound`: "לא נמצא": the order went back to `waiting`, but stays in the route, shown as
  *   handled, so Yoel sees what happened at that stop.
@@ -269,8 +269,7 @@ export type RoundsResponse = z.infer<typeof roundsResponseSchema>;
 
 /**
  * The group an order of the round is shown in, or `undefined` for none:
- * - still in this round (`roundId`) and `confirmed`, `collected`, or `pending` (an order planned
- *   before ADR-0012, which the route build takes in like a confirmed one): "בסבב".
+ * - still in this round (`roundId`) and `confirmed` or `collected`: "בסבב".
  * - out of this round, and it left this round because the customer asked for another date (its
  *   `lastMiss` is this round, reason `askedOtherDate`: "לא מתאים הפעם" on the customer's page):
  *   "ביקשו מועד אחר".
@@ -280,8 +279,7 @@ export type RoundsResponse = z.infer<typeof roundsResponseSchema>;
  */
 function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
   if (order.roundId === round.id) {
-    const inRound =
-      order.status === 'confirmed' || order.status === 'collected' || order.status === 'pending';
+    const inRound = order.status === 'confirmed' || order.status === 'collected';
     return inRound ? 'inRound' : undefined;
   }
   const askedOtherDate =
@@ -293,8 +291,7 @@ function roundGroupOf(round: Round, order: Order): RoundGroupKey | undefined {
  * The state of `order`'s stop in `round`'s route (see {@link ROUND_STOP_STATES}), derived from
  * the order alone:
  * - still in this round (`roundId`): `collected` and `cancelled` as its status says, and
- *   `toCollect` while it is `confirmed` (or `pending`, which a routed round does not normally
- *   have: building the route moves a legacy pending order to `confirmed`, ADR-0012).
+ *   `toCollect` while it is `confirmed`.
  * - out of this round, and its `lastMiss` is this round with reason `notFound`: `notFound`.
  * - anything else: `left`.
  *
@@ -314,7 +311,7 @@ export function roundStopStateOf(round: Round, order: Order): RoundStopState {
   if (order.roundId === round.id) {
     if (order.status === 'collected') return 'collected';
     if (order.status === 'cancelled') return 'cancelled';
-    if (order.status === 'confirmed' || order.status === 'pending') return 'toCollect';
+    if (order.status === 'confirmed') return 'toCollect';
   }
   const notFoundHere = order.lastMiss?.roundId === round.id && order.lastMiss.reason === 'notFound';
   return notFoundHere ? 'notFound' : 'left';
@@ -333,7 +330,7 @@ export function roundStopStateOf(round: Round, order: Order): RoundStopState {
  *   An order that left the round is in "ביקשו מועד אחר" only for the reason `askedOtherDate`;
  *   for any other reason it is in no group.
  * - `sendList`: the latest round message (`confirmRequest`, {@link toMessageLink}) of each order
- *   still in the round and not collected (`confirmed`, or a legacy `pending`), in the same order.
+ *   still in the round and not collected (`confirmed`), in the same order.
  *   Nobody confirms any more (ADR-0012), so every such customer has a row until Yoel taps it
  *   (`openedAt` shows it as sent); an order whose newest message is not a wa.me link has no row.
  * - `stops`: walks `round.stops` in their STORED driving order (not plan order), skipping a stop

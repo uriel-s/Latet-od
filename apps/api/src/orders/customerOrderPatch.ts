@@ -49,7 +49,7 @@ export interface BuiltCustomerOrderPatch {
  *   on the same street is in the same region, so a region Yoel set by hand survives it).
  * - Leaving the round (spec §3.3: "שינוי כתובת אחרי שההזמנה נכנסה לסבב מוציא אותה מהסבב"): when
  *   the street or the house number changed (`isLocationChange`), the order is in a round
- *   (`roundId`), and it may go back to `waiting` (`pending` or `confirmed`), the patch also has
+ *   (`roundId`), and it may go back to `waiting` (`confirmed`), the patch also has
  *   {@link leaveRoundPatch} with reason `addressChanged`: status `waiting`, `roundId` removed,
  *   `lastMiss` with the round's date (only when `round` is the order's round). The round was
  *   planned, and its route will be built, for the old place. A change of `bottlesSpot`,

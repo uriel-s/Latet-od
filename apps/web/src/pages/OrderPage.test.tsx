@@ -18,13 +18,8 @@ import { OrderPage } from './OrderPage.tsx';
 /** A token as the api hands it out: 43 base64url characters. */
 const TOKEN = 'Q'.repeat(43);
 
-/** The round of an order in a round (confirmed, or a legacy pending): 12/11, out by 18:00. */
+/** The round of an order in a round (confirmed): 12/11, out by 18:00. */
 const ROUND = { date: '2026-11-12', pickupBy: '18:00' };
-
-/** A legacy pending order: planned before ADR-0012, when the customer was asked to confirm. */
-function pendingOrder(): CustomerOrder {
-  return makeCustomerOrder({ status: 'pending', round: ROUND });
-}
 
 /** An order in a round: since ADR-0012 planning moves it straight to confirmed. */
 function confirmedOrder(): CustomerOrder {
@@ -510,24 +505,6 @@ describe('OrderPage', () => {
     });
   });
 
-  describe('a legacy pending order (planned before ADR-0012)', () => {
-    it('shows the round like a confirmed one, with "לא מתאים הפעם" and nothing to confirm', async () => {
-      const calls = await renderLoaded(pendingOrder());
-
-      expect(statusLabel()).toBe('מצב ההזמנה: בסבב');
-      expect(getByWholeText('נעבור לאסוף ב-12/11.')).toBeDefined();
-      expect(getByWholeText('נא להוציא את הבקבוקים החוצה עד השעה 18:00.')).toBeDefined();
-      expect(button('ביטול ההזמנה')).toBeDefined();
-      expect(screen.queryByRole('button', { name: /כן, אוציא את הבקבוקים/ })).toBeNull();
-
-      click('לא מתאים הפעם');
-      click('כן, לא מתאים');
-
-      expect(await screen.findByText('קיבלנו. נחזור אליך עם מועד חדש.')).toBeDefined();
-      expect(calls.declines).toEqual([TOKEN]);
-    });
-  });
-
   describe('a collected order', () => {
     it('thanks the customer, with the details and no cancel', async () => {
       await renderLoaded(makeCustomerOrder({ status: 'collected' }));
@@ -659,7 +636,6 @@ describe('OrderPage', () => {
   describe('changing the order ("שינוי")', () => {
     it.each([
       ['waiting', makeCustomerOrder()],
-      ['pending', pendingOrder()],
       ['confirmed', confirmedOrder()],
     ] as const)('offers "שינוי" on a %s order', async (_status, order) => {
       await renderLoaded(order);
@@ -818,15 +794,6 @@ describe('OrderPage', () => {
 
       expect(queryLeaveRoundWarning()).toBeNull();
       expect(button('שמירת השינויים').getAttribute('aria-describedby')).toBeNull();
-    });
-
-    it('warns about a new street of a legacy pending order too', async () => {
-      await openChange(pendingOrder());
-
-      click('הרחוב שלי לא ברשימה');
-      fillIn('שם הרחוב', 'הרימון');
-
-      expect(getByWholeText(LEAVE_ROUND_WARNING)).toBeDefined();
     });
 
     it('never warns on a waiting order, which is in no round', async () => {

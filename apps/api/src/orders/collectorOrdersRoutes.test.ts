@@ -283,7 +283,7 @@ describe('GET /api/collector/orders: the waiting orders by region', () => {
     const noRegion = await seed({ address: FREE_TEXT_ADDRESS, bottlesEstimated: 50, lastMiss });
     // Not waiting: none of these is listed.
     const notListed = await Promise.all(
-      (['pending', 'confirmed', 'collected', 'cancelled'] as const).map((status) =>
+      (['confirmed', 'collected', 'cancelled'] as const).map((status) =>
         seed({ status, address: listedAddress(RAMAT_STREET), region: 'ramat' }),
       ),
     );
@@ -455,17 +455,14 @@ describe('PATCH /api/collector/orders/:id: editing', () => {
     expect(groupIds(listOf(await getList()), 'old')).toStrictEqual([order.id]);
   });
 
-  it.each(['pending', 'confirmed'] as const)(
-    'edits an order that is %s (still open)',
-    async (status) => {
-      const order = await seed({ status });
+  it('edits an order that is confirmed (still open)', async () => {
+    const order = await seed({ status: 'confirmed' });
 
-      const res = await patchOrder(order.id, { bottlesEstimated: 33 });
+    const res = await patchOrder(order.id, { bottlesEstimated: 33 });
 
-      expect(res.status).toBe(200);
-      expect(await stored(order.id)).toMatchObject({ status, bottlesEstimated: 33 });
-    },
-  );
+    expect(res.status).toBe(200);
+    expect(await stored(order.id)).toMatchObject({ status: 'confirmed', bottlesEstimated: 33 });
+  });
 
   it('refuses 19 bottles with 400 and the plain message, changing nothing', async () => {
     const order = await seed();
@@ -564,7 +561,7 @@ describe('POST /api/collector/orders/:id/cancel', () => {
   });
 
   it('cancels an order in a round and leaves its round as it is', async () => {
-    const order = await seed({ status: 'pending', roundId: 'round-7' });
+    const order = await seed({ status: 'confirmed', roundId: 'round-7' });
 
     const res = await cancelOrder(order.id);
 
@@ -652,7 +649,6 @@ describe('DELETE /api/collector/orders/:id', () => {
       label: 'a collected order',
       overrides: { status: 'collected', collectedAt: MADE_ORDER_CREATED_AT },
     },
-    { label: 'a pending order in a round', overrides: { status: 'pending', roundId: 'round-7' } },
     {
       label: 'a confirmed order in a round',
       overrides: { status: 'confirmed', roundId: 'round-7' },
@@ -713,7 +709,7 @@ describe('DELETE /api/collector/orders/:id', () => {
 
   it('marks exactly the deletable orders as `deletable` for the screen', async () => {
     const waiting = await seed();
-    const inRound = await seed({ status: 'pending', roundId: 'round-7' });
+    const inRound = await seed({ status: 'confirmed', roundId: 'round-7' });
 
     expect(orderOf(await getOne(waiting.id)).deletable).toBe(true);
     expect(orderOf(await getOne(inRound.id)).deletable).toBe(false);
@@ -723,7 +719,7 @@ describe('DELETE /api/collector/orders/:id', () => {
 describe('POST /api/collector/orders/:id/messages/:index/opened', () => {
   it('sets openedAt of the manual entry to now, changing nothing else, the status included', async () => {
     const order = await seed({
-      status: 'pending',
+      status: 'confirmed',
       roundId: 'round-7',
       messages: [FAILED_ENTRY, MANUAL_CONFIRM],
     });

@@ -27,7 +27,7 @@ import type { OrderPatch } from '../orders/ordersRepo.ts';
  *
  * Pure: the caller writes the patch, conditional on the status it decided on
  * (`orders.update(id, patch, { ifStatus: [order.status] })`), and checks with `canTransition`
- * that the order may move to `waiting` (only `pending` and `confirmed` may).
+ * that the order may move to `waiting` (only `confirmed` may).
  */
 export function leaveRoundPatch(
   order: Order,

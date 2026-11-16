@@ -327,7 +327,7 @@ describe('POST /api/orders: an invalid booking', () => {
 });
 
 describe('POST /api/orders: one open order per phone', () => {
-  it.each(['waiting', 'pending', 'confirmed'] as const)(
+  it.each(['waiting', 'confirmed'] as const)(
     'refuses a second order while the first is %s, with 409 and the fixed message only',
     async (status) => {
       const existing = await orders.create(
