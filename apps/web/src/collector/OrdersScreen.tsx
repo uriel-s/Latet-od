@@ -22,6 +22,7 @@ import { useApi } from '../api/ApiContext.tsx';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import { Link, navigate } from '../router.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
+import { bottlesText, ordersText } from './countText.ts';
 import { FlashNotice } from './FlashNotice.tsx';
 import { PushNotificationsControl } from './PushNotificationsControl.tsx';
 import { orderTags } from './orderTags.ts';
@@ -46,22 +47,6 @@ const PLAN_ROUND_PATH = '/app/orders/plan';
  */
 function editOrderPath(id: string): string {
   return `/app/orders/${encodeURIComponent(id)}`;
-}
-
-/**
- * "הזמנה אחת", "3 הזמנות": Hebrew says "one" after the noun, and the plural from two up. The
- * rounds tab's groups use it too, so both tabs count orders the same way.
- */
-export function ordersText(count: number): string {
-  return count === 1 ? 'הזמנה אחת' : `${count} הזמנות`;
-}
-
-/**
- * "בקבוק אחד", "40 בקבוקים". A real order has at least 20, but a count of one still reads right.
- * The planning screen's order rows use it too, so a card and a row say the count the same way.
- */
-export function bottlesText(count: number): string {
-  return count === 1 ? 'בקבוק אחד' : `${count} בקבוקים`;
 }
 
 /**

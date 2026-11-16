@@ -30,7 +30,8 @@ import { navigate } from '../router.tsx';
 import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
-import { ORDERS_LOAD_FAILED_MESSAGE, bottlesText } from './OrdersScreen.tsx';
+import { bottlesText } from './countText.ts';
+import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
 
 /** Where a planned round leads: the "סבבים" tab, with the round's "שלח" list (ADR-0003). */

@@ -16,8 +16,8 @@ import {
 import { Icon } from '../components/Icon.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { TextField } from '../components/TextField.tsx';
+import { bottlesText } from './countText.ts';
 import { MoreActionsSheet } from './MoreActionsSheet.tsx';
-import { bottlesText } from './OrdersScreen.tsx';
 import { NO_LOCATION_TAG } from './orderTags.ts';
 import {
   STOP_STATE_LABELS,

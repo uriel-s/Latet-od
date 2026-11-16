@@ -20,7 +20,7 @@ import {
 import { useApi } from '../api/ApiContext.tsx';
 import type { HistoryOutcome } from '../api/historyApi.ts';
 import { navigate } from '../router.tsx';
-import { bottlesText } from './OrdersScreen.tsx';
+import { bottlesText } from './countText.ts';
 import { useReloadOnReturn } from './useReloadOnReturn.ts';
 
 /** Shown when the month got no usable answer (network error, 5xx, unreadable body). */

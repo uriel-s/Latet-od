@@ -31,7 +31,7 @@ import {
 } from './BuildRouteConfirm.tsx';
 import { CloseRoundConfirm, type CloseRoundConfirmProps } from './CloseRoundConfirm.tsx';
 import { FlashNotice } from './FlashNotice.tsx';
-import { bottlesText, ordersText } from './OrdersScreen.tsx';
+import { bottlesText, ordersText } from './countText.ts';
 import { orderTags } from './orderTags.ts';
 import { pickSelectedRound } from './roundPicker.ts';
 import { RoundPicker } from './RoundPickerSheet.tsx';
