@@ -48,13 +48,10 @@ const MANUAL_REQUEST: MessageLogEntry = {
 /**
  * An in-memory orders repo where something happens to an order at the worst moment: just before
  * a conditional write (`ifStatus`) to an id in {@link collectBeforeConditionalWrite}, the order is
- * collected ("אספתי" on another screen won); to an id in {@link confirmOnceBeforeConditionalWrite},
- * it is confirmed, once ("התחל מסלול" taking a legacy pending order in). The write then finds
- * another status and answers null. Unconditional writes go through as usual.
+ * collected ("אספתי" on another screen won). The write then finds another status and answers null. Unconditional writes go through as usual.
  */
 class RacingOrdersRepo extends InMemoryOrdersRepo {
   readonly collectBeforeConditionalWrite = new Set<string>();
-  readonly confirmOnceBeforeConditionalWrite = new Set<string>();
 
   override async update(
     id: string,
@@ -70,8 +67,6 @@ class RacingOrdersRepo extends InMemoryOrdersRepo {
           collectedAt: now,
           updatedAt: now,
         });
-      } else if (this.confirmOnceBeforeConditionalWrite.delete(id)) {
-        await super.update(id, { status: 'confirmed', updatedAt: now });
       }
     }
     return super.update(id, patch, options);
@@ -353,22 +348,17 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     expect((await getRound(round.id)).body).toStrictEqual(res.body);
   });
 
-  it('sends every order of a round closed before its route back as notReached, a legacy pending one too', async () => {
-    const { round, orders: seeded } = await seedRound([
-      { status: 'pending' },
-      {},
-      askedOtherDateIn,
-      CANCELLED,
-    ]);
-    const [pending, confirmed, otherDate, cancelled] = take(seeded, 4);
-    if (!pending || !confirmed || !otherDate || !cancelled) throw new Error();
+  it('sends every order of a round closed before its route back as notReached', async () => {
+    const { round, orders: seeded } = await seedRound([{}, {}, askedOtherDateIn, CANCELLED]);
+    const [first, confirmed, otherDate, cancelled] = take(seeded, 4);
+    if (!first || !confirmed || !otherDate || !cancelled) throw new Error();
 
     const before = new Date();
     const res = await close(round.id);
     const after = new Date();
 
     expect(res.status).toBe(200);
-    expectSentBack(await storedOrder(pending.id), round, before, after);
+    expectSentBack(await storedOrder(first.id), round, before, after);
     expectSentBack(await storedOrder(confirmed.id), round, before, after);
     expect(await storedOrder(otherDate.id)).toStrictEqual(otherDate);
     expect(await storedOrder(cancelled.id)).toStrictEqual(cancelled);
@@ -383,21 +373,6 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
     expect(groupsOf(view)).toStrictEqual({ inRound: [], otherDate: [otherDate.id] });
     expect(view.sendList).toStrictEqual([]);
     expect(view.stops).toStrictEqual([]);
-  });
-
-  it('sends a legacy pending stop of a routed round back as notReached, like a confirmed one', async () => {
-    const { round, orders: seeded } = await seedRound([{ status: 'pending' }, {}], {
-      routed: true,
-    });
-    const [pending, confirmed] = take(seeded, 2);
-    if (!pending || !confirmed) throw new Error();
-
-    const before = new Date();
-    expect((await close(round.id)).status).toBe(200);
-    const after = new Date();
-
-    expectSentBack(await storedOrder(pending.id), round, before, after);
-    expectSentBack(await storedOrder(confirmed.id), round, before, after);
   });
 
   it('closes a routed round with no stops', async () => {
@@ -437,14 +412,14 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
   });
 
   it('sweeps, on a second close, an order a first close left in the round', async () => {
-    // A round closed by a first close whose sweep stopped half way: one stop still confirmed in
-    // it, one pending.
-    const { round, orders: seeded } = await seedRound([{}, { status: 'pending' }, COLLECTED], {
+    // A round closed by a first close whose sweep stopped half way: two stops still confirmed
+    // in it.
+    const { round, orders: seeded } = await seedRound([{}, {}, COLLECTED], {
       routed: true,
       round: { status: 'closed', closedAt: new Date(EARLIER_CLOSE) },
     });
-    const [confirmed, pending, collected] = take(seeded, 3);
-    if (!confirmed || !pending || !collected) throw new Error();
+    const [confirmed, alsoConfirmed, collected] = take(seeded, 3);
+    if (!confirmed || !alsoConfirmed || !collected) throw new Error();
 
     const before = new Date();
     const res = await close(round.id);
@@ -452,7 +427,7 @@ describe('POST /api/collector/rounds/:id/close: "סגור סבב"', () => {
 
     expect(res.status).toBe(200);
     expectSentBack(await storedOrder(confirmed.id), round, before, after);
-    expectSentBack(await storedOrder(pending.id), round, before, after);
+    expectSentBack(await storedOrder(alsoConfirmed.id), round, before, after);
     expect(await storedOrder(collected.id)).toStrictEqual(collected);
     // The round itself is not written again: it keeps its first closedAt.
     expect(await storedRound(round.id)).toStrictEqual(round);
@@ -521,7 +496,7 @@ describe('after "סגור סבב"', () => {
   });
 
   it('refuses "התחל מסלול" with 409 confirmations_closed, changing nothing', async () => {
-    const { round } = await seedRound([{}, { status: 'pending' }]);
+    const { round } = await seedRound([{}, {}]);
     expect((await close(round.id)).status).toBe(200);
     const before = await storedState();
 
@@ -562,22 +537,6 @@ describe('"סגור סבב" racing other screens', () => {
     expect(states).toStrictEqual(['collected', 'left']);
   });
 
-  it('sends back a legacy pending order the route build took in between the read and the write', async () => {
-    const racing = new RacingOrdersRepo();
-    buildApp({ orders: racing });
-    const { round, orders: seeded } = await seedRound([{ status: 'pending' }]);
-    const [order] = take(seeded, 1);
-    if (!order) throw new Error();
-    racing.confirmOnceBeforeConditionalWrite.add(order.id);
-
-    const before = new Date();
-    expect((await close(round.id)).status).toBe(200);
-    const after = new Date();
-
-    // The first write missed (pending → confirmed meanwhile); the retry sent the confirmed one back.
-    expectSentBack(await storedOrder(order.id), round, before, after);
-  });
-
   it('closes a round routed between the read and the write as routed, with notReached', async () => {
     const racingRounds = new RacingRoundsRepo();
     buildApp({ rounds: racingRounds });
@@ -603,7 +562,7 @@ describe('"סגור סבב" racing other screens', () => {
   it('answers 500 and sweeps nothing when the round keeps changing under the close', async () => {
     const racingRounds = new RacingRoundsRepo();
     buildApp({ rounds: racingRounds });
-    const { round } = await seedRound([{}, { status: 'pending' }]);
+    const { round } = await seedRound([{}, {}]);
     racingRounds.alwaysMissConditionalWrites = true;
     const before = await storedState();
 

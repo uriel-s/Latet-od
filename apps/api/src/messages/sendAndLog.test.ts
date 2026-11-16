@@ -49,12 +49,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A stored `pending` order of {@link NAME} with one earlier message in its log. */
+/** A stored `confirmed` order of {@link NAME} with one earlier message in its log. */
 function seed(overrides: Partial<NewOrder> = {}): Promise<Order> {
   return orders.create(
     makeNewOrder({
       contact: { name: NAME, phone: PHONE_E164, method: 'whatsapp' },
-      status: 'pending',
+      status: 'confirmed',
       roundId: 'round-7',
       messages: [EARLIER_ENTRY],
       ...overrides,
@@ -204,7 +204,7 @@ describe('sendAndLog', () => {
       messages: [EARLIER_ENTRY, newEntry],
       updatedAt: NOW,
     });
-    expect(after.status).toBe('pending');
+    expect(after.status).toBe('confirmed');
     expect(outcome.order).toStrictEqual(after);
   });
 
@@ -266,7 +266,7 @@ describe('sendAndLog', () => {
       mode: 'failed',
       reason: 'invalid_phone',
     });
-    expect(after.status).toBe('pending');
+    expect(after.status).toBe('confirmed');
   });
 
   it('stores a sender that rejects as failed / sender_error, logging the error without customer data', async () => {

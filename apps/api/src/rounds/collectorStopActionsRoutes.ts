@@ -54,9 +54,8 @@ import {
  *   round's, one that left the round before the build, or a guess).
  * - 409 {@link StopHandledErrorBody}: the stop was handled another way: not found, cancelled, or
  *   it left the round.
- * - 409 {@link InvalidTransitionErrorBody}: the order is in the round but cannot be collected
- *   (still `pending`, which a routed round does not normally have), or it changed status while the
- *   request was on its way (the customer cancelled at that very moment).
+ * - 409 {@link InvalidTransitionErrorBody}: the order is in the round but cannot be collected:
+ *   it changed status while the request was on its way (the customer cancelled at that very moment).
  *
  * POST /:id/stops/:orderId/not-found — "לא נמצא" (spec §3.6 step 2); no body (any body is
  * ignored). Same 404 / 409 route_not_open checks, in the same order, as "אספתי":
@@ -161,8 +160,7 @@ export function createCollectorStopActionsRouter(
       sendStopHandled(res);
       return;
     }
-    // A stop to collect is `confirmed`, or `pending` (which a routed round does not normally
-    // have): only confirmed → collected is allowed (spec §4).
+    // A stop to collect is `confirmed`: only confirmed → collected is allowed (spec §4).
     if (!canTransition(order.status, 'collected')) {
       sendInvalidTransition(res);
       return;
@@ -227,7 +225,7 @@ export function createCollectorStopActionsRouter(
       sendStopHandled(res);
       return;
     }
-    // A stop to collect is `confirmed` (or `pending`): both may go back to `waiting` (spec §4).
+    // A stop to collect is `confirmed`, which may go back to `waiting` (spec §4).
     if (!canTransition(order.status, 'waiting')) {
       sendInvalidTransition(res);
       return;

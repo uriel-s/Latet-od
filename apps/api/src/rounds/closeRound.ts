@@ -40,7 +40,7 @@ const SWEEP_ATTEMPTS = 2;
  *    not written again: it keeps its first `closedAt`.
  * 2. Then the sweep, on every call, a second close too: that heals a first close whose sweep
  *    stopped half way (a 500 in the middle). Each order of the round that is still in it
- *    (`roundId`) and `pending` or `confirmed` leaves it (leaveRoundPatch) with reason `notReached`
+ *    (`roundId`) and `confirmed` leaves it (leaveRoundPatch) with reason `notReached`
  *    ("לא הגענו אליו"): Yoel did not get to it, whether the route was built or the round was
  *    called off before ("בטל את הסבב"). Nobody leaves for "did not confirm" any more (ADR-0012).
  *    Collected, cancelled and not-found orders, and those that already left the round, are not
@@ -106,7 +106,7 @@ async function sendBackUnhandled(
   let current: Order | null = order;
   for (let attempt = 0; attempt < SWEEP_ATTEMPTS; attempt += 1) {
     if (current === null || !isUnhandledIn(round, current)) return;
-    // pending and confirmed may both go back to waiting (spec §4); checked, like every change.
+    // confirmed may go back to waiting (spec §4); checked, like every change.
     if (!canTransition(current.status, 'waiting')) return;
     const left = await orders.update(
       current.id,
@@ -119,10 +119,10 @@ async function sendBackUnhandled(
 }
 
 /**
- * Whether `order` is still in `round` and nothing happened to it there: `pending` or `confirmed`
+ * Whether `order` is still in `round` and nothing happened to it there: `confirmed`
  * with this `roundId`. A collected or cancelled order keeps its `roundId` but is final; a
  * not-found one (and any that left the round) has no `roundId` any more.
  */
 function isUnhandledIn(round: Round, order: Order): boolean {
-  return order.roundId === round.id && (order.status === 'pending' || order.status === 'confirmed');
+  return order.roundId === round.id && order.status === 'confirmed';
 }

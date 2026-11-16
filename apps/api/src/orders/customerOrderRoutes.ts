@@ -77,7 +77,7 @@ const ORDER_CLOSED: InvalidTransitionErrorBody = {
  * a secret link, which must never sit in a shared cache. Every 200 is a
  * {@link CustomerOrderResponse}: the order through the shared allow-list (`toCustomerOrder`), so
  * never its id, roundId, token, message log, lastMiss or Yoel's own fields; with the round's date
- * (and its pickup times) while the order is `confirmed` (or a legacy `pending`) in it.
+ * (and its pickup times) while the order is `confirmed` in it.
  *
  * Every route answers 404 {@link OrderNotFoundErrorBody} (`order_not_found`) when no order has the
  * token, and the very same status and body when the token is not one at all (malformed, forged):
@@ -89,16 +89,16 @@ const ORDER_CLOSED: InvalidTransitionErrorBody = {
  *   GET to every link in a message (spec §3.3), so a GET must never confirm or change anything.
  *
  * POST /:token/decline — "לא מתאים הפעם"; no body:
- * - 200: `pending` or `confirmed` → back to `waiting`, out of its round, `lastMiss` reason
+ * - 200: `confirmed` → back to `waiting`, out of its round, `lastMiss` reason
  *   `askedOtherDate` (leaveRoundPatch), so Yoel's round screen lists it under "ביקשו מועד אחר" and
  *   the order can be planned into a later round. Already `waiting` → as it is, nothing written (a
  *   second tap: it is in no round). Allowed in any phase of the round, like cancel: the customer
  *   who cannot make it should say so even after the route was built. The page offers the button
- *   for an order in a round (`confirmed`, or a legacy `pending`), ADR-0012.
+ *   for an order in a round (`confirmed`), ADR-0012.
  * - 409 {@link InvalidTransitionErrorBody}: collected or cancelled.
  *
  * POST /:token/cancel — "ביטול"; no body:
- * - 200: `waiting`, `pending` or `confirmed` → `cancelled`, with `cancelledAt`. Already
+ * - 200: `waiting` or `confirmed` → `cancelled`, with `cancelledAt`. Already
  *   `cancelled` → as it is, nothing written, so `cancelledAt` keeps the first moment.
  * - 409 {@link InvalidTransitionErrorBody}: collected.
  * A cancelled order KEEPS its `roundId`, like the collector's cancel (collectorOrdersRoutes.ts):
@@ -108,8 +108,8 @@ const ORDER_CLOSED: InvalidTransitionErrorBody = {
  *
  * PATCH /:token — "שינוי"; body `customerUpdateOrderRequestSchema` (address, bottlesEstimated):
  * - 200: the change is stored (rules: buildCustomerOrderPatch, customerOrderPatch.ts) and the
- *   order answered as it is now. A change of the street or the house number of a `pending` or
- *   `confirmed` order takes it out of its round (spec §3.3): back to `waiting`, `lastMiss` reason
+ *   order answered as it is now. A change of the street or the house number of a `confirmed`
+ *   order takes it out of its round (spec §3.3): back to `waiting`, `lastMiss` reason
  *   `addressChanged`, so the answer has no `round`, and Yoel's round view lists it in no group (it
  *   did not ask for another date). Any other change keeps the order where it is.
  * - 400 {@link InvalidOrderErrorBody}: the body did not validate, with the booking form's plain
@@ -180,7 +180,7 @@ export function createCustomerOrderRouter(deps: Pick<AppDeps, 'orders' | 'rounds
       });
       if (updated !== null) {
         // The round read with the order: toCustomerOrder shows it only while the updated order is
-        // still in it and pending or confirmed (so not after a decline or a cancel).
+        // still in it and confirmed (so not after a decline or a cancel).
         sendOrder(res, updated, found.round);
         return;
       }
@@ -223,7 +223,7 @@ export function createCustomerOrderRouter(deps: Pick<AppDeps, 'orders' | 'rounds
 }
 
 /**
- * "לא מתאים הפעם": `pending` or `confirmed` → `waiting`, out of the round, `lastMiss` reason
+ * "לא מתאים הפעם": `confirmed` → `waiting`, out of the round, `lastMiss` reason
  * `askedOtherDate`. Already `waiting` is a success: the order is in no round, which is what the
  * customer asked for (a second tap).
  */
@@ -238,7 +238,7 @@ function decideDecline(order: Order, round: Round | null, now: Date): Decision {
 }
 
 /**
- * "ביטול": `waiting`, `pending` or `confirmed` → `cancelled`. Already cancelled is a success, and
+ * "ביטול": `waiting` or `confirmed` → `cancelled`. Already cancelled is a success, and
  * nothing is written, so `cancelledAt` keeps the first moment. `roundId` stays (see the router's
  * JSDoc).
  */
@@ -253,7 +253,7 @@ function decideCancel(order: Order, _round: Round | null, now: Date): Decision {
 }
 
 /**
- * "שינוי": `update` applied to an open order (waiting, pending, confirmed), following
+ * "שינוי": `update` applied to an open order (waiting, confirmed), following
  * buildCustomerOrderPatch (which may also take it out of its round). A collected or cancelled
  * order is history: the statistics count it as it was, so nothing on it changes. Every change is
  * written, even one that sends the stored values again, so `updatedAt` says the customer saved.

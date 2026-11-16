@@ -6,7 +6,6 @@ import { Router, type Response } from 'express';
 import {
   ROUND_MESSAGES,
   buildRoundView,
-  canTransition,
   formFieldErrors,
   moveStopRequestSchema,
   planRoundRequestSchema,
@@ -43,7 +42,7 @@ import {
  * created last, whatever its status.
  *
  * POST /:id/route ("התחל מסלול"): every order still in the round is a stop, nobody is sent back
- * for not answering (ADR-0012); a legacy `pending` order is moved to `confirmed`. A round whose
+ * for not answering (ADR-0012). A round whose
  * orders all left still becomes routed, with no stops. The route is computed once (spec §3.6: its
  * order must not change in the middle of the drive), so a second build is a 409 that recomputes
  * nothing; Yoel moves a stop by hand instead.
@@ -54,7 +53,7 @@ import {
  * on its way. Two moves racing: the later write wins (each is one swap of the stops it read).
  *
  * POST /:id/close (closeRound.ts): the round becomes `closed` with `closedAt`, phase unchanged; it
- * leaves GET / but GET /:id still answers. Its orders still in it and `pending`/`confirmed` go back
+ * leaves GET / but GET /:id still answers. Its orders still in it and `confirmed` go back
  * to `waiting` with `lastMiss` `notReached`; every other order is untouched; no message. Closing
  * it again keeps the first `closedAt` and re-runs the sweep, so an order a half-failed first close
  * left behind is sent back now. The round is closed BEFORE its orders are swept, so a stop action
@@ -187,20 +186,16 @@ export function createCollectorRoundsRouter(
     // Who is a stop, in plan order (which also breaks planRoute's ties): every order still in the
     // round. An order that left it already (asked for another date, cancelled and so on) has
     // another `roundId`, or none, or is not confirmed, and is no stop.
-    const now = new Date();
     const found = new Map((await orders.list({ ids: round.orderIds })).map((o) => [o.id, o]));
     const stopOrders: Order[] = [];
     for (const orderId of round.orderIds) {
       const order = found.get(orderId);
-      if (order?.roundId !== round.id) continue;
-      const settled = order.status === 'pending' ? await takeInLegacyPending(order, now) : order;
-      if (settled?.roundId === round.id && settled.status === 'confirmed') stopOrders.push(settled);
+      if (order?.roundId === round.id && order.status === 'confirmed') stopOrders.push(order);
     }
 
     const stops = buildRouteStops(stopOrders, route.start, DROP_OFF.point, route.distance);
     // Conditional on the round still being open and confirming: of two racing builds (or a build
-    // and a close), only one writes. The loser already moved the same legacy pending orders to
-    // confirmed, which the winner did too, so it changed nothing the winner did not.
+    // and a close), only one writes.
     const routed = await rounds.update(
       round.id,
       { phase: 'routed', stops },
@@ -271,24 +266,6 @@ export function createCollectorRoundsRouter(
     }
     sendView(res, view);
   });
-
-  /**
-   * Moves a legacy `pending` order (planned before ADR-0012, when the customer still had to
-   * confirm) to `confirmed`, so it is a stop like every other order of the round: not answering
-   * no longer takes anyone out. Resolves to the order as it is now. The write is conditional on
-   * `pending`: when it misses, the order changed in that instant (the customer declined or
-   * cancelled), so it is read again and the caller decides by what it is now; null only if the
-   * order is gone.
-   */
-  async function takeInLegacyPending(order: Order, now: Date): Promise<Order | null> {
-    if (!canTransition(order.status, 'confirmed')) return order;
-    const confirmed = await orders.update(
-      order.id,
-      { status: 'confirmed', updatedAt: new Date(now) },
-      { ifStatus: [order.status] },
-    );
-    return confirmed ?? (await orders.findById(order.id));
-  }
 
   return router;
 }

@@ -158,11 +158,6 @@ const CANCELLED_MEANWHILE: OrderPatch = {
   cancelledAt: new Date('2026-11-11T10:00:00.000Z'),
   updatedAt: new Date('2026-11-11T10:00:00.000Z'),
 };
-/** "התחל מסלול" taking a legacy `pending` order into the route, landing first. */
-const CONFIRMED_MEANWHILE: OrderPatch = {
-  status: 'confirmed',
-  updatedAt: new Date('2026-11-11T10:00:00.000Z'),
-};
 
 let orders: InMemoryOrdersRepo;
 let rounds: InMemoryRoundsRepo;
@@ -205,8 +200,7 @@ function seed(overrides: Partial<NewOrder> = {}): Promise<Order> {
 /**
  * Stores a round (open, confirming, on {@link DATE}, pickup by {@link PICKUP_BY}, unless
  * overridden) and one order in it: `confirmed`, with its round message in the log, unless
- * overridden. The round's `orderIds` lists the order, as planning leaves it (ADR-0012). Pass
- * `order: { status: 'pending' }` for a legacy order planned before ADR-0012.
+ * overridden. The round's `orderIds` lists the order, as planning leaves it (ADR-0012).
  */
 async function seedInRound(
   options: { order?: Partial<NewOrder>; round?: Partial<NewRound> } = {},
@@ -356,15 +350,6 @@ describe('GET /api/o/:token', () => {
     }
   });
 
-  it('shows the round date to a legacy pending customer too', async () => {
-    const { order } = await seedInRound({ order: { status: 'pending' } });
-
-    const page = orderOf(await getPage(order.token));
-
-    expect(page.status).toBe('pending');
-    expect(page.round).toStrictEqual({ date: DATE, pickupBy: PICKUP_BY });
-  });
-
   it('shows the pickup window start when the round has one', async () => {
     const { order } = await seedInRound({ round: { pickupFrom: '07:00' } });
 
@@ -452,7 +437,7 @@ describe('/api/o/:token: unknown and malformed tokens', () => {
 
 describe('POST /api/o/:token/confirm (removed, ADR-0012)', () => {
   it('answers the api 404 and changes nothing: the customer confirms nothing any more', async () => {
-    const { order } = await seedInRound({ order: { status: 'pending' } });
+    const { order } = await seedInRound();
     const before = await storedState();
 
     const res = await request(app).post(`${BASE}/${order.token}/confirm`).set(SAME_ORIGIN_HEADERS);
@@ -529,21 +514,6 @@ describe('POST /api/o/:token/decline', () => {
     expect(await storedOrder(order.id)).toStrictEqual(afterFirst);
   });
 
-  it('takes a legacy pending order out of its round too', async () => {
-    const { order, round } = await seedInRound({ order: { status: 'pending' } });
-
-    const res = await press('decline', order.token);
-
-    expect(orderOf(res).status).toBe('waiting');
-    const stored = await storedOrder(order.id);
-    expect(stored).not.toHaveProperty('roundId');
-    expect(stored.lastMiss).toStrictEqual({
-      date: round.date,
-      reason: 'askedOtherDate',
-      roundId: round.id,
-    });
-  });
-
   it('works after the route was built too', async () => {
     const { order } = await seedInRound({ round: { phase: 'routed' } });
 
@@ -562,44 +532,26 @@ describe('POST /api/o/:token/decline', () => {
       expect(await storedState()).toStrictEqual(before);
     },
   );
-
-  it('decides again from the new status when the route build takes a legacy pending order in just before the write', async () => {
-    const racing = new RacingOrdersRepo();
-    buildApp({ orders: racing });
-    const { order, round } = await seedInRound({ order: { status: 'pending' } });
-    racing.racesBeforeConditionalWrite.set(order.id, [CONFIRMED_MEANWHILE]);
-
-    const res = await press('decline', order.token);
-
-    // The customer's "not this time" still stands: confirmed may leave the round as well.
-    expect(orderOf(res).status).toBe('waiting');
-    const stored = await storedOrder(order.id);
-    expect(stored.status).toBe('waiting');
-    expect(stored.lastMiss?.roundId).toBe(round.id);
-  });
 });
 
 describe('POST /api/o/:token/cancel', () => {
-  it.each(['pending', 'confirmed'] as const satisfies readonly OrderStatus[])(
-    'cancels a %s order in a round, with cancelledAt',
-    async (status) => {
-      const { order } = await seedInRound({ order: { status } });
-      const before = new Date();
+  it('cancels an order in a round, with cancelledAt', async () => {
+    const { order } = await seedInRound();
+    const before = new Date();
 
-      const res = await press('cancel', order.token);
+    const res = await press('cancel', order.token);
 
-      const after = new Date();
-      expect(res.headers['cache-control']).toBe('no-store');
-      const page = orderOf(res);
-      expect(page.status).toBe('cancelled');
-      expect(page).not.toHaveProperty('round');
-      const stored = await storedOrder(order.id);
-      expect(stored.status).toBe('cancelled');
-      expectBetween(stored.cancelledAt, before, after);
-      expect(stored.updatedAt).toStrictEqual(stored.cancelledAt);
-      expect(stored.messages).toStrictEqual([MANUAL_REQUEST]);
-    },
-  );
+    const after = new Date();
+    expect(res.headers['cache-control']).toBe('no-store');
+    const page = orderOf(res);
+    expect(page.status).toBe('cancelled');
+    expect(page).not.toHaveProperty('round');
+    const stored = await storedOrder(order.id);
+    expect(stored.status).toBe('cancelled');
+    expectBetween(stored.cancelledAt, before, after);
+    expect(stored.updatedAt).toStrictEqual(stored.cancelledAt);
+    expect(stored.messages).toStrictEqual([MANUAL_REQUEST]);
+  });
 
   it('cancels a waiting order, with cancelledAt', async () => {
     const order = await seed();
@@ -651,18 +603,22 @@ describe('POST /api/o/:token/cancel', () => {
   it('answers 409 when the order changes twice before its writes, without a third try', async () => {
     const racing = new RacingOrdersRepo();
     buildApp({ orders: racing });
-    const { order } = await seedInRound({ order: { status: 'pending' } });
-    // The route build takes the legacy pending order in before the first write, then the order
-    // leaves the round before the second: both writes find another status.
+    const { order } = await seedInRound();
+    // The order leaves the round before the first write, then is planned into another round
+    // before the second: both writes find another status.
     racing.racesBeforeConditionalWrite.set(order.id, [
-      CONFIRMED_MEANWHILE,
-      { status: 'waiting', roundId: undefined, updatedAt: new Date('2026-11-11T11:00:00.000Z') },
+      { status: 'waiting', roundId: undefined, updatedAt: new Date('2026-11-11T10:00:00.000Z') },
+      {
+        status: 'confirmed',
+        roundId: 'round-next',
+        updatedAt: new Date('2026-11-11T11:00:00.000Z'),
+      },
     ]);
 
     const res = await press('cancel', order.token);
 
     expectOrderClosed(res);
-    expect((await storedOrder(order.id)).status).toBe('waiting');
+    expect((await storedOrder(order.id)).status).toBe('confirmed');
   });
 });
 
@@ -785,15 +741,11 @@ describe('PATCH /api/o/:token: an order in a round', () => {
     { label: 'a new street', address: OLD_INPUT },
     { label: 'a new house number alone', address: { ...RAMAT_INPUT, houseNumber: '9' } },
   ];
-  const cases = (['pending', 'confirmed'] as const).flatMap((status) =>
-    locationChanges.map((change) => ({ status, ...change })),
-  );
-
-  it.each(cases)(
-    'takes a $status order out of its round on $label: waiting, no roundId, lastMiss addressChanged',
-    async ({ status, address }) => {
+  it.each(locationChanges)(
+    'takes an order out of its round on $label: waiting, no roundId, lastMiss addressChanged',
+    async ({ address }) => {
       const { order, round } = await seedInRound({
-        order: { status, address: RAMAT_ADDRESS, region: 'ramat' },
+        order: { address: RAMAT_ADDRESS, region: 'ramat' },
       });
       const before = new Date();
 
@@ -818,43 +770,37 @@ describe('PATCH /api/o/:token: an order in a round', () => {
     },
   );
 
-  it.each(['pending', 'confirmed'] as const)(
-    'lists a %s order that changed its address in no group of the round (it asked for no other date)',
-    async (status) => {
-      const { order, round } = await seedInRound({
-        order: { status, address: RAMAT_ADDRESS, region: 'ramat' },
-      });
+  it('lists an order that changed its address in no group of the round (it asked for no other date)', async () => {
+    const { order, round } = await seedInRound({
+      order: { address: RAMAT_ADDRESS, region: 'ramat' },
+    });
 
-      await patchOrder(order.token, { address: OLD_INPUT });
+    await patchOrder(order.token, { address: OLD_INPUT });
 
-      expect(groupsOf(await roundView(round.id))).toStrictEqual({
-        inRound: [],
-        otherDate: [],
-      });
-    },
-  );
+    expect(groupsOf(await roundView(round.id))).toStrictEqual({
+      inRound: [],
+      otherDate: [],
+    });
+  });
 
-  it.each(['pending', 'confirmed'] as const)(
-    'leaves a %s order that changed its address free to be planned into a new round',
-    async (status) => {
-      const { order } = await seedInRound({
-        order: { status, address: RAMAT_ADDRESS, region: 'ramat' },
-      });
-      await patchOrder(order.token, { address: { ...RAMAT_INPUT, houseNumber: '9' } });
+  it('leaves an order that changed its address free to be planned into a new round', async () => {
+    const { order } = await seedInRound({
+      order: { address: RAMAT_ADDRESS, region: 'ramat' },
+    });
+    await patchOrder(order.token, { address: { ...RAMAT_INPUT, houseNumber: '9' } });
 
-      const res = await request(app)
-        .post('/api/collector/rounds')
-        .set(SAME_ORIGIN_HEADERS)
-        .set('Cookie', cookie)
-        .send({ date: '2026-11-19', region: 'ramat', orderIds: [order.id] });
+    const res = await request(app)
+      .post('/api/collector/rounds')
+      .set(SAME_ORIGIN_HEADERS)
+      .set('Cookie', cookie)
+      .send({ date: '2026-11-19', region: 'ramat', orderIds: [order.id] });
 
-      expect(res.status).toBe(201);
-      const newRound = roundViewSchema.parse(res.body).round;
-      const stored = await storedOrder(order.id);
-      expect(stored.status).toBe('confirmed');
-      expect(stored.roundId).toBe(newRound.id);
-    },
-  );
+    expect(res.status).toBe(201);
+    const newRound = roundViewSchema.parse(res.body).round;
+    const stored = await storedOrder(order.id);
+    expect(stored.status).toBe('confirmed');
+    expect(stored.roundId).toBe(newRound.id);
+  });
 
   const samePlaceChanges: { label: string; body: CustomerUpdateOrderRequest }[] = [
     { label: 'the note', body: { address: { ...RAMAT_INPUT, note: 'הערה חדשה' } } },
@@ -1000,24 +946,6 @@ describe('PATCH /api/o/:token: refused changes', () => {
     expect(stored.region).toBe('ramat');
     expect(stored.roundId).toBe(order.roundId);
     expect(stored).not.toHaveProperty('lastMiss');
-  });
-
-  it('decides again from the new status when the route build takes a legacy pending order in just before the write', async () => {
-    const racing = new RacingOrdersRepo();
-    buildApp({ orders: racing });
-    const { order, round } = await seedInRound({
-      order: { status: 'pending', address: RAMAT_ADDRESS, region: 'ramat' },
-    });
-    racing.racesBeforeConditionalWrite.set(order.id, [CONFIRMED_MEANWHILE]);
-
-    const res = await patchOrder(order.token, { bottlesEstimated: 90 });
-
-    const page = orderOf(res);
-    expect(page.status).toBe('confirmed');
-    expect(page.bottlesEstimated).toBe(90);
-    const stored = await storedOrder(order.id);
-    expect(stored.status).toBe('confirmed');
-    expect(stored.roundId).toBe(round.id);
   });
 });
 
