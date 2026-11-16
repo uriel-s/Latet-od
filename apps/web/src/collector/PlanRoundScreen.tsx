@@ -23,6 +23,7 @@ import { useApi } from '../api/ApiContext.tsx';
 import type { WaitingOrdersOutcome } from '../api/collectorOrdersApi.ts';
 import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { TextField } from '../components/TextField.tsx';
+import { describedBy } from '../components/describedBy.ts';
 import { FormCard } from '../orderForm/OrderFields.tsx';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { navigate } from '../router.tsx';
@@ -135,12 +136,6 @@ function todayInIsrael(): string {
 /** "מסומנות: 3 מתוך 4": how many of the region's orders go into the round. */
 function checkedSummary(checkedCount: number, total: number): string {
   return `מסומנות: ${checkedCount} מתוך ${total}`;
-}
-
-/** The ids for `aria-describedby`, space-separated; undefined when there is none. */
-function describedBy(...ids: (string | undefined)[]): string | undefined {
-  const present = ids.filter((id) => id !== undefined);
-  return present.length === 0 ? undefined : present.join(' ');
 }
 
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */

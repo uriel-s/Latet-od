@@ -18,6 +18,7 @@ import {
   type Lang,
   type Street,
 } from '@bottlerun/shared';
+import { describedBy } from '../components/describedBy.ts';
 import type { StreetChoice } from './streetChoice.ts';
 
 /** At most this many matches are shown: more would push the rest of the form off the screen. */
@@ -121,11 +122,6 @@ export function StreetPicker({
   const hintId = useId();
   const errorId = useId();
   const hasHint = hint !== undefined;
-  // The hint and the error, space-separated, so a screen reader reads both with the input.
-  const describedBy =
-    [hasHint ? hintId : undefined, error ? errorId : undefined]
-      .filter((id) => id !== undefined)
-      .join(' ') || undefined;
 
   // A street just chosen (or prefilled) is already in the input: its list has done its job.
   const showsChosenStreet = value?.kind === 'listed' && choiceText(value, lang, streets) === text;
@@ -206,7 +202,7 @@ export function StreetPicker({
         // The limit the api enforces on a hand-written name; also longer than any listed name.
         maxLength={FORM_TEXT_MAX_LENGTH.streetName}
         aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
+        aria-describedby={describedBy(hasHint ? hintId : undefined, error ? errorId : undefined)}
       />
       {error && (
         <p id={errorId} className="field-error">
