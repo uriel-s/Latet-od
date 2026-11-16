@@ -19,7 +19,7 @@ export const ORDER: CollectorOrder = {
   bottlesEstimated: 45,
   status: 'waiting',
   region: 'ramat',
-  lastMiss: { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-0' },
+  lastMiss: { date: '2026-10-12', reason: 'notReached', roundId: 'round-0' },
   source: 'collector',
   createdAt: new Date('2026-10-19T08:30:00.000Z'),
   hasLocation: true,
