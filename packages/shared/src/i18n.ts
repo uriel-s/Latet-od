@@ -95,8 +95,6 @@ const HE = {
 
   // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
   'orderStatus.waiting': 'ממתינה לסבב',
-  // Legacy (ADR-0012): nothing to confirm any more, so an old pending order reads as in the round.
-  'orderStatus.pending': 'בסבב',
   'orderStatus.confirmed': 'בסבב',
   'orderStatus.collected': 'נאספה',
   'orderStatus.cancelled': 'בוטלה',
@@ -275,7 +273,6 @@ const EN = {
 
   // Order status names.
   'orderStatus.waiting': 'Waiting for a round',
-  'orderStatus.pending': 'Scheduled',
   'orderStatus.confirmed': 'Scheduled',
   'orderStatus.collected': 'Collected',
   'orderStatus.cancelled': 'Cancelled',

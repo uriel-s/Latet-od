@@ -4,21 +4,14 @@
 import { z } from 'zod';
 
 /** Every order status, in lifecycle order. */
-export const ORDER_STATUSES = [
-  'waiting',
-  'pending',
-  'confirmed',
-  'collected',
-  'cancelled',
-] as const;
+export const ORDER_STATUSES = ['waiting', 'confirmed', 'collected', 'cancelled'] as const;
 
 /**
  * Where an order is in its life (spec §4, ADR-0012): `waiting` for a round, `confirmed` once Yoel
  * puts it in a round ("בסבב": the customer confirms nothing, the name is from before ADR-0012), then
- * `collected` or `cancelled`, both final. `pending` (once "ממתינה לאישור") is legacy: no order enters
- * it any more, but orders planned before ADR-0012 may still be in it, so it stays readable and can
- * leave the way it always could. Leaving a round is not a status: the order goes back to `waiting`
- * and `lastMiss` records why.
+ * `collected` or `cancelled`, both final. Leaving a round is not a status: the order goes back to
+ * `waiting` and `lastMiss` records why. The legacy `pending` is gone (no stored order has it); only
+ * the phone index still names it (mongoOrdersRepo.ts).
  */
 export const orderStatusSchema = z.enum(ORDER_STATUSES);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
@@ -29,8 +22,6 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>;
  */
 export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
   waiting: 'ממתינה לסבב',
-  // Legacy (ADR-0012): shown like `confirmed`, since there is nothing left for the customer to do.
-  pending: 'בסבב',
   confirmed: 'בסבב',
   collected: 'נאספה',
   cancelled: 'בוטלה',
@@ -41,22 +32,19 @@ export const ORDER_STATUS_LABELS: Readonly<Record<OrderStatus, string>> = {
  * (spec §3.1), so this list is the filter of that duplicate check and, later, of the Mongo
  * partial unique index on the phone.
  */
-export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = ['waiting', 'pending', 'confirmed'];
+export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = ['waiting', 'confirmed'];
 
 /**
  * Allowed moves, exactly the arrows of the spec §4 diagram, by the action behind each:
  * - waiting → confirmed: Yoel plans a round with it and the message announcing the pickup goes
  *   out. No customer confirmation in between (ADR-0012).
- * - pending → confirmed: legacy. "התחל מסלול" takes an order still pending from before ADR-0012
- *   into the route.
- * - pending / confirmed → waiting: it leaves the round uncollected (reason in `lastMiss`).
- * - confirmed → collected: Yoel taps "אספתי". A pending order cannot be collected directly.
- * - waiting / pending / confirmed → cancelled: the customer or Yoel cancels.
+ * - confirmed → waiting: it leaves the round uncollected (reason in `lastMiss`).
+ * - confirmed → collected: Yoel taps "אספתי".
+ * - waiting / confirmed → cancelled: the customer or Yoel cancels.
  * - collected, cancelled: final, no way out.
  */
 export const ORDER_TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   waiting: ['confirmed', 'cancelled'],
-  pending: ['confirmed', 'waiting', 'cancelled'],
   confirmed: ['waiting', 'collected', 'cancelled'],
   collected: [],
   cancelled: [],

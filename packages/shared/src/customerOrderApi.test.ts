@@ -30,12 +30,12 @@ const STORED_ADDRESS: Address = {
 };
 
 /**
- * What these tests start from, on top of makeOrder: a legacy pending order in round
+ * What these tests start from, on top of makeOrder: a confirmed order in round
  * {@link ROUND_ID}, with its round message, a near street and every internal field set.
  */
 const IN_ROUND: Partial<Order> = {
   address: { ...STORED_ADDRESS, nearStreetCode: OLD_STREET.code },
-  status: 'pending',
+  status: 'confirmed',
   region: 'ramat',
   roundId: ROUND_ID,
   lastMiss: { date: '2026-10-29', reason: 'notConfirmed', roundId: 'round-0' },
@@ -81,7 +81,7 @@ describe('toCustomerOrder', () => {
       contact: { name: 'משה כהן', phone: '+972501234567' },
       address: STORED_ADDRESS,
       bottlesEstimated: 45,
-      status: 'pending',
+      status: 'confirmed',
       lang: 'he',
       round: { date: '2026-11-05', pickupBy: '08:00' },
     });
@@ -123,16 +123,11 @@ describe('toCustomerOrder', () => {
     expect(toCustomerOrder(stored, makeRound()).lang).toBe('he');
   });
 
-  it('gives a pending and a confirmed order in the round its date and pickup time', () => {
-    for (const status of ['pending', 'confirmed'] as const) {
-      expect(
-        toCustomerOrder(makeOrder({ ...IN_ROUND, status }), makeRound()).round,
-        status,
-      ).toStrictEqual({
-        date: '2026-11-05',
-        pickupBy: '08:00',
-      });
-    }
+  it('gives a confirmed order in the round its date and pickup time', () => {
+    expect(toCustomerOrder(makeOrder(IN_ROUND), makeRound()).round).toStrictEqual({
+      date: '2026-11-05',
+      pickupBy: '08:00',
+    });
   });
 
   it('gives the pickup window start too when the round has one', () => {

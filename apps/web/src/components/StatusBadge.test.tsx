@@ -13,14 +13,13 @@ describe('StatusBadge', () => {
     unmount();
   });
 
-  it('gives waiting amber, confirmed, legacy pending and collected green, cancelled gray', () => {
+  it('gives waiting amber, confirmed and collected green, cancelled gray', () => {
     const tones = Object.fromEntries(
       ORDER_STATUSES.map((status) => [status, STATUS_BADGE_STYLES[status].tone]),
     );
 
     expect(tones).toEqual({
       waiting: 'amber',
-      pending: 'green',
       confirmed: 'green',
       collected: 'green',
       cancelled: 'gray',
@@ -28,9 +27,7 @@ describe('StatusBadge', () => {
   });
 
   it('draws a hidden icon for every status, a different one each, so colour is not the only signal', () => {
-    // The legacy pending is drawn exactly like confirmed (ADR-0012), so it is not a status of its own.
-    const shown = ORDER_STATUSES.filter((status) => status !== 'pending');
-    const drawings = shown.map((status) => {
+    const drawings = ORDER_STATUSES.map((status) => {
       const { unmount } = render(<StatusBadge status={status} />);
       const svgs = screen.getByText(ORDER_STATUS_LABELS[status]).querySelectorAll('svg');
       expect(svgs).toHaveLength(1);
@@ -40,12 +37,7 @@ describe('StatusBadge', () => {
       return drawing;
     });
 
-    expect(new Set(drawings).size).toBe(shown.length);
-  });
-
-  it('draws a legacy pending order exactly like a confirmed one (ADR-0012)', () => {
-    expect(STATUS_BADGE_STYLES.pending).toEqual(STATUS_BADGE_STYLES.confirmed);
-    expect(ORDER_STATUS_LABELS.pending).toBe(ORDER_STATUS_LABELS.confirmed);
+    expect(new Set(drawings).size).toBe(ORDER_STATUSES.length);
   });
 
   it('passes a class name through next to its own classes', () => {

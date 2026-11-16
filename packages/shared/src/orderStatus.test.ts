@@ -12,17 +12,14 @@ import {
 } from './orderStatus.ts';
 
 /**
- * The arrows of the spec §4 state diagram (ADR-0012: planning goes straight to confirmed; pending
- * is legacy), written out independently of ORDER_TRANSITIONS.
+ * The arrows of the spec §4 state diagram (ADR-0012: planning goes straight to confirmed), written
+ * out independently of ORDER_TRANSITIONS.
  */
 const SPEC_EDGES: ReadonlyArray<readonly [OrderStatus, OrderStatus]> = [
   ['waiting', 'confirmed'],
-  ['pending', 'confirmed'],
-  ['pending', 'waiting'],
   ['confirmed', 'waiting'],
   ['confirmed', 'collected'],
   ['waiting', 'cancelled'],
-  ['pending', 'cancelled'],
   ['confirmed', 'cancelled'],
 ];
 
@@ -44,7 +41,6 @@ describe('ORDER_STATUS_LABELS', () => {
   it('names every status in Hebrew', () => {
     expect(ORDER_STATUS_LABELS).toEqual({
       waiting: 'ממתינה לסבב',
-      pending: 'בסבב',
       confirmed: 'בסבב',
       collected: 'נאספה',
       cancelled: 'בוטלה',
@@ -84,15 +80,10 @@ describe('canTransition', () => {
 
   it('puts a waiting order straight into a round, with no confirmation step (ADR-0012)', () => {
     expect(canTransition('waiting', 'confirmed')).toBe(true);
-    expect(canTransition('waiting', 'pending')).toBe(false);
   });
 
   it('refuses to collect an order that is not in a round', () => {
     expect(canTransition('waiting', 'collected')).toBe(false);
-  });
-
-  it('refuses to collect a legacy pending order directly', () => {
-    expect(canTransition('pending', 'collected')).toBe(false);
   });
 
   it('refuses to reopen a cancelled order', () => {
@@ -107,8 +98,8 @@ describe('canTransition', () => {
 });
 
 describe('OPEN_ORDER_STATUSES', () => {
-  it('is waiting, pending and confirmed', () => {
-    expect(OPEN_ORDER_STATUSES).toEqual(['waiting', 'pending', 'confirmed']);
+  it('is waiting and confirmed', () => {
+    expect(OPEN_ORDER_STATUSES).toEqual(['waiting', 'confirmed']);
   });
 
   it('holds exactly the statuses an order can still move out of', () => {
@@ -118,9 +109,8 @@ describe('OPEN_ORDER_STATUSES', () => {
 });
 
 describe('isOpenStatus', () => {
-  it('is true for waiting, pending and confirmed', () => {
+  it('is true for waiting and confirmed', () => {
     expect(isOpenStatus('waiting')).toBe(true);
-    expect(isOpenStatus('pending')).toBe(true);
     expect(isOpenStatus('confirmed')).toBe(true);
   });
 
@@ -140,8 +130,7 @@ describe('canDeleteOrder', () => {
     expect(canDeleteOrder({ status: 'collected' })).toBe(false);
   });
 
-  it('refuses a pending or confirmed order, which is in a round', () => {
-    expect(canDeleteOrder({ status: 'pending', roundId: 'round-1' })).toBe(false);
+  it('refuses a confirmed order, which is in a round', () => {
     expect(canDeleteOrder({ status: 'confirmed', roundId: 'round-1' })).toBe(false);
   });
 
