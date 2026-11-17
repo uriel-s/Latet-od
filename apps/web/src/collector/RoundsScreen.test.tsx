@@ -29,7 +29,8 @@ import {
 import { SEND_LIST_HEADING, SEND_LIST_HINT, roundGroupsSummary } from './RoundSection.tsx';
 import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
-import { BOTTLES_COLLECTED_LABEL, SEND_THANKS_TITLE } from './StopCard.tsx';
+import { BOTTLES_COLLECTED_LABEL } from './CollectQuantityForm.tsx';
+import { SEND_THANKS_TITLE } from './StopCard.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
 /**
