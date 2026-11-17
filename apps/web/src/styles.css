@@ -1728,15 +1728,9 @@ html:has(.bottom-nav) {
   flex: 1 1 8rem;
 }
 
-/* The quantity field and the "לא נמצא" question sit under the links, with room above. */
-.stop-card-quantity,
+/* Room above the "לא נמצא" question. */
 .stop-card .cancel-confirm {
   margin-block-start: 0.75rem;
-}
-
-/* The field's own bottom margin would leave a gap above "שמור"; the actions keep their gap. */
-.stop-card-quantity .field {
-  margin-block-end: 0.75rem;
 }
 
 /* The thank-you's "שלח" row under a handled card's street. */
@@ -2060,35 +2054,12 @@ html:has(.bottom-nav) {
   padding-inline: 0.25rem;
 }
 
-/* --- "⋯" sheet and bottles stepper (collector/MoreActionsSheet.tsx, StopCard.tsx) --------- */
+/* --- "⋯" sheet (collector/MoreActionsSheet.tsx, StopCard.tsx) ---------------------------- */
 
 .more-actions-list {
   display: grid;
   gap: 0.625rem;
   margin-block-end: 0.75rem;
-}
-
-/* "−  [field]  +": two big round-ish buttons (64px, ADR-0011) on both sides of the number. */
-.bottles-stepper {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.bottles-stepper .field {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-block-end: 0;
-}
-
-.bottles-stepper-button {
-  flex: 0 0 auto;
-  width: 4rem;
-  min-width: 4rem;
-  min-height: 4rem;
-  padding: 0;
-  font-size: 2rem;
-  line-height: 1;
 }
 
 /* --- Upcoming timeline and donation line (collector/RouteScreen.tsx, StopCard.tsx) ------ */

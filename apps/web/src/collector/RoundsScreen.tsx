@@ -59,7 +59,7 @@ interface Notice {
  * date: {@link pickSelectedRound}). With two or more open, {@link RoundPicker} sits above it and
  * choosing a round writes `?round=<id>` with `replace`, so the choice survives a reload and a
  * return from WhatsApp without adding history entries. The default is never written to the URL.
- * The other rounds' state (building, closing, typing) is kept by round id, so an action still
+ * The other rounds' state (building, closing) is kept by round id, so an action still
  * answering for a round that is not on screen finds its way back when Yoel returns to it.
  *
  * A 401 means the session ended: to the login, like the guard in CollectorApp.tsx. A failed load
@@ -78,12 +78,6 @@ interface Notice {
  * here. The selection then falls back to the first round left (the URL still names the closed
  * one, which is simply not open any more). With none left, "אין סבב פתוח." and the planning link
  * show, as after any load.
- *
- * The reload on coming back is skipped while a quantity field of "אספתי" is open: a reload must
- * never wipe what Yoel types (a failed load replaces the rounds, and a stop handled elsewhere
- * closes its field). The usual trip away mid-route is to Waze or the dialler; once the field is
- * closed, the next return reloads as before. Picking another round while a field is open unmounts
- * that round's route, which reports "not typing" on its way out, so the pause cannot outlast it.
  *
  * The screen's own requests are `fetchRounds`, `buildRoute` and `closeRound` of {@link useApi}.
  * The stop actions are RouteScreen's and the "שלח" rows' are SendList's: each part takes its own
@@ -105,9 +99,6 @@ export function RoundsScreen() {
   // before the close answered still lists the round, and must not bring it back. A closed round
   // never opens again, so the set only grows while the screen is shown.
   const closedRoundIdsRef = useRef(new Set<string>());
-  // The routed rounds with a quantity field open (RouteScreen's onTypingChange). A ref, not state:
-  // only the reload-on-return callback reads it, and a change must not re-render the screen.
-  const typingRoundIdsRef = useRef(new Set<string>());
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -161,17 +152,8 @@ export function RoundsScreen() {
 
   // Back in the app: the same reload, rounds kept on screen. A notice stays: the usual trip away is
   // to WhatsApp from "שלח", and the notice still explains why the card Yoel tapped moved or left;
-  // his next action or "לנסות שוב" clears it, as before. Skipped while he is typing a
-  // quantity (see the doc comment above): nothing is lost, the next return loads.
-  useReloadOnReturn(() => {
-    if (typingRoundIdsRef.current.size === 0) reload();
-  });
-
-  /** RouteScreen of round `roundId` reports whether one of its quantity fields is open. */
-  function typingChanged(roundId: string, typing: boolean): void {
-    if (typing) typingRoundIdsRef.current.add(roundId);
-    else typingRoundIdsRef.current.delete(roundId);
-  }
+  // his next action or "לנסות שוב" clears it, as before.
+  useReloadOnReturn(reload);
 
   /** The screen is out of date: says why under the heading and loads the rounds again. */
   function showStale(message: string): void {
@@ -301,9 +283,8 @@ export function RoundsScreen() {
             onSelect={selectRound}
           />
           {/* Keyed by the round's id, so the section, and the "שלח" list or the route in it, stay
-              mounted when an action swaps in a new view: the rows Yoel already opened stay marked,
-              and an open quantity field stays open. Picking another round mounts that round's
-              section anew, and RouteScreen's unmount tells typingChanged the field is gone. */}
+              mounted when an action swaps in a new view: the rows Yoel already opened stay marked.
+              Picking another round mounts that round's section anew. */}
           <RoundSection
             key={selected.round.id}
             view={selected}
@@ -326,7 +307,6 @@ export function RoundsScreen() {
                 replaceRound(next);
               },
               onStale: showStale,
-              onTypingChange: (typing) => typingChanged(selected.round.id, typing),
             }}
           />
         </>

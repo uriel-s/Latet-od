@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ROUND_MESSAGES,
   type CollectorOrder,
@@ -29,8 +29,7 @@ import {
 import { SEND_LIST_HEADING, SEND_LIST_HINT, roundGroupsSummary } from './RoundSection.tsx';
 import { ROUND_PICKER_TITLE, ROUND_PICKER_TRIGGER_PREFIX } from './RoundPickerSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
-import { BOTTLES_COLLECTED_LABEL } from './CollectQuantityForm.tsx';
-import { SEND_THANKS_TITLE } from './StopCard.tsx';
+import { COLLECT_TAP_GUARD_MS, SEND_THANKS_TITLE } from './StopCard.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
 /**
@@ -968,16 +967,21 @@ describe('RoundsScreen', () => {
     it('swaps in the round a stop action answers: "אספתי" shows its "שלח תודה" row', async () => {
       const saved = routedView([collected(stopOf(DANA)), stopOf(MOSHE)]);
       const { fakes, calls } = fakeStopActions({ kind: 'saved', view: saved });
-      await renderLoaded({ fetchRounds: fakeLoad(LOADED_ROUTED).load, ...fakes });
-
-      fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
-      fireEvent.click(screen.getByRole('button', { name: 'שמור' }));
+      // Date only: the current card's "אספתי" ignores taps for a moment after it appears.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        await renderLoaded({ fetchRounds: fakeLoad(LOADED_ROUTED).load, ...fakes });
+        vi.setSystemTime(Date.now() + COLLECT_TAP_GUARD_MS);
+        fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
+      } finally {
+        vi.useRealTimers();
+      }
 
       expect(
         await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE }),
       ).toBeDefined();
-      // The field starts at the estimate, 40, and was saved as it was.
-      expect(calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o1', arg: 40 }]);
+      // One tap, no count: the api keeps the estimate.
+      expect(calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o1' }]);
       // Still to collect first, the handled stop at the end.
       expect(stopNames()).toEqual(['משה לוי', 'דנה כהן']);
       expect(screen.getByRole('link', { name: 'שלח לדנה כהן' })).toBeDefined();
@@ -998,51 +1002,6 @@ describe('RoundsScreen', () => {
       expect(notice.textContent).toBe(ROUND_MESSAGES.stopHandled);
       await waitFor(() => expect(document.activeElement).toBe(notice));
       await waitFor(() => expect(stopNames()).toEqual(['משה לוי', 'דנה כהן']));
-      expect(rounds.calls()).toBe(2);
-    });
-
-    it('does not reload on coming back while a quantity field is open, and does once it closes', async () => {
-      const rounds = fakeLoad(LOADED_ROUTED);
-      await renderLoaded({ fetchRounds: rounds.load });
-      fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
-      fireEvent.change(screen.getByLabelText(BOTTLES_COLLECTED_LABEL), {
-        target: { value: '35' },
-      });
-
-      returnToApp();
-      await settle();
-
-      expect(rounds.calls()).toBe(1);
-      // The field is still open with what Yoel typed.
-      expect(screen.getByLabelText<HTMLInputElement>(BOTTLES_COLLECTED_LABEL).value).toBe('35');
-
-      fireEvent.click(screen.getByRole('button', { name: 'ביטול' }));
-      returnToApp();
-      await settle();
-
-      expect(rounds.calls()).toBe(2);
-    });
-
-    it('reloads on coming back after Yoel switched rounds with a quantity field open', async () => {
-      // The field belongs to the round that leaves the screen; it must not pause reloads for good.
-      const routedSecond: RoundView = {
-        ...routedView([stopOf(MOSHE)]),
-        round: { ...ROUND, id: 'r2', date: '2026-11-26', region: 'old', phase: 'routed' },
-      };
-      const rounds = fakeLoad({ kind: 'loaded', rounds: [ROUTED, routedSecond] });
-      renderScreen({ fetchRounds: rounds.load });
-      await screen.findByRole('region', { name: 'רמת בית שמש · 19/11' });
-      fireEvent.click(screen.getByRole('button', { name: 'אספתי, דנה כהן' }));
-      returnToApp();
-      await settle();
-      expect(rounds.calls()).toBe(1);
-
-      pickRound('19/11', '26/11');
-      await screen.findByRole('region', { name: 'בית שמש · 26/11' });
-      expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
-      returnToApp();
-      await settle();
-
       expect(rounds.calls()).toBe(2);
     });
   });

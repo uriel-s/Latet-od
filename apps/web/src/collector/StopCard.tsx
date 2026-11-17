@@ -1,16 +1,14 @@
 // One stop of the route screen (spec §3.6 step 2, "מסלול"): who, where, how many bottles, and
-// what Yoel does there: "נווט" (Waze), "חייג", "הודעה" (WhatsApp), "אספתי" with the real quantity (a − / + stepper),
-// and "⋯", which opens the bottom sheet with "לא נמצא" and the arrows that move the stop. A handled stop shows its state in words and, once
-// collected, its "שלח תודה" row (SendList.tsx, which stores the opening itself through useApi).
+// what Yoel does there: "נווט" (Waze), "חייג", "הודעה" (WhatsApp), "אספתי" in one tap (the api
+// keeps the estimate as the count), and "⋯", which opens the bottom sheet with "לא נמצא" and the
+// arrows that move the stop. A handled stop shows its state in words and, once collected, its
+// "שלח תודה" row (SendList.tsx, which stores the opening itself through useApi).
 // Presentational: the route screen sends every stop request and tells this card whether one is on
-// its way and why it failed; the card owns only what is open in it (the quantity stepper, the "⋯"
-// sheet) and where focus goes.
+// its way and why it failed; the card owns only its "⋯" sheet and where focus goes.
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { flushSync } from 'react-dom';
 import { waMeChatUrl, type RouteStopView } from '@bottlerun/shared';
 import { Icon } from '../components/Icon.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
-import { CollectQuantityForm } from './CollectQuantityForm.tsx';
 import { bottlesText } from './countText.ts';
 import { MoreActionsSheet } from './MoreActionsSheet.tsx';
 import { NO_LOCATION_TAG } from './orderTags.ts';
@@ -29,6 +27,9 @@ export const NEXT_STOP_EYEBROW = 'העצירה הבאה';
 /** Above the thank-you's "שלח" row of a collected stop. */
 export const SEND_THANKS_TITLE = 'שלח תודה';
 
+/** How long the current card's "אספתי" ignores taps after the card appears. */
+export const COLLECT_TAP_GUARD_MS = 1000;
+
 /** Props of {@link StopCard}. */
 export interface StopCardProps {
   stop: RouteStopView;
@@ -41,6 +42,8 @@ export interface StopCardProps {
    * "חייג" and "הודעה".
    */
   current?: boolean;
+  /** The current card's name `<h3>`: the route screen focuses it after a saved "אספתי". */
+  headingRef?: RefObject<HTMLHeadingElement | null>;
   /** Whether the "הזז למעלה" arrow shows (the route screen's storedMovesFor(...) > 0). */
   canMoveUp: boolean;
   /** Whether the "הזז למטה" arrow shows. */
@@ -49,21 +52,17 @@ export interface StopCardProps {
   busy: boolean;
   /** Why the last action of this card failed (plain Hebrew), shown in the card; undefined for none. */
   error?: string;
-  /** The api's message for the quantity (400 invalid_collect), shown next to the field. */
-  bottlesError?: string;
   onMove: (direction: 'up' | 'down') => void;
-  /** "שמור" in the quantity field, with a validated whole number. */
-  onCollect: (bottlesCollected: number) => void;
+  /** "אספתי", on the current card or in the compact card's sheet. */
+  onCollect: () => void;
   /** "כן, לא נמצא" in the card's question. */
   onNotFound: () => void;
-  /** The quantity field opened or closed: the screen stops reload-on-return while Yoel types. */
-  onTypingChange?: (typing: boolean) => void;
   /**
-   * What the route screen just saved for this card: 'collected' (Yoel's own "אספתי") buzzes once
-   * and moves the focus to "שלח תודה"; 'notFound' (his own "כן, לא נמצא") moves it to the handled
-   * card's name; 'moved' (an arrow) puts a lost focus back on "⋯". It comes
-   * from the screen, not from a flag inside the card, because the save moves the card into another
-   * list (current → handled, current ↔ upcoming), and React mounts a new card there.
+   * What the route screen just saved for this card: 'collected' (Yoel's own "אספתי") buzzes once;
+   * 'notFound' (his own "כן, לא נמצא") moves the focus to the handled card's name; 'moved' (an
+   * arrow) puts a lost focus back on "⋯". It comes from the screen, not from a flag inside the
+   * card, because the save moves the card into another list (current → handled, current ↔
+   * upcoming), and React mounts a new card there.
    */
   justSaved?: JustSaved;
   /** The card acted on `justSaved`: the screen forgets it, so it happens once. */
@@ -72,9 +71,6 @@ export interface StopCardProps {
 
 /** A save of the route screen that the card reacts to; see {@link StopCardProps.justSaved}. */
 export type JustSaved = 'collected' | 'notFound' | 'moved';
-
-/** What is open in a card still to collect: nothing, the quantity stepper, or the "⋯" sheet. */
-type OpenPart = 'none' | 'quantity' | 'more';
 
 /**
  * One stop as a list item; the route screen puts the cards in an `<ol>` under the round's `<h2>`,
@@ -93,57 +89,30 @@ type OpenPart = 'none' | 'quantity' | 'more';
  * action; when collected, its "שלח תודה" row. The route screen moves it to the end of the list.
  */
 export function StopCard(props: StopCardProps) {
-  const { stop, onTypingChange, justSaved } = props;
-  const [openPart, setOpenPart] = useState<OpenPart>('none');
+  const { stop, justSaved } = props;
+  const [moreOpen, setMoreOpen] = useState(false);
   const handled = isStopHandled(stop.state);
-  // The field and the sheet close by themselves once the stop is handled (the saved view, or
-  // a reload that shows it handled elsewhere): the handled card has neither. Set during render,
-  // React's pattern for state that follows a prop, so no frame shows the stale part.
-  if (handled && openPart !== 'none') setOpenPart('none');
-  const typing = openPart === 'quantity' && !handled;
+  // The sheet closes by itself once the stop is handled (the saved view, or a reload that shows
+  // it handled elsewhere): the handled card has none. Set during render, React's pattern for state
+  // that follows a prop, so no frame shows the stale sheet.
+  if (handled && moreOpen) setMoreOpen(false);
 
   // The latest callback, read by the effects below, so a new arrow from the screen on every
-  // render neither reports "typing" again nor is missed on unmount.
-  const onTypingChangeRef = useRef(onTypingChange);
+  // render is not missed.
   const onJustSavedSeenRef = useRef(props.onJustSavedSeen);
   useEffect(() => {
-    onTypingChangeRef.current = onTypingChange;
     onJustSavedSeenRef.current = props.onJustSavedSeen;
   });
-  // What the screen was last told, so it hears each change once (StrictMode's second run too).
-  const reportedTypingRef = useRef(false);
-  useEffect(() => {
-    if (reportedTypingRef.current === typing) return;
-    reportedTypingRef.current = typing;
-    onTypingChangeRef.current?.(typing);
-  }, [typing]);
-  // A card that leaves the screen with its field open must not keep the screen's reload stopped.
-  useEffect(
-    () => () => {
-      if (!reportedTypingRef.current) return;
-      reportedTypingRef.current = false;
-      onTypingChangeRef.current?.(false);
-    },
-    [],
-  );
 
-  // Yoel's own "אספתי" was saved (the screen says so in justSaved, and the stop shows collected).
-  // A stop collected elsewhere or seen collected on a reload does neither of the two below.
-  const thanksTitleRef = useRef<HTMLHeadingElement>(null);
+  // Yoel's own "אספתי" was saved (the screen says so in justSaved, and the stop shows collected):
+  // a short buzz, so he feels it went through without looking. A stop collected elsewhere or seen
+  // collected on a reload does not. navigator.vibrate is missing on iOS and desktop: optional call.
   const collectedHere = justSaved === 'collected' && stop.state === 'collected';
-  // A short buzz, so he feels it went through without looking. navigator.vibrate is missing on
-  // iOS and desktop: optional call.
   useEffect(() => {
-    if (collectedHere) navigator.vibrate?.(30);
-  }, [collectedHere]);
-  // The thank-you row's title gets the focus: the field he typed in is gone, and the row he taps
-  // next ("שלח") is right under it, in the handled list the card moved to.
-  const showThanks = stop.state === 'collected' && stop.thankYou !== undefined;
-  useEffect(() => {
-    if (!collectedHere || !showThanks) return;
-    thanksTitleRef.current?.focus();
+    if (!collectedHere) return;
+    navigator.vibrate?.(30);
     onJustSavedSeenRef.current?.();
-  }, [collectedHere, showThanks]);
+  }, [collectedHere]);
   // Yoel's own "כן, לא נמצא" was saved: the sheet he answered in is gone with the card it was in,
   // and the focus would fall to the page. The handled card's name takes it, so a screen reader
   // says which stop moved and he goes on from there. A stop seen not found on a reload does not.
@@ -166,22 +135,22 @@ export function StopCard(props: StopCardProps) {
   }, [movedHere]);
 
   if (handled) {
-    return <HandledStopCard {...props} nameRef={nameRef} thanksTitleRef={thanksTitleRef} />;
+    return <HandledStopCard {...props} nameRef={nameRef} />;
   }
   return (
     <ToCollectStopCard
       {...props}
-      openPart={openPart}
-      setOpenPart={setOpenPart}
+      moreOpen={moreOpen}
+      setMoreOpen={setMoreOpen}
       moreButtonRef={moreButtonRef}
     />
   );
 }
 
-/** Props of {@link ToCollectStopCard}: the card's, plus what is open in it and its "⋯" button. */
+/** Props of {@link ToCollectStopCard}: the card's, plus its "⋯" sheet and button. */
 interface ToCollectStopCardProps extends StopCardProps {
-  openPart: OpenPart;
-  setOpenPart: (part: OpenPart) => void;
+  moreOpen: boolean;
+  setMoreOpen: (open: boolean) => void;
   /** Owned by StopCard, which focuses "⋯" after a saved move. */
   moreButtonRef: RefObject<HTMLButtonElement | null>;
 }
@@ -191,63 +160,45 @@ function ToCollectStopCard({
   stop,
   position,
   current = false,
+  headingRef,
   canMoveUp,
   canMoveDown,
   busy,
   error,
-  bottlesError,
   onMove,
   onCollect,
   onNotFound,
-  openPart,
-  setOpenPart,
+  moreOpen,
+  setMoreOpen,
   moreButtonRef,
 }: ToCollectStopCardProps) {
   const { order } = stop;
   const name = order.contact.name;
   const lines = stopAddressLines(order.address);
-  const collectButtonRef = useRef<HTMLButtonElement>(null);
-  const quantityInputRef = useRef<HTMLInputElement>(null);
 
-  /**
-   * Opens or closes a part of the card. flushSync renders first, so the element to focus exists,
-   * and the focus call stays inside the tap (iOS opens the keyboard only then): to the quantity
-   * field when it opens (the button just tapped is gone; the sheet takes its own focus), and back
-   * to the button that opened the part when it closes.
-   */
-  function open(part: OpenPart): void {
-    const closing = openPart;
-    flushSync(() => {
-      setOpenPart(part);
-    });
-    if (part === 'quantity') {
-      quantityInputRef.current?.focus();
-      // Selected, so typing the real count replaces the estimate instead of adding to it.
-      quantityInputRef.current?.select();
-    } else if (part === 'none') {
-      // The compact card has no "אספתי" of its own: focus goes back to its "⋯".
-      (closing === 'more' || !current ? moreButtonRef : collectButtonRef).current?.focus();
-    }
+  // Collected is final, and after one "אספתי" the next stop's button lands right where the finger
+  // just was: a tap in the first COLLECT_TAP_GUARD_MS after the card appears is a double tap.
+  const shownAtRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    shownAtRef.current = Date.now();
+  }, []);
+
+  function collectFromCard(): void {
+    const shownAt = shownAtRef.current;
+    if (busy || shownAt === undefined || Date.now() - shownAt < COLLECT_TAP_GUARD_MS) return;
+    onCollect();
+  }
+
+  /** Closes the sheet; the focus goes back to the "⋯" that opened it. */
+  function closeSheet(): void {
+    setMoreOpen(false);
+    moreButtonRef.current?.focus();
   }
 
   // aria-disabled, not disabled, while busy: a button keeps focus and is announced as
   // unavailable, and its tap does nothing (the screen keeps its own guard too).
   const ariaBusy = busy ? true : undefined;
   const nameSuffix = <span className="visually-hidden">, {name}</span>;
-  const moreOpen = openPart === 'more';
-  const quantityOpen = openPart === 'quantity';
-
-  // Shared by the plain card and the current one: the quantity stepper (the "⋯" sheet follows).
-  const quantityPanel = quantityOpen && (
-    <CollectQuantityForm
-      bottlesEstimated={order.bottlesEstimated}
-      busy={busy}
-      bottlesError={bottlesError}
-      inputRef={quantityInputRef}
-      onSave={onCollect}
-      onCancel={() => open('none')}
-    />
-  );
 
   // While the sheet is open its error shows inside it: in the card it would sit behind the dark
   // background, outside the modal dialog a screen reader stays in. Closed, the card shows it.
@@ -265,12 +216,15 @@ function ToCollectStopCard({
       {...(current
         ? {}
         : {
-            onCollect: () => open('quantity'),
+            onCollect: () => {
+              closeSheet();
+              onCollect();
+            },
             navigateUrl: wazeUrl(order.address),
             phoneUrl: telUrl(order.contact.phone),
             messageUrl: waMeChatUrl(order.contact.phone),
           })}
-      onClose={() => open('none')}
+      onClose={closeSheet}
     />
   );
 
@@ -285,7 +239,7 @@ function ToCollectStopCard({
       aria-disabled={ariaBusy}
       aria-label={`עוד פעולות, ${name}`}
       onClick={() => {
-        if (!busy) open('more');
+        if (!busy) setMoreOpen(true);
       }}
     >
       <Icon name="more" />
@@ -301,7 +255,10 @@ function ToCollectStopCard({
           </span>
           <div>
             <p className="stop-card-eyebrow">{NEXT_STOP_EYEBROW}</p>
-            <h3 className="stop-card-name">{name}</h3>
+            {/* tabIndex -1: focused from code after "אספתי" saved, never a Tab stop. */}
+            <h3 ref={headingRef} tabIndex={-1} className="stop-card-name">
+              {name}
+            </h3>
           </div>
         </div>
         <div className="stop-card-fact">
@@ -318,52 +275,43 @@ function ToCollectStopCard({
           {!stop.hasLocation && <span className="tag">{NO_LOCATION_TAG}</span>}
         </p>
 
-        {quantityPanel}
-
-        {!quantityOpen && (
-          <>
-            <div className="stop-card-current-row">
-              {/* The same Waze link as the plain card's "נווט" (ADR-0007): it follows the current
-                  stop, so after "אספתי" it points at the next one. */}
-              <a
-                className="button button-secondary"
-                href={wazeUrl(order.address)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Icon name="navigate" />
-                נווט{nameSuffix}
-              </a>
-              <a className="button button-secondary" href={telUrl(order.contact.phone)}>
-                <Icon name="phone" />
-                חייג{nameSuffix}
-              </a>
-              {/* An empty WhatsApp chat, as the orders tab's "הודעה": Yoel writes what he needs. */}
-              <a
-                className="button button-secondary"
-                href={waMeChatUrl(order.contact.phone)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Icon name="chat" />
-                הודעה{nameSuffix}
-              </a>
-              {moreButton}
-            </div>
-            <button
-              ref={collectButtonRef}
-              type="button"
-              className="button button-primary button-big button-block"
-              aria-disabled={ariaBusy}
-              onClick={() => {
-                if (!busy) open('quantity');
-              }}
-            >
-              <Icon name="check" />
-              אספתי{nameSuffix}
-            </button>
-          </>
-        )}
+        <div className="stop-card-current-row">
+          {/* The same Waze link as the plain card's "נווט" (ADR-0007): it follows the current
+              stop, so after "אספתי" it points at the next one. */}
+          <a
+            className="button button-secondary"
+            href={wazeUrl(order.address)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Icon name="navigate" />
+            נווט{nameSuffix}
+          </a>
+          <a className="button button-secondary" href={telUrl(order.contact.phone)}>
+            <Icon name="phone" />
+            חייג{nameSuffix}
+          </a>
+          {/* An empty WhatsApp chat, as the orders tab's "הודעה": Yoel writes what he needs. */}
+          <a
+            className="button button-secondary"
+            href={waMeChatUrl(order.contact.phone)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Icon name="chat" />
+            הודעה{nameSuffix}
+          </a>
+          {moreButton}
+        </div>
+        <button
+          type="button"
+          className="button button-primary button-big button-block"
+          aria-disabled={ariaBusy}
+          onClick={collectFromCard}
+        >
+          <Icon name="check" />
+          אספתי{nameSuffix}
+        </button>
 
         {moreSheet}
 
@@ -393,8 +341,6 @@ function ToCollectStopCard({
       </div>
       {moreButton}
 
-      {quantityOpen && <div className="stop-card-compact-wide">{quantityPanel}</div>}
-
       {moreSheet}
 
       {cardError !== undefined && (
@@ -406,12 +352,10 @@ function ToCollectStopCard({
   );
 }
 
-/** Props of {@link HandledStopCard}: the card's, plus the headings StopCard focuses. */
+/** Props of {@link HandledStopCard}: the card's, plus the name StopCard focuses. */
 interface HandledStopCardProps extends StopCardProps {
   /** The name, focused after Yoel's own "כן, לא נמצא" saved. */
   nameRef: RefObject<HTMLHeadingElement | null>;
-  /** "שלח תודה", focused after Yoel's own "אספתי" saved. */
-  thanksTitleRef: RefObject<HTMLHeadingElement | null>;
 }
 
 /**
@@ -419,7 +363,7 @@ interface HandledStopCardProps extends StopCardProps {
  * signal), the name and the street, and no action or arrow. A collected stop with a thank-you to
  * send shows its "שלח תודה" row; SendList keeps what Yoel tapped while the row stays mounted.
  */
-function HandledStopCard({ stop, error, nameRef, thanksTitleRef }: HandledStopCardProps) {
+function HandledStopCard({ stop, error, nameRef }: HandledStopCardProps) {
   const { order } = stop;
   // isStopHandled already excluded 'toCollect'; the check narrows the type for the label lookup.
   const label = stop.state === 'toCollect' ? undefined : STOP_STATE_LABELS[stop.state];
@@ -434,10 +378,7 @@ function HandledStopCard({ stop, error, nameRef, thanksTitleRef }: HandledStopCa
       <p className="stop-card-street">{stopAddressLines(order.address).street}</p>
       {stop.state === 'collected' && stop.thankYou !== undefined && (
         <div className="stop-card-thanks">
-          {/* tabIndex -1: focused from code after "אספתי" saved, never a Tab stop. */}
-          <h4 ref={thanksTitleRef} tabIndex={-1} className="stop-card-thanks-title">
-            {SEND_THANKS_TITLE}
-          </h4>
+          <h4 className="stop-card-thanks-title">{SEND_THANKS_TITLE}</h4>
           <SendList rows={[stop.thankYou]} />
         </div>
       )}

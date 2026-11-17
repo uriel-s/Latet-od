@@ -3,12 +3,7 @@
 // `routed`, swaps in every view a saved action answers, and reloads when this calls `onStale`.
 import { EmptyState } from '../components/EmptyState.tsx';
 import { useEffect, useId, useRef, useState } from 'react';
-import {
-  COLLECT_STOP_ERRORS,
-  formatShekels,
-  type RoundView,
-  type RouteStopView,
-} from '@bottlerun/shared';
+import { formatShekels, type RoundView, type RouteStopView } from '@bottlerun/shared';
 import { useApi } from '../api/ApiContext.tsx';
 import type { StopActionOutcome } from '../api/roundsApi.ts';
 import { Icon } from '../components/Icon.tsx';
@@ -110,8 +105,6 @@ export interface RouteScreenProps {
    * the parent shows `message` under the heading and reloads the rounds.
    */
   onStale: (message: string) => void;
-  /** True while some quantity field is open: the parent must not reload-on-return then. */
-  onTypingChange?: (typing: boolean) => void;
 }
 
 /**
@@ -122,14 +115,14 @@ export interface RouteScreenProps {
  * Every card sends its own requests, one at a time: a second tap on a card whose request is on its
  * way sends nothing, while the other cards keep working. A saved answer goes to `onView`; an answer
  * that says the screen is out of date goes to `onStale`, since the card Yoel tapped may move or
- * vanish once the parent reloads; a refused count shows next to the quantity field; anything else
- * shows in the card, and the button can be tapped again. A 401 leaves for the login.
+ * vanish once the parent reloads; anything else shows in the card, and the button can be tapped
+ * again. A 401 leaves for the login.
  *
  * The requests are `moveStop`, `collectStop` and `markStopNotFound` of {@link useApi}: this part
  * sends them, so neither the rounds screen above nor the cards below handle them. A card's
  * "שלח תודה" row stores its opening itself (SendList.tsx).
  */
-export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScreenProps) {
+export function RouteScreen({ view, onView, onStale }: RouteScreenProps) {
   const { moveStop, collectStop, markStopNotFound } = useApi();
   const roundId = view.round.id;
 
@@ -150,7 +143,6 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
   // is one stop of one route at most.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
-  const [bottlesErrors, setBottlesErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   // What was just saved for a card (Yoel's own "אספתי" or "כן, לא נמצא", or an arrow), until the
   // card acted on it.
   // Kept here, not in the card: the save moves the card into another list, where React mounts a
@@ -162,42 +154,24 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
   // An answer after Yoel left the tab changes nothing, and must not pull him to the login.
   const mountedRef = useMountedRef();
 
-  // The parent's latest callbacks, read after an await and from the cards' typing reports: the
-  // parent may hand new arrows on every render, and an answer must reach the current ones.
-  const callbacksRef = useRef({ onView, onStale, onTypingChange });
+  // The parent's latest callbacks, read after an await: the parent may hand new arrows on every
+  // render, and an answer must reach the current ones.
+  const callbacksRef = useRef({ onView, onStale });
   useEffect(() => {
-    callbacksRef.current = { onView, onStale, onTypingChange };
+    callbacksRef.current = { onView, onStale };
   });
 
-  // The cards whose quantity field is open, and what the parent was last told, so it hears each
-  // change of "Yoel is typing somewhere in the route" once, not once per card.
-  const typingIdsRef = useRef(new Set<string>());
-  const reportedTypingRef = useRef(false);
-
-  function reportTyping(): void {
-    const typing = typingIdsRef.current.size > 0;
-    if (reportedTypingRef.current === typing) return;
-    reportedTypingRef.current = typing;
-    callbacksRef.current.onTypingChange?.(typing);
-  }
-
-  function typingChanged(orderId: string, typing: boolean): void {
-    if (typing) typingIdsRef.current.add(orderId);
-    else typingIdsRef.current.delete(orderId);
-    reportTyping();
-  }
-
+  // Set when Yoel's own "אספתי" is saved: the render that shows the saved view focuses the new
+  // current stop's name, or the progress title once none is left. Not the collected card's
+  // "שלח תודה": it sits at the bottom of the list, and the page would scroll away from his next stop.
+  const focusCurrentRef = useRef(false);
+  const currentNameRef = useRef<HTMLHeadingElement>(null);
+  const progressTitleRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    const typingIds = typingIdsRef.current;
-    return () => {
-      // Leaving with a field open must not keep the parent's reload stopped. The cards' own
-      // unmount reports come after this one and find nothing left to tell.
-      typingIds.clear();
-      if (!reportedTypingRef.current) return;
-      reportedTypingRef.current = false;
-      callbacksRef.current.onTypingChange?.(false);
-    };
-  }, []);
+    if (!focusCurrentRef.current) return;
+    focusCurrentRef.current = false;
+    (currentNameRef.current ?? progressTitleRef.current)?.focus();
+  });
 
   /**
    * Starts an action of card `orderId`: false when one is already on its way (nothing is sent).
@@ -208,7 +182,6 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
     busyIdsRef.current.add(orderId);
     setBusyIds((previous) => withId(previous, orderId, true));
     setErrors((previous) => withMessage(previous, orderId, undefined));
-    setBottlesErrors((previous) => withMessage(previous, orderId, undefined));
     return true;
   }
 
@@ -244,21 +217,14 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
         // Nothing moved: only this card's arrow was out of date.
         setErrors((previous) => withMessage(previous, orderId, outcome.message));
         return false;
-      case 'invalid':
-        setBottlesErrors((previous) =>
-          withMessage(
-            previous,
-            orderId,
-            outcome.fieldErrors.bottlesCollected ?? COLLECT_STOP_ERRORS.bottlesInvalid,
-          ),
-        );
-        return false;
       case 'loggedOut':
         // Replace, not push: "back" from the login must not land on a screen that needs it.
         navigate('/login', { replace: true });
         return false;
+      case 'invalid':
       case 'failed':
-        // Nothing to reload: the request may not have arrived. The card is free again.
+        // Nothing to reload: the request may not have arrived. The card is free again. ('invalid'
+        // refuses only a count, and the card sends none: a retry is all Yoel can do.)
         setErrors((previous) => withMessage(previous, orderId, STOP_ACTION_FAILED_MESSAGE));
         return false;
     }
@@ -328,7 +294,7 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
   function renderCard(stop: RouteStopView) {
     const orderId = stop.order.id;
     return (
-      // Keyed by the order: a card keeps its open field and focus when it moves inside its list.
+      // Keyed by the order: a card keeps its open sheet and focus when it moves inside its list.
       // A move into another list (current, upcoming, handled) mounts a new card; justSaved tells
       // that new card what Yoel just did there.
       <StopCard
@@ -336,17 +302,20 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
         stop={stop}
         position={screenStops.indexOf(stop) + 1}
         current={orderId === currentOrderId}
+        headingRef={orderId === currentOrderId ? currentNameRef : undefined}
         canMoveUp={storedMovesFor(view.stops, orderId, 'up') > 0}
         canMoveDown={storedMovesFor(view.stops, orderId, 'down') > 0}
         busy={busyIds.has(orderId)}
         error={errors.get(orderId)}
-        bottlesError={bottlesErrors.get(orderId)}
         onMove={(direction) => void move(orderId, direction)}
-        onCollect={(bottlesCollected) =>
+        onCollect={() =>
           void runOnce(
             orderId,
-            () => collectStop(roundId, orderId, bottlesCollected),
-            () => markJustSaved(orderId, 'collected'),
+            () => collectStop(roundId, orderId),
+            () => {
+              markJustSaved(orderId, 'collected');
+              focusCurrentRef.current = true;
+            },
           )
         }
         onNotFound={() =>
@@ -356,7 +325,6 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
             () => markJustSaved(orderId, 'notFound'),
           )
         }
-        onTypingChange={(typing) => typingChanged(orderId, typing)}
         justSaved={justSaved.get(orderId)}
         onJustSavedSeen={() =>
           setJustSaved((previous) => withMessage(previous, orderId, undefined))
@@ -377,7 +345,8 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
         )
       ) : (
         <div className="card route-progress" role="group" aria-label={ROUTE_PROGRESS_LABEL}>
-          <p className="route-progress-title">
+          {/* tabIndex -1: focused from code after the last "אספתי" saved, never a Tab stop. */}
+          <p ref={progressTitleRef} tabIndex={-1} className="route-progress-title">
             {nextStop === undefined
               ? ALL_STOPS_HANDLED_TEXT
               : `עצירה ${handledCount + 1} מתוך ${shownStops.length}`}

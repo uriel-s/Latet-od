@@ -37,7 +37,7 @@ export interface MoreActionsSheetProps {
   onNotFound: () => void;
   /**
    * Upcoming stops only: "אספתי" at the top of the sheet (Yoel collects out of order). The card
-   * closes the sheet and opens its quantity stepper. Left out, no "אספתי" shows.
+   * closes the sheet and collects. Left out, no "אספתי" shows.
    */
   onCollect?: () => void;
   /** Upcoming stops only: the Waze link, shown as "נווט" in the sheet. */
