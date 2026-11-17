@@ -32,8 +32,8 @@ export type RoundStatus = z.infer<typeof roundStatusSchema>;
  * - `routed`: Yoel tapped "התחל מסלול"; every order still in the round is a stop, and the route
  *   is built and stored (step 2).
  * "סגור סבב" does not change the phase: a closed round keeps the one it was closed in, which
- * records whether its route was ever built. Its unhandled orders leave with `notReached` either
- * way (older rounds may hold the legacy `notConfirmed`).
+ * records whether its route was ever built. Its unhandled orders leave with `notReached`
+ * either way.
  */
 export const ROUND_PHASES = ['confirming', 'routed'] as const;
 export const roundPhaseSchema = z.enum(ROUND_PHASES);

@@ -63,10 +63,10 @@ function storedOrder(overrides: Partial<Order> = {}): Order {
   return { ...makeNewOrder(), id: ORDER_ID, ...overrides };
 }
 
-/** A stored order `pending` in {@link ROUND}, with its confirmation request in the log. */
+/** A stored order `confirmed` in {@link ROUND}, with its round message in the log. */
 function orderInRound(overrides: Partial<Order> = {}): Order {
   return storedOrder({
-    status: 'pending',
+    status: 'confirmed',
     roundId: ROUND_ID,
     messages: [CONFIRM_REQUEST],
     ...overrides,
@@ -112,7 +112,7 @@ describe('buildCustomerOrderPatch: bottles and the note', () => {
     expect(patch.updatedAt).not.toBe(NOW);
   });
 
-  it('keeps a pending order in its round when only the note changes, near street and region too', () => {
+  it('keeps an order in its round when only the note changes, near street and region too', () => {
     const stored = orderInRound({ address: FREE_TEXT_WITH_NEAR, region: 'ramat' });
 
     const { patch, leftRound } = buildCustomerOrderPatch(
@@ -311,40 +311,36 @@ describe('buildCustomerOrderPatch: the near street and the region', () => {
 });
 
 describe('buildCustomerOrderPatch: leaving the round', () => {
-  it.each(['pending', 'confirmed'] as const)(
-    'takes a %s order out of its round on a new street: waiting, no roundId, lastMiss addressChanged',
-    (status) => {
-      const stored = orderInRound({
-        status,
-        address: listedAddress(RAMAT_STREET),
-        region: 'ramat',
-      });
+  it('takes an order out of its round on a new street: waiting, no roundId, lastMiss addressChanged', () => {
+    const stored = orderInRound({
+      address: listedAddress(RAMAT_STREET),
+      region: 'ramat',
+    });
 
-      const { patch, leftRound } = buildCustomerOrderPatch(
-        stored,
-        parseRequest({
-          address: { streetCode: OLD_STREET.code, houseNumber: '7', bottlesSpot: 'privateHouse' },
-        }),
-        ROUND,
-        NOW,
-      );
+    const { patch, leftRound } = buildCustomerOrderPatch(
+      stored,
+      parseRequest({
+        address: { streetCode: OLD_STREET.code, houseNumber: '7', bottlesSpot: 'privateHouse' },
+      }),
+      ROUND,
+      NOW,
+    );
 
-      expect(leftRound).toBe(true);
-      expect(patch).toStrictEqual({
-        address: {
-          streetCode: OLD_STREET.code,
-          streetName: OLD_STREET.name,
-          houseNumber: '7',
-          bottlesSpot: 'privateHouse',
-        },
-        region: 'old',
-        status: 'waiting',
-        roundId: undefined,
-        lastMiss: { date: ROUND.date, reason: 'addressChanged', roundId: ROUND_ID },
-        updatedAt: NOW,
-      });
-    },
-  );
+    expect(leftRound).toBe(true);
+    expect(patch).toStrictEqual({
+      address: {
+        streetCode: OLD_STREET.code,
+        streetName: OLD_STREET.name,
+        houseNumber: '7',
+        bottlesSpot: 'privateHouse',
+      },
+      region: 'old',
+      status: 'waiting',
+      roundId: undefined,
+      lastMiss: { date: ROUND.date, reason: 'addressChanged', roundId: ROUND_ID },
+      updatedAt: NOW,
+    });
+  });
 
   it('takes the order out without a lastMiss when its round is missing, keeping an earlier one', () => {
     const earlierMiss = {
@@ -463,7 +459,7 @@ describe('buildCustomerOrderPatch: the patch', () => {
       const repo = new InMemoryOrdersRepo();
       const stored = await repo.create(
         makeNewOrder({
-          status: 'pending',
+          status: 'confirmed',
           roundId: ROUND_ID,
           messages: [CONFIRM_REQUEST],
           address: FREE_TEXT_WITH_NEAR,

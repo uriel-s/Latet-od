@@ -43,7 +43,7 @@ const BACK_FROM_ROUND: Partial<Order> = {
     note: 'קוד לבניין 1234',
   },
   region: 'ramat',
-  lastMiss: { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-0' },
+  lastMiss: { date: '2026-10-12', reason: 'notReached', roundId: 'round-0' },
   messages: [
     {
       kind: 'confirmRequest',
@@ -111,7 +111,7 @@ describe('toCollectorOrder', () => {
       bottlesEstimated: 45,
       status: 'waiting',
       region: 'ramat',
-      lastMiss: { date: '2026-10-12', reason: 'notConfirmed', roundId: 'round-0' },
+      lastMiss: { date: '2026-10-12', reason: 'notReached', roundId: 'round-0' },
       source: 'form',
       createdAt: CREATED_AT,
       hasLocation: true,
@@ -125,7 +125,7 @@ describe('toCollectorOrder', () => {
       false,
     );
     expect(
-      toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'pending', roundId: 'round-1' }))
+      toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'confirmed', roundId: 'round-1' }))
         .deletable,
     ).toBe(false);
     expect(toCollectorOrder(makeOrder({ ...BACK_FROM_ROUND, status: 'collected' })).deletable).toBe(

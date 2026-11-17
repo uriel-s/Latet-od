@@ -13,6 +13,7 @@ import { useApi } from '../api/ApiContext.tsx';
 import type { StopActionOutcome } from '../api/roundsApi.ts';
 import { Icon } from '../components/Icon.tsx';
 import { navigate } from '../router.tsx';
+import { useMountedRef } from '../useMountedRef.ts';
 import {
   dropOffWazeUrl,
   googleMapsRouteUrl,
@@ -24,6 +25,7 @@ import {
   storedMovesFor,
 } from './routeStops.ts';
 import { StopCard, type JustSaved } from './StopCard.tsx';
+import { withId } from './withId.ts';
 
 /** In place of the list when the route has no stop at all. */
 export const NO_STOPS_TEXT = 'אין עצירות במסלול.';
@@ -82,15 +84,6 @@ export function routeSummary(stops: readonly Pick<RouteStopView, 'state'>[]): st
   const collected = stops.filter((stop) => stop.state === 'collected').length;
   const toCollect = stops.filter((stop) => stop.state === 'toCollect').length;
   return `נאספו ${collected} מתוך ${stops.length} · נשארו ${toCollect}`;
-}
-
-/** `ids` with `id` in it (`present`) or out of it; the same set when nothing changes. */
-function withId(ids: ReadonlySet<string>, id: string, present: boolean): ReadonlySet<string> {
-  if (ids.has(id) === present) return ids;
-  const next = new Set(ids);
-  if (present) next.add(id);
-  else next.delete(id);
-  return next;
 }
 
 /** `messages` with `message` for `id`, or without `id` when undefined; the same map if unchanged. */
@@ -166,9 +159,8 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
   // The state above reaches a handler only after a re-render; this ref stops a second tap on the
   // same card that comes before it, so one tap sends one request.
   const busyIdsRef = useRef(new Set<string>());
-  // False once the part is gone: an answer that comes after Yoel left the tab changes nothing, and
-  // above all must not pull him to the login from the screen he went to.
-  const mountedRef = useRef(false);
+  // An answer after Yoel left the tab changes nothing, and must not pull him to the login.
+  const mountedRef = useMountedRef();
 
   // The parent's latest callbacks, read after an await and from the cards' typing reports: the
   // parent may hand new arrows on every render, and an answer must reach the current ones.
@@ -196,10 +188,8 @@ export function RouteScreen({ view, onView, onStale, onTypingChange }: RouteScre
   }
 
   useEffect(() => {
-    mountedRef.current = true;
     const typingIds = typingIdsRef.current;
     return () => {
-      mountedRef.current = false;
       // Leaving with a field open must not keep the parent's reload stopped. The cards' own
       // unmount reports come after this one and find nothing left to tell.
       typingIds.clear();

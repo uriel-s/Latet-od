@@ -48,12 +48,11 @@ UI text is Hebrew; code, identifiers and commit messages are English.
 | Code | Hebrew | When |
 |---|---|---|
 | `waiting` | ממתינה לסבב | Created, or back from a round that did not collect it. |
-| `pending` | ממתינה לאישור | Legacy (ADR-0012): nothing enters it; old orders in it are taken into the route by "התחל מסלול". |
 | `confirmed` | בסבב | In a round: Yoel planned it and the message went out. No customer confirmation (ADR-0012). |
 | `collected` | נאספה | Yoel tapped "אספתי". Final. |
 | `cancelled` | בוטלה | Customer or Yoel cancelled. Final. |
 
-Leaving a round is a **reason, not a status**: the order returns to `waiting` and `lastMiss` stores date + reason (ביקש מועד אחר, לא נמצא במקום, לא הגענו אליו, שינה כתובת; "לא אישר בזמן" is legacy, ADR-0012). There is no `archived` and no "כתובת לבדיקה" status — an order without a location gets a "בלי מיקום" tag instead.
+Leaving a round is a **reason, not a status**: the order returns to `waiting` and `lastMiss` stores date + reason (ביקש מועד אחר, לא נמצא במקום, לא הגענו אליו, שינה כתובת). There is no `archived` and no "כתובת לבדיקה" status — an order without a location gets a "בלי מיקום" tag instead.
 
 ## Project Structure
 

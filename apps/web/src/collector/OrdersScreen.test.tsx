@@ -32,7 +32,7 @@ const ORDERS: CollectorOrder[] = [
       bottlesSpot: 'privateHouse',
     },
     bottlesEstimated: 80,
-    lastMiss: { date: '2026-11-12', reason: 'notConfirmed', roundId: 'r1' },
+    lastMiss: { date: '2026-11-12', reason: 'notReached', roundId: 'r1' },
   }),
   makeCollectorOrder({
     ...WITH_DETAILS,
@@ -295,8 +295,8 @@ describe('OrdersScreen', () => {
     it('tags the order back from a round with its reason and day, and only that order', async () => {
       await renderLoaded();
 
-      expect(within(cardOf('משה לוי')).getByText('לא אישר בזמן · 12/11')).toBeDefined();
-      expect(screen.getAllByText('לא אישר בזמן · 12/11')).toHaveLength(1);
+      expect(within(cardOf('משה לוי')).getByText('לא הגענו אליו · 12/11')).toBeDefined();
+      expect(screen.getAllByText('לא הגענו אליו · 12/11')).toHaveLength(1);
       expect(within(cardOf('משה לוי')).queryByText('בלי מיקום')).toBeNull();
     });
 

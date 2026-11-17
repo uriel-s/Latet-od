@@ -17,15 +17,14 @@ import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import {
-  NO_REGION_ORDERS_TEXT,
   PERSONAL_TEXT_HINT,
   PICKUP_BY_HINT,
   PICKUP_BY_LABEL,
   PICKUP_FROM_HINT,
   PICKUP_FROM_LABEL,
   PlanRoundScreen,
-  UNASSIGNED_ORDERS_HINT,
 } from './PlanRoundScreen.tsx';
+import { NO_REGION_ORDERS_TEXT, UNASSIGNED_ORDERS_HINT } from './PlanOrdersField.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
 /** What these tests start from, on top of makeCollectorOrder: a waiting private house. */
@@ -46,7 +45,7 @@ const MOSHE = makeCollectorOrder({
     bottlesSpot: 'privateHouse',
   },
   bottlesEstimated: 80,
-  lastMiss: { date: '2026-11-12', reason: 'notConfirmed', roundId: 'r0' },
+  lastMiss: { date: '2026-11-12', reason: 'notReached', roundId: 'r0' },
 });
 /** In בית שמש, with no map point: its card has "בלי מיקום". */
 const YOSSI = makeCollectorOrder({
@@ -408,7 +407,7 @@ describe('PlanRoundScreen', () => {
       if (moshe === null) throw new Error('no row for משה לוי');
       expect(within(moshe).getByText("בית ג'מאל 5")).toBeDefined();
       expect(within(moshe).getByText('80 בקבוקים')).toBeDefined();
-      expect(within(moshe).getByText('לא אישר בזמן · 12/11')).toBeDefined();
+      expect(within(moshe).getByText('לא הגענו אליו · 12/11')).toBeDefined();
       const dana = orderBox('דנה כהן').closest('label');
       if (dana === null) throw new Error('no row for דנה כהן');
       expect(within(dana).queryByText(/12\/11|בלי מיקום/)).toBeNull();

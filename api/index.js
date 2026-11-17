@@ -19908,8 +19908,6 @@ var HE = {
   "bottlesSpot.other": "\u05D0\u05D7\u05E8 (\u05D0\u05E4\u05E8\u05D8 \u05D1\u05D4\u05E2\u05E8\u05D5\u05EA)",
   // Order status names (orderStatus.ts ORDER_STATUS_LABELS).
   "orderStatus.waiting": "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05E1\u05D1\u05D1",
-  // Legacy (ADR-0012): nothing to confirm any more, so an old pending order reads as in the round.
-  "orderStatus.pending": "\u05D1\u05E1\u05D1\u05D1",
   "orderStatus.confirmed": "\u05D1\u05E1\u05D1\u05D1",
   "orderStatus.collected": "\u05E0\u05D0\u05E1\u05E4\u05D4",
   "orderStatus.cancelled": "\u05D1\u05D5\u05D8\u05DC\u05D4",
@@ -20067,7 +20065,6 @@ var EN = {
   "bottlesSpot.other": "Other (I will specify in the note)",
   // Order status names.
   "orderStatus.waiting": "Waiting for a round",
-  "orderStatus.pending": "Scheduled",
   "orderStatus.confirmed": "Scheduled",
   "orderStatus.collected": "Collected",
   "orderStatus.cancelled": "Cancelled",
@@ -21045,18 +21042,11 @@ function addMonths(month, delta) {
 }
 
 // packages/shared/src/orderStatus.ts
-var ORDER_STATUSES = [
-  "waiting",
-  "pending",
-  "confirmed",
-  "collected",
-  "cancelled"
-];
+var ORDER_STATUSES = ["waiting", "confirmed", "collected", "cancelled"];
 var orderStatusSchema = external_exports.enum(ORDER_STATUSES);
-var OPEN_ORDER_STATUSES = ["waiting", "pending", "confirmed"];
+var OPEN_ORDER_STATUSES = ["waiting", "confirmed"];
 var ORDER_TRANSITIONS = {
   waiting: ["confirmed", "cancelled"],
-  pending: ["confirmed", "waiting", "cancelled"],
   confirmed: ["waiting", "collected", "cancelled"],
   collected: [],
   cancelled: []
@@ -21112,7 +21102,6 @@ var bottlesSpotSchema = external_exports.enum([
   "other"
 ]);
 var missReasonSchema = external_exports.enum([
-  "notConfirmed",
   "askedOtherDate",
   "notFound",
   "notReached",
@@ -21666,7 +21655,7 @@ var roundsResponseSchema = external_exports.object({
 });
 function roundGroupOf(round, order) {
   if (order.roundId === round.id) {
-    const inRound = order.status === "confirmed" || order.status === "collected" || order.status === "pending";
+    const inRound = order.status === "confirmed" || order.status === "collected";
     return inRound ? "inRound" : void 0;
   }
   const askedOtherDate = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "askedOtherDate";
@@ -21676,7 +21665,7 @@ function roundStopStateOf(round, order) {
   if (order.roundId === round.id) {
     if (order.status === "collected") return "collected";
     if (order.status === "cancelled") return "cancelled";
-    if (order.status === "confirmed" || order.status === "pending") return "toCollect";
+    if (order.status === "confirmed") return "toCollect";
   }
   const notFoundHere = order.lastMiss?.roundId === round.id && order.lastMiss.reason === "notFound";
   return notFoundHere ? "notFound" : "left";
@@ -21758,12 +21747,12 @@ var customerOrderSchema = orderSummarySchema.extend({
    */
   lang: orderSchema.shape.lang,
   /**
-   * The round the order is in: present for a `confirmed` order (and a legacy `pending` one),
-   * absent otherwise. See {@link toCustomerOrder}.
+   * The round the order is in: present for a `confirmed` order, absent otherwise. See
+   * {@link toCustomerOrder}.
    */
   round: customerRoundSchema.optional()
 });
-var ROUND_SHOWN_STATUSES = ["pending", "confirmed"];
+var ROUND_SHOWN_STATUSES = ["confirmed"];
 function toCustomerOrder(order, round) {
   const showsRound = round !== null && round !== void 0 && order.roundId === round.id && ROUND_SHOWN_STATUSES.includes(order.status);
   return customerOrderSchema.parse(showsRound ? { ...order, round } : order);
@@ -21924,7 +21913,10 @@ var ORDER_INDEXES = [
     key: { "contact.phone": 1 },
     name: ONE_OPEN_ORDER_PER_PHONE_INDEX,
     unique: true,
-    partialFilterExpression: { status: { $in: [...OPEN_ORDER_STATUSES] } }
+    // Not OPEN_ORDER_STATUSES: it still names the removed `pending`. The server stores this index
+    // as created, and other options under the same name are an IndexOptionsConflict that fails
+    // every orders operation (indexes.ts). No order is `pending`, so the extra value is harmless.
+    partialFilterExpression: { status: { $in: ["waiting", "pending", "confirmed"] } }
   }
 ];
 var DUPLICATE_KEY_CODE = 11e3;
@@ -23638,7 +23630,7 @@ async function sendBackUnhandled({ orders }, round, order, now) {
   }
 }
 function isUnhandledIn(round, order) {
-  return order.roundId === round.id && (order.status === "pending" || order.status === "confirmed");
+  return order.roundId === round.id && order.status === "confirmed";
 }
 
 // apps/api/src/rounds/roundResponses.ts
@@ -23759,14 +23751,11 @@ function createCollectorRoundsRouter(deps) {
       sendConfirmationsClosed(res);
       return;
     }
-    const now = /* @__PURE__ */ new Date();
     const found = new Map((await orders.list({ ids: round.orderIds })).map((o) => [o.id, o]));
     const stopOrders = [];
     for (const orderId of round.orderIds) {
       const order = found.get(orderId);
-      if (order?.roundId !== round.id) continue;
-      const settled = order.status === "pending" ? await takeInLegacyPending(order, now) : order;
-      if (settled?.roundId === round.id && settled.status === "confirmed") stopOrders.push(settled);
+      if (order?.roundId === round.id && order.status === "confirmed") stopOrders.push(order);
     }
     const stops = buildRouteStops(stopOrders, route.start, DROP_OFF.point, route.distance);
     const routed = await rounds.update(
@@ -23824,15 +23813,6 @@ function createCollectorRoundsRouter(deps) {
     }
     sendView(res, view);
   });
-  async function takeInLegacyPending(order, now) {
-    if (!canTransition(order.status, "confirmed")) return order;
-    const confirmed = await orders.update(
-      order.id,
-      { status: "confirmed", updatedAt: new Date(now) },
-      { ifStatus: [order.status] }
-    );
-    return confirmed ?? await orders.findById(order.id);
-  }
   return router;
 }
 function isPlannable(order) {

@@ -53,7 +53,10 @@ export const ORDER_INDEXES: readonly IndexDescription[] = [
     key: { 'contact.phone': 1 },
     name: ONE_OPEN_ORDER_PER_PHONE_INDEX,
     unique: true,
-    partialFilterExpression: { status: { $in: [...OPEN_ORDER_STATUSES] } },
+    // Not OPEN_ORDER_STATUSES: it still names the removed `pending`. The server stores this index
+    // as created, and other options under the same name are an IndexOptionsConflict that fails
+    // every orders operation (indexes.ts). No order is `pending`, so the extra value is harmless.
+    partialFilterExpression: { status: { $in: ['waiting', 'pending', 'confirmed'] } },
   },
 ];
 

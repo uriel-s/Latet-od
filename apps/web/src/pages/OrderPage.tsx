@@ -3,35 +3,20 @@
 // (customerOrderApi.ts, GET /api/o/:token, reached through useApi()) and draws what fits its
 // status: while the order is in a round, the round's date and times with "לא מתאים הפעם" (there
 // is nothing to confirm: being in the round is the default, ADR-0012), thanks and "הזמנה חדשה עם
-// אותם פרטים" once collected or cancelled, and, while the order is open, "שינוי" (the booking
-// form's fields without the contact: address, note and bottles, never the phone) and "ביטול
+// אותם פרטים" once collected or cancelled, and, while the order is open, "שינוי" and "ביטול
 // ההזמנה" (with a question first). Every button is a POST or a PATCH, never a link to open:
 // WhatsApp's preview opens links. The page always draws the order the api answered with, not what
 // it expected the button to do.
-import {
-  Fragment,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
   CUSTOMER_ORDER_MESSAGES,
   DEFAULT_LANG,
-  findStreet,
-  formatDayMonth,
-  formatIsraeliMobileLocal,
-  isLocationChange,
   isOpenStatus,
-  streetDisplayName,
   t,
   type CustomerOrder,
   type CustomerUpdateOrderRequest,
   type Lang,
-  type MessageKey,
 } from '@bottlerun/shared';
 import { networkErrorMessage } from '../api/request.ts';
 import {
@@ -39,21 +24,17 @@ import {
   type CustomerOrderWriteOutcome,
 } from '../api/customerOrderApi.ts';
 import { useApi } from '../api/ApiContext.tsx';
-import { StatusBadge } from '../components/StatusBadge.tsx';
 import { CancelConfirm } from '../components/CancelConfirm.tsx';
-import {
-  NO_ERRORS,
-  addressPlaceOf,
-  validateCustomerChange,
-  type FormErrors,
-  type OrderFormValues,
-} from '../orderForm/formValues.ts';
+import { LoadFailed } from '../components/LoadFailed.tsx';
+import { type FormErrors } from '../orderForm/formValues.ts';
 import { localizedFormErrors } from '../orderForm/formText.ts';
-import { OrderFields } from '../orderForm/OrderFields.tsx';
-import { formValuesFromPrefill, orderFormNavigationState } from '../orderForm/savedDetails.ts';
-import { useOrderForm } from '../orderForm/useOrderForm.ts';
+import { orderFormNavigationState } from '../orderForm/savedDetails.ts';
 import { Link, navigate } from '../router.tsx';
 import { useDocumentLanguage } from '../useDocumentLanguage.ts';
+import { useMountedRef } from '../useMountedRef.ts';
+import { ChangeOrderForm } from './ChangeOrderForm.tsx';
+import { OrderDetails } from './OrderDetails.tsx';
+import { OrderStatus } from './OrderStatus.tsx';
 
 // Every text of the page comes from the dictionary (i18n.ts, 'orderPage.*'), in the order's
 // language; tests read the Hebrew ones through t('he', …) too.
@@ -72,29 +53,6 @@ function closedMessageText(lang: Lang, message: string): string {
   if (message === CUSTOMER_ORDER_MESSAGES.orderNotFound)
     return t(lang, 'customerOrder.orderNotFound');
   return message;
-}
-
-/**
- * `text` (from t(), written with a `{date}` placeholder) with the day set in a left-to-right
- * `<bdi>`: DD/MM and "Nov 12" read left to right inside right-to-left text (CLAUDE.md).
- */
-function withDay(text: string, day: string): ReactNode {
-  const [before = '', after = ''] = text.split(DAY_PLACEHOLDER);
-  return (
-    <>
-      {before}
-      <bdi dir="ltr">{day}</bdi>
-      {after}
-    </>
-  );
-}
-
-/** A `{date}` that t() leaves as it is when passed as its own value. */
-const DAY_PLACEHOLDER = '{date}';
-
-/** {@link t} with `{date}` left in the text, for {@link withDay}. */
-function tWithDay(lang: Lang, key: MessageKey, day: string): ReactNode {
-  return withDay(t(lang, key, { date: DAY_PLACEHOLDER }), day);
 }
 
 /** A request of the page, by what it asks the api to do; each has its 'orderPage.saved.*' text. */
@@ -182,17 +140,10 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
   // One request at a time: `busy` reaches the handlers only after a re-render, and this ref stops
   // a second tap that comes before it.
   const busyRef = useRef(false);
-  // False once the page is gone: an answer that comes after the customer left changes nothing.
-  const mountedRef = useRef(false);
+  // An answer after the customer left changes nothing.
+  const mountedRef = useMountedRef();
   const noticeRef = useRef<HTMLParagraphElement>(null);
   const changeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     // False once this load's answer no longer matters: the customer left the page, a newer load
@@ -386,14 +337,11 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
       {state.kind === 'loading' && <p role="status">{t(lang, 'orderPage.loading')}</p>}
 
       {state.kind === 'failed' && (
-        <>
-          <p className="form-alert" role="alert">
-            {t(lang, 'orderPage.loadFailed')}
-          </p>
-          <button type="button" className="button button-primary button-block" onClick={reload}>
-            {t(lang, 'orderPage.retry')}
-          </button>
-        </>
+        <LoadFailed
+          message={t(lang, 'orderPage.loadFailed')}
+          onRetry={reload}
+          retryLabel={t(lang, 'orderPage.retry')}
+        />
       )}
 
       {state.kind === 'notFound' && (
@@ -423,9 +371,8 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
             />
           ) : (
             <>
-              {/* In a round: nothing to confirm (ADR-0012), only "not this time". A legacy
-                  pending order (planned before ADR-0012) is in a round too. */}
-              {(state.order.status === 'confirmed' || state.order.status === 'pending') && (
+              {/* In a round: nothing to confirm (ADR-0012), only "not this time". */}
+              {state.order.status === 'confirmed' && (
                 <div className="order-actions">
                   <CancelConfirm
                     inline
@@ -489,142 +436,6 @@ export function OrderPage({ token, onLangChange }: OrderPageProps) {
   );
 }
 
-/** Props of {@link ChangeOrderForm}. */
-interface ChangeOrderFormProps {
-  /** The open order the form starts from. */
-  order: CustomerOrder;
-  /** The order's language: the form speaks it. */
-  lang: Lang;
-  /** True while the save is on its way: the save button reads "שומר...". */
-  saving: boolean;
-  /** Sends the validated change; resolves to the errors to show, or null (see saveChange). */
-  onSave: (request: CustomerUpdateOrderRequest, leavesRound: boolean) => Promise<FormErrors | null>;
-  /** "בלי לשנות": closes the form without a request. */
-  onClose: () => void;
-}
-
-/**
- * "שינוי" (spec §3.3: "אפשר לשנות כתובת, כמות והערה. לא את הטלפון."): the booking form's fields
- * without the contact, filled from the order, and the same rules (validateCustomerChange) before
- * anything is sent. Mounted only when opened: the street picker reads its value when it mounts.
- *
- * While the order is in a round (pending or confirmed) and the street or house number differs
- * from the stored one, a line above the save button says that saving takes the order out of the
- * round (the api's rule, shared `isLocationChange`), before the customer saves.
- */
-function ChangeOrderForm({ order, lang, saving, onSave, onClose }: ChangeOrderFormProps) {
-  const { values, errors, setErrors, setField, formRef, showErrors } = useOrderForm(() =>
-    changeFormValues(order),
-  );
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const headingId = useId();
-  const warningId = useId();
-
-  // The "שינוי" button just tapped is gone: focus moves to the form's heading, so a screen reader
-  // says where the customer is, and the next tab reaches the first field. In the commit that
-  // draws the form (a layout effect), so focus is never left on the vanished button.
-  useLayoutEffect(() => {
-    headingRef.current?.focus();
-  }, []);
-
-  // A pending or confirmed order is in a round; the api takes it out on a new street or house
-  // number. The round's date shows when the api sent it.
-  const inRound = order.status === 'pending' || order.status === 'confirmed';
-  const leavesRound = inRound && isLocationChange(order.address, addressPlaceOf(values));
-
-  async function save(): Promise<void> {
-    if (saving) return;
-    const validation = validateCustomerChange(values);
-    if (!validation.ok) {
-      showErrors(localizedFormErrors(lang, validation.errors));
-      return;
-    }
-    setErrors(NO_ERRORS);
-    const shown = await onSave(validation.request, leavesRound);
-    if (shown !== null) showErrors(shown);
-  }
-
-  return (
-    <section aria-labelledby={headingId}>
-      {/* tabIndex -1: focusable from code, but not a stop when tabbing through the page. */}
-      <h2 id={headingId} ref={headingRef} tabIndex={-1}>
-        {t(lang, 'orderPage.changeHeading')}
-      </h2>
-      <p>{t(lang, 'orderPage.phoneNotChanged')}</p>
-
-      {/* noValidate: the form shows its own Hebrew messages next to each field, not the
-          browser's bubbles. */}
-      <form
-        ref={formRef}
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-      >
-        <OrderFields
-          values={values}
-          errors={errors.byField}
-          onFieldChange={setField}
-          showContact={false}
-          lang={lang}
-        />
-
-        {leavesRound && (
-          <p id={warningId} className="order-change-warning">
-            {order.round === undefined
-              ? t(lang, 'orderPage.leavesRound')
-              : tWithDay(lang, 'orderPage.leavesRoundDate', formatDayMonth(order.round.date, lang))}
-          </p>
-        )}
-
-        {errors.other && (
-          <p className="form-alert" role="alert">
-            {errors.other}
-          </p>
-        )}
-
-        <div className="order-actions">
-          {/* aria-disabled, not disabled, while saving: the button keeps focus and is announced
-              as unavailable; the page's busyRef ignores the extra taps. */}
-          <button
-            type="submit"
-            className="button button-primary button-block"
-            aria-disabled={saving ? true : undefined}
-            aria-describedby={leavesRound ? warningId : undefined}
-          >
-            {saving ? t(lang, 'orderPage.saving') : t(lang, 'orderPage.saveChange')}
-          </button>
-          <button
-            type="button"
-            className="button button-secondary button-block"
-            aria-disabled={saving ? true : undefined}
-            onClick={() => {
-              // While the save is on its way its answer decides; closing now would hide it.
-              if (!saving) onClose();
-            }}
-          >
-            {t(lang, 'orderPage.keepAsIs')}
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
-/**
- * The change form's starting values: the order's address as the booking form's prefill shows it
- * (a street still in the official list as that listed street, any other as the stored name in
- * free text), and the number of bottles as text in its input. The name and phone are in the
- * values too, but the form neither shows nor sends them.
- */
-function changeFormValues(order: CustomerOrder): OrderFormValues {
-  return {
-    ...formValuesFromPrefill({ contact: order.contact, address: order.address }),
-    bottlesEstimated: String(order.bottlesEstimated),
-  };
-}
-
 /**
  * "הזמנה חדשה עם אותם פרטים": the booking form at `/`, filled with this order's contact and
  * address (savedDetails.ts reads them back). Never the number of bottles, which differs from one
@@ -635,128 +446,4 @@ function startNewOrder(order: CustomerOrder, lang: Lang): void {
   navigate(lang === 'en' ? '/en' : '/', {
     state: orderFormNavigationState({ contact: order.contact, address: order.address }),
   });
-}
-
-/**
- * The status in plain words, and what it means for the customer now (spec §3.3): one card at the
- * top of the page, the status as a large badge and the sentence that explains it under it, so the
- * customer reads both together.
- */
-function OrderStatus({ order, lang }: { order: CustomerOrder; lang: Lang }) {
-  return (
-    <div className="order-status-card card">
-      <p className="order-status">
-        {t(lang, 'orderPage.status')} <StatusBadge status={order.status} lang={lang} />
-      </p>
-      <StatusText order={order} lang={lang} />
-    </div>
-  );
-}
-
-/**
- * The lines under the status. The round's date and times show for an order in a round
- * (`confirmed`, or a legacy `pending`) only, and only when the api sent the round: an order whose
- * round is gone has no date to promise. With both times, the first is when the bottles must be
- * out and the window is when Yoel comes (ADR-0012), so the start time is said twice.
- */
-function StatusText({ order, lang }: { order: CustomerOrder; lang: Lang }) {
-  const { round } = order;
-  switch (order.status) {
-    case 'waiting':
-      return <p>{t(lang, 'orderPage.waiting')}</p>;
-    case 'pending':
-    case 'confirmed':
-      if (round === undefined) return null;
-      return (
-        <>
-          <p>
-            {/* DD/MM and HH:MM read left to right inside the right-to-left text (CLAUDE.md). */}
-            {tWithDay(lang, 'orderPage.roundDate', formatDayMonth(round.date, lang))}
-          </p>
-          {round.pickupBy !== undefined && (
-            <p>
-              {round.pickupFrom !== undefined
-                ? timesText(t(lang, 'orderPage.pickupWindow', TIME_PLACEHOLDERS), [
-                    round.pickupFrom,
-                    round.pickupFrom,
-                    round.pickupBy,
-                  ])
-                : timesText(t(lang, 'orderPage.pickupBy', TIME_PLACEHOLDERS), [round.pickupBy])}
-            </p>
-          )}
-        </>
-      );
-    case 'collected':
-      return <p>{t(lang, 'orderPage.collected')}</p>;
-    case 'cancelled':
-      // Thanks (spec §3.3), not "ההזמנה בוטלה.": the status line already says it, and so does
-      // the notice announced right after the customer's own cancel.
-      return <p>{t(lang, 'orderPage.cancelled')}</p>;
-  }
-}
-
-/** `{from}` and `{by}` left in the text by t(), for {@link timesText} to fill. */
-const TIME_PLACEHOLDERS = { from: '{from}', by: '{by}' } as const;
-
-/** `text` with each time (in the order they appear) set in a left-to-right `<bdi>`. */
-function timesText(text: string, times: readonly string[]): ReactNode {
-  const parts = text.split(/\{(?:from|by)\}/);
-  return parts.map((part, index) => (
-    // The parts never reorder, so the index is a stable key.
-    <Fragment key={index}>
-      {part}
-      {index < times.length && <bdi dir="ltr">{times[index]}</bdi>}
-    </Fragment>
-  ));
-}
-
-/**
- * The order's details as the customer gave them: only what the api sent, which is the order's
- * own (no id, no region, nothing of another customer). Drawn as settings-style rows: each
- * name/value pair in its own `<div>` inside the `<dl>` (valid HTML), so CSS can lay out a row
- * with the name at the start, the value at the end and a line between rows.
- */
-function OrderDetails({ order, lang }: { order: CustomerOrder; lang: Lang }) {
-  const headingId = useId();
-  const { contact, address } = order;
-  // Where at the address: the spot in the form's words, then the floor and apartment if given.
-  const spot = [t(lang, `bottlesSpot.${address.bottlesSpot}`), address.floorApt]
-    .filter((part) => part !== undefined && part !== '')
-    .join(' · ');
-  // A listed street reads in the page's language; a hand-written one stays as the customer typed it.
-  const listedStreet =
-    address.streetCode === undefined ? undefined : findStreet(address.streetCode);
-  const streetName =
-    listedStreet === undefined ? address.streetName : streetDisplayName(listedStreet, lang);
-
-  return (
-    <section className="order-details card" aria-labelledby={headingId}>
-      <h2 id={headingId}>{t(lang, 'orderPage.details')}</h2>
-      <dl>
-        <DetailRow label={t(lang, 'orderPage.detailName')}>{contact.name}</DetailRow>
-        <DetailRow label={t(lang, 'orderPage.detailPhone')}>
-          {/* Digits and hyphens read left to right inside the right-to-left text (CLAUDE.md). */}
-          <bdi dir="ltr">{formatIsraeliMobileLocal(contact.phone)}</bdi>
-        </DetailRow>
-        <DetailRow label={t(lang, 'orderPage.detailAddress')}>
-          {streetName} {address.houseNumber}
-        </DetailRow>
-        <DetailRow label={t(lang, 'orderPage.detailSpot')}>{spot}</DetailRow>
-        {address.note !== undefined && address.note !== '' && (
-          <DetailRow label={t(lang, 'orderPage.detailNote')}>{address.note}</DetailRow>
-        )}
-        <DetailRow label={t(lang, 'orderPage.detailBottles')}>{order.bottlesEstimated}</DetailRow>
-      </dl>
-    </section>
-  );
-}
-
-/** One row of {@link OrderDetails}: the detail's name (`dt`) and its value (`dd`). */
-function DetailRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="order-detail-row">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
 }

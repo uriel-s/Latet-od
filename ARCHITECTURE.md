@@ -82,7 +82,7 @@ sequenceDiagram
     Note over L: לא מאשרים. רק מי שלא מתאים לו לוחץ "לא מתאים הפעם" (→ waiting)
 
     Y->>W: "התחל מסלול"
-    A->>D: כל מי שעדיין בסבב הוא עצירה (pending ישן → confirmed)<br/>planRoute(בית, עצירות, נקודת פריקה) נשמר בסבב
+    A->>D: כל מי שעדיין בסבב הוא עצירה<br/>planRoute(בית, עצירות, נקודת פריקה) נשמר בסבב
     loop לכל עצירה
         Y->>Y: נווט (Waze) / חייג
         Y->>W: "אספתי" (כמות בפועל) או "לא נמצא"
@@ -93,7 +93,7 @@ sequenceDiagram
     W-->>Y: שאלה, ומעליה "תודות שלא נשלחו"<br/>(נאספו, וקישור התודה לא נפתח)
     Y->>W: "כן, לסיים"
     W->>A: POST /api/collector/rounds/:id/close
-    A->>D: קודם הסבב → closed (כתיבה מותנית)<br/>אחר כך כל הזמנה בו שעוד pending או confirmed → waiting + lastMiss<br/>notReached (בשני השלבים, גם סבב שבוטל בגלל גשם)<br/>collected, "לא נמצא" ו-cancelled נשארים כמו שהם
+    A->>D: קודם הסבב → closed (כתיבה מותנית)<br/>אחר כך כל הזמנה בו שעוד confirmed → waiting + lastMiss<br/>notReached (בשני השלבים, גם סבב שבוטל בגלל גשם)<br/>collected, "לא נמצא" ו-cancelled נשארים כמו שהם
     A-->>W: הסבב יוצא מהטאב "סבבים"<br/>סגירה שנייה: הצלחה, ועוברת שוב על ההזמנות
 ```
 

@@ -158,15 +158,6 @@ describe('OrderPage in English', () => {
     expect(wholeText('Please put the bottles outside by 18:00.')).toBeDefined();
   });
 
-  it('shows a legacy pending order like one in a round, with "Not this time"', async () => {
-    await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'pending', round: ROUND }));
-
-    expect(statusLine()).toBe('Order status: Scheduled');
-    expect(wholeText('We will come to collect on Nov 12.')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Not this time' })).toBeDefined();
-    expect(screen.queryByRole('button', { name: /Yes, I will put the bottles out/ })).toBeNull();
-  });
-
   it('shows a collected order with thanks and a new-order button', async () => {
     await renderEn(makeCustomerOrder({ ...IN_ENGLISH, status: 'collected' }));
 
