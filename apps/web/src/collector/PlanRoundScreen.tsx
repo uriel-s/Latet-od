@@ -26,7 +26,6 @@ import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { TextField } from '../components/TextField.tsx';
 import { describedBy } from '../components/describedBy.ts';
 import { FormCard } from '../orderForm/OrderFields.tsx';
-import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { navigate } from '../router.tsx';
 import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
@@ -34,6 +33,13 @@ import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
 import { bottlesText } from './countText.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import { orderTags } from './orderTags.ts';
+import {
+  NO_ERRORS,
+  planErrorsOf,
+  withoutFieldErrors,
+  type PlanErrors,
+  type PlanField,
+} from './planErrors.ts';
 
 /** Where a planned round leads: the "סבבים" tab, with the round's "שלח" list (ADR-0003). */
 const ROUNDS_PATH = '/app/rounds';
@@ -72,46 +78,6 @@ const MESSAGE_CARD_TITLE = 'הודעה';
 
 const SEND_LABEL = 'שלח הודעות';
 const SENDING_LABEL = 'שולח...';
-
-/** A field of the plan that shows its error next to it, in form order. */
-type PlanField = 'region' | 'orderIds' | 'date' | 'pickupFrom' | 'pickupBy' | 'personalText';
-
-const PLAN_FIELDS: readonly PlanField[] = [
-  'region',
-  'orderIds',
-  'date',
-  'pickupFrom',
-  'pickupBy',
-  'personalText',
-];
-
-/** Errors to show on the plan: one plain-Hebrew message per field, plus one above the button. */
-interface PlanErrors {
-  byField: Partial<Record<PlanField, string>>;
-  /** A message about the whole plan: a failed send, a conflict, or an error no field shows. */
-  other?: string;
-}
-
-const NO_ERRORS: PlanErrors = { byField: {} };
-
-/**
- * Maps `{ dottedPath: message }` (the shared check's `formFieldErrors`, or the api's 400) onto the
- * plan's fields. A path's first segment names the field, so `orderIds.3` (one id of the list)
- * lands on the list. A path no field shows, or no path at all, sets `other` to
- * {@link UNKNOWN_FIELD_ERROR}: a refused plan that shows nothing would leave Yoel stuck.
- */
-function planErrorsOf(fieldErrors: Record<string, string>): PlanErrors {
-  const byField: Partial<Record<PlanField, string>> = {};
-  let unplaced = false;
-  for (const [path, message] of Object.entries(fieldErrors)) {
-    const head = path.split('.')[0];
-    const field = PLAN_FIELDS.find((candidate) => candidate === head);
-    if (field === undefined) unplaced = true;
-    else byField[field] ??= message;
-  }
-  if (Object.keys(byField).length === 0) unplaced = true;
-  return unplaced ? { byField, other: UNKNOWN_FIELD_ERROR } : { byField };
-}
 
 /**
  * The waiting orders of `region`, oldest first as the api listed them; none before a region is
@@ -297,12 +263,7 @@ function PlanRoundForm({
 
   /** Clears these fields' errors (only these: the rest still hold), as their value changes. */
   function clearErrors(...fields: PlanField[]): void {
-    setErrors((previous) => {
-      if (fields.every((field) => previous.byField[field] === undefined)) return previous;
-      const byField = { ...previous.byField };
-      for (const field of fields) byField[field] = undefined;
-      return { ...previous, byField };
-    });
+    setErrors((previous) => withoutFieldErrors(previous, fields));
   }
 
   /**
