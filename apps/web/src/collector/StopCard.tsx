@@ -1,5 +1,5 @@
 // One stop of the route screen (spec §3.6 step 2, "מסלול"): who, where, how many bottles, and
-// what Yoel does there: "נווט" (Waze), "חייג", "אספתי" with the real quantity (a − / + stepper),
+// what Yoel does there: "נווט" (Waze), "חייג", "הודעה" (WhatsApp), "אספתי" with the real quantity (a − / + stepper),
 // and "⋯", which opens the bottom sheet with "לא נמצא" and the arrows that move the stop. A handled stop shows its state in words and, once
 // collected, its "שלח תודה" row (SendList.tsx, which stores the opening itself through useApi).
 // Presentational: the route screen sends every stop request and tells this card whether one is on
@@ -7,7 +7,7 @@
 // sheet) and where focus goes.
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
-import type { RouteStopView } from '@bottlerun/shared';
+import { waMeChatUrl, type RouteStopView } from '@bottlerun/shared';
 import { Icon } from '../components/Icon.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
 import { CollectQuantityForm } from './CollectQuantityForm.tsx';
@@ -36,8 +36,9 @@ export interface StopCardProps {
   position: number;
   /**
    * The route's next stop to collect: shown as the big "העצירה הבאה" card (icon, tags, "נווט" /
-   * "חייג" / "⋯", a big "אספתי"). Ignored for a handled stop. Default false: the compact
-   * timeline card of an upcoming stop, whose "⋯" sheet also holds "אספתי", "נווט" and "חייג".
+   * "חייג" / "הודעה" / "⋯", a big "אספתי"). Ignored for a handled stop. Default false: the
+   * compact timeline card of an upcoming stop, whose "⋯" sheet also holds "אספתי", "נווט",
+   * "חייג" and "הודעה".
    */
   current?: boolean;
   /** Whether the "הזז למעלה" arrow shows (the route screen's storedMovesFor(...) > 0). */
@@ -260,13 +261,14 @@ function ToCollectStopCard({
       error={error}
       onMove={onMove}
       onNotFound={onNotFound}
-      // Only the compact card: its sheet is where "אספתי", "נווט" and "חייג" live.
+      // Only the compact card: its sheet is where "אספתי", "נווט", "חייג" and "הודעה" live.
       {...(current
         ? {}
         : {
             onCollect: () => open('quantity'),
             navigateUrl: wazeUrl(order.address),
             phoneUrl: telUrl(order.contact.phone),
+            messageUrl: waMeChatUrl(order.contact.phone),
           })}
       onClose={() => open('none')}
     />
@@ -336,6 +338,16 @@ function ToCollectStopCard({
                 <Icon name="phone" />
                 חייג{nameSuffix}
               </a>
+              {/* An empty WhatsApp chat, as the orders tab's "הודעה": Yoel writes what he needs. */}
+              <a
+                className="button button-secondary"
+                href={waMeChatUrl(order.contact.phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon name="chat" />
+                הודעה{nameSuffix}
+              </a>
               {moreButton}
             </div>
             <button
@@ -365,7 +377,7 @@ function ToCollectStopCard({
   }
 
   // An upcoming stop: a numbered dot on the timeline and a compact card. Everything else
-  // ("אספתי", "נווט", "חייג", "לא נמצא", the arrows) is in the "⋯" sheet.
+  // ("אספתי", "נווט", "חייג", "הודעה", "לא נמצא", the arrows) is in the "⋯" sheet.
   return (
     <li className="stop-card stop-card-compact">
       <span className="timeline-dot" aria-hidden="true">

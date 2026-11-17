@@ -209,6 +209,15 @@ describe('StopCard compact (upcoming stop)', () => {
     );
   });
 
+  it('puts "הודעה" in the sheet: an empty WhatsApp chat with the customer', () => {
+    renderCard({ current: false });
+    openSheet();
+
+    const message = within(screen.getByRole('dialog')).getByRole('link', { name: 'הודעה' });
+    expect(message.getAttribute('href')).toBe('https://wa.me/972501234567');
+    expect(message.getAttribute('target')).toBe('_blank');
+  });
+
   it('collects out of order: the sheet closes and the stepper opens with the estimate', () => {
     const { calls } = renderCard({ current: false });
     openSheet();
@@ -741,6 +750,17 @@ describe('StopCard current', () => {
     );
     expect(button('אספתי, דנה כהן')).toBeTruthy();
     expect(button('עוד פעולות, דנה כהן')).toBeTruthy();
+  });
+
+  it('has "הודעה": an empty WhatsApp chat with the customer, no prefilled text', () => {
+    renderCard({ current: true });
+
+    const message = screen.getByRole('link', { name: 'הודעה, דנה כהן' });
+    expect(message.getAttribute('href')).toBe('https://wa.me/972501234567');
+    expect(message.getAttribute('target')).toBe('_blank');
+    expect(message.getAttribute('rel')?.split(' ')).toEqual(
+      expect.arrayContaining(['noopener', 'noreferrer']),
+    );
   });
 
   it('shows "בלי מיקום" for a stop without a map point', () => {

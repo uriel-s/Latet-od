@@ -3,8 +3,8 @@
 // RoundPickerSheet.tsx (RoundPicker): a modal dialog, focus moves in on open, Escape / "סגור" /
 // the dark background close it. Presentational: the card owns whether it is open and gives the
 // focus back to its "⋯" button after onClose; the route screen sends the requests. On an upcoming
-// stop (compact timeline card, no buttons of its own) the sheet also carries "אספתי", "נווט" and
-// "חייג", so collecting out of order and every other action stay one tap away.
+// stop (compact timeline card, no buttons of its own) the sheet also carries "אספתי", "נווט",
+// "חייג" and "הודעה", so collecting out of order and every other action stay one tap away.
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon } from '../components/Icon.tsx';
 
@@ -44,6 +44,8 @@ export interface MoreActionsSheetProps {
   navigateUrl?: string;
   /** Upcoming stops only: the `tel:` link, shown as "חייג" in the sheet. */
   phoneUrl?: string;
+  /** Upcoming stops only: the empty WhatsApp chat link, shown as "הודעה" in the sheet. */
+  messageUrl?: string;
   /** Escape, "סגור", the background or an arrow: the card closes the sheet and refocuses "⋯". */
   onClose: () => void;
 }
@@ -60,6 +62,7 @@ export function MoreActionsSheet({
   onCollect,
   navigateUrl,
   phoneUrl,
+  messageUrl,
   onClose,
 }: MoreActionsSheetProps) {
   const [asking, setAsking] = useState(false);
@@ -187,6 +190,17 @@ export function MoreActionsSheet({
               <a className="button button-secondary button-block" href={phoneUrl}>
                 <Icon name="phone" />
                 חייג
+              </a>
+            )}
+            {messageUrl !== undefined && (
+              <a
+                className="button button-secondary button-block"
+                href={messageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon name="chat" />
+                הודעה
               </a>
             )}
             <button

@@ -2045,16 +2045,19 @@ html:has(.bottom-nav) {
   color: var(--muted);
 }
 
-/* "נווט", "חייג" and "⋯" in one row, then the big "אספתי" under it. */
+/* "נווט", "חייג", "הודעה" and "⋯" in one row, then the big "אספתי" under it. Three words do not
+   fit side by side with their icons at 360px, so each icon sits above its word. */
 .stop-card-current-row {
   display: grid;
-  grid-template-columns: 1fr 1fr var(--tap-target);
-  gap: 0.625rem;
+  grid-template-columns: 1fr 1fr 1fr var(--tap-target);
+  gap: 0.5rem;
   margin-block: 0.75rem;
 }
 
 .stop-card-current-row .button {
-  padding-inline: 0.75rem;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-inline: 0.25rem;
 }
 
 /* --- "⋯" sheet and bottles stepper (collector/MoreActionsSheet.tsx, StopCard.tsx) --------- */
