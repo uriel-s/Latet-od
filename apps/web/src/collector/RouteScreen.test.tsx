@@ -28,7 +28,8 @@ import {
   routeSummary,
 } from './RouteScreen.tsx';
 import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
-import { BOTTLES_COLLECTED_LABEL, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
+import { BOTTLES_COLLECTED_LABEL } from './CollectQuantityForm.tsx';
+import { NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
 
 /** What these tests start from, on top of makeCollectorOrder: confirmed in round r1. */
 const IN_ROUND: Partial<CollectorOrder> = { status: 'confirmed' };

@@ -12,14 +12,8 @@ import {
 import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
-import {
-  BOTTLES_COLLECTED_LABEL,
-  NEXT_STOP_EYEBROW,
-  SEND_THANKS_TITLE,
-  StopCard,
-  parseBottlesCollected,
-  type StopCardProps,
-} from './StopCard.tsx';
+import { BOTTLES_COLLECTED_LABEL, parseBottlesCollected } from './CollectQuantityForm.tsx';
+import { NEXT_STOP_EYEBROW, SEND_THANKS_TITLE, StopCard, type StopCardProps } from './StopCard.tsx';
 
 /**
  * What these tests start from, on top of makeCollectorOrder: confirmed, on an apartment door with
