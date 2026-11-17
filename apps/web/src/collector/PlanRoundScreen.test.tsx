@@ -17,15 +17,14 @@ import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
 import {
-  NO_REGION_ORDERS_TEXT,
   PERSONAL_TEXT_HINT,
   PICKUP_BY_HINT,
   PICKUP_BY_LABEL,
   PICKUP_FROM_HINT,
   PICKUP_FROM_LABEL,
   PlanRoundScreen,
-  UNASSIGNED_ORDERS_HINT,
 } from './PlanRoundScreen.tsx';
+import { NO_REGION_ORDERS_TEXT, UNASSIGNED_ORDERS_HINT } from './PlanOrdersField.tsx';
 import { returnToApp } from './visibilityTestHelper.ts';
 
 /** What these tests start from, on top of makeCollectorOrder: a waiting private house. */
