@@ -11,11 +11,8 @@ import { flushSync } from 'react-dom';
 import {
   APP_TIME_ZONE,
   PERSONAL_TEXT_MAX_LENGTH,
-  REGION_LABELS,
   formFieldErrors,
   planRoundRequestSchema,
-  regionSchema,
-  type CollectorOrder,
   type OrderGroup,
   type Region,
 } from '@bottlerun/shared';
@@ -26,27 +23,22 @@ import type { PlanRoundOutcome, RoundsOutcome } from '../api/roundsApi.ts';
 import { TextField } from '../components/TextField.tsx';
 import { describedBy } from '../components/describedBy.ts';
 import { FormCard } from '../orderForm/OrderFields.tsx';
-import { UNKNOWN_FIELD_ERROR } from '../orderForm/formValues.ts';
 import { navigate } from '../router.tsx';
 import { useMountedRef } from '../useMountedRef.ts';
 import { BackToOrdersLink } from './BackToOrdersLink.tsx';
 import { FLASH_NOTICES, flashNoticeState } from './flashNotice.ts';
-import { bottlesText } from './countText.ts';
 import { ORDERS_LOAD_FAILED_MESSAGE } from './OrdersScreen.tsx';
-import { orderTags } from './orderTags.ts';
+import { PlanOrdersField, ordersOfRegion } from './PlanOrdersField.tsx';
+import {
+  NO_ERRORS,
+  planErrorsOf,
+  withoutFieldErrors,
+  type PlanErrors,
+  type PlanField,
+} from './planErrors.ts';
 
 /** Where a planned round leads: the "סבבים" tab, with the round's "שלח" list (ADR-0003). */
 const ROUNDS_PATH = '/app/rounds';
-
-/** In place of the order list, for a region with no waiting orders. */
-export const NO_REGION_ORDERS_TEXT = 'אין הזמנות שממתינות באזור הזה';
-
-/**
- * Under "אזור" while some waiting order has no region: the screen plans by region, so such an
- * order is not offered here until Yoel gives it one in "עריכה" (spec §3.5, "בלי אזור").
- */
-export const UNASSIGNED_ORDERS_HINT =
-  'הזמנות בלי אזור לא מופיעות כאן. קודם בוחרים להן אזור בעריכה.';
 
 /** Under "טקסט אישי": where the text goes (spec §3.5, ת11). */
 export const PERSONAL_TEXT_HINT = 'נוסף לכל ההודעות של הסבב.';
@@ -73,59 +65,6 @@ const MESSAGE_CARD_TITLE = 'הודעה';
 const SEND_LABEL = 'שלח הודעות';
 const SENDING_LABEL = 'שולח...';
 
-/** A field of the plan that shows its error next to it, in form order. */
-type PlanField = 'region' | 'orderIds' | 'date' | 'pickupFrom' | 'pickupBy' | 'personalText';
-
-const PLAN_FIELDS: readonly PlanField[] = [
-  'region',
-  'orderIds',
-  'date',
-  'pickupFrom',
-  'pickupBy',
-  'personalText',
-];
-
-/** Errors to show on the plan: one plain-Hebrew message per field, plus one above the button. */
-interface PlanErrors {
-  byField: Partial<Record<PlanField, string>>;
-  /** A message about the whole plan: a failed send, a conflict, or an error no field shows. */
-  other?: string;
-}
-
-const NO_ERRORS: PlanErrors = { byField: {} };
-
-/**
- * Maps `{ dottedPath: message }` (the shared check's `formFieldErrors`, or the api's 400) onto the
- * plan's fields. A path's first segment names the field, so `orderIds.3` (one id of the list)
- * lands on the list. A path no field shows, or no path at all, sets `other` to
- * {@link UNKNOWN_FIELD_ERROR}: a refused plan that shows nothing would leave Yoel stuck.
- */
-function planErrorsOf(fieldErrors: Record<string, string>): PlanErrors {
-  const byField: Partial<Record<PlanField, string>> = {};
-  let unplaced = false;
-  for (const [path, message] of Object.entries(fieldErrors)) {
-    const head = path.split('.')[0];
-    const field = PLAN_FIELDS.find((candidate) => candidate === head);
-    if (field === undefined) unplaced = true;
-    else byField[field] ??= message;
-  }
-  if (Object.keys(byField).length === 0) unplaced = true;
-  return unplaced ? { byField, other: UNKNOWN_FIELD_ERROR } : { byField };
-}
-
-/**
- * The waiting orders of `region`, oldest first as the api listed them; none before a region is
- * chosen. Orders "בלי אזור" are never among them: the api would accept their ids, but a round is
- * planned per region, and Yoel first gives such an order its region in "עריכה".
- */
-function ordersOfRegion(
-  groups: readonly OrderGroup[],
-  region: Region | undefined,
-): CollectorOrder[] {
-  if (region === undefined) return [];
-  return groups.find((group) => group.key === region)?.orders ?? [];
-}
-
 /**
  * Today as `YYYY-MM-DD` in Israel's time zone (the 'en-CA' format is that shape): the earliest
  * date the round's picker offers. Not the phone's own zone, so a round is never planned for
@@ -133,11 +72,6 @@ function ordersOfRegion(
  */
 function todayInIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIME_ZONE }).format(new Date());
-}
-
-/** "מסומנות: 3 מתוך 4": how many of the region's orders go into the round. */
-function checkedSummary(checkedCount: number, total: number): string {
-  return `מסומנות: ${checkedCount} מתוך ${total}`;
 }
 
 /** What the screen shows. A logged-out answer leaves for /login and needs no state of its own. */
@@ -242,10 +176,9 @@ interface PlanRoundFormProps {
 }
 
 /**
- * The plan's form, in three cards: "איפה" (the region with its waiting-order counts,
- * then the region's orders as checkboxes, all marked when the region is chosen, spec §3.5),
- * "מתי" (the date and the pickup window) and "הודעה" (the personal text); then
- * "שלח הודעות". Every mistake shows next to its field, checked with the
+ * The plan's form, in three cards: "איפה" (the region and its orders, all marked when the region
+ * is chosen, spec §3.5), "מתי" (the date and the pickup window) and "הודעה" (the personal text);
+ * then "שלח הודעות". Every mistake shows next to its field, checked with the
  * shared `planRoundRequestSchema` (the api's own check) before anything is sent.
  *
  * The send is `planRound` of {@link useApi}, and after a conflict (`ordersNotWaiting`) the list
@@ -279,30 +212,12 @@ function PlanRoundForm({
   // An answer after Yoel left must not pull him to the rounds, or to the login.
   const mountedRef = useMountedRef();
   const formRef = useRef<HTMLFormElement>(null);
-  const regionGroupName = useId();
-  const regionHintId = useId();
-  const regionErrorId = useId();
-  const ordersSummaryId = useId();
-  const ordersErrorId = useId();
-  const textId = useId();
-  const textHintId = useId();
-  const textErrorId = useId();
 
   const regionOrders = ordersOfRegion(groups, region);
-  const checkedCount = regionOrders.filter((order) => checkedIds.has(order.id)).length;
-  const unassignedCount = groups.find((group) => group.key === 'none')?.orders.length ?? 0;
-  const regionError = errors.byField.region;
-  const ordersError = errors.byField.orderIds;
-  const textError = errors.byField.personalText;
 
   /** Clears these fields' errors (only these: the rest still hold), as their value changes. */
   function clearErrors(...fields: PlanField[]): void {
-    setErrors((previous) => {
-      if (fields.every((field) => previous.byField[field] === undefined)) return previous;
-      const byField = { ...previous.byField };
-      for (const field of fields) byField[field] = undefined;
-      return { ...previous, byField };
-    });
+    setErrors((previous) => withoutFieldErrors(previous, fields));
   }
 
   /**
@@ -453,80 +368,15 @@ function PlanRoundForm({
       {/* Three cards: where (the region, and right under it its orders),
           when, and the message. The first field with an error is focused in this DOM order. */}
       <FormCard title={WHERE_CARD_TITLE} icon="pin">
-        <fieldset
-          className="field"
-          aria-describedby={describedBy(
-            unassignedCount > 0 ? regionHintId : undefined,
-            regionError ? regionErrorId : undefined,
-          )}
-        >
-          <legend className="field-label">אזור</legend>
-          {unassignedCount > 0 && (
-            <p id={regionHintId} className="field-hint">
-              {UNASSIGNED_ORDERS_HINT}
-            </p>
-          )}
-          {/* Choice cards with words only, as the region on the edit screen. */}
-          <div className="choice-cards">
-            {regionSchema.options.map((option) => (
-              <label key={option} className="choice-card">
-                <input
-                  type="radio"
-                  name={regionGroupName}
-                  value={option}
-                  checked={region === option}
-                  onChange={() => chooseRegion(option)}
-                  aria-invalid={regionError ? true : undefined}
-                />
-                {/* The number of orders waiting there, so an empty half is seen before it is
-                    chosen. */}
-                <span>{`${REGION_LABELS[option]} (${ordersOfRegion(groups, option).length})`}</span>
-              </label>
-            ))}
-          </div>
-          {regionError && (
-            <p id={regionErrorId} className="field-error">
-              {regionError}
-            </p>
-          )}
-        </fieldset>
-
-        {region !== undefined && (
-          <fieldset
-            className="field"
-            aria-describedby={describedBy(
-              regionOrders.length > 0 ? ordersSummaryId : undefined,
-              ordersError ? ordersErrorId : undefined,
-            )}
-          >
-            <legend className="field-label">הזמנות לסבב</legend>
-            {regionOrders.length === 0 ? (
-              <p className="field-hint">{NO_REGION_ORDERS_TEXT}</p>
-            ) : (
-              <>
-                <p id={ordersSummaryId} className="field-hint">
-                  {checkedSummary(checkedCount, regionOrders.length)}
-                </p>
-                <div className="grouped-list plan-order-list">
-                  {regionOrders.map((order) => (
-                    <PlanOrderRow
-                      key={order.id}
-                      order={order}
-                      checked={checkedIds.has(order.id)}
-                      invalid={Boolean(ordersError)}
-                      onToggle={toggleOrder}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-            {ordersError && (
-              <p id={ordersErrorId} className="field-error">
-                {ordersError}
-              </p>
-            )}
-          </fieldset>
-        )}
+        <PlanOrdersField
+          groups={groups}
+          region={region}
+          checkedIds={checkedIds}
+          regionError={errors.byField.region}
+          ordersError={errors.byField.orderIds}
+          onChooseRegion={chooseRegion}
+          onToggleOrder={toggleOrder}
+        />
       </FormCard>
 
       <FormCard title={WHEN_CARD_TITLE} icon="calendar">
@@ -572,31 +422,14 @@ function PlanRoundForm({
       </FormCard>
 
       <FormCard title={MESSAGE_CARD_TITLE} icon="chat">
-        {/* A textarea, which TextField does not render: the same .field parts and wiring by hand. */}
-        <div className="field">
-          <label htmlFor={textId} className="field-label">
-            טקסט אישי (לא חובה)
-          </label>
-          <p id={textHintId} className="field-hint">
-            {PERSONAL_TEXT_HINT}
-          </p>
-          <textarea
-            id={textId}
-            value={personalText}
-            onChange={(event) => {
-              setPersonalText(event.target.value);
-              clearErrors('personalText');
-            }}
-            maxLength={PERSONAL_TEXT_MAX_LENGTH}
-            aria-invalid={textError ? true : undefined}
-            aria-describedby={describedBy(textHintId, textError ? textErrorId : undefined)}
-          />
-          {textError && (
-            <p id={textErrorId} className="field-error">
-              {textError}
-            </p>
-          )}
-        </div>
+        <PersonalTextField
+          value={personalText}
+          onChange={(nextText) => {
+            setPersonalText(nextText);
+            clearErrors('personalText');
+          }}
+          error={errors.byField.personalText}
+        />
       </FormCard>
 
       {errors.other && (
@@ -618,57 +451,40 @@ function PlanRoundForm({
   );
 }
 
-/** Props of {@link PlanOrderRow}. */
-interface PlanOrderRowProps {
-  order: CollectorOrder;
-  checked: boolean;
-  /** True while the list has an error ("נא לסמן לפחות הזמנה אחת", too many). */
-  invalid: boolean;
-  onToggle: (orderId: string, checked: boolean) => void;
+/** Props of {@link PersonalTextField}. */
+interface PersonalTextFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  error: string | undefined;
 }
 
-/**
- * One waiting order of the region as a checkbox row: who, where, how many bottles, and its tags
- * (orderTags.ts: why it came back from a round, "בלי מיקום"). A row of the grouped list, with a big
- * checkbox; the whole row (64px+) is the tap target.
- * The checkbox is named by the customer's name alone and described by the rest, so a screen
- * reader says the name first and the details after.
- */
-function PlanOrderRow({ order, checked, invalid, onToggle }: PlanOrderRowProps) {
-  const nameId = useId();
-  const detailsId = useId();
-  const tags = orderTags(order);
+/** "טקסט אישי": a textarea, which TextField does not render, so the same .field parts by hand. */
+function PersonalTextField({ value, onChange, error }: PersonalTextFieldProps) {
+  const textId = useId();
+  const textHintId = useId();
+  const textErrorId = useId();
 
   return (
-    <label className="grouped-row plan-order">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onToggle(order.id, event.target.checked)}
-        aria-labelledby={nameId}
-        aria-describedby={detailsId}
-        aria-invalid={invalid ? true : undefined}
+    <div className="field">
+      <label htmlFor={textId} className="field-label">
+        טקסט אישי (לא חובה)
+      </label>
+      <p id={textHintId} className="field-hint">
+        {PERSONAL_TEXT_HINT}
+      </p>
+      <textarea
+        id={textId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        maxLength={PERSONAL_TEXT_MAX_LENGTH}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy(textHintId, error ? textErrorId : undefined)}
       />
-      <span className="plan-order-details">
-        <span id={nameId} className="plan-order-name">
-          {order.contact.name}
-        </span>
-        <span id={detailsId} className="plan-order-more">
-          <span>
-            {order.address.streetName} {order.address.houseNumber}
-          </span>
-          <span>{bottlesText(order.bottlesEstimated)}</span>
-          {tags.length > 0 && (
-            <span className="tag-list">
-              {tags.map((tag) => (
-                <span key={tag} className="badge">
-                  {tag}
-                </span>
-              ))}
-            </span>
-          )}
-        </span>
-      </span>
-    </label>
+      {error && (
+        <p id={textErrorId} className="field-error">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
