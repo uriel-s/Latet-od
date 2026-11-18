@@ -1,19 +1,18 @@
-import { StrictMode } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOT_FOUND_QUESTION } from './MoreActionsSheet.tsx';
 import { wazeUrl } from './routeStops.ts';
-import {
-  COLLECT_STOP_ERRORS,
-  MAX_BOTTLES,
-  type CollectorOrder,
-  type RouteStopView,
-} from '@bottlerun/shared';
+import type { CollectorOrder, RouteStopView } from '@bottlerun/shared';
 import { makeCollectorOrder } from '@bottlerun/shared/testing';
 import type { MarkMessageOpenedOutcome } from '../api/collectorOrdersApi.ts';
 import { renderWithApi } from '../api/renderWithApi.tsx';
-import { BOTTLES_COLLECTED_LABEL, parseBottlesCollected } from './CollectQuantityForm.tsx';
-import { NEXT_STOP_EYEBROW, SEND_THANKS_TITLE, StopCard, type StopCardProps } from './StopCard.tsx';
+import {
+  COLLECT_TAP_GUARD_MS,
+  NEXT_STOP_EYEBROW,
+  SEND_THANKS_TITLE,
+  StopCard,
+  type StopCardProps,
+} from './StopCard.tsx';
 
 /**
  * What these tests start from, on top of makeCollectorOrder: confirmed, on an apartment door with
@@ -52,9 +51,8 @@ const COLLECTED: RouteStopView = makeStop({
 /** What the card called back, in order. */
 interface Calls {
   moves: ('up' | 'down')[];
-  collects: number[];
+  collects: number;
   notFounds: number;
-  typing: boolean[];
 }
 
 /**
@@ -73,7 +71,7 @@ function renderCard(overrides: Partial<StopCardProps> = {}): {
   rerender: (next: Partial<StopCardProps>) => void;
   unmount: () => void;
 } {
-  const calls: Calls = { moves: [], collects: [], notFounds: 0, typing: [] };
+  const calls: Calls = { moves: [], collects: 0, notFounds: 0 };
   const props = (next: Partial<StopCardProps>): StopCardProps => ({
     stop: makeStop(),
     position: 2,
@@ -83,11 +81,12 @@ function renderCard(overrides: Partial<StopCardProps> = {}): {
     canMoveDown: true,
     busy: false,
     onMove: (direction) => calls.moves.push(direction),
-    onCollect: (bottles) => calls.collects.push(bottles),
+    onCollect: () => {
+      calls.collects += 1;
+    },
     onNotFound: () => {
       calls.notFounds += 1;
     },
-    onTypingChange: (typing) => calls.typing.push(typing),
     ...overrides,
     ...next,
   });
@@ -113,41 +112,26 @@ function button(name: string | RegExp): HTMLElement {
   return screen.getByRole('button', { name });
 }
 
-function quantityField(): HTMLInputElement {
-  return screen.getByLabelText(BOTTLES_COLLECTED_LABEL);
-}
-
-/** Taps "אספתי", types `text` into the quantity field, and taps "שמור". */
-function collectWith(text: string): void {
-  fireEvent.click(button('אספתי, דנה כהן'));
-  fireEvent.change(quantityField(), { target: { value: text } });
-  fireEvent.click(button('שמור'));
-}
-
-describe('parseBottlesCollected', () => {
-  it('accepts a whole number from 1 up, below the booking minimum too', () => {
-    expect(parseBottlesCollected(' 42 ')).toEqual({ ok: true, bottlesCollected: 42 });
-    expect(parseBottlesCollected('1')).toEqual({ ok: true, bottlesCollected: 1 });
-    expect(parseBottlesCollected(String(MAX_BOTTLES))).toEqual({
-      ok: true,
-      bottlesCollected: MAX_BOTTLES,
-    });
-  });
-
-  it.each(['', '  ', '0', '2.5', '4,5', '1e3', '-3', 'abc'])('refuses "%s"', (text) => {
-    expect(parseBottlesCollected(text)).toEqual({
-      ok: false,
-      message: COLLECT_STOP_ERRORS.bottlesInvalid,
-    });
-  });
-
-  it('refuses more than MAX_BOTTLES with its own message', () => {
-    expect(parseBottlesCollected(String(MAX_BOTTLES + 1))).toEqual({
-      ok: false,
-      message: COLLECT_STOP_ERRORS.bottlesTooMany,
-    });
-  });
+// Date only, frozen: the current card's "אספתי" ignores taps for COLLECT_TAP_GUARD_MS after it
+// appears, and the tests move the clock past that themselves.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** Lets the double-tap guard of the card on screen pass. */
+function waitOutTapGuard(): void {
+  vi.setSystemTime(Date.now() + COLLECT_TAP_GUARD_MS);
+}
+
+/** Taps the current card's "אספתי" once the guard lets it through. */
+function tapCollect(): void {
+  waitOutTapGuard();
+  fireEvent.click(button('אספתי, דנה כהן'));
+}
 
 describe('StopCard compact (upcoming stop)', () => {
   it('shows the number in a dot, the name as a heading, the street and the estimate', () => {
@@ -209,167 +193,45 @@ describe('StopCard compact (upcoming stop)', () => {
     );
   });
 
-  it('collects out of order: the sheet closes and the stepper opens with the estimate', () => {
+  it('puts "הודעה" in the sheet: an empty WhatsApp chat with the customer', () => {
+    renderCard({ current: false });
+    openSheet();
+
+    const message = within(screen.getByRole('dialog')).getByRole('link', { name: 'הודעה' });
+    expect(message.getAttribute('href')).toBe('https://wa.me/972501234567');
+    expect(message.getAttribute('target')).toBe('_blank');
+  });
+
+  it('collects out of order in one tap, at once: the sheet closes, the focus back on "⋯"', () => {
     const { calls } = renderCard({ current: false });
     openSheet();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(quantityField().value).toBe('40');
-    expect(document.activeElement).toBe(quantityField());
-    fireEvent.change(quantityField(), { target: { value: '33' } });
-    fireEvent.click(button('שמור'));
-    expect(calls.collects).toEqual([33]);
-  });
-
-  it('gives the focus back to "⋯" when the stepper is cancelled', () => {
-    renderCard({ current: false });
-    openSheet();
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
-    fireEvent.click(button('ביטול'));
+    expect(calls.collects).toBe(1);
     expect(document.activeElement).toBe(button('עוד פעולות, דנה כהן'));
   });
 });
 
 describe('StopCard "אספתי"', () => {
-  it('opens the quantity field with the estimate, on the numeric keyboard, with the focus', () => {
+  it('collects in one tap, with no count to fill in', () => {
+    const { calls } = renderCard();
+    tapCollect();
+    expect(calls.collects).toBe(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('ignores taps in the first second after the card appears, then collects', () => {
     const { calls } = renderCard();
 
     fireEvent.click(button('אספתי, דנה כהן'));
-
-    const field = quantityField();
-    expect(field.value).toBe('40');
-    expect(field.getAttribute('inputmode')).toBe('numeric');
-    expect(field.getAttribute('dir')).toBe('ltr');
-    expect(document.activeElement).toBe(field);
-    expect(screen.queryByRole('button', { name: /^אספתי/ })).toBeNull();
-    expect(calls.typing).toEqual([true]);
-  });
-
-  it('saves the estimate as it is', () => {
-    const { calls } = renderCard();
+    vi.setSystemTime(Date.now() + COLLECT_TAP_GUARD_MS - 1);
     fireEvent.click(button('אספתי, דנה כהן'));
-    fireEvent.click(button('שמור'));
-    expect(calls.collects).toEqual([40]);
-  });
+    expect(calls.collects).toBe(0);
 
-  it('saves the corrected quantity', () => {
-    const { calls } = renderCard();
-    collectWith('42');
-    expect(calls.collects).toEqual([42]);
-  });
-
-  it('saves from the keyboard\'s "Go" too', () => {
-    const { calls } = renderCard();
+    vi.setSystemTime(Date.now() + 1);
     fireEvent.click(button('אספתי, דנה כהן'));
-    fireEvent.change(quantityField(), { target: { value: '25' } });
-    fireEvent.submit(quantityField());
-    expect(calls.collects).toEqual([25]);
-  });
-
-  it.each([
-    ['0', COLLECT_STOP_ERRORS.bottlesInvalid],
-    ['2.5', COLLECT_STOP_ERRORS.bottlesInvalid],
-    ['', COLLECT_STOP_ERRORS.bottlesInvalid],
-    [String(MAX_BOTTLES + 1), COLLECT_STOP_ERRORS.bottlesTooMany],
-  ])('refuses "%s" next to the field and does not save', (text, message) => {
-    const { calls } = renderCard();
-
-    collectWith(text);
-
-    const field = quantityField();
-    expect(field.getAttribute('aria-invalid')).toBe('true');
-    const error = screen.getByText(message);
-    expect(field.getAttribute('aria-describedby')).toBe(error.id);
-    expect(calls.collects).toEqual([]);
-  });
-
-  it('clears the message once the quantity is typed again', () => {
-    renderCard();
-    collectWith('0');
-    fireEvent.change(quantityField(), { target: { value: '30' } });
-    expect(screen.queryByText(COLLECT_STOP_ERRORS.bottlesInvalid)).toBeNull();
-  });
-
-  it("shows the api's message for the quantity next to the field", () => {
-    renderCard({ bottlesError: COLLECT_STOP_ERRORS.bottlesTooMany });
-    fireEvent.click(button('אספתי, דנה כהן'));
-    expect(screen.getByText(COLLECT_STOP_ERRORS.bottlesTooMany)).toBeTruthy();
-    expect(quantityField().getAttribute('aria-invalid')).toBe('true');
-  });
-
-  it('closes on "ביטול", with the focus back on "אספתי"', () => {
-    const { calls } = renderCard();
-    fireEvent.click(button('אספתי, דנה כהן'));
-
-    fireEvent.click(button('ביטול'));
-
-    expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
-    expect(document.activeElement).toBe(button('אספתי, דנה כהן'));
-    expect(calls.typing).toEqual([true, false]);
-    expect(calls.collects).toEqual([]);
-  });
-
-  it('opens again with the estimate after "ביטול"', () => {
-    renderCard();
-    fireEvent.click(button('אספתי, דנה כהן'));
-    fireEvent.change(quantityField(), { target: { value: '7' } });
-    fireEvent.click(button('ביטול'));
-    fireEvent.click(button('אספתי, דנה כהן'));
-    expect(quantityField().value).toBe('40');
-  });
-
-  it('keeps the field open while the save is on its way, and closes it once collected', () => {
-    const { calls, rerender } = renderCard();
-    collectWith('42');
-
-    rerender({ busy: true });
-    expect(quantityField().value).toBe('42');
-    expect(button('שומר...').getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(button('שומר...'));
-    fireEvent.click(button('ביטול'));
-    expect(quantityField()).toBeTruthy();
-    expect(calls.collects).toEqual([42]);
-
-    rerender({ busy: false, stop: COLLECTED, justSaved: 'collected' });
-    expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
-    expect(calls.typing).toEqual([true, false]);
-    // Yoel's own save (the screen says so): the focus goes to the thank-you he sends next.
-    expect(document.activeElement).toBe(
-      screen.getByRole('heading', { level: 4, name: SEND_THANKS_TITLE }),
-    );
-  });
-
-  it('tells the screen typing stopped when the card leaves with the field open', () => {
-    const { calls, unmount } = renderCard();
-    fireEvent.click(button('אספתי, דנה כהן'));
-    unmount();
-    expect(calls.typing).toEqual([true, false]);
-  });
-
-  it('reports each change of typing once under StrictMode', () => {
-    const typing: boolean[] = [];
-    render(
-      <StrictMode>
-        <ol>
-          <StopCard
-            stop={makeStop()}
-            position={1}
-            current
-            canMoveUp={false}
-            canMoveDown={false}
-            busy={false}
-            onMove={() => undefined}
-            onCollect={() => undefined}
-            onNotFound={() => undefined}
-            onTypingChange={(value) => typing.push(value)}
-          />
-        </ol>
-      </StrictMode>,
-    );
-    expect(typing).toEqual([]);
-    fireEvent.click(button('אספתי, דנה כהן'));
-    expect(typing).toEqual([true]);
+    expect(calls.collects).toBe(1);
   });
 });
 
@@ -512,59 +374,16 @@ describe.each([
   });
 });
 
-describe('StopCard bottles stepper', () => {
+describe('StopCard vibrate', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it('has big − and + buttons around the digit field, starting at the estimate', () => {
-    renderCard();
-    fireEvent.click(button('אספתי, דנה כהן'));
-    expect(quantityField().value).toBe('40');
-    expect(button('הפחת בקבוק').textContent).toBe('−');
-    expect(button('הוסף בקבוק').textContent).toBe('+');
-  });
-
-  it('changes the value by one and never goes below 1', () => {
-    renderCard({
-      stop: makeStop({ order: makeCollectorOrder({ ...AT_THE_DOOR, bottlesEstimated: 2 }) }),
-    });
-    fireEvent.click(button('אספתי, דנה כהן'));
-
-    fireEvent.click(button('הוסף בקבוק'));
-    expect(quantityField().value).toBe('3');
-    fireEvent.click(button('הפחת בקבוק'));
-    fireEvent.click(button('הפחת בקבוק'));
-    expect(quantityField().value).toBe('1');
-    fireEvent.click(button('הפחת בקבוק'));
-    expect(quantityField().value).toBe('1');
-  });
-
-  it('never goes above MAX_BOTTLES, and steps from the estimate when the field is blank', () => {
-    renderCard();
-    fireEvent.click(button('אספתי, דנה כהן'));
-    fireEvent.change(quantityField(), { target: { value: String(MAX_BOTTLES) } });
-    fireEvent.click(button('הוסף בקבוק'));
-    expect(quantityField().value).toBe(String(MAX_BOTTLES));
-
-    fireEvent.change(quantityField(), { target: { value: '' } });
-    fireEvent.click(button('הוסף בקבוק'));
-    expect(quantityField().value).toBe('41');
-  });
-
-  it('saves the stepped value through onCollect', () => {
-    const { calls } = renderCard();
-    fireEvent.click(button('אספתי, דנה כהן'));
-    fireEvent.click(button('הפחת בקבוק'));
-    fireEvent.click(button('שמור'));
-    expect(calls.collects).toEqual([39]);
   });
 
   it('vibrates once the save succeeded, not before', () => {
     const vibrate = vi.fn();
     vi.stubGlobal('navigator', { ...navigator, vibrate });
     const { rerender } = renderCard();
-    collectWith('42');
+    tapCollect();
     expect(vibrate).not.toHaveBeenCalled();
 
     rerender({ stop: COLLECTED, justSaved: 'collected' });
@@ -575,7 +394,7 @@ describe('StopCard bottles stepper', () => {
   it('does not fail where vibrate does not exist', () => {
     vi.stubGlobal('navigator', { ...navigator, vibrate: undefined });
     const { rerender } = renderCard();
-    collectWith('42');
+    tapCollect();
     rerender({ stop: COLLECTED, justSaved: 'collected' });
     expect(screen.getByText('נאסף')).toBeTruthy();
   });
@@ -592,15 +411,15 @@ describe('StopCard bottles stepper', () => {
 describe('StopCard busy', () => {
   it('marks the buttons aria-disabled and ignores the taps', () => {
     const { calls } = renderCard({ busy: true });
+    waitOutTapGuard();
 
     for (const name of ['אספתי, דנה כהן', 'עוד פעולות, דנה כהן']) {
       expect(button(name).getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(button(name));
     }
 
-    expect(screen.queryByLabelText(BOTTLES_COLLECTED_LABEL)).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(calls).toEqual({ moves: [], collects: [], notFounds: 0, typing: [] });
+    expect(calls).toEqual({ moves: [], collects: 0, notFounds: 0 });
   });
 });
 
@@ -618,7 +437,7 @@ describe('StopCard justSaved', () => {
     vi.unstubAllGlobals();
   });
 
-  it('buzzes and focuses "שלח תודה" when mounted collected right after Yoel\'s "אספתי"', () => {
+  it('buzzes, and leaves the focus alone, when mounted collected after Yoel\'s "אספתי"', () => {
     const vibrate = vi.fn();
     vi.stubGlobal('navigator', { ...navigator, vibrate });
     const seen = vi.fn();
@@ -626,9 +445,8 @@ describe('StopCard justSaved', () => {
     renderCard({ stop: COLLECTED, justSaved: 'collected', onJustSavedSeen: seen });
 
     expect(vibrate).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(
-      screen.getByRole('heading', { level: 4, name: SEND_THANKS_TITLE }),
-    );
+    // The route screen moves the focus to the next stop, not down to this card's "שלח תודה".
+    expect(document.activeElement).toBe(document.body);
     expect(seen).toHaveBeenCalledTimes(1);
   });
 
@@ -743,16 +561,27 @@ describe('StopCard current', () => {
     expect(button('עוד פעולות, דנה כהן')).toBeTruthy();
   });
 
+  it('has "הודעה": an empty WhatsApp chat with the customer, no prefilled text', () => {
+    renderCard({ current: true });
+
+    const message = screen.getByRole('link', { name: 'הודעה, דנה כהן' });
+    expect(message.getAttribute('href')).toBe('https://wa.me/972501234567');
+    expect(message.getAttribute('target')).toBe('_blank');
+    expect(message.getAttribute('rel')?.split(' ')).toEqual(
+      expect.arrayContaining(['noopener', 'noreferrer']),
+    );
+  });
+
   it('shows "בלי מיקום" for a stop without a map point', () => {
     renderCard({ current: true, stop: makeStop({ hasLocation: false }) });
     expect(screen.getByText('בלי מיקום')).toBeTruthy();
   });
 
-  it('keeps "אספתי" working: the quantity field opens with the estimate', () => {
-    const { calls } = renderCard({ current: true });
-    fireEvent.click(button('אספתי, דנה כהן'));
-    expect(quantityField().value).toBe('40');
-    fireEvent.click(button('שמור'));
-    expect(calls.collects).toEqual([40]);
+  it('hands its name heading to the screen, focusable from code but never a Tab stop', () => {
+    const headingRef = { current: null as HTMLHeadingElement | null };
+    renderCard({ current: true, headingRef });
+    const name = screen.getByRole('heading', { level: 3, name: 'דנה כהן' });
+    expect(headingRef.current).toBe(name);
+    expect(name.getAttribute('tabindex')).toBe('-1');
   });
 });

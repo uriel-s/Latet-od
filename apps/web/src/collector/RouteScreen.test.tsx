@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  COLLECT_STOP_ERRORS,
   ROUND_MESSAGES,
   type CollectorOrder,
   type CollectorRound,
@@ -28,8 +27,7 @@ import {
   routeSummary,
 } from './RouteScreen.tsx';
 import { dropOffWazeUrl, screenOrderOfStops, wazeUrl } from './routeStops.ts';
-import { BOTTLES_COLLECTED_LABEL } from './CollectQuantityForm.tsx';
-import { NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
+import { COLLECT_TAP_GUARD_MS, NEXT_STOP_EYEBROW, SEND_THANKS_TITLE } from './StopCard.tsx';
 
 /** What these tests start from, on top of makeCollectorOrder: confirmed in round r1. */
 const IN_ROUND: Partial<CollectorOrder> = { status: 'confirmed' };
@@ -119,7 +117,7 @@ interface Call {
   action: 'move' | 'collect' | 'notFound';
   roundId: string;
   orderId: string;
-  /** The direction of a move, or the count of "אספתי". */
+  /** The direction of a move, or the count of "אספתי" (none: the card sends no count). */
   arg?: string | number;
 }
 
@@ -195,7 +193,6 @@ const markMessageOpened = (): Promise<MarkMessageOpenedOutcome> =>
 interface Parent {
   views: RoundView[];
   stale: string[];
-  typing: boolean[];
 }
 
 /** The parent's part: holds the view, so a view the route hands back re-renders it. */
@@ -209,27 +206,25 @@ function Harness({ initial, parent }: { initial: RoundView; parent: Parent }) {
         setView(next);
       }}
       onStale={(message) => parent.stale.push(message)}
-      onTypingChange={(typing) => parent.typing.push(typing)}
     />
   );
 }
 
 /**
  * Renders the route under an ApiProvider whose stop actions are a {@link fakeApi} over `initial`
- * and whose `markMessageOpened` is the fake above. `strict` puts StrictMode around the whole tree,
- * as in development.
+ * and whose `markMessageOpened` is the fake above.
  */
-function renderRoute(
-  initial: RoundView = VIEW,
-  { strict = false }: { strict?: boolean } = {},
-): { api: ReturnType<typeof fakeApi>; parent: Parent; unmount: () => void } {
+function renderRoute(initial: RoundView = VIEW): {
+  api: ReturnType<typeof fakeApi>;
+  parent: Parent;
+  unmount: () => void;
+} {
   const api = fakeApi(initial);
-  const parent: Parent = { views: [], stale: [], typing: [] };
-  const { unmount } = renderWithApi(
-    <Harness initial={initial} parent={parent} />,
-    { ...api.fakes, markMessageOpened },
-    { reactStrictMode: strict },
-  );
+  const parent: Parent = { views: [], stale: [] };
+  const { unmount } = renderWithApi(<Harness initial={initial} parent={parent} />, {
+    ...api.fakes,
+    markMessageOpened,
+  });
   return { api, parent, unmount };
 }
 
@@ -266,13 +261,19 @@ function sheetAction(name: string, label: string | RegExp): void {
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
 }
 
+/** Lets the double-tap guard of the current card pass: it ignores taps right after it appears. */
+function waitOutTapGuard(): void {
+  vi.setSystemTime(Date.now() + COLLECT_TAP_GUARD_MS);
+}
+
 /**
- * Taps "אספתי" of `name`'s stop: on the big card itself, or, for an upcoming stop, in its "⋯"
- * sheet (collecting out of order).
+ * Taps "אספתי" of `name`'s stop: on the big card itself once its guard passed, or, for an
+ * upcoming stop, in its "⋯" sheet (collecting out of order).
  */
-function startCollect(name: string): void {
+function collect(name: string): void {
   const direct = screen.queryByRole('button', { name: `אספתי, ${name}` });
   if (direct !== null) {
+    waitOutTapGuard();
     fireEvent.click(direct);
     return;
   }
@@ -280,22 +281,19 @@ function startCollect(name: string): void {
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'אספתי' }));
 }
 
-/** Taps "אספתי" on `name`'s card, types `text` (the estimate when undefined), and saves. */
-function collect(name: string, text?: string): void {
-  startCollect(name);
-  if (text !== undefined) {
-    fireEvent.change(screen.getByLabelText(BOTTLES_COLLECTED_LABEL), { target: { value: text } });
-  }
-  fireEvent.click(button('שמור'));
-}
-
 /** Lets every pending promise callback run. */
 function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// Date only, frozen: the current card's double-tap guard reads it, and collect() moves it on.
 beforeEach(() => {
   window.history.replaceState(null, '', '/app/rounds');
+  vi.useFakeTimers({ toFake: ['Date'] });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('routeSummary', () => {
@@ -397,9 +395,9 @@ describe('RouteScreen order', () => {
 
   it('collects an upcoming stop out of order from its sheet', async () => {
     const { api } = renderRoute();
-    collect('יוסי מזרחי', '12');
+    collect('יוסי מזרחי');
     await waitFor(() =>
-      expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o3', arg: 12 }]),
+      expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o3' }]),
     );
   });
 
@@ -539,13 +537,14 @@ describe('RouteScreen "אספתי"', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends the estimate, then moves the card to the end with its "שלח תודה" row', async () => {
+  it('sends no count, then moves the card to the end with its "שלח תודה" row', async () => {
     const { api, parent } = renderRoute();
 
     collect('דנה כהן');
 
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'יוסי מזרחי', 'דנה כהן']));
-    expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o1', arg: 40 }]);
+    expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o1' }]);
+    expect(api.calls[0]?.arg).toBeUndefined();
     expect(parent.views).toHaveLength(1);
     const card = cardOf('דנה כהן');
     expect(within(card).getByText('נאסף')).toBeTruthy();
@@ -557,18 +556,56 @@ describe('RouteScreen "אספתי"', () => {
   });
 
   // The saved card leaves the current list for the handled one, where React mounts a new card:
-  // the buzz and the focus must still come (the screen tells the new card, justSaved).
-  it("buzzes once and moves the focus to 'שלח תודה' after Yoel's own 'אספתי'", async () => {
+  // the buzz must still come (the screen tells the new card, justSaved). The focus stays with the
+  // stops ahead: "שלח תודה" at the bottom would scroll the page away from the next customer.
+  it("buzzes once and focuses the next stop's name, not 'שלח תודה', after Yoel's 'אספתי'", async () => {
     const vibrate = vi.fn();
     vi.stubGlobal('navigator', { ...navigator, vibrate });
     renderRoute();
 
     collect('דנה כהן');
 
-    const title = await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
-    await waitFor(() => expect(document.activeElement).toBe(title));
+    await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
+    const next = within(currentCard()).getByRole('heading', { level: 3, name: 'משה לוי' });
+    await waitFor(() => expect(document.activeElement).toBe(next));
+    expect(next.getAttribute('tabindex')).toBe('-1');
     expect(vibrate).toHaveBeenCalledTimes(1);
     expect(vibrate).toHaveBeenCalledWith(30);
+  });
+
+  it('focuses the progress title once no stop is left to collect', async () => {
+    renderRoute(makeView([collected(stopOf(DANA)), stopOf(MOSHE)]));
+
+    collect('משה לוי');
+
+    const title = await screen.findByText(ALL_STOPS_HANDLED_TEXT);
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    expect(title.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it("focuses the current stop's name after collecting an upcoming stop out of order", async () => {
+    renderRoute();
+
+    collect('יוסי מזרחי');
+
+    await waitFor(() => expect(shownNames()).toEqual(['דנה כהן', 'משה לוי', 'יוסי מזרחי']));
+    const current = within(currentCard()).getByRole('heading', { level: 3, name: 'דנה כהן' });
+    await waitFor(() => expect(document.activeElement).toBe(current));
+  });
+
+  // Collected is final, and the next card's "אספתי" appears right under the finger.
+  it("ignores a tap on the next stop's 'אספתי' in its first second, and takes one after", async () => {
+    const { api } = renderRoute();
+    collect('דנה כהן');
+    await waitFor(() => expect(within(currentCard()).getByText('משה לוי')).toBeTruthy());
+
+    fireEvent.click(button('אספתי, משה לוי'));
+    await settle();
+    expect(api.calls.map((call) => call.orderId)).toEqual(['o1']);
+
+    waitOutTapGuard();
+    fireEvent.click(button('אספתי, משה לוי'));
+    await waitFor(() => expect(api.calls.map((call) => call.orderId)).toEqual(['o1', 'o2']));
   });
 
   it('neither buzzes nor moves the focus when the save fails', async () => {
@@ -583,14 +620,6 @@ describe('RouteScreen "אספתי"', () => {
       expect(within(currentCard()).getByRole('alert').textContent).toBe(STOP_ACTION_FAILED_MESSAGE),
     );
     expect(vibrate).not.toHaveBeenCalled();
-  });
-
-  it('sends the corrected quantity', async () => {
-    const { api } = renderRoute();
-    collect('משה לוי', '42');
-    await waitFor(() =>
-      expect(api.calls).toEqual([{ action: 'collect', roundId: 'r1', orderId: 'o2', arg: 42 }]),
-    );
   });
 
   it('keeps a shown "שלח תודה" row when a later view lacks it', async () => {
@@ -680,8 +709,11 @@ describe('RouteScreen "לא נמצא"', () => {
 
     collect('דנה כהן');
 
-    const title = await screen.findByRole('heading', { level: 4, name: SEND_THANKS_TITLE });
-    await waitFor(() => expect(document.activeElement).toBe(title));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(currentCard()).getByRole('heading', { level: 3, name: 'יוסי מזרחי' }),
+      ),
+    );
     expect(within(cardOf('משה לוי')).getByText('לא נמצא')).toBeTruthy();
   });
 });
@@ -831,29 +863,16 @@ describe('RouteScreen errors', () => {
     },
   );
 
-  it("shows the api's refused count next to the quantity field", async () => {
-    const { api } = renderRoute();
-    api.next.push({
-      kind: 'invalid',
-      fieldErrors: { bottlesCollected: COLLECT_STOP_ERRORS.bottlesTooMany },
-    });
-
-    collect('דנה כהן', '42');
-
-    const field = screen.getByLabelText(BOTTLES_COLLECTED_LABEL);
-    await waitFor(() => expect(field.getAttribute('aria-invalid')).toBe('true'));
-    expect(screen.getByText(COLLECT_STOP_ERRORS.bottlesTooMany).id).toBe(
-      field.getAttribute('aria-describedby'),
-    );
-  });
-
-  it('shows the plain count message when the refusal names none', async () => {
+  // The card sends no count, so a refusal is nothing Yoel can fix: he can only try again.
+  it('shows a refused "אספתי" as a failed one, in the card', async () => {
     const { api } = renderRoute();
     api.next.push({ kind: 'invalid', fieldErrors: {} });
 
     collect('דנה כהן');
 
-    expect(await screen.findByText(COLLECT_STOP_ERRORS.bottlesInvalid)).toBeTruthy();
+    await waitFor(() =>
+      expect(within(currentCard()).getByRole('alert').textContent).toBe(STOP_ACTION_FAILED_MESSAGE),
+    );
   });
 
   it('goes to the login, replacing the screen, when the session ended', async () => {
@@ -889,8 +908,8 @@ describe('RouteScreen busy', () => {
     api.next.push(answer.promise);
 
     collect('דנה כהן');
-    fireEvent.click(button('שומר...'));
-    expect(button('שומר...').getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(button('אספתי, דנה כהן'));
+    expect(button('אספתי, דנה כהן').getAttribute('aria-disabled')).toBe('true');
     sheetAction('יוסי מזרחי', /^הזז למעלה/);
 
     await waitFor(() => expect(shownNames()).toEqual(['דנה כהן', 'יוסי מזרחי', 'משה לוי']));
@@ -918,33 +937,6 @@ describe('RouteScreen busy', () => {
     answer.resolve({ kind: 'saved', view: makeView([stopOf(MOSHE), stopOf(DANA), stopOf(YOSSI)]) });
     await waitFor(() => expect(shownNames()).toEqual(['משה לוי', 'דנה כהן', 'יוסי מזרחי']));
     expect(api.calls).toHaveLength(1);
-  });
-});
-
-describe('RouteScreen typing', () => {
-  it('tells the parent once while any quantity field is open', () => {
-    const { parent } = renderRoute(VIEW, { strict: true });
-
-    startCollect('דנה כהן');
-    expect(parent.typing).toEqual([true]);
-    startCollect('משה לוי');
-    fireEvent.click(within(cardOf('דנה כהן')).getByRole('button', { name: 'ביטול' }));
-    expect(parent.typing).toEqual([true]);
-    fireEvent.click(within(cardOf('משה לוי')).getByRole('button', { name: 'ביטול' }));
-    expect(parent.typing).toEqual([true, false]);
-  });
-
-  it('stops typing once the save closes the field', async () => {
-    const { parent } = renderRoute();
-    collect('דנה כהן');
-    await waitFor(() => expect(parent.typing).toEqual([true, false]));
-  });
-
-  it('tells the parent typing stopped when the route leaves with a field open', () => {
-    const { parent, unmount } = renderRoute();
-    fireEvent.click(button('אספתי, דנה כהן'));
-    unmount();
-    expect(parent.typing).toEqual([true, false]);
   });
 });
 
